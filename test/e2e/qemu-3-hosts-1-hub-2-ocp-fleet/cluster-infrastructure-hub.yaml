@@ -11,7 +11,7 @@ spec:
       gateway: 192.168.150.1
       dnsServers:
         - 192.168.150.1
-      qemuKVM:
+      libvirt:
         bridge: vbr-hub
   machines:
     master-0:
@@ -25,7 +25,7 @@ spec:
             name: primary
           ipAddress: 192.168.150.20
           macAddress: 52:54:00:30:10:00
-      qemuKVM:
+      libvirt:
         hostRef:
           name: hub-host
     master-1:
@@ -39,7 +39,7 @@ spec:
             name: primary
           ipAddress: 192.168.150.21
           macAddress: 52:54:00:30:10:01
-      qemuKVM:
+      libvirt:
         hostRef:
           name: hub-host
     master-2:
@@ -53,7 +53,7 @@ spec:
             name: primary
           ipAddress: 192.168.150.22
           macAddress: 52:54:00:30:10:02
-      qemuKVM:
+      libvirt:
         hostRef:
           name: hub-host
   endpoints:

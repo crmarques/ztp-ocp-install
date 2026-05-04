@@ -303,12 +303,12 @@ func collectSecretRefRequirements(state v1alpha1.State) []secretRefRequirement {
 	for _, ci := range state.ClusterInfrastructures {
 		for _, mname := range sortedMapKeys(ci.Spec.Machines) {
 			m := ci.Spec.Machines[mname]
-			if m.BareMetal == nil || m.BareMetal.BMC == nil || m.BareMetal.BMC.CredentialRef.Name == "" {
+			if m.Baremetal == nil || m.Baremetal.BMC == nil || m.Baremetal.BMC.CredentialRef.Name == "" {
 				continue
 			}
 			out = append(out, secretRefRequirement{
-				refName: m.BareMetal.BMC.CredentialRef.Name,
-				label:   fmt.Sprintf("infra %s machine %s bareMetal bmc credentialRef", ci.Metadata.Name, mname),
+				refName: m.Baremetal.BMC.CredentialRef.Name,
+				label:   fmt.Sprintf("infra %s machine %s baremetal bmc credentialRef", ci.Metadata.Name, mname),
 				phase:   "infra",
 			})
 		}

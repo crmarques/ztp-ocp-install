@@ -89,7 +89,7 @@ func TestLoadNormalizeValidateOneHostSample(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s missing master-0 machine", item.Metadata.Name)
 		}
-		if got, want := machine.QemuKVM.HostRef.Name, "local-qemu-host"; got != want {
+		if got, want := machine.Libvirt.HostRef.Name, "local-qemu-host"; got != want {
 			t.Fatalf("%s machine hostRef got %q, want %q", item.Metadata.Name, got, want)
 		}
 		if machine.Resources == nil || machine.Resources.CPU != 8 || machine.Resources.MemoryMiB != 20480 {
@@ -402,7 +402,7 @@ spec:
   networks:
     primary:
       cidr: %s
-      qemuKVM:
+      libvirt:
         bridge: virbr0
   machines:
     master-0:
@@ -411,7 +411,7 @@ spec:
           networkRef:
             name: primary
           ipAddress: %s
-      qemuKVM:
+      libvirt:
         hostRef:
           name: host-01
   endpoints:
@@ -479,7 +479,7 @@ spec:
             name: primary
           ipAddress: 192.168.180.20
           macAddress: 52:54:00:00:00:20
-      bareMetal:
+      baremetal:
         bootMACAddress: 52:54:00:00:00:20
         bmc:
           address: redfish-virtualmedia+https://bmc-master-0.example.com/redfish/v1/Systems/1

@@ -11,7 +11,7 @@ spec:
       gateway: 192.168.131.1
       dnsServers:
         - 192.168.131.1
-      qemuKVM:
+      libvirt:
         bridge: vbr-managed
   machines:
     master-0:
@@ -25,7 +25,7 @@ spec:
           macAddress: 52:54:00:21:12:10
       rootDeviceHints:
         deviceName: /dev/vda
-      qemuKVM:
+      libvirt:
         hostRef:
           name: qemu-host
     master-1:
@@ -39,7 +39,7 @@ spec:
           macAddress: 52:54:00:21:12:11
       rootDeviceHints:
         deviceName: /dev/vda
-      qemuKVM:
+      libvirt:
         hostRef:
           name: qemu-host
     master-2:
@@ -53,7 +53,7 @@ spec:
           macAddress: 52:54:00:21:12:12
       rootDeviceHints:
         deviceName: /dev/vda
-      qemuKVM:
+      libvirt:
         hostRef:
           name: qemu-host
   endpoints:

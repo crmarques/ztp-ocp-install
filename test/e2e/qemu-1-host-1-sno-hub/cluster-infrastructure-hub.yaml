@@ -11,7 +11,7 @@ spec:
       gateway: 192.168.130.1
       dnsServers:
         - 192.168.130.1
-      qemuKVM:
+      libvirt:
         bridge: vbr-1-host-hub
   machines:
     master-0:
@@ -27,7 +27,7 @@ spec:
             name: primary
           ipAddress: 192.168.130.20
           macAddress: 52:54:00:21:11:10
-      qemuKVM:
+      libvirt:
         hostRef:
           name: local-qemu-host
   endpoints:

@@ -626,7 +626,7 @@ func TestPreflightChecksBMCEmulationAndMachineCredentials(t *testing.T) {
 				ProviderRef: v1alpha1.LocalObjectReference{Name: "qemu-1-host-provider"},
 				Machines: map[string]v1alpha1.MachineSpec{
 					"master-0": {
-						BareMetal: &v1alpha1.MachineBareMetalSpec{BMC: &v1alpha1.MachineBMCSpec{
+						Baremetal: &v1alpha1.MachineBaremetalSpec{BMC: &v1alpha1.MachineBMCSpec{
 							Address:       "redfish://10.0.0.5",
 							CredentialRef: v1alpha1.SecretRef{Name: "rack-bmc-credentials"},
 						}},
@@ -643,7 +643,7 @@ func TestPreflightChecksBMCEmulationAndMachineCredentials(t *testing.T) {
 	checks := collectPreflightChecks(state, nil, true, "/secrets", defaultHostStateDir, deps)
 	want := map[string]bool{
 		"provider qemu-1-host-provider bmcEmulation credentialRef at /secrets/qemu-1-host-bmc-credentials":     false,
-		"infra ci machine master-0 bareMetal bmc credentialRef at /secrets/rack-bmc-credentials": false,
+		"infra ci machine master-0 baremetal bmc credentialRef at /secrets/rack-bmc-credentials": false,
 	}
 	seen := map[string]bool{}
 	for _, c := range checks {

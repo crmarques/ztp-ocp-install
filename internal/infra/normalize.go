@@ -126,7 +126,7 @@ func applyMachineDefaultResources(m *v1alpha1.MachineSpec, provider *v1alpha1.In
 	if provider == nil || provider.Spec.QemuKVM == nil {
 		return
 	}
-	if m.QemuKVM == nil {
+	if m.Libvirt == nil {
 		return
 	}
 	if m.Resources == nil {
@@ -144,7 +144,7 @@ func applyMachineDefaultResources(m *v1alpha1.MachineSpec, provider *v1alpha1.In
 }
 
 func applyGeneratedMAC(m *v1alpha1.MachineSpec, clusterName, machineName string) {
-	if m.QemuKVM == nil {
+	if m.Libvirt == nil {
 		return
 	}
 	for ifaceName, iface := range m.Interfaces {

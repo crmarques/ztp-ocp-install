@@ -286,11 +286,11 @@ type MachineNetworkSpec struct {
 	CIDR       string                     `yaml:"cidr" json:"cidr"`
 	Gateway    string                     `yaml:"gateway,omitempty" json:"gateway,omitempty"`
 	DNSServers []string                   `yaml:"dnsServers,omitempty" json:"dnsServers,omitempty"`
-	QemuKVM    *MachineNetworkQemuKVMSpec `yaml:"qemuKVM,omitempty" json:"qemuKVM,omitempty"`
+	Libvirt    *MachineNetworkLibvirtSpec `yaml:"libvirt,omitempty" json:"libvirt,omitempty"`
 	VMware     *MachineNetworkVMwareSpec  `yaml:"vmware,omitempty" json:"vmware,omitempty"`
 }
 
-type MachineNetworkQemuKVMSpec struct {
+type MachineNetworkLibvirtSpec struct {
 	Bridge string `yaml:"bridge" json:"bridge"`
 }
 
@@ -303,8 +303,8 @@ type MachineSpec struct {
 	Resources       *MachineResourcesSpec           `yaml:"resources,omitempty" json:"resources,omitempty"`
 	Interfaces      map[string]MachineInterfaceSpec `yaml:"interfaces,omitempty" json:"interfaces,omitempty"`
 	RootDeviceHints *RootDeviceHintsSpec            `yaml:"rootDeviceHints,omitempty" json:"rootDeviceHints,omitempty"`
-	QemuKVM         *MachineQemuKVMSpec             `yaml:"qemuKVM,omitempty" json:"qemuKVM,omitempty"`
-	BareMetal       *MachineBareMetalSpec           `yaml:"bareMetal,omitempty" json:"bareMetal,omitempty"`
+	Libvirt         *MachineLibvirtSpec             `yaml:"libvirt,omitempty" json:"libvirt,omitempty"`
+	Baremetal       *MachineBaremetalSpec           `yaml:"baremetal,omitempty" json:"baremetal,omitempty"`
 	VMware          *MachineVMwareSpec              `yaml:"vmware,omitempty" json:"vmware,omitempty"`
 }
 
@@ -332,11 +332,11 @@ type RootDeviceHintsSpec struct {
 	Rotational       *bool  `yaml:"rotational,omitempty" json:"rotational,omitempty"`
 }
 
-type MachineQemuKVMSpec struct {
+type MachineLibvirtSpec struct {
 	HostRef LocalObjectReference `yaml:"hostRef" json:"hostRef"`
 }
 
-type MachineBareMetalSpec struct {
+type MachineBaremetalSpec struct {
 	BootMACAddress string          `yaml:"bootMACAddress,omitempty" json:"bootMACAddress,omitempty"`
 	BMC            *MachineBMCSpec `yaml:"bmc,omitempty" json:"bmc,omitempty"`
 }
@@ -486,12 +486,15 @@ func ProviderKind(provider InfrastructureProvider) string {
 	}
 }
 
-// MachineKind reports the structural discriminator of a MachineSpec.
+// MachineKind reports the structural discriminator of a MachineSpec, mapped
+// onto the provider-kind constants so cross-layer comparisons against
+// ProviderKind() continue to work. The YAML field names use substrate-flavor
+// vocabulary (libvirt / baremetal / vmware) rather than product names.
 func MachineKind(machine MachineSpec) string {
 	switch {
-	case machine.QemuKVM != nil:
+	case machine.Libvirt != nil:
 		return ProviderKindQemuKVM
-	case machine.BareMetal != nil:
+	case machine.Baremetal != nil:
 		return ProviderKindBareMetal
 	case machine.VMware != nil:
 		return ProviderKindVMware

@@ -252,11 +252,11 @@ type MachineNetworkVars struct {
 	CIDR       string                     `yaml:"cidr" json:"cidr"`
 	Gateway    string                     `yaml:"gateway,omitempty" json:"gateway,omitempty"`
 	DNSServers []string                   `yaml:"dnsServers,omitempty" json:"dnsServers,omitempty"`
-	QemuKVM    *MachineNetworkQemuKVMVars `yaml:"qemuKVM,omitempty" json:"qemuKVM,omitempty"`
+	Libvirt    *MachineNetworkLibvirtVars `yaml:"libvirt,omitempty" json:"libvirt,omitempty"`
 	VMware     *MachineNetworkVMwareVars  `yaml:"vmware,omitempty" json:"vmware,omitempty"`
 }
 
-type MachineNetworkQemuKVMVars struct {
+type MachineNetworkLibvirtVars struct {
 	LibvirtNetwork string `yaml:"libvirtNetwork" json:"libvirtNetwork"`
 	Bridge         string `yaml:"bridge" json:"bridge"`
 }
@@ -586,17 +586,17 @@ func ocpClusterNodes(item v1alpha1.ClusterInfrastructure, ocp v1alpha1.OCPCluste
 			Role:       node.Role,
 		}
 		if machine, ok := item.Spec.Machines[machineRef]; ok {
-			if machine.QemuKVM != nil {
-				entry.HostRef = machine.QemuKVM.HostRef.Name
+			if machine.Libvirt != nil {
+				entry.HostRef = machine.Libvirt.HostRef.Name
 			}
-			if machine.BareMetal != nil && machine.BareMetal.BMC != nil {
+			if machine.Baremetal != nil && machine.Baremetal.BMC != nil {
 				entry.BareMetal = &MachineBMCVars{
-					Address:                        machine.BareMetal.BMC.Address,
-					Port:                           machine.BareMetal.BMC.Port,
-					Protocol:                       machine.BareMetal.BMC.Protocol,
-					CredentialRef:                  machine.BareMetal.BMC.CredentialRef.Name,
-					DisableCertificateVerification: machine.BareMetal.BMC.DisableCertificateVerification,
-					BootMACAddress:                 machine.BareMetal.BootMACAddress,
+					Address:                        machine.Baremetal.BMC.Address,
+					Port:                           machine.Baremetal.BMC.Port,
+					Protocol:                       machine.Baremetal.BMC.Protocol,
+					CredentialRef:                  machine.Baremetal.BMC.CredentialRef.Name,
+					DisableCertificateVerification: machine.Baremetal.BMC.DisableCertificateVerification,
+					BootMACAddress:                 machine.Baremetal.BootMACAddress,
 				}
 			}
 			primary := primaryInterface(machine)
@@ -750,8 +750,8 @@ func providerBMCNodes(provider v1alpha1.InfrastructureProvider, state v1alpha1.S
 			machine := infra.Spec.Machines[mname]
 			primary := primaryInterface(machine)
 			hostRef := ""
-			if machine.QemuKVM != nil {
-				hostRef = machine.QemuKVM.HostRef.Name
+			if machine.Libvirt != nil {
+				hostRef = machine.Libvirt.HostRef.Name
 			}
 			result = append(result, ProviderBMCNodeVars{
 				ClusterName: infra.Metadata.Name,
@@ -774,12 +774,12 @@ func libvirtVars(item v1alpha1.ClusterInfrastructure, q *v1alpha1.QemuKVMProvide
 		return nil
 	}
 	machineNetwork := machineNetworks[0]
-	if machineNetwork.QemuKVM == nil {
+	if machineNetwork.Libvirt == nil {
 		return nil
 	}
 	return &LibvirtVars{
-		Network:  machineNetwork.QemuKVM.LibvirtNetwork,
-		Bridge:   machineNetwork.QemuKVM.Bridge,
+		Network:  machineNetwork.Libvirt.LibvirtNetwork,
+		Bridge:   machineNetwork.Libvirt.Bridge,
 		DNSHosts: libvirtDNSHosts(machineNetwork, env),
 	}
 }
@@ -814,8 +814,8 @@ func providerNodes(item v1alpha1.ClusterInfrastructure, ocp v1alpha1.OCPCluster)
 		machine := item.Spec.Machines[name]
 		primary := primaryInterface(machine)
 		hostRef := ""
-		if machine.QemuKVM != nil {
-			hostRef = machine.QemuKVM.HostRef.Name
+		if machine.Libvirt != nil {
+			hostRef = machine.Libvirt.HostRef.Name
 		}
 		var resources VirtualNodeResourceVars
 		if machine.Resources != nil {
@@ -891,10 +891,10 @@ func machineNetworksList(item v1alpha1.ClusterInfrastructure) []MachineNetworkVa
 			Gateway:    n.Gateway,
 			DNSServers: append([]string(nil), n.DNSServers...),
 		}
-		if n.QemuKVM != nil {
-			entry.QemuKVM = &MachineNetworkQemuKVMVars{
+		if n.Libvirt != nil {
+			entry.Libvirt = &MachineNetworkLibvirtVars{
 				LibvirtNetwork: libvirtNetworkName(item.Metadata.Name, name),
-				Bridge:         n.QemuKVM.Bridge,
+				Bridge:         n.Libvirt.Bridge,
 			}
 		}
 		if n.VMware != nil {
@@ -1005,7 +1005,7 @@ func vipBridgeAttachment(infra v1alpha1.ClusterInfrastructure, provider v1alpha1
 	}
 	for _, name := range sortedKeys(infra.Spec.Networks) {
 		net := infra.Spec.Networks[name]
-		if net.QemuKVM == nil || net.QemuKVM.Bridge == "" || net.CIDR == "" {
+		if net.Libvirt == nil || net.Libvirt.Bridge == "" || net.CIDR == "" {
 			continue
 		}
 		prefix, err := netip.ParsePrefix(net.CIDR)
@@ -1016,7 +1016,7 @@ func vipBridgeAttachment(infra v1alpha1.ClusterInfrastructure, provider v1alpha1
 			continue
 		}
 		return &LoadBalancerVIPBridgeAttachment{
-			Bridge:       net.QemuKVM.Bridge,
+			Bridge:       net.Libvirt.Bridge,
 			PrefixLength: prefix.Bits(),
 		}
 	}

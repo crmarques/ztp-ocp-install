@@ -362,19 +362,19 @@ func validateNetworks(ci v1alpha1.ClusterInfrastructure, provider v1alpha1.Infra
 		}
 		switch providerKind {
 		case v1alpha1.ProviderKindQemuKVM:
-			if network.QemuKVM == nil || network.QemuKVM.Bridge == "" {
-				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s networks[%s].qemuKVM.bridge is required for qemu-kvm provider", ci.Metadata.Name, name))
+			if network.Libvirt == nil || network.Libvirt.Bridge == "" {
+				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s networks[%s].libvirt.bridge is required for qemu-kvm provider", ci.Metadata.Name, name))
 			}
 			if network.VMware != nil {
 				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s networks[%s].vmware does not match InfrastructureProvider/%s kind %q", ci.Metadata.Name, name, provider.Metadata.Name, providerKind))
 			}
 		case v1alpha1.ProviderKindVMware:
-			if network.QemuKVM != nil {
-				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s networks[%s].qemuKVM does not match InfrastructureProvider/%s kind %q", ci.Metadata.Name, name, provider.Metadata.Name, providerKind))
+			if network.Libvirt != nil {
+				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s networks[%s].libvirt does not match InfrastructureProvider/%s kind %q", ci.Metadata.Name, name, provider.Metadata.Name, providerKind))
 			}
 		default:
-			if network.QemuKVM != nil {
-				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s networks[%s].qemuKVM does not match InfrastructureProvider/%s kind %q", ci.Metadata.Name, name, provider.Metadata.Name, providerKind))
+			if network.Libvirt != nil {
+				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s networks[%s].libvirt does not match InfrastructureProvider/%s kind %q", ci.Metadata.Name, name, provider.Metadata.Name, providerKind))
 			}
 			if network.VMware != nil {
 				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s networks[%s].vmware does not match InfrastructureProvider/%s kind %q", ci.Metadata.Name, name, provider.Metadata.Name, providerKind))
@@ -389,29 +389,29 @@ func validateMachines(ci v1alpha1.ClusterInfrastructure, provider v1alpha1.Infra
 	providerKind := v1alpha1.ProviderKind(provider)
 	for name, machine := range ci.Spec.Machines {
 		set := 0
-		if machine.QemuKVM != nil {
+		if machine.Libvirt != nil {
 			set++
 		}
-		if machine.BareMetal != nil {
+		if machine.Baremetal != nil {
 			set++
 		}
 		if machine.VMware != nil {
 			set++
 		}
 		if set != 1 {
-			errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s machines[%s] must set exactly one of {qemuKVM, bareMetal, vmware}", ci.Metadata.Name, name))
+			errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s machines[%s] must set exactly one of {libvirt, baremetal, vmware}", ci.Metadata.Name, name))
 		}
 		if machineKind := v1alpha1.MachineKind(machine); machineKind != "" && machineKind != providerKind {
 			errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s machines[%s] kind %q does not match InfrastructureProvider/%s kind %q", ci.Metadata.Name, name, machineKind, provider.Metadata.Name, providerKind))
 		}
-		if machine.QemuKVM != nil && provider.Spec.QemuKVM != nil {
-			if _, ok := provider.Spec.QemuKVM.Hosts[machine.QemuKVM.HostRef.Name]; !ok {
-				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s machines[%s].qemuKVM.hostRef %q not defined on InfrastructureProvider/%s", ci.Metadata.Name, name, machine.QemuKVM.HostRef.Name, provider.Metadata.Name))
+		if machine.Libvirt != nil && provider.Spec.QemuKVM != nil {
+			if _, ok := provider.Spec.QemuKVM.Hosts[machine.Libvirt.HostRef.Name]; !ok {
+				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s machines[%s].libvirt.hostRef %q not defined on InfrastructureProvider/%s", ci.Metadata.Name, name, machine.Libvirt.HostRef.Name, provider.Metadata.Name))
 			}
 		}
-		if machine.BareMetal != nil && machine.BareMetal.BMC != nil {
-			if machine.BareMetal.BMC.Address == "" {
-				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s machines[%s].bareMetal.bmc.address is required", ci.Metadata.Name, name))
+		if machine.Baremetal != nil && machine.Baremetal.BMC != nil {
+			if machine.Baremetal.BMC.Address == "" {
+				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s machines[%s].baremetal.bmc.address is required", ci.Metadata.Name, name))
 			}
 		}
 		errs = append(errs, validateMachineInterfaces(ci, name, machine)...)

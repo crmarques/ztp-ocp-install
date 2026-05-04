@@ -11,7 +11,7 @@ spec:
       gateway: 192.168.123.1
       dnsServers:
         - 192.168.123.1
-      qemuKVM:
+      libvirt:
         bridge: vbr-spoke-01
   machines:
     master-0:
@@ -20,7 +20,7 @@ spec:
           networkRef:
             name: primary
           ipAddress: 192.168.123.20
-      qemuKVM:
+      libvirt:
         hostRef:
           name: spoke-01-host
     master-1:
@@ -29,7 +29,7 @@ spec:
           networkRef:
             name: primary
           ipAddress: 192.168.123.21
-      qemuKVM:
+      libvirt:
         hostRef:
           name: spoke-01-host
     master-2:
@@ -38,7 +38,7 @@ spec:
           networkRef:
             name: primary
           ipAddress: 192.168.123.22
-      qemuKVM:
+      libvirt:
         hostRef:
           name: spoke-01-host
   endpoints:

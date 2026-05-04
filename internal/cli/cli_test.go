@@ -225,7 +225,7 @@ spec:
   networks:
     primary:
       cidr: 192.168.155.0/24
-      qemuKVM:
+      libvirt:
         bridge: virbr0
   machines:
     master-0:
@@ -234,7 +234,7 @@ spec:
           networkRef:
             name: primary
           ipAddress: 192.168.155.20
-      qemuKVM:
+      libvirt:
         hostRef:
           name: host-01
   endpoints:

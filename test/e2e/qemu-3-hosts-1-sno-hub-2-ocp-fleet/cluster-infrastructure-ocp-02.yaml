@@ -11,7 +11,7 @@ spec:
       gateway: 192.168.152.1
       dnsServers:
         - 192.168.152.1
-      qemuKVM:
+      libvirt:
         bridge: vbr-ocp-02
   machines:
     master-0:
@@ -25,7 +25,7 @@ spec:
             name: primary
           ipAddress: 192.168.152.20
           macAddress: 52:54:00:32:10:00
-      qemuKVM:
+      libvirt:
         hostRef:
           name: ocp-02-host
     master-1:
@@ -39,7 +39,7 @@ spec:
             name: primary
           ipAddress: 192.168.152.21
           macAddress: 52:54:00:32:10:01
-      qemuKVM:
+      libvirt:
         hostRef:
           name: ocp-02-host
     master-2:
@@ -53,7 +53,7 @@ spec:
             name: primary
           ipAddress: 192.168.152.22
           macAddress: 52:54:00:32:10:02
-      qemuKVM:
+      libvirt:
         hostRef:
           name: ocp-02-host
   endpoints:

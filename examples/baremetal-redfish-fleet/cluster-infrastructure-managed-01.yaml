@@ -21,7 +21,7 @@ spec:
           macAddress: 52:54:00:21:12:10
       rootDeviceHints:
         deviceName: /dev/sda
-      bareMetal:
+      baremetal:
         bmc:
           address: redfish-virtualmedia+https://bmc-managed-01-0.example.test/redfish/v1/Systems/1
           credentialRef:
@@ -36,7 +36,7 @@ spec:
           macAddress: 52:54:00:21:12:11
       rootDeviceHints:
         deviceName: /dev/sda
-      bareMetal:
+      baremetal:
         bmc:
           address: redfish-virtualmedia+https://bmc-managed-01-1.example.test/redfish/v1/Systems/1
           credentialRef:
@@ -51,7 +51,7 @@ spec:
           macAddress: 52:54:00:21:12:12
       rootDeviceHints:
         deviceName: /dev/sda
-      bareMetal:
+      baremetal:
         bmc:
           address: redfish-virtualmedia+https://bmc-managed-01-2.example.test/redfish/v1/Systems/1
           credentialRef:
