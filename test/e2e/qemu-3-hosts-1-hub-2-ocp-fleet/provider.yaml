@@ -29,6 +29,10 @@ spec:
           cpu: 4
           memoryMiB: 16384
           diskGiB: 100
+  loadBalancer:
+    haProxy:
+      hostRef:
+        name: hub-host
 ---
 apiVersion: gitups.io/v1alpha1
 kind: InfrastructureProvider
@@ -61,6 +65,10 @@ spec:
           cpu: 4
           memoryMiB: 16384
           diskGiB: 100
+  loadBalancer:
+    haProxy:
+      hostRef:
+        name: ocp-01-host
 ---
 apiVersion: gitups.io/v1alpha1
 kind: InfrastructureProvider
@@ -93,3 +101,7 @@ spec:
           cpu: 10
           memoryMiB: 20480
           diskGiB: 120
+  loadBalancer:
+    haProxy:
+      hostRef:
+        name: ocp-02-host

@@ -1,7 +1,7 @@
 apiVersion: gitups.io/v1alpha1
 kind: InfrastructureProvider
 metadata:
-  name: lab-provider
+  name: lab-hub-provider
 spec:
   hosts:
     hub-sno-host:
@@ -12,6 +12,28 @@ spec:
       capabilities:
         - libvirt
         - hosts-file
+  machine:
+    libvirt:
+      hostRefs:
+        - name: hub-sno-host
+      bmcEmulation:
+        enabled: true
+        protocol: redfish
+        port: 8000
+        auth:
+          credentialRef:
+            name: lab-bmc-credentials
+  loadBalancer:
+    haProxy:
+      hostRef:
+        name: hub-sno-host
+---
+apiVersion: gitups.io/v1alpha1
+kind: InfrastructureProvider
+metadata:
+  name: lab-spoke-01-provider
+spec:
+  hosts:
     spoke-01-host:
       ssh:
         address: 10.10.10.2
@@ -20,6 +42,28 @@ spec:
       capabilities:
         - libvirt
         - hosts-file
+  machine:
+    libvirt:
+      hostRefs:
+        - name: spoke-01-host
+      bmcEmulation:
+        enabled: true
+        protocol: redfish
+        port: 8000
+        auth:
+          credentialRef:
+            name: lab-bmc-credentials
+  loadBalancer:
+    haProxy:
+      hostRef:
+        name: spoke-01-host
+---
+apiVersion: gitups.io/v1alpha1
+kind: InfrastructureProvider
+metadata:
+  name: lab-spoke-02-provider
+spec:
+  hosts:
     spoke-02-host:
       ssh:
         address: 10.10.10.3
@@ -31,8 +75,6 @@ spec:
   machine:
     libvirt:
       hostRefs:
-        - name: hub-sno-host
-        - name: spoke-01-host
         - name: spoke-02-host
       bmcEmulation:
         enabled: true
@@ -41,3 +83,7 @@ spec:
         auth:
           credentialRef:
             name: lab-bmc-credentials
+  loadBalancer:
+    haProxy:
+      hostRef:
+        name: spoke-02-host

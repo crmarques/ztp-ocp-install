@@ -39,9 +39,6 @@ spec:
       address: 192.168.130.11
   loadBalancers:
     lb-qemu-1-host-hub:
-      placement:
-        providerHostRef:
-          name: local-qemu-host
       endpoints:
         - api
         - apiInt

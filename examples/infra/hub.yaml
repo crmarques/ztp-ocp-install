@@ -4,7 +4,7 @@ metadata:
   name: hub
 spec:
   providerRef:
-    name: lab-provider
+    name: lab-hub-provider
   networks:
     primary:
       cidr: 192.168.122.0/24
@@ -34,9 +34,6 @@ spec:
       address: 192.168.122.11
   loadBalancers:
     default:
-      placement:
-        providerHostRef:
-          name: hub-sno-host
       endpoints:
         - api
         - apiInt

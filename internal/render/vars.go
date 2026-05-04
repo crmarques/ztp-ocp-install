@@ -947,6 +947,14 @@ func sharedLoadBalancerVars(state v1alpha1.State, env *v1alpha1.Environment) []S
 	for _, infra := range state.ClusterInfrastructures {
 		ocp := ocpByInfra[infra.Metadata.Name]
 		provider := providers[infra.Spec.ProviderRef.Name]
+		if provider.Spec.LoadBalancer == nil || provider.Spec.LoadBalancer.HAProxy == nil {
+			continue
+		}
+		hostRef := provider.Spec.LoadBalancer.HAProxy.HostRef.Name
+		runtime := provider.Spec.LoadBalancer.HAProxy.Runtime
+		if runtime == "" {
+			runtime = v1alpha1.ContainerRuntimePodman
+		}
 		lbNames := sortedKeys(infra.Spec.LoadBalancers)
 		for _, lbName := range lbNames {
 			lb := infra.Spec.LoadBalancers[lbName]
@@ -955,8 +963,8 @@ func sharedLoadBalancerVars(state v1alpha1.State, env *v1alpha1.Environment) []S
 				ClusterName: infra.Metadata.Name,
 				ProviderRef: infra.Spec.ProviderRef.Name,
 				Image:       imageRef,
-				Runtime:     v1alpha1.ContainerRuntimePodman,
-				Placement:   LoadBalancerPlacementVars{ProviderHostRef: lb.Placement.ProviderHostRef.Name},
+				Runtime:     runtime,
+				Placement:   LoadBalancerPlacementVars{ProviderHostRef: hostRef},
 				Frontends:   make([]SharedLoadBalancerFrontendVars, 0, len(lb.Endpoints)),
 			}
 			for _, ep := range lb.Endpoints {

@@ -31,3 +31,7 @@ spec:
           cpu: 8
           memoryMiB: 22528
           diskGiB: 120
+  loadBalancer:
+    haProxy:
+      hostRef:
+        name: qemu-host

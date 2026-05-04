@@ -4,7 +4,7 @@ metadata:
   name: spoke-01
 spec:
   providerRef:
-    name: lab-provider
+    name: lab-spoke-01-provider
   networks:
     primary:
       cidr: 192.168.123.0/24
@@ -50,9 +50,6 @@ spec:
       address: 192.168.123.11
   loadBalancers:
     default:
-      placement:
-        providerHostRef:
-          name: spoke-01-host
       endpoints:
         - api
         - apiInt

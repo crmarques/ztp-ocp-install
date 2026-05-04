@@ -4,7 +4,7 @@ metadata:
   name: qemu-3-hosts-ocp-01
 spec:
   providerRef:
-    name: qemu-3-hosts-sno-hub-fleet-provider
+    name: qemu-3-hosts-sno-ocp-01-provider
   networks:
     primary:
       cidr: 192.168.151.0/24
@@ -65,9 +65,6 @@ spec:
       address: 192.168.151.11
   loadBalancers:
     lb-qemu-3-hosts-ocp-01:
-      placement:
-        providerHostRef:
-          name: ocp-01-host
       endpoints:
         - api
         - apiInt

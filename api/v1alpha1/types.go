@@ -214,8 +214,21 @@ type InfrastructureProvider struct {
 // API embed their endpoint in the capability block — the host pool stays
 // optional so appliance-style providers need not declare it.
 type InfrastructureProviderSpec struct {
-	Hosts   map[string]ProviderHostSpec `yaml:"hosts,omitempty" json:"hosts,omitempty"`
-	Machine *MachineCapabilitySpec      `yaml:"machine,omitempty" json:"machine,omitempty"`
+	Hosts        map[string]ProviderHostSpec  `yaml:"hosts,omitempty" json:"hosts,omitempty"`
+	Machine      *MachineCapabilitySpec       `yaml:"machine,omitempty" json:"machine,omitempty"`
+	LoadBalancer *LoadBalancerCapabilitySpec  `yaml:"loadBalancer,omitempty" json:"loadBalancer,omitempty"`
+}
+
+// LoadBalancerCapabilitySpec is the structural-discriminator union for the
+// load-balancer capability. v1 ships only haProxy; future appliance flavors
+// (BigIP, NSX-LB) slot in here without schema rework.
+type LoadBalancerCapabilitySpec struct {
+	HAProxy *LoadBalancerHAProxySpec `yaml:"haProxy,omitempty" json:"haProxy,omitempty"`
+}
+
+type LoadBalancerHAProxySpec struct {
+	HostRef LocalObjectReference `yaml:"hostRef" json:"hostRef"`
+	Runtime string               `yaml:"runtime,omitempty" json:"runtime,omitempty"`
 }
 
 // ProviderHostSpec describes one host in the provider's pool. The connection
@@ -393,16 +406,12 @@ type EndpointSpec struct {
 	Address  string `yaml:"address" json:"address"`
 }
 
-// LoadBalancerSpec binds a list of cluster endpoints (by name) to a managed
-// HAProxy instance placed on a provider host. Standard OpenShift LB ports are
+// LoadBalancerSpec binds a list of cluster endpoints (by name) to the
+// provider's load-balancer capability. Standard OpenShift LB ports are
 // implied by endpoint names: api → 6443, apiInt → 22623, ingress → 80+443.
+// Placement now lives on the provider (spec.loadBalancer.<flavor>.hostRef).
 type LoadBalancerSpec struct {
-	Placement LoadBalancerPlacementSpec `yaml:"placement" json:"placement"`
-	Endpoints []string                  `yaml:"endpoints" json:"endpoints"`
-}
-
-type LoadBalancerPlacementSpec struct {
-	ProviderHostRef LocalObjectReference `yaml:"providerHostRef" json:"providerHostRef"`
+	Endpoints []string `yaml:"endpoints" json:"endpoints"`
 }
 
 // NameResolutionSpec is structural: exactly one of Managed or External is set.

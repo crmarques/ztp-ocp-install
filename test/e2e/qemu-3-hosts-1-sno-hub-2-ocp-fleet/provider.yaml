@@ -1,7 +1,7 @@
 apiVersion: gitups.io/v1alpha1
 kind: InfrastructureProvider
 metadata:
-  name: qemu-3-hosts-sno-hub-fleet-provider
+  name: qemu-3-hosts-sno-hub-provider
 spec:
   hosts:
     hub-host:
@@ -15,6 +15,31 @@ spec:
         - libvirt
         - container-runtime
         - hosts-file
+  machine:
+    libvirt:
+      hostRefs:
+        - name: hub-host
+      bmcEmulation:
+        port: 8000
+        auth:
+          credentialRef:
+            name: qemu-3-hosts-sno-hub-fleet-bmc-credentials
+      machineProfiles:
+        compact-control-plane:
+          cpu: 4
+          memoryMiB: 16384
+          diskGiB: 100
+  loadBalancer:
+    haProxy:
+      hostRef:
+        name: hub-host
+---
+apiVersion: gitups.io/v1alpha1
+kind: InfrastructureProvider
+metadata:
+  name: qemu-3-hosts-sno-ocp-01-provider
+spec:
+  hosts:
     ocp-01-host:
       ssh:
         address: 192.168.140.11
@@ -26,6 +51,31 @@ spec:
         - libvirt
         - container-runtime
         - hosts-file
+  machine:
+    libvirt:
+      hostRefs:
+        - name: ocp-01-host
+      bmcEmulation:
+        port: 8000
+        auth:
+          credentialRef:
+            name: qemu-3-hosts-sno-hub-fleet-bmc-credentials
+      machineProfiles:
+        compact-control-plane:
+          cpu: 4
+          memoryMiB: 16384
+          diskGiB: 100
+  loadBalancer:
+    haProxy:
+      hostRef:
+        name: ocp-01-host
+---
+apiVersion: gitups.io/v1alpha1
+kind: InfrastructureProvider
+metadata:
+  name: qemu-3-hosts-sno-ocp-02-provider
+spec:
+  hosts:
     ocp-02-host:
       ssh:
         address: 192.168.140.12
@@ -40,8 +90,6 @@ spec:
   machine:
     libvirt:
       hostRefs:
-        - name: hub-host
-        - name: ocp-01-host
         - name: ocp-02-host
       bmcEmulation:
         port: 8000
@@ -53,3 +101,7 @@ spec:
           cpu: 4
           memoryMiB: 16384
           diskGiB: 100
+  loadBalancer:
+    haProxy:
+      hostRef:
+        name: ocp-02-host

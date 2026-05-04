@@ -19,7 +19,7 @@ func TestValidateCommand(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
 	}
-	if got := stdout.String(); !strings.Contains(got, "validated 1 Environment, 1 InfrastructureProvider, 3 ClusterInfrastructure, 3 OCPCluster object(s)") {
+	if got := stdout.String(); !strings.Contains(got, "validated 1 Environment, 3 InfrastructureProvider, 3 ClusterInfrastructure, 3 OCPCluster object(s)") {
 		t.Fatalf("unexpected stdout: %s", got)
 	}
 }

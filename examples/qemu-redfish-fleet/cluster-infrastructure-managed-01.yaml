@@ -65,9 +65,6 @@ spec:
       address: 192.168.131.11
   loadBalancers:
     default:
-      placement:
-        providerHostRef:
-          name: qemu-host
       endpoints:
         - api
         - apiInt

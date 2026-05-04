@@ -23,3 +23,7 @@ spec:
         auth:
           credentialRef:
             name: qemu-1-host-bmc-credentials
+  loadBalancer:
+    haProxy:
+      hostRef:
+        name: local-qemu-host

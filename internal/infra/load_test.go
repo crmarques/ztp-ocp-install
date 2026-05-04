@@ -15,7 +15,7 @@ func TestLoadNormalizeValidateExamples(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
-	if got, want := len(state.InfrastructureProviders), 1; got != want {
+	if got, want := len(state.InfrastructureProviders), 3; got != want {
 		t.Fatalf("got %d providers, want %d", got, want)
 	}
 	if got, want := len(state.Environments), 1; got != want {

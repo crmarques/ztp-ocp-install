@@ -274,6 +274,32 @@ func validateProviders(providers []v1alpha1.InfrastructureProvider) []string {
 		if p.Spec.Machine.Kubevirt != nil {
 			errs = append(errs, validateKubevirtProvider(p)...)
 		}
+		errs = append(errs, validateProviderLoadBalancer(p)...)
+	}
+	return errs
+}
+
+func validateProviderLoadBalancer(p v1alpha1.InfrastructureProvider) []string {
+	if p.Spec.LoadBalancer == nil {
+		return nil
+	}
+	var errs []string
+	if p.Spec.LoadBalancer.HAProxy == nil {
+		errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec.loadBalancer must set exactly one of {haProxy}", p.Metadata.Name))
+		return errs
+	}
+	hp := p.Spec.LoadBalancer.HAProxy
+	if hp.HostRef.Name == "" {
+		errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec.loadBalancer.haProxy.hostRef.name is required", p.Metadata.Name))
+		return errs
+	}
+	host, ok := p.Spec.Hosts[hp.HostRef.Name]
+	if !ok {
+		errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec.loadBalancer.haProxy.hostRef %q not defined under spec.hosts", p.Metadata.Name, hp.HostRef.Name))
+		return errs
+	}
+	if host.SSH == nil {
+		errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec.loadBalancer.haProxy.hostRef %q must have ssh connection set", p.Metadata.Name, hp.HostRef.Name))
 	}
 	return errs
 }
@@ -507,16 +533,10 @@ func validateEndpoints(ci v1alpha1.ClusterInfrastructure) []string {
 
 func validateLoadBalancers(ci v1alpha1.ClusterInfrastructure, provider v1alpha1.InfrastructureProvider) []string {
 	var errs []string
+	if len(ci.Spec.LoadBalancers) > 0 && (provider.Spec.LoadBalancer == nil || provider.Spec.LoadBalancer.HAProxy == nil) {
+		errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s declares loadBalancers but InfrastructureProvider/%s does not supply spec.loadBalancer", ci.Metadata.Name, provider.Metadata.Name))
+	}
 	for lbName, lb := range ci.Spec.LoadBalancers {
-		if lb.Placement.ProviderHostRef.Name == "" {
-			errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s loadBalancers[%s].placement.providerHostRef.name is required", ci.Metadata.Name, lbName))
-			continue
-		}
-		if provider.Spec.Machine != nil && provider.Spec.Machine.Libvirt != nil {
-			if _, ok := provider.Spec.Hosts[lb.Placement.ProviderHostRef.Name]; !ok {
-				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s loadBalancers[%s].placement.providerHostRef %q not defined on InfrastructureProvider/%s", ci.Metadata.Name, lbName, lb.Placement.ProviderHostRef.Name, provider.Metadata.Name))
-			}
-		}
 		if len(lb.Endpoints) == 0 {
 			errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s loadBalancers[%s].endpoints is required", ci.Metadata.Name, lbName))
 		}
