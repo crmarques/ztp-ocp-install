@@ -326,22 +326,15 @@ type LoadBalancerBackendVars struct {
 	NodeRole string `yaml:"nodeRole,omitempty" json:"nodeRole,omitempty"`
 }
 
+// LoadBalancerBindingVars describes one VIP bind for a load-balancer
+// frontend. VIP-to-bridge plumbing is handled by the substrate role
+// (cluster_substrate_libvirt) — it walks the cluster's libvirt
+// machineNetworks and attaches addresses whose CIDR contains the bind.
 type LoadBalancerBindingVars struct {
-	ClusterName      string                           `yaml:"clusterName" json:"clusterName"`
-	OCPName          string                           `yaml:"ocpName" json:"ocpName"`
-	BindAddress      string                           `yaml:"bindAddress" json:"bindAddress"`
-	BridgeAttachment *LoadBalancerVIPBridgeAttachment `yaml:"bridgeAttachment,omitempty" json:"bridgeAttachment,omitempty"`
-	Backends         []LoadBalancerBackendNode        `yaml:"backends" json:"backends"`
-}
-
-// LoadBalancerVIPBridgeAttachment tells the network_lb_managed Ansible role
-// where to plumb the VIP so the address actually answers ARP on the local
-// network. Without this, ip_nonlocal_bind lets HAProxy bind the listener but
-// no interface owns the IP, so neither the SNO node nor the host can reach
-// the API endpoint.
-type LoadBalancerVIPBridgeAttachment struct {
-	Bridge       string `yaml:"bridge" json:"bridge"`
-	PrefixLength int    `yaml:"prefixLength" json:"prefixLength"`
+	ClusterName string                    `yaml:"clusterName" json:"clusterName"`
+	OCPName     string                    `yaml:"ocpName" json:"ocpName"`
+	BindAddress string                    `yaml:"bindAddress" json:"bindAddress"`
+	Backends    []LoadBalancerBackendNode `yaml:"backends" json:"backends"`
 }
 
 type LoadBalancerBackendNode struct {
@@ -989,49 +982,14 @@ func frontendForEndpoint(infra v1alpha1.ClusterInfrastructure, ocp v1alpha1.OCPC
 	}
 	bindAddress := endpointAddressFromCI(infra, ep)
 	frontend.Bindings = append(frontend.Bindings, LoadBalancerBindingVars{
-		ClusterName:      infra.Metadata.Name,
-		OCPName:          ocp.Metadata.Name,
-		BindAddress:      bindAddress,
-		BridgeAttachment: vipBridgeAttachment(infra, provider, bindAddress),
-		Backends:         backendNodes(infra, ocp, frontend.Backend.NodeRole),
+		ClusterName: infra.Metadata.Name,
+		OCPName:     ocp.Metadata.Name,
+		BindAddress: bindAddress,
+		Backends:    backendNodes(infra, ocp, frontend.Backend.NodeRole),
 	})
 	_ = lbName
+	_ = provider
 	return frontend
-}
-
-// vipBridgeAttachment resolves the local interface that must own a managed VIP
-// so the address answers ARP. Returns nil when the cluster's provider does not
-// expose a host-local bridge (e.g. baremetal, vSphere) — in those cases the
-// upstream network owns address plumbing and the VIP is reached out-of-band.
-func vipBridgeAttachment(infra v1alpha1.ClusterInfrastructure, provider v1alpha1.InfrastructureProvider, bindAddress string) *LoadBalancerVIPBridgeAttachment {
-	if v1alpha1.MachineFlavor(provider) != v1alpha1.MachineFlavorLibvirt {
-		return nil
-	}
-	if bindAddress == "" {
-		return nil
-	}
-	addr, err := netip.ParseAddr(bindAddress)
-	if err != nil {
-		return nil
-	}
-	for _, name := range sortedKeys(infra.Spec.Networks) {
-		net := infra.Spec.Networks[name]
-		if net.Libvirt == nil || net.Libvirt.Bridge == "" || net.CIDR == "" {
-			continue
-		}
-		prefix, err := netip.ParsePrefix(net.CIDR)
-		if err != nil {
-			continue
-		}
-		if !prefix.Contains(addr) {
-			continue
-		}
-		return &LoadBalancerVIPBridgeAttachment{
-			Bridge:       net.Libvirt.Bridge,
-			PrefixLength: prefix.Bits(),
-		}
-	}
-	return nil
 }
 
 func endpointAddressFromCI(infra v1alpha1.ClusterInfrastructure, ep string) string {

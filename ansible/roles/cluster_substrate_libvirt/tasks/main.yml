@@ -272,6 +272,65 @@
     - gitups_firewalld_state.rc == 0
     - gitups_current_cluster.provider.bootArtifactsHttp.enabled | default(false) | bool
 
+# Plumb managed load balancer VIPs onto the cluster's libvirt bridge so the
+# addresses answer ARP. ip_nonlocal_bind lets HAProxy listen on a non-local
+# IP, but without an interface owning it neither the cluster nodes nor the
+# host can reach the listener — the installer then loops on
+# "Bootstrap Kube API never initialized" while bootkube actually runs fine
+# on the SNO node, because traffic to the API VIP never arrives.
+#
+# Sourced from the cluster's machineNetworks (libvirt sub-block) and the
+# cluster's load balancer bindings — the substrate role owns this because
+# the bridge identity is a libvirt-only fact.
+- name: Resolve cluster managed load balancer VIPs against libvirt bridges
+  ansible.builtin.set_fact:
+    gitups_libvirt_lb_vips: >-
+      {{
+        (gitups_load_balancers | default([]))
+        | selectattr('clusterName', 'equalto', gitups_current_cluster.name)
+        | map(attribute='frontends') | flatten
+        | map(attribute='bindings') | flatten
+        | selectattr('clusterName', 'equalto', gitups_current_cluster.name)
+        | list
+      }}
+  changed_when: false
+
+- name: Compute libvirt VIP attachments matching cluster bridges
+  ansible.builtin.set_fact:
+    gitups_libvirt_vip_targets: >-
+      {{
+        gitups_libvirt_vip_targets | default([]) +
+        (
+          gitups_libvirt_lb_vips
+          | selectattr('bindAddress', 'defined')
+          | rejectattr('bindAddress', 'equalto', '')
+          | map('combine', {'bridge': item.libvirt.bridge, 'cidr': item.cidr})
+          | selectattr('bindAddress', 'in_cidr', item.cidr) | list
+        )
+      }}
+  changed_when: false
+  loop: "{{ gitups_current_cluster.network.machineNetworks | selectattr('libvirt', 'defined') | list }}"
+  loop_control:
+    label: "{{ item.libvirt.bridge | default('?') }} {{ item.cidr }}"
+
+- name: Plumb cluster load balancer VIPs onto libvirt bridges
+  ansible.builtin.command:
+    argv:
+      - ip
+      - address
+      - add
+      - "{{ item.bindAddress }}/{{ (item.cidr | ansible.utils.ipaddr('prefix')) }}"
+      - dev
+      - "{{ item.bridge }}"
+  register: gitups_libvirt_vip_plumb
+  changed_when: gitups_libvirt_vip_plumb.rc == 0
+  failed_when:
+    - gitups_libvirt_vip_plumb.rc != 0
+    - "'File exists' not in (gitups_libvirt_vip_plumb.stderr | default(''))"
+  loop: "{{ gitups_libvirt_vip_targets | default([]) }}"
+  loop_control:
+    label: "{{ item.bindAddress }} dev {{ item.bridge }}"
+
 - name: Open boot artifacts HTTP firewall port (permanent)
   ansible.builtin.command:
     argv:

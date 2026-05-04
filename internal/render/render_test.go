@@ -398,6 +398,7 @@ func TestLibvirtSubstrateOpensBootArtifactsHTTPPort(t *testing.T) {
 		"ip='{{ node.ipAddress }}'",
 		"--get-zone-of-interface={{ gitups_current_cluster.provider.virtualization.libvirt.bridge }}",
 		"--add-port={{ gitups_current_cluster.provider.bootArtifactsHttp.port | int }}/tcp",
+		"Plumb cluster load balancer VIPs onto libvirt bridges",
 	} {
 		if !strings.Contains(tasks, expected) {
 			t.Fatalf("cluster_substrate_libvirt is missing %q\n%s", expected, tasks)
@@ -507,9 +508,6 @@ func TestRenderManagedNetworkDetails(t *testing.T) {
 		"public: docker.io/library/haproxy:3.2.15",
 		"runtime: podman",
 		"bindAddress: 192.168.130.10",
-		"bridgeAttachment:",
-		"bridge: vbr-1-host-hub",
-		"prefixLength: 24",
 		"targetPort: 6443",
 		"backends:",
 		"address: 192.168.130.20",

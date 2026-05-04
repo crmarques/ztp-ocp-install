@@ -13,9 +13,6 @@
     sysctl_set: true
     reload: true
 
-- name: Plumb managed load balancer VIPs onto the cluster bridge
-  ansible.builtin.include_tasks: vips.yml
-
 - name: Converge managed load balancers
   ansible.builtin.include_tasks: haproxy.yml
   loop: "{{ gitups_current_load_balancers }}"
