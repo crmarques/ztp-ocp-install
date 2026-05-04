@@ -1,0 +1,43 @@
+---
+- name: Validate external API records resolve when name resolution is external
+  ansible.builtin.command:
+    argv:
+      - getent
+      - hosts
+      - "{{ item }}"
+  become: false
+  loop:
+    - "{{ gitups_current_cluster.network.records.api }}"
+    - "{{ gitups_current_cluster.network.records.apiInt }}"
+  changed_when: false
+  when: gitups_current_cluster.network.nameResolution.mode == 'external'
+
+- name: Create external network requirements directory
+  ansible.builtin.file:
+    path: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: gitups_current_cluster.network.nameResolution.mode == 'external' or gitups_current_cluster.network.loadBalancer.external | default(false) | bool
+
+- name: Record external network requirements
+  ansible.builtin.copy:
+    dest: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}/external-network.yml"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      endpoints:
+        api:
+          hostname: {{ gitups_current_cluster.network.endpoints.api.hostname }}
+          address: {{ gitups_current_cluster.network.endpoints.api.address }}
+        apiInt:
+          hostname: {{ gitups_current_cluster.network.endpoints.apiInt.hostname }}
+          address: {{ gitups_current_cluster.network.endpoints.apiInt.address }}
+        ingress:
+          hostname: "{{ gitups_current_cluster.network.endpoints.ingress.hostname }}"
+          address: {{ gitups_current_cluster.network.endpoints.ingress.address }}
+      loadBalancerMode: {{ gitups_current_cluster.network.loadBalancer.mode }}
+      nameResolutionMode: {{ gitups_current_cluster.network.nameResolution.mode }}
+  when: gitups_current_cluster.network.nameResolution.mode == 'external' or gitups_current_cluster.network.loadBalancer.external | default(false) | bool

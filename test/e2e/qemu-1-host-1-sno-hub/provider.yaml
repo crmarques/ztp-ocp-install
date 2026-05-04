@@ -1,0 +1,21 @@
+apiVersion: gitups.io/v1alpha1
+kind: InfrastructureProvider
+metadata:
+  name: qemu-1-host-provider
+spec:
+  qemuKVM:
+    hosts:
+      local-qemu-host:
+        address: localhost
+        sshKeyRef:
+          name: local-qemu-host-admin-key
+        libvirtURI: qemu:///system
+        capabilities:
+          - libvirt
+          - container-runtime
+          - hosts-file
+    bmcEmulation:
+      port: 8000
+      auth:
+        credentialRef:
+          name: qemu-1-host-bmc-credentials

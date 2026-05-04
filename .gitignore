@@ -1,0 +1,33 @@
+# Local runtime files
+.env
+.env.*
+*.log
+*.tmp
+*.bak
+
+# Credentials and cluster access
+*kubeconfig*
+*pull-secret*
+*.pem
+*.key
+*.crt
+*.p12
+auth/
+secrets/
+
+# Generated output
+.cache/
+.state/
+bin/
+dist/
+build/
+out/
+rendered/
+tmp/
+
+# Tooling
+.DS_Store
+.idea/
+.vscode/
+.codex/
+.claude/

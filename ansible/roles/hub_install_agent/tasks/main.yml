@@ -1,0 +1,510 @@
+---
+- name: Validate gitups_state_dir is set
+  ansible.builtin.assert:
+    that:
+      - gitups_state_dir is defined
+      - gitups_state_dir | length > 0
+    fail_msg: "gitups_state_dir is required (gitups CLI passes it to ansible-playbook)"
+
+- name: Resolve hub cluster install context
+  ansible.builtin.set_fact:
+    gitups_hub_install: "{{ gitups_current_cluster.ocp.install }}"
+    gitups_hub_release: "{{ gitups_current_cluster.ocp.release }}"
+    gitups_hub_installer_dir: "{{ gitups_state_dir }}/{{ gitups_current_cluster.ocp.installer.relativeDir }}"
+    gitups_hub_installer_relative_work: "{{ gitups_current_cluster.ocp.installer.relativeDir }}/work"
+    gitups_hub_install_config_path: "{{ gitups_state_dir }}/{{ gitups_current_cluster.ocp.installer.relativeInstallConfigPath }}"
+    gitups_hub_agent_config_path: "{{ gitups_state_dir }}/{{ gitups_current_cluster.ocp.installer.relativeAgentConfigPath }}"
+    gitups_hub_provider_bmc: "{{ gitups_current_provider.bmc }}"
+    gitups_hub_bmc_auth_enabled: "{{ gitups_current_provider.bmc.auth is defined and gitups_current_provider.bmc.auth.credentialRef | default('') | length > 0 }}"
+    gitups_hub_local_registry: "{{ gitups_current_cluster.ocp.install.localRegistry | default({}) }}"
+    gitups_hub_release_image_override: "{{ gitups_current_cluster.ocp.install.releaseImageOverride | default('') }}"
+  changed_when: false
+
+# A previous apply that was interrupted (Ctrl+C, host reboot, async timeout)
+# can leave a detached `openshift-install agent wait-for install-complete`
+# bound to the cluster's installer work dir. Re-running apply with that
+# process still alive blocks ISO regen, BMC media swap, and the new wait-for.
+# Kill any matching process before we touch the work dir. Match on the
+# relative installer subpath so the rule does not depend on how
+# `--state-dir` was resolved when the lingering process was launched.
+- name: Find lingering openshift-install / oc processes from a prior apply
+  ansible.builtin.command:
+    argv:
+      - pgrep
+      - -f
+      - "--"
+      - "{{ gitups_hub_installer_relative_work }}"
+  register: gitups_hub_apply_lingering_procs
+  failed_when: false
+  changed_when: false
+
+# Kill captured PIDs directly instead of `pkill -f <pattern>`. With local
+# connection + a task `environment:`, ansible prepends `VAR=value` to the
+# remote command, putting the pattern into the cmdline of the bash that
+# wraps the python module wrapper. `pkill -f` then SIGTERMs that bash —
+# which manifests as rc=-15 / "Module result deserialization failed"
+# because the python wrapper dies before printing its JSON result. Killing
+# by PID has no such collateral: pgrep itself is skipped from its own match,
+# and ansible's wrappers do not have these PIDs.
+- name: Terminate lingering openshift-install / oc processes from a prior apply
+  ansible.builtin.shell: |
+    set -uo pipefail
+    pids="{{ gitups_hub_apply_lingering_procs.stdout_lines | join(' ') }}"
+    [ -n "$pids" ] || exit 0
+    alive() {
+      for p in $pids; do
+        kill -0 "$p" 2>/dev/null && return 0
+      done
+      return 1
+    }
+    kill -TERM $pids 2>/dev/null || true
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+      sleep 1
+      alive || exit 0
+    done
+    kill -KILL $pids 2>/dev/null || true
+    sleep 1
+    if alive; then
+      echo "could not terminate PIDs: $pids" >&2
+      exit 1
+    fi
+  args:
+    executable: /bin/bash
+  changed_when: gitups_hub_apply_lingering_procs.rc == 0
+  when: gitups_hub_apply_lingering_procs.rc == 0
+
+- name: Read BMC credentials for Redfish auth
+  ansible.builtin.slurp:
+    src: "{{ gitups_secrets_dir }}/{{ gitups_current_provider.bmc.auth.credentialRef }}"
+  register: gitups_hub_bmc_credentials_slurp
+  no_log: true
+  when: gitups_hub_bmc_auth_enabled
+
+- name: Resolve BMC credentials
+  ansible.builtin.set_fact:
+    gitups_hub_bmc_username: "{{ ((gitups_hub_bmc_credentials_slurp.content | b64decode | trim).split(':', 1))[0] }}"
+    gitups_hub_bmc_password: "{{ ((gitups_hub_bmc_credentials_slurp.content | b64decode | trim).split(':', 1))[1] }}"
+  no_log: true
+  changed_when: false
+  when: gitups_hub_bmc_auth_enabled
+
+- name: Resolve generated self-signed certificate requests
+  ansible.builtin.set_fact:
+    gitups_hub_generated_self_signed_certificates: "{{ gitups_hub_install.generatedSecrets | default([]) | selectattr('type', 'equalto', 'self-signed-certificate') | list }}"
+  changed_when: false
+
+- name: Fail when install method is not agent
+  ansible.builtin.fail:
+    msg: "hub_install_agent only supports install method 'agent', got '{{ gitups_hub_install.method }}'"
+  when: gitups_hub_install.method != 'agent'
+
+- name: Resolve openshift-install binary
+  ansible.builtin.command:
+    cmd: "command -v {{ gitups_openshift_install }}"
+  register: gitups_openshift_install_lookup
+  changed_when: false
+  failed_when: gitups_openshift_install_lookup.rc != 0
+  environment:
+    PATH: "{{ ansible_facts.env.PATH }}:/usr/local/bin:{{ gitups_host_state_dir }}/tools"
+
+- name: Resolve openshift-install absolute path
+  ansible.builtin.set_fact:
+    gitups_openshift_install_path: "{{ gitups_openshift_install_lookup.stdout | trim }}"
+  changed_when: false
+
+- name: Read openshift-install version
+  ansible.builtin.command:
+    cmd: "{{ gitups_openshift_install_path }} version"
+  register: gitups_openshift_install_version
+  changed_when: false
+
+- name: Validate openshift-install version matches release
+  ansible.builtin.assert:
+    that:
+      - gitups_hub_release.version | length > 0
+      - gitups_openshift_install_version.stdout_lines[0] is search(gitups_hub_release.version)
+    fail_msg: |
+      openshift-install at {{ gitups_openshift_install_path }} reports
+      "{{ gitups_openshift_install_version.stdout_lines[0] }}", which does not match
+      release.version {{ gitups_hub_release.version | default('<unset>') }}.
+      Replace the binary or override gitups_openshift_install.
+
+- name: Create secrets directory for generated install material
+  ansible.builtin.file:
+    path: "{{ gitups_secrets_dir }}"
+    state: directory
+    mode: "0700"
+  when: gitups_hub_generated_self_signed_certificates | length > 0
+
+- name: Validate secrets directory exists
+  ansible.builtin.stat:
+    path: "{{ gitups_secrets_dir }}"
+  register: gitups_secrets_dir_stat
+
+- name: Fail when secrets directory is missing
+  ansible.builtin.fail:
+    msg: "secrets directory {{ gitups_secrets_dir }} does not exist"
+  when: not gitups_secrets_dir_stat.stat.exists or not gitups_secrets_dir_stat.stat.isdir
+
+- name: Generate requested self-signed certificate material
+  ansible.builtin.include_tasks: generated-self-signed-certificate.yml
+  loop: "{{ gitups_hub_generated_self_signed_certificates }}"
+  loop_control:
+    loop_var: gitups_generated_secret
+    label: "{{ gitups_generated_secret.name }}"
+
+- name: Read pull secret material
+  ansible.builtin.slurp:
+    src: "{{ gitups_secrets_dir }}/{{ gitups_hub_install.pullSecretRef }}"
+  register: gitups_pull_secret_slurp
+  no_log: true
+
+- name: Read SSH public key material
+  ansible.builtin.slurp:
+    src: "{{ gitups_secrets_dir }}/{{ gitups_hub_install.sshKeyRef }}"
+  register: gitups_ssh_key_slurp
+  no_log: true
+
+- name: Read additional trust bundle material
+  ansible.builtin.slurp:
+    src: "{{ gitups_secrets_dir }}/{{ gitups_hub_install.additionalTrustBundleRef }}"
+  register: gitups_trust_bundle_slurp
+  no_log: true
+  when: (gitups_hub_install.additionalTrustBundleRef | default('')) | length > 0
+
+- name: Decode resolved secret material
+  ansible.builtin.set_fact:
+    gitups_resolved_pull_secret: "{{ gitups_pull_secret_slurp.content | b64decode | trim }}"
+    gitups_resolved_ssh_key: "{{ gitups_ssh_key_slurp.content | b64decode | trim }}"
+    gitups_resolved_trust_bundle: "{{ (gitups_trust_bundle_slurp.content | default('') | b64decode) if (gitups_hub_install.additionalTrustBundleRef | default('')) | length > 0 else '' }}"
+  no_log: true
+  changed_when: false
+
+- name: Validate pull secret JSON
+  ansible.builtin.assert:
+    that:
+      - (gitups_resolved_pull_secret | from_json).auths is mapping
+    fail_msg: "pull secret at {{ gitups_secrets_dir }}/{{ gitups_hub_install.pullSecretRef }} is not valid JSON with .auths"
+
+# When the environment enables the local registry, the user supplies a separate
+# credentials file (`username:password`) for that registry. Merging it into the
+# effective pull secret here means the user does not have to hand-edit the
+# docker-config-json themselves; if the registry host is already present in
+# their pull secret, that explicit entry wins.
+- name: Read local registry credentials
+  ansible.builtin.slurp:
+    src: "{{ gitups_secrets_dir }}/{{ gitups_hub_local_registry.registry.credentialsRef }}"
+  register: gitups_mirror_credentials_slurp
+  no_log: true
+  when: gitups_hub_local_registry | length > 0
+
+- name: Resolve local registry pull-secret auth
+  ansible.builtin.set_fact:
+    gitups_mirror_pull_secret_auth: >-
+      {{
+        {
+          gitups_hub_local_registry.registry.url: {
+            'auth': (gitups_mirror_credentials_slurp.content | b64decode | trim) | b64encode,
+          }
+        }
+      }}
+  no_log: true
+  changed_when: false
+  when: gitups_hub_local_registry | length > 0
+
+- name: Merge local registry auth into effective pull secret
+  ansible.builtin.set_fact:
+    gitups_resolved_pull_secret: >-
+      {{
+        (gitups_resolved_pull_secret | from_json)
+        | combine({'auths': gitups_mirror_pull_secret_auth | combine((gitups_resolved_pull_secret | from_json).auths | default({}))})
+        | to_json
+      }}
+  no_log: true
+  changed_when: false
+  when: gitups_hub_local_registry | length > 0
+
+- name: Read rendered install-config.yaml
+  ansible.builtin.slurp:
+    src: "{{ gitups_hub_install_config_path }}"
+  register: gitups_install_config_slurp
+
+- name: Read rendered agent-config.yaml
+  ansible.builtin.slurp:
+    src: "{{ gitups_hub_agent_config_path }}"
+  register: gitups_agent_config_slurp
+
+- name: Build effective install-config
+  ansible.builtin.set_fact:
+    gitups_effective_install_config: >-
+      {{
+        (gitups_install_config_slurp.content | b64decode | from_yaml)
+        | combine({
+            'pullSecret': gitups_resolved_pull_secret,
+            'sshKey': gitups_resolved_ssh_key,
+          })
+        | combine(
+            {'additionalTrustBundle': gitups_resolved_trust_bundle}
+            if (gitups_resolved_trust_bundle | length) > 0 else {},
+            recursive=true
+          )
+        | combine(
+            {
+              'proxy': {
+                'httpProxy': gitups_proxy_http_effective,
+                'httpsProxy': gitups_proxy_https_effective,
+                'noProxy': gitups_proxy_no,
+              }
+            }
+            if (gitups_proxy_enabled | default(false) | bool)
+               and ((gitups_proxy_credentials_ref | default('') | length) > 0)
+            else {},
+            recursive=true
+          )
+      }}
+  no_log: true
+  changed_when: false
+
+- name: Build effective agent-config
+  ansible.builtin.set_fact:
+    gitups_effective_agent_config: "{{ gitups_agent_config_slurp.content | b64decode | from_yaml }}"
+  changed_when: false
+
+- name: Resolve agent boot artifact settings
+  ansible.builtin.set_fact:
+    gitups_hub_minimal_iso: "{{ gitups_effective_agent_config.minimalISO | default(false) | bool }}"
+    gitups_hub_boot_artifacts_http_port: "{{ gitups_current_provider.bootArtifactsHttp.port | int }}"
+  changed_when: false
+
+# Probe each configured imageDigestSources mirror endpoint to fail fast on
+# obvious local registry mistakes. This only validates the configured local
+# registry path; disconnected mode is enforced by rendering imageDigestSources
+# with NeverContactSource and by overriding the installer release image below.
+- name: Collect imageDigestSources mirror endpoints
+  ansible.builtin.set_fact:
+    gitups_hub_mirror_endpoints: >-
+      {{
+        (gitups_effective_install_config.imageDigestSources | default([]))
+        | map(attribute='mirrors') | flatten
+        | map('regex_replace', '^([^/]+)/.*$', '\1')
+        | unique | list
+      }}
+  changed_when: false
+
+- name: Probe imageDigestSources mirror reachability
+  block:
+    - name: Probe each mirror endpoint over TCP
+      ansible.builtin.wait_for:
+        host: "{{ item.split(':')[0] }}"
+        port: "{{ ((item.split(':') | length > 1) | ternary(item.split(':') | last, '443')) | int }}"
+        timeout: 5
+        state: started
+      become: false
+      loop: "{{ gitups_hub_mirror_endpoints }}"
+  rescue:
+    - name: Fail with local-registry guidance when a mirror is unreachable
+      ansible.builtin.fail:
+        msg: |
+          imageDigestSources mirror is not reachable from this host
+          ({{ ansible_failed_result.msg | default('connection failed') }}).
+          Bring up the mirror at the address listed in install-config.yaml
+          imageDigestSources[].mirrors and re-run, or disable the local registry
+          in the Environment for a connected install.
+  when: gitups_hub_mirror_endpoints | length > 0
+
+- name: Fail when disconnected install has no local release image override
+  ansible.builtin.fail:
+    msg: "disconnected installs require a local release image override from ocpInstall.registries.imageDigestSources"
+  when:
+    - gitups_ocp_install.disconnected | default(false) | bool
+    - gitups_hub_release_image_override | length == 0
+
+- name: Resolve OpenShift install command environment
+  ansible.builtin.set_fact:
+    gitups_hub_install_env: >-
+      {{
+        {'OPENSHIFT_INSTALL_RELEASE_IMAGE_OVERRIDE': gitups_hub_release_image_override}
+        if (gitups_hub_release_image_override | length) > 0
+        else {}
+      }}
+  changed_when: false
+
+- name: Create installer working directory
+  ansible.builtin.file:
+    path: "{{ gitups_hub_installer_dir }}/work"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Write effective install-config.yaml to working directory
+  ansible.builtin.copy:
+    dest: "{{ gitups_hub_installer_dir }}/work/install-config.yaml"
+    owner: root
+    group: root
+    mode: "0600"
+    content: "{{ gitups_effective_install_config | to_nice_yaml(indent=2) }}"
+  no_log: true
+  register: gitups_effective_install_config_file
+
+- name: Write effective agent-config.yaml to working directory
+  ansible.builtin.copy:
+    dest: "{{ gitups_hub_installer_dir }}/work/agent-config.yaml"
+    owner: root
+    group: root
+    mode: "0600"
+    content: "{{ gitups_effective_agent_config | to_nice_yaml(indent=2) }}"
+  register: gitups_effective_agent_config_file
+
+- name: Stat existing agent ISO
+  ansible.builtin.stat:
+    path: "{{ gitups_hub_installer_dir }}/work/agent.x86_64.iso"
+  register: gitups_agent_iso_stat
+
+- name: Refresh installer working files when configs change
+  ansible.builtin.copy:
+    dest: "{{ gitups_hub_installer_dir }}/work/{{ item.name }}"
+    owner: root
+    group: root
+    mode: "0600"
+    content: "{{ item.content }}"
+  no_log: true
+  loop:
+    - { name: install-config.yaml, content: "{{ gitups_effective_install_config | to_nice_yaml(indent=2) }}" }
+    - { name: agent-config.yaml, content: "{{ gitups_effective_agent_config | to_nice_yaml(indent=2) }}" }
+  when: not gitups_agent_iso_stat.stat.exists or gitups_effective_install_config_file.changed or gitups_effective_agent_config_file.changed
+
+# openshift-install caches asset state in .openshift_install_state.json after a
+# successful run; on a re-run with re-written install-config.yaml/agent-config.yaml,
+# the cached Agent Installer ISO asset is replayed and fails with "cannot generate
+# ISO image due to configuration errors". Drop the cached state and outputs first.
+- name: Purge stale openshift-install state before regenerating agent ISO
+  ansible.builtin.file:
+    path: "{{ gitups_hub_installer_dir }}/work/{{ item }}"
+    state: absent
+  loop:
+    - .openshift_install_state.json
+    - .openshift_install.log
+    - agent.x86_64.iso
+    - boot-artifacts
+    - rendezvousIP
+    - auth
+  when: not gitups_agent_iso_stat.stat.exists or gitups_effective_install_config_file.changed or gitups_effective_agent_config_file.changed
+
+- name: Create agent ISO
+  ansible.builtin.command:
+    cmd: "{{ gitups_openshift_install_path }} agent create image --dir {{ gitups_hub_installer_dir }}/work"
+    chdir: "{{ gitups_hub_installer_dir }}/work"
+  environment: "{{ gitups_hub_install_env }}"
+  changed_when: true
+  when: not gitups_agent_iso_stat.stat.exists or gitups_effective_install_config_file.changed or gitups_effective_agent_config_file.changed
+
+- name: Locate generated rootfs boot artifacts
+  ansible.builtin.find:
+    paths: "{{ gitups_hub_installer_dir }}/work/boot-artifacts"
+    patterns: "agent.*-rootfs.img"
+    file_type: file
+  register: gitups_agent_rootfs_find
+  when: gitups_hub_minimal_iso | bool
+
+- name: Fail when minimal ISO rootfs artifact is missing
+  ansible.builtin.fail:
+    msg: "openshift-install did not produce an agent rootfs artifact under {{ gitups_hub_installer_dir }}/work/boot-artifacts"
+  when:
+    - gitups_hub_minimal_iso | bool
+    - gitups_agent_rootfs_find.matched == 0
+
+- name: Create provider boot artifacts directory
+  ansible.builtin.file:
+    path: "{{ gitups_host_state_dir }}/providers/{{ gitups_provider_name }}/boot-artifacts"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: gitups_hub_minimal_iso | bool
+
+- name: Stage rootfs boot artifacts for node access
+  ansible.builtin.copy:
+    src: "{{ item.path }}"
+    remote_src: true
+    dest: "{{ gitups_host_state_dir }}/providers/{{ gitups_provider_name }}/boot-artifacts/{{ item.path | basename }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ gitups_agent_rootfs_find.files | default([]) }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  when: gitups_hub_minimal_iso | bool
+
+- name: Validate staged rootfs is reachable from provider HTTP server
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ gitups_hub_boot_artifacts_http_port }}/{{ (gitups_agent_rootfs_find.files | first).path | basename }}"
+    method: GET
+    status_code: 200
+    return_content: false
+  register: gitups_agent_rootfs_http
+  retries: 30
+  delay: 1
+  until: gitups_agent_rootfs_http.status == 200
+  when: gitups_hub_minimal_iso | bool
+
+- name: Locate generated agent ISO
+  ansible.builtin.find:
+    paths: "{{ gitups_hub_installer_dir }}/work"
+    patterns: "agent.*.iso"
+    file_type: file
+  register: gitups_agent_iso_find
+
+- name: Fail when agent ISO is missing
+  ansible.builtin.fail:
+    msg: "openshift-install did not produce an agent ISO under {{ gitups_hub_installer_dir }}/work"
+  when: gitups_agent_iso_find.matched == 0
+
+- name: Resolve agent ISO path
+  ansible.builtin.set_fact:
+    gitups_agent_iso_path: "{{ gitups_agent_iso_find.files | sort(attribute='mtime', reverse=true) | map(attribute='path') | first }}"
+  changed_when: false
+
+- name: Stage agent ISO into the BMC vmedia pool
+  ansible.builtin.copy:
+    src: "{{ gitups_agent_iso_path }}"
+    remote_src: true
+    dest: "{{ gitups_host_state_dir }}/providers/{{ gitups_provider_name }}/bmc/vmedia/{{ gitups_current_cluster.name }}-agent.iso"
+    owner: root
+    group: root
+    mode: "0644"
+  register: gitups_agent_iso_stage
+
+- name: Refresh libvirt vmedia pool after staging ISO
+  community.libvirt.virt_pool:
+    name: "gitups-{{ gitups_provider_name }}-vmedia"
+    command: refresh
+  when:
+    - gitups_agent_iso_stage.changed
+    - gitups_current_provider.bmcRole == 'emulated'
+
+# Hand off to the BMC-specific boot role. provider_bmc_emulated and
+# provider_bmc_redfish both expose Redfish, so the same role serves both;
+# real bare-metal will set bmcRole to 'redfish' and read per-host endpoints
+# from the same `bmc.yml` shape that emulated writes.
+- name: Boot hub VM via BMC
+  ansible.builtin.include_role:
+    name: "hub_boot_{{ gitups_current_provider.bmcRole }}"
+
+- name: Wait for openshift-install agent install-complete
+  ansible.builtin.command:
+    cmd: "{{ gitups_openshift_install_path }} agent wait-for install-complete --dir {{ gitups_hub_installer_dir }}/work --log-level info"
+  environment: "{{ gitups_hub_install_env }}"
+  async: "{{ gitups_hub_install_timeout_seconds }}"
+  poll: 30
+  register: gitups_hub_install_wait
+  changed_when: gitups_hub_install_wait.rc == 0
+
+- name: Persist kubeconfig path
+  ansible.builtin.copy:
+    dest: "{{ gitups_hub_installer_dir }}/work/kubeconfig.path"
+    owner: root
+    group: root
+    mode: "0644"
+    content: "{{ gitups_hub_installer_dir }}/work/auth/kubeconfig\n"
+  when: gitups_hub_install_wait.rc == 0

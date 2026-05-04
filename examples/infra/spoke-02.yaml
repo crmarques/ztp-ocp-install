@@ -1,0 +1,82 @@
+apiVersion: gitups.io/v1alpha1
+kind: ClusterInfrastructure
+metadata:
+  name: spoke-02
+spec:
+  providerRef:
+    name: lab-provider
+  networks:
+    primary:
+      cidr: 192.168.124.0/24
+      gateway: 192.168.124.1
+      dnsServers:
+        - 192.168.124.1
+      qemuKVM:
+        bridge: vbr-spoke-02
+  machines:
+    master-0:
+      interfaces:
+        primary:
+          networkRef:
+            name: primary
+          ipAddress: 192.168.124.20
+      qemuKVM:
+        hostRef:
+          name: spoke-02-host
+    master-1:
+      interfaces:
+        primary:
+          networkRef:
+            name: primary
+          ipAddress: 192.168.124.21
+      qemuKVM:
+        hostRef:
+          name: spoke-02-host
+    master-2:
+      interfaces:
+        primary:
+          networkRef:
+            name: primary
+          ipAddress: 192.168.124.22
+      qemuKVM:
+        hostRef:
+          name: spoke-02-host
+  endpoints:
+    api:
+      address: 192.168.124.10
+    apiInt:
+      address: 192.168.124.10
+    ingress:
+      address: 192.168.124.11
+  loadBalancers:
+    default:
+      placement:
+        providerHostRef:
+          name: spoke-02-host
+      endpoints:
+        - api
+        - apiInt
+        - ingress
+  nameResolution:
+    managed:
+      providerHostRefs:
+        - name: spoke-02-host
+---
+apiVersion: gitups.io/v1alpha1
+kind: OCPCluster
+metadata:
+  name: spoke-02
+spec:
+  role: managed
+  topology: multi-node
+  infrastructureRef:
+    name: spoke-02
+  install:
+    method: agent
+  nodes:
+    master-0:
+      role: control-plane
+    master-1:
+      role: control-plane
+    master-2:
+      role: control-plane

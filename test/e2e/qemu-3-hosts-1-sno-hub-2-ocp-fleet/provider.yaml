@@ -1,0 +1,47 @@
+apiVersion: gitups.io/v1alpha1
+kind: InfrastructureProvider
+metadata:
+  name: qemu-3-hosts-sno-hub-fleet-provider
+spec:
+  qemuKVM:
+    hosts:
+      hub-host:
+        address: 192.168.140.10
+        user: root
+        sshKeyRef:
+          name: provider-host-admin-key
+        libvirtURI: qemu:///system
+        capabilities:
+          - libvirt
+          - container-runtime
+          - hosts-file
+      ocp-01-host:
+        address: 192.168.140.11
+        user: root
+        sshKeyRef:
+          name: provider-host-admin-key
+        libvirtURI: qemu:///system
+        capabilities:
+          - libvirt
+          - container-runtime
+          - hosts-file
+      ocp-02-host:
+        address: 192.168.140.12
+        user: root
+        sshKeyRef:
+          name: provider-host-admin-key
+        libvirtURI: qemu:///system
+        capabilities:
+          - libvirt
+          - container-runtime
+          - hosts-file
+    bmcEmulation:
+      port: 8000
+      auth:
+        credentialRef:
+          name: qemu-3-hosts-sno-hub-fleet-bmc-credentials
+    machineProfiles:
+      compact-control-plane:
+        cpu: 4
+        memoryMiB: 16384
+        diskGiB: 100

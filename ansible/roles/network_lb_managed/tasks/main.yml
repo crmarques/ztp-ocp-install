@@ -1,0 +1,24 @@
+---
+- name: Install Podman for managed HAProxy
+  ansible.builtin.package:
+    name: podman
+    state: present
+
+- name: Enable non-local bind support for managed HAProxy
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_nonlocal_bind
+    value: "1"
+    state: present
+    sysctl_file: /etc/sysctl.d/99-gitups-haproxy.conf
+    sysctl_set: true
+    reload: true
+
+- name: Plumb managed load balancer VIPs onto the cluster bridge
+  ansible.builtin.include_tasks: vips.yml
+
+- name: Converge managed load balancers
+  ansible.builtin.include_tasks: haproxy.yml
+  loop: "{{ gitups_current_load_balancers }}"
+  loop_control:
+    loop_var: gitups_current_load_balancer
+    label: "{{ gitups_current_load_balancer.name }}"

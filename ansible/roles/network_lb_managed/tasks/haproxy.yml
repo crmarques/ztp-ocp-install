@@ -1,0 +1,285 @@
+---
+- name: Create managed load balancer state directory
+  ansible.builtin.file:
+    path: "{{ gitups_host_state_dir }}/load-balancers/{{ gitups_current_load_balancer.name }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Write managed load balancer requirements
+  ansible.builtin.copy:
+    dest: "{{ gitups_host_state_dir }}/load-balancers/{{ gitups_current_load_balancer.name }}/requirements.yml"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      name: {{ gitups_current_load_balancer.name }}
+      runtime: {{ gitups_current_load_balancer.runtime }}
+      providerRef: {{ gitups_current_load_balancer.providerRef }}
+      providerHostRef: {{ gitups_current_load_balancer.placement.providerHostRef }}
+      image:
+        local: {{ gitups_current_load_balancer.image.local | default('') }}
+        public: {{ gitups_current_load_balancer.image.public | default('') }}
+      frontends:
+      {% for frontend in gitups_current_load_balancer.frontends %}
+        - name: {{ frontend.name }}
+          endpointRef: {{ frontend.endpointRef }}
+          ports:
+      {% for port in frontend.ports %}
+            - listenPort: {{ port.listenPort }}
+              targetPort: {{ port.targetPort }}
+      {% endfor %}
+          bindings:
+      {% for binding in frontend.bindings %}
+            - clusterName: {{ binding.clusterName }}
+              bindAddress: {{ binding.bindAddress }}
+              backends:
+      {% for backend in binding.backends %}
+                - name: {{ backend.name }}
+                  address: {{ backend.address }}
+                  role: {{ backend.role }}
+      {% endfor %}
+      {% endfor %}
+      {% endfor %}
+
+- name: Write HAProxy configuration
+  ansible.builtin.copy:
+    dest: "{{ gitups_host_state_dir }}/load-balancers/{{ gitups_current_load_balancer.name }}/haproxy.cfg"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      global
+        maxconn 20000
+        log stdout format raw local0
+
+      defaults
+        mode tcp
+        log global
+        option tcplog
+        timeout connect 10s
+        timeout client 1m
+        timeout server 1m
+
+      {% for frontend in gitups_current_load_balancer.frontends %}
+      {% for binding in frontend.bindings %}
+      {% for port in frontend.ports %}
+      frontend {{ binding.clusterName }}_{{ frontend.name }}_{{ port.listenPort }}_fe
+        bind {{ binding.bindAddress }}:{{ port.listenPort }}
+        default_backend {{ binding.clusterName }}_{{ frontend.name }}_{{ port.listenPort }}_be
+
+      backend {{ binding.clusterName }}_{{ frontend.name }}_{{ port.listenPort }}_be
+        balance roundrobin
+      {% for backend in binding.backends %}
+        server {{ binding.clusterName }}_{{ backend.name }} {{ backend.address }}:{{ port.targetPort }} check
+      {% endfor %}
+
+      {% endfor %}
+      {% endfor %}
+      {% endfor %}
+  register: gitups_haproxy_config
+
+# Bump this whenever the run spec changes so existing containers get
+# recreated. Both image refs participate in the fingerprint so a swap
+# between local-only and local+public also recreates the container.
+- name: Compute managed HAProxy spec fingerprint
+  ansible.builtin.set_fact:
+    gitups_haproxy_spec_hash: >-
+      {{ (gitups_haproxy_config.checksum
+          ~ '|run-args=v3:user=0:0,net=host,restart=unless-stopped'
+          ~ '|local=' ~ (gitups_current_load_balancer.image.local | default(''))
+          ~ '|public=' ~ (gitups_current_load_balancer.image.public | default(''))
+         ) | hash('sha1') }}
+  changed_when: false
+
+- name: Inspect existing managed HAProxy container
+  containers.podman.podman_container_info:
+    name: "gitups-haproxy-{{ gitups_current_load_balancer.name }}"
+  register: gitups_haproxy_existing
+  failed_when: false
+
+- name: Resolve managed HAProxy recreate decision
+  ansible.builtin.set_fact:
+    gitups_haproxy_recreate: >-
+      {{
+        (gitups_haproxy_existing.containers | default([]) | length) == 0
+        or (((gitups_haproxy_existing.containers | first).Config.Labels | default({}))['gitups.spec-hash'] | default('')) != gitups_haproxy_spec_hash
+        or not ((gitups_haproxy_existing.containers | first).State.Running | default(false))
+      }}
+  changed_when: false
+
+# Pull strategy: try `local` first when the user declared one; fall back
+# to `public` only when local is unset or its pull fails. Operators who
+# want a strict-local install (no public fallback) declare only `local`.
+#
+# Failure detection uses `podman image exists` (rc=0 == present in local
+# storage) rather than the module's `.failed` flag. failed_when: false
+# zeroes out .failed and would silently mask pull failures; ignore_errors
+# preserves .failed but logs a noisy fatal even on the expected fallback
+# path. The exists-check sidesteps both: pull tasks stay quiet, fallback
+# logic is driven by ground truth.
+- name: Pull managed HAProxy image from local registry
+  containers.podman.podman_image:
+    name: "{{ gitups_current_load_balancer.image.local }}"
+    state: present
+    pull: true
+  register: gitups_haproxy_pull_local
+  failed_when: false
+  when:
+    - gitups_haproxy_recreate | bool
+    - (gitups_current_load_balancer.image.local | default('')) | length > 0
+
+- name: Check whether managed HAProxy local image is in podman storage
+  ansible.builtin.command:
+    argv:
+      - podman
+      - image
+      - exists
+      - "{{ gitups_current_load_balancer.image.local }}"
+  register: gitups_haproxy_local_present
+  changed_when: false
+  failed_when: false
+  when:
+    - gitups_haproxy_recreate | bool
+    - (gitups_current_load_balancer.image.local | default('')) | length > 0
+
+- name: Pull managed HAProxy image from public registry
+  containers.podman.podman_image:
+    name: "{{ gitups_current_load_balancer.image.public }}"
+    state: present
+    pull: true
+  register: gitups_haproxy_pull_public
+  failed_when: false
+  when:
+    - gitups_haproxy_recreate | bool
+    - (gitups_current_load_balancer.image.public | default('')) | length > 0
+    - >-
+      (gitups_current_load_balancer.image.local | default('')) | length == 0
+      or (gitups_haproxy_local_present.rc | default(1) != 0)
+
+- name: Check whether managed HAProxy public image is in podman storage
+  ansible.builtin.command:
+    argv:
+      - podman
+      - image
+      - exists
+      - "{{ gitups_current_load_balancer.image.public }}"
+  register: gitups_haproxy_public_present
+  changed_when: false
+  failed_when: false
+  when:
+    - gitups_haproxy_recreate | bool
+    - (gitups_current_load_balancer.image.public | default('')) | length > 0
+
+- name: Resolve managed HAProxy image ref for run
+  ansible.builtin.set_fact:
+    gitups_haproxy_run_image: >-
+      {{ gitups_current_load_balancer.image.local
+         if (gitups_haproxy_local_present.rc | default(1) == 0)
+         else gitups_current_load_balancer.image.public }}
+  when: gitups_haproxy_recreate | bool
+
+- name: Fail when neither managed HAProxy image ref could be pulled
+  ansible.builtin.fail:
+    msg: >-
+      managed HAProxy image pull failed.
+      local={{ gitups_current_load_balancer.image.local | default('<unset>') }},
+      public={{ gitups_current_load_balancer.image.public | default('<unset>') }}.
+      Pre-pull the image into local container storage or run
+      `gitups registry verify` to inspect mirror contents.
+  when:
+    - gitups_haproxy_recreate | bool
+    - (gitups_haproxy_local_present.rc | default(1) != 0)
+    - (gitups_haproxy_public_present.rc | default(1) != 0)
+
+- name: Run managed HAProxy container
+  containers.podman.podman_container:
+    name: "gitups-haproxy-{{ gitups_current_load_balancer.name }}"
+    image: "{{ gitups_haproxy_run_image }}"
+    state: started
+    recreate: "{{ gitups_haproxy_recreate | bool }}"
+    network: host
+    user: "0:0"
+    restart_policy: unless-stopped
+    pull: never
+    labels:
+      gitups.spec-hash: "{{ gitups_haproxy_spec_hash }}"
+      gitups.load-balancer: "{{ gitups_current_load_balancer.name }}"
+    volumes:
+      - "{{ gitups_host_state_dir }}/load-balancers/{{ gitups_current_load_balancer.name }}/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro,Z"
+    command:
+      - haproxy
+      - -f
+      - /usr/local/etc/haproxy/haproxy.cfg
+  when: gitups_haproxy_recreate | bool
+
+- name: Probe managed HAProxy container stability
+  ansible.builtin.command:
+    argv:
+      - timeout
+      - "3"
+      - podman
+      - wait
+      - --condition=stopped
+      - "gitups-haproxy-{{ gitups_current_load_balancer.name }}"
+  register: gitups_haproxy_wait
+  failed_when: false
+  changed_when: false
+
+- name: Capture managed HAProxy container inspect for diagnostics
+  containers.podman.podman_container_info:
+    name: "gitups-haproxy-{{ gitups_current_load_balancer.name }}"
+  register: gitups_haproxy_post_inspect
+  failed_when: false
+
+- name: Capture managed HAProxy container logs for diagnostics
+  ansible.builtin.command:
+    argv:
+      - podman
+      - logs
+      - --tail=500
+      - --timestamps
+      - "gitups-haproxy-{{ gitups_current_load_balancer.name }}"
+  register: gitups_haproxy_logs
+  failed_when: false
+  changed_when: false
+
+- name: Persist managed HAProxy container inspect snapshot
+  ansible.builtin.copy:
+    dest: "{{ gitups_host_state_dir }}/load-balancers/{{ gitups_current_load_balancer.name }}/last-inspect.json"
+    owner: root
+    group: root
+    mode: "0644"
+    content: "{{ (gitups_haproxy_post_inspect.containers | default([])) | to_nice_json }}"
+
+- name: Persist managed HAProxy container log snapshot
+  ansible.builtin.copy:
+    dest: "{{ gitups_host_state_dir }}/load-balancers/{{ gitups_current_load_balancer.name }}/last-run.log"
+    owner: root
+    group: root
+    mode: "0644"
+    content: "{{ gitups_haproxy_logs.stdout }}\n===== stderr =====\n{{ gitups_haproxy_logs.stderr }}\n"
+
+- name: Resolve final managed HAProxy container state
+  ansible.builtin.set_fact:
+    gitups_haproxy_final_state: "{{ ((gitups_haproxy_post_inspect.containers | first).State | default({})) if (gitups_haproxy_post_inspect.containers | default([]) | length) > 0 else {} }}"
+    gitups_haproxy_final_restart_count: "{{ ((gitups_haproxy_post_inspect.containers | first).RestartCount | default('n/a')) if (gitups_haproxy_post_inspect.containers | default([]) | length) > 0 else 'n/a' }}"
+  changed_when: false
+
+# timeout(1) returns 124 when the wait kept blocking; that means no stop
+# event occurred during the probe window, so the container is stably
+# running. Any other rc means `podman wait` returned because the container
+# hit a stop state at least once (i.e. it is crash-looping).
+- name: Fail when managed HAProxy container is not healthy
+  ansible.builtin.fail:
+    msg: |
+      HAProxy container gitups-haproxy-{{ gitups_current_load_balancer.name }} is not running cleanly.
+      Status:        {{ gitups_haproxy_final_state.Status | default('unknown') }}
+      Running:       {{ gitups_haproxy_final_state.Running | default(false) }}
+      ExitCode:      {{ gitups_haproxy_final_state.ExitCode | default('n/a') }}
+      RestartCount:  {{ gitups_haproxy_final_restart_count | default('n/a') }}
+      Probe rc:      {{ gitups_haproxy_wait.rc }}
+      Logs:    {{ gitups_host_state_dir }}/load-balancers/{{ gitups_current_load_balancer.name }}/last-run.log
+      Inspect: {{ gitups_host_state_dir }}/load-balancers/{{ gitups_current_load_balancer.name }}/last-inspect.json
+  when: gitups_haproxy_wait.rc != 124

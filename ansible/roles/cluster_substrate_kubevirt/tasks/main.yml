@@ -1,0 +1,12 @@
+---
+# Per-cluster substrate role for the OpenShift Virtualization provider.
+# Scaffold only: VirtualMachine + DataVolume manifests applied through the
+# KubeVirt API land alongside the OpenShiftVirtualizationSpec extensions.
+
+- name: KubeVirt substrate is not yet implemented
+  ansible.builtin.fail:
+    msg: |
+      cluster_substrate_kubevirt is a scaffold. To enable, extend
+      OpenShiftVirtualizationSpec with namespace/storage/network fields and
+      project them in internal/render/vars.go, then implement the
+      VirtualMachine apply tasks here using kubernetes.core.k8s.

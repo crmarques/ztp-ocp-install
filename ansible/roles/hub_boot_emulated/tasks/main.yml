@@ -1,0 +1,8 @@
+---
+# provider_bmc_emulated (sushy-tools loopback) and provider_bmc_redfish (real
+# BMC) expose the same Redfish surface, so the boot sequence is shared.
+# ADR 0002 dispatches on `bmcRole` literally (hub_boot_<role>), so this role
+# must exist for bmcRole=emulated; it delegates to hub_boot_redfish.
+- name: Boot hub VM via emulated Redfish (sushy-tools)
+  ansible.builtin.include_role:
+    name: hub_boot_redfish

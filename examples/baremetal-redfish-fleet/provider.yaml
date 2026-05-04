@@ -1,0 +1,7 @@
+apiVersion: gitups.io/v1alpha1
+kind: InfrastructureProvider
+metadata:
+  name: baremetal-redfish-provider
+spec:
+  bareMetal:
+    bmcProtocol: redfish

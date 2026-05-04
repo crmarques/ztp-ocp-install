@@ -1,0 +1,81 @@
+---
+# Per-cluster substrate role for the bare-metal provider. Hardware is already
+# present, so this role only stages credentials and writes a baremetal.yml
+# manifest for hub_boot_redfish to consume. Mirror of the qemu/virtualization.yml
+# manifest written by cluster_substrate_libvirt.
+
+- name: Resolve bare-metal machines for current cluster
+  ansible.builtin.set_fact:
+    gitups_baremetal_machines: >-
+      {{
+        gitups_current_cluster.ocp.nodes
+        | selectattr('bareMetal', 'defined')
+        | rejectattr('bareMetal', 'equalto', None)
+        | list
+      }}
+  changed_when: false
+
+- name: Fail when bare-metal machines lack BMC details
+  ansible.builtin.assert:
+    that:
+      - gitups_baremetal_machines | length == gitups_current_cluster.ocp.nodes | length
+      - gitups_baremetal_machines | rejectattr('bareMetal.address', 'defined') | list | length == 0
+    fail_msg: "Every machine in cluster {{ gitups_current_cluster.name }} must declare bareMetal.bmc.address; got {{ gitups_baremetal_machines | length }} of {{ gitups_current_cluster.ocp.nodes | length }} with BMC info"
+
+- name: Resolve unique BMC credential refs for current cluster
+  ansible.builtin.set_fact:
+    gitups_baremetal_credential_refs: >-
+      {{
+        gitups_baremetal_machines
+        | map(attribute='bareMetal.credentialRef')
+        | select('truthy') | unique | list
+      }}
+  changed_when: false
+
+- name: Verify each BMC credential file exists
+  ansible.builtin.stat:
+    path: "{{ gitups_secrets_dir }}/{{ item }}"
+  loop: "{{ gitups_baremetal_credential_refs }}"
+  register: gitups_baremetal_credential_stats
+
+- name: Fail when any BMC credential is missing
+  ansible.builtin.fail:
+    msg: "Missing bare-metal BMC credentials at {{ gitups_secrets_dir }}/{{ item.item }}"
+  loop: "{{ gitups_baremetal_credential_stats.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: not (item.stat.exists | default(false))
+
+- name: Create state directory for cluster bare-metal manifest
+  ansible.builtin.file:
+    path: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}/baremetal"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Write bare-metal cluster manifest
+  ansible.builtin.copy:
+    dest: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}/baremetal/manifest.yml"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      cluster: {{ gitups_current_cluster.name }}
+      machines:
+      {% for node in gitups_baremetal_machines %}
+        - name: {{ node.name }}
+          role: {{ node.role }}
+          ipAddress: {{ node.ipAddress }}
+          macAddress: {{ node.macAddress }}
+          bmc:
+            address: {{ node.bareMetal.address }}
+            {% if node.bareMetal.protocol | default('') | length > 0 %}
+            protocol: {{ node.bareMetal.protocol }}
+            {% endif %}
+            {% if (node.bareMetal.port | default(0)) > 0 %}
+            port: {{ node.bareMetal.port }}
+            {% endif %}
+            credentialRef: {{ node.bareMetal.credentialRef | default('') }}
+            disableCertificateVerification: {{ node.bareMetal.disableCertificateVerification | default(false) }}
+      {% endfor %}

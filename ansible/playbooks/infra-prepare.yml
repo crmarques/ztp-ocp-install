@@ -1,0 +1,83 @@
+---
+- name: Prepare Gitups lowest-layer infrastructure
+  hosts: gitups_infra_hosts
+  gather_facts: true
+  become: true
+  environment: "{{ gitups_proxy_env | default({}) }}"
+
+  pre_tasks:
+    - name: Select cluster infrastructure for current host
+      ansible.builtin.set_fact:
+        gitups_current_cluster: "{{ gitups_clusters | selectattr('name', 'equalto', gitups_cluster_name) | first }}"
+      become: false
+      changed_when: false
+
+  tasks:
+    - name: Apply host proxy role
+      ansible.builtin.import_role:
+        name: host_proxy
+
+    - name: Apply host prepare role
+      ansible.builtin.import_role:
+        name: host_prepare
+
+    # Substrate dispatch by structural discriminator. include_role (not
+    # import_role) is required because the role name interpolates a fact
+    # set in pre_tasks; import_role evaluates at parse time and would fail
+    # with `gitups_current_cluster is undefined`. host_kvm rides along as
+    # a meta dependency of cluster_substrate_libvirt so the package
+    # install travels with the role that needs it.
+    - name: Apply substrate role for current provider kind
+      ansible.builtin.include_role:
+        name: "cluster_substrate_{{ gitups_current_cluster.provider.substrateRole }}"
+
+    - name: Apply managed name resolution
+      ansible.builtin.import_role:
+        name: network_dns_managed
+      when: gitups_current_cluster.network.nameResolution.mode == 'managed'
+
+    - name: Validate external network reachability
+      ansible.builtin.import_role:
+        name: network_external_validate
+      when: gitups_current_cluster.network.nameResolution.mode == 'external' or gitups_current_cluster.network.loadBalancer.external | default(false) | bool
+
+- name: Prepare Gitups provider-scoped infrastructure components
+  hosts: gitups_provider_hosts
+  gather_facts: true
+  become: true
+  environment: "{{ gitups_proxy_env | default({}) }}"
+
+  pre_tasks:
+    - name: Select provider for current host
+      ansible.builtin.set_fact:
+        gitups_current_provider: "{{ gitups_providers | selectattr('name', 'equalto', gitups_provider_name) | first }}"
+      become: false
+      changed_when: false
+
+    - name: Select managed load balancers for current host
+      ansible.builtin.set_fact:
+        gitups_current_load_balancers: "{{ gitups_load_balancers | selectattr('providerRef', 'equalto', gitups_provider_name) | selectattr('placement.providerHostRef', 'equalto', gitups_host_name) | list }}"
+      become: false
+      changed_when: false
+
+  tasks:
+    - name: Apply host proxy role
+      ansible.builtin.import_role:
+        name: host_proxy
+
+    # BMC dispatch by structural discriminator. provider_bmc_none is the
+    # explicit empty case (vSphere, KubeVirt) so the dynamic role-name
+    # always resolves.
+    - name: Apply BMC role for current provider kind
+      ansible.builtin.include_role:
+        name: "provider_bmc_{{ gitups_current_provider.bmcRole }}"
+
+    - name: Apply boot-artifacts HTTP role
+      ansible.builtin.import_role:
+        name: provider_boot_artifacts_http
+      when: gitups_current_provider.bootArtifactsHttp.enabled | default(false) | bool
+
+    - name: Apply managed load balancer role
+      ansible.builtin.import_role:
+        name: network_lb_managed
+      when: gitups_current_load_balancers | length > 0

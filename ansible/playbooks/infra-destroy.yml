@@ -1,0 +1,290 @@
+---
+- name: Tear down Gitups provider-scoped infrastructure
+  hosts: gitups_provider_hosts
+  gather_facts: false
+  become: true
+
+  pre_tasks:
+    - name: Select provider for current host
+      ansible.builtin.set_fact:
+        gitups_current_provider: "{{ gitups_providers | selectattr('name', 'equalto', gitups_provider_name) | first }}"
+      become: false
+      changed_when: false
+
+    - name: Select managed load balancers for current host
+      ansible.builtin.set_fact:
+        gitups_current_load_balancers: "{{ gitups_load_balancers | selectattr('providerRef', 'equalto', gitups_provider_name) | selectattr('placement.providerHostRef', 'equalto', gitups_host_name) | list }}"
+      become: false
+      changed_when: false
+
+  tasks:
+    - name: Stop sushy-emulator service for current provider
+      ansible.builtin.systemd_service:
+        name: "gitups-sushy-{{ gitups_current_provider.name }}.service"
+        state: stopped
+        enabled: false
+      register: gitups_sushy_stop
+      failed_when: false
+      changed_when: gitups_sushy_stop.changed | default(false)
+      when: gitups_current_provider.bmcRole == 'emulated'
+
+    - name: Stop vmedia HTTP server for current provider
+      ansible.builtin.systemd_service:
+        name: "gitups-vmedia-{{ gitups_current_provider.name }}.service"
+        state: stopped
+        enabled: false
+      register: gitups_vmedia_stop
+      failed_when: false
+      changed_when: gitups_vmedia_stop.changed | default(false)
+      when: gitups_current_provider.bmcRole == 'emulated'
+
+    - name: Stop boot artifacts HTTP server for current provider
+      ansible.builtin.systemd_service:
+        name: "gitups-boot-artifacts-{{ gitups_current_provider.name }}.service"
+        state: stopped
+        enabled: false
+      register: gitups_boot_artifacts_stop
+      failed_when: false
+      changed_when: gitups_boot_artifacts_stop.changed | default(false)
+      when: gitups_current_provider.bootArtifactsHttp.enabled | default(false) | bool
+
+    - name: Remove sushy-emulator systemd unit
+      ansible.builtin.file:
+        path: "/etc/systemd/system/gitups-sushy-{{ gitups_current_provider.name }}.service"
+        state: absent
+      register: gitups_sushy_unit_remove
+
+    - name: Remove vmedia HTTP systemd unit
+      ansible.builtin.file:
+        path: "/etc/systemd/system/gitups-vmedia-{{ gitups_current_provider.name }}.service"
+        state: absent
+      register: gitups_vmedia_unit_remove
+
+    - name: Remove boot artifacts HTTP systemd unit
+      ansible.builtin.file:
+        path: "/etc/systemd/system/gitups-boot-artifacts-{{ gitups_current_provider.name }}.service"
+        state: absent
+      register: gitups_boot_artifacts_unit_remove
+
+    - name: Reload systemd after removing provider units
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+      when: gitups_sushy_unit_remove.changed or gitups_vmedia_unit_remove.changed or gitups_boot_artifacts_unit_remove.changed
+
+    - name: Destroy libvirt vmedia pool for current provider
+      community.libvirt.virt_pool:
+        name: "gitups-{{ gitups_current_provider.name }}-vmedia"
+        state: absent
+      failed_when: false
+
+    - name: Remove managed HAProxy containers
+      containers.podman.podman_container:
+        name: "gitups-haproxy-{{ item.name }}"
+        state: absent
+      loop: "{{ gitups_current_load_balancers }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    # Drop the VIPs plumbed by network_lb_managed before per-cluster teardown
+    # tears the bridge down. virsh net-destroy would also delete them with the
+    # bridge, but doing it explicitly keeps cleanup symmetric for partial runs
+    # and for hosts where the libvirt teardown is skipped.
+    - name: Resolve managed load balancer VIPs to remove
+      ansible.builtin.set_fact:
+        gitups_managed_lb_vip_targets: >-
+          {{
+            gitups_current_load_balancers
+            | map(attribute='frontends') | flatten
+            | map(attribute='bindings') | flatten
+            | selectattr('bridgeAttachment', 'defined')
+            | rejectattr('bridgeAttachment', 'equalto', None)
+            | map('to_json') | unique | map('from_json') | list
+          }}
+      changed_when: false
+
+    - name: Unplumb managed load balancer VIPs from the cluster bridge
+      ansible.builtin.command:
+        argv:
+          - ip
+          - address
+          - del
+          - "{{ item.bindAddress }}/{{ item.bridgeAttachment.prefixLength }}"
+          - dev
+          - "{{ item.bridgeAttachment.bridge }}"
+      register: gitups_managed_lb_vip_unplumb
+      changed_when: gitups_managed_lb_vip_unplumb.rc == 0
+      failed_when:
+        - gitups_managed_lb_vip_unplumb.rc != 0
+        - "'Cannot assign requested address' not in (gitups_managed_lb_vip_unplumb.stderr | default(''))"
+        - "'Cannot find device' not in (gitups_managed_lb_vip_unplumb.stderr | default(''))"
+      loop: "{{ gitups_managed_lb_vip_targets }}"
+      loop_control:
+        label: "{{ item.bindAddress }}/{{ item.bridgeAttachment.prefixLength }} dev {{ item.bridgeAttachment.bridge }}"
+
+    - name: Remove managed load balancer state directories
+      ansible.builtin.file:
+        path: "{{ gitups_host_state_dir }}/load-balancers/{{ item.name }}"
+        state: absent
+      loop: "{{ gitups_current_load_balancers }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Remove load-balancers parent directory if empty
+      ansible.builtin.command:
+        argv:
+          - rmdir
+          - "{{ gitups_host_state_dir }}/load-balancers"
+      register: gitups_lb_parent_rm
+      failed_when: false
+      changed_when: gitups_lb_parent_rm.rc == 0
+
+    - name: Remove BMC emulator state for current provider
+      ansible.builtin.file:
+        path: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}"
+        state: absent
+
+    - name: Remove providers parent directory if empty
+      ansible.builtin.command:
+        argv:
+          - rmdir
+          - "{{ gitups_host_state_dir }}/providers"
+      register: gitups_providers_parent_rm
+      failed_when: false
+      changed_when: gitups_providers_parent_rm.rc == 0
+
+    - name: Remove Gitups sysctl drop-in for HAProxy
+      ansible.builtin.file:
+        path: /etc/sysctl.d/99-gitups-haproxy.conf
+        state: absent
+
+- name: Tear down Gitups per-cluster infrastructure
+  hosts: gitups_infra_hosts
+  gather_facts: false
+  become: true
+
+  pre_tasks:
+    - name: Select cluster infrastructure for current host
+      ansible.builtin.set_fact:
+        gitups_current_cluster: "{{ gitups_clusters | selectattr('name', 'equalto', gitups_cluster_name) | first }}"
+      become: false
+      changed_when: false
+
+  tasks:
+    - name: Force-stop libvirt domains for current cluster
+      community.libvirt.virt:
+        name: "{{ gitups_current_cluster.name }}-{{ item.name }}"
+        state: destroyed
+      failed_when: false
+      loop: "{{ gitups_current_cluster.provider.nodes | default([]) }}"
+      loop_control:
+        label: "{{ item.name }}"
+      when: gitups_current_cluster.provider.kind == 'qemu-kvm'
+
+    - name: Undefine libvirt domains for current cluster
+      community.libvirt.virt:
+        command: undefine
+        name: "{{ gitups_current_cluster.name }}-{{ item.name }}"
+        flags:
+          - remove_all_storage
+          - keep_nvram
+      failed_when: false
+      loop: "{{ gitups_current_cluster.provider.nodes | default([]) }}"
+      loop_control:
+        label: "{{ item.name }}"
+      when: gitups_current_cluster.provider.kind == 'qemu-kvm'
+
+    # Close the firewalld port opened by provider_qemu before tearing the
+    # libvirt bridge down: net-destroy removes the bridge, after which
+    # firewall-cmd --get-zone-of-interface can no longer resolve the zone.
+    - name: Check firewalld state
+      ansible.builtin.command:
+        argv:
+          - firewall-cmd
+          - --state
+      register: gitups_firewalld_state
+      changed_when: false
+      failed_when: false
+      when: gitups_current_cluster.provider.kind == 'qemu-kvm'
+
+    - name: Resolve firewalld zone for libvirt bridge
+      ansible.builtin.command:
+        argv:
+          - firewall-cmd
+          - "--get-zone-of-interface={{ gitups_current_cluster.provider.virtualization.libvirt.bridge }}"
+      register: gitups_libvirt_firewalld_zone
+      changed_when: false
+      failed_when: false
+      when:
+        - gitups_current_cluster.provider.kind == 'qemu-kvm'
+        - gitups_firewalld_state.rc | default(1) == 0
+        - gitups_current_cluster.provider.bootArtifactsHttp.enabled | default(false) | bool
+
+    # Driven by firewall-cmd directly rather than ansible.posix.firewalld:
+    # ansible.posix 2.1.0 ships the firewalld module_util with an import
+    # of `_respawn` that is absent from the collection, which fails task
+    # execution at import time.
+    - name: Close boot artifacts HTTP firewall port (runtime)
+      ansible.builtin.command:
+        argv:
+          - firewall-cmd
+          - "--zone={{ gitups_libvirt_firewalld_zone.stdout | trim }}"
+          - "--remove-port={{ gitups_current_cluster.provider.bootArtifactsHttp.port | int }}/tcp"
+      register: gitups_boot_port_runtime_close
+      changed_when: "'NOT_ENABLED' not in (gitups_boot_port_runtime_close.stdout | default('') ~ gitups_boot_port_runtime_close.stderr | default(''))"
+      failed_when: false
+      when:
+        - gitups_current_cluster.provider.kind == 'qemu-kvm'
+        - gitups_firewalld_state.rc | default(1) == 0
+        - gitups_current_cluster.provider.bootArtifactsHttp.enabled | default(false) | bool
+        - gitups_libvirt_firewalld_zone.rc | default(1) == 0
+
+    - name: Close boot artifacts HTTP firewall port (permanent)
+      ansible.builtin.command:
+        argv:
+          - firewall-cmd
+          - --permanent
+          - "--zone={{ gitups_libvirt_firewalld_zone.stdout | trim }}"
+          - "--remove-port={{ gitups_current_cluster.provider.bootArtifactsHttp.port | int }}/tcp"
+      register: gitups_boot_port_permanent_close
+      changed_when: "'NOT_ENABLED' not in (gitups_boot_port_permanent_close.stdout | default('') ~ gitups_boot_port_permanent_close.stderr | default(''))"
+      failed_when: false
+      when:
+        - gitups_current_cluster.provider.kind == 'qemu-kvm'
+        - gitups_firewalld_state.rc | default(1) == 0
+        - gitups_current_cluster.provider.bootArtifactsHttp.enabled | default(false) | bool
+        - gitups_libvirt_firewalld_zone.rc | default(1) == 0
+
+    - name: Tear down libvirt network for current cluster
+      community.libvirt.virt_net:
+        name: "{{ gitups_current_cluster.provider.virtualization.libvirt.network }}"
+        state: absent
+      failed_when: false
+      when:
+        - gitups_current_cluster.provider.kind == 'qemu-kvm'
+        - (gitups_current_cluster.provider.virtualization.libvirt.network | default('')) | length > 0
+
+    - name: Remove managed hosts-file block for current cluster
+      ansible.builtin.blockinfile:
+        path: /etc/hosts
+        marker: "# {mark} GITUPS {{ gitups_current_cluster.name }} hosts"
+        state: absent
+      when: gitups_current_cluster.network.nameResolution.mode == 'managed'
+
+    - name: Remove cluster state directory
+      ansible.builtin.file:
+        path: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}"
+        state: absent
+
+- name: Remove Gitups state root if empty
+  hosts: gitups_provider_hosts
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Remove Gitups host state root if empty
+      ansible.builtin.command:
+        argv:
+          - rmdir
+          - "{{ gitups_host_state_dir }}"
+      register: gitups_root_rm
+      failed_when: false
+      changed_when: gitups_root_rm.rc == 0

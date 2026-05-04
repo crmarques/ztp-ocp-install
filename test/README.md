@@ -1,0 +1,66 @@
+# Tests
+
+Repository tests run from the project root.
+
+- `test/e2e/<case>/`: self-contained Gitups input sets for real host
+  validation and apply flows.
+- Go unit and rendering fixtures live with the package tests that consume
+  them.
+
+E2E cases are test assets, not canonical UX examples. Canonical examples live
+under [`/examples/`](../examples/).
+
+## E2E Case Names
+
+Case names describe the architectural shape — substrate, host layout, and
+fleet shape:
+
+```text
+<substrate>-<host-layout>-<fleet-shape>
+```
+
+OCP install mode (connected vs. disconnected) is not encoded in the case
+name; it is documented in each case's `README.md`.
+
+Current cases:
+
+- `qemu-1-host-1-sno-hub` — 1 QEMU host, 1 SNO hub, no managed clusters.
+- `qemu-3-hosts-1-sno-hub-2-ocp-fleet` — 3 QEMU hosts, 1 SNO hub plus 2
+  multi-node managed OCP clusters (one cluster per host).
+- `qemu-3-hosts-1-hub-2-ocp-fleet` — 3 QEMU hosts, 1 multi-node hub plus 2
+  multi-node managed OCP clusters (one cluster per host).
+
+## Running A Case
+
+```text
+make build
+make list-e2e-cases
+make e2e-dry-run CASE=qemu-1-host-1-sno-hub
+make e2e         CASE=qemu-1-host-1-sno-hub
+make e2e-destroy CASE=qemu-1-host-1-sno-hub
+```
+
+The user-facing equivalent is plain `gitups`:
+
+```text
+gitups validate -f test/e2e/<case> --check-host
+gitups render   -f test/e2e/<case> --state-dir /tmp/gitups-<case>
+gitups apply    -f test/e2e/<case> --state-dir /tmp/gitups-<case> --dry-run
+gitups apply    -f test/e2e/<case> --state-dir /tmp/gitups-<case> --yes
+gitups status   -f test/e2e/<case> --state-dir /tmp/gitups-<case> --diff
+gitups destroy  -f test/e2e/<case> --state-dir /tmp/gitups-<case> --yes
+```
+
+## Common Prerequisites
+
+- Linux host with KVM support (`/dev/kvm`) for QEMU/KVM cases.
+- Go toolchain compatible with `go.mod`.
+- `ansible-playbook`, `python3`, `pip3`, and `sudo` on `PATH`.
+- Permission to manage host runtime state under `/var/lib/gitups`.
+- Required install secrets under `~/.gitups/secrets` or `--secrets-dir`.
+
+## Logs And Artifacts
+
+Generated state defaults to `/tmp/gitups-<case>/`. Apply and destroy logs are
+written under `ansible/artifacts/<phase>/ansible-output.log` inside that state
+directory. Failed phases print the relevant log path.

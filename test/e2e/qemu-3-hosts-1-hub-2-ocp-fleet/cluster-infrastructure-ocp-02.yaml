@@ -1,0 +1,81 @@
+apiVersion: gitups.io/v1alpha1
+kind: ClusterInfrastructure
+metadata:
+  name: qemu-3-hosts-ocp-02
+spec:
+  providerRef:
+    name: qemu-3-hosts-ocp-02-provider
+  networks:
+    primary:
+      cidr: 192.168.152.0/24
+      gateway: 192.168.152.1
+      dnsServers:
+        - 192.168.152.1
+      qemuKVM:
+        bridge: vbr-ocp-02
+  machines:
+    master-0:
+      profileRef:
+        name: compact-control-plane
+      rootDeviceHints:
+        deviceName: /dev/vda
+      interfaces:
+        enp1s0:
+          networkRef:
+            name: primary
+          ipAddress: 192.168.152.20
+          macAddress: 52:54:00:32:10:00
+      qemuKVM:
+        hostRef:
+          name: ocp-02-host
+    master-1:
+      profileRef:
+        name: compact-control-plane
+      rootDeviceHints:
+        deviceName: /dev/vda
+      interfaces:
+        enp1s0:
+          networkRef:
+            name: primary
+          ipAddress: 192.168.152.21
+          macAddress: 52:54:00:32:10:01
+      qemuKVM:
+        hostRef:
+          name: ocp-02-host
+    master-2:
+      profileRef:
+        name: compact-control-plane
+      rootDeviceHints:
+        deviceName: /dev/vda
+      interfaces:
+        enp1s0:
+          networkRef:
+            name: primary
+          ipAddress: 192.168.152.22
+          macAddress: 52:54:00:32:10:02
+      qemuKVM:
+        hostRef:
+          name: ocp-02-host
+  endpoints:
+    api:
+      address: 192.168.152.10
+    apiInt:
+      address: 192.168.152.10
+    ingress:
+      address: 192.168.152.11
+  loadBalancers:
+    lb-qemu-3-hosts-ocp-02:
+      placement:
+        providerHostRef:
+          name: ocp-02-host
+      endpoints:
+        - api
+        - apiInt
+        - ingress
+  nameResolution:
+    managed:
+      providerHostRefs:
+        - name: ocp-02-host
+      additionalIngressHosts:
+        - console-openshift-console.apps.qemu-3-hosts-ocp-02.gitups.test
+        - oauth-openshift.apps.qemu-3-hosts-ocp-02.gitups.test

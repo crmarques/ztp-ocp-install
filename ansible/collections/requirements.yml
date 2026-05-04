@@ -1,0 +1,16 @@
+---
+# Trusted collection dependencies. Pinned to compatible majors so build-time
+# `ansible-galaxy collection install` resolves deterministically. Keep the
+# list minimal: every entry must come from an official Ansible community or
+# vendor namespace (community.*, ansible.*, containers.*, redhat.*).
+collections:
+  - name: community.general
+    version: ">=10.0.0,<11.0.0"
+  - name: community.libvirt
+    version: ">=1.3.0,<2.0.0"
+  - name: containers.podman
+    version: ">=1.16.0,<2.0.0"
+  - name: ansible.posix
+    version: ">=2.0.0,<3.0.0"
+  - name: community.crypto
+    version: ">=2.22.0,<3.0.0"

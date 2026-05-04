@@ -1,0 +1,29 @@
+apiVersion: gitups.io/v1alpha1
+kind: InfrastructureProvider
+metadata:
+  name: qemu-redfish-provider
+spec:
+  qemuKVM:
+    hosts:
+      qemu-host:
+        address: 192.168.10.11
+        sshKeyRef:
+          name: qemu-host-ssh
+        capabilities:
+          - libvirt
+          - hosts-file
+    bmcEmulation:
+      enabled: true
+      protocol: redfish
+      auth:
+        credentialRef:
+          name: qemu-redfish-bmc
+    machineProfiles:
+      sno:
+        cpu: 8
+        memoryMiB: 22528
+        diskGiB: 120
+      compact:
+        cpu: 8
+        memoryMiB: 22528
+        diskGiB: 120

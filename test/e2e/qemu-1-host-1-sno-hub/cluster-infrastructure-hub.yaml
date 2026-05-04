@@ -1,0 +1,55 @@
+apiVersion: gitups.io/v1alpha1
+kind: ClusterInfrastructure
+metadata:
+  name: qemu-1-host-hub
+spec:
+  providerRef:
+    name: qemu-1-host-provider
+  networks:
+    primary:
+      cidr: 192.168.130.0/24
+      gateway: 192.168.130.1
+      dnsServers:
+        - 192.168.130.1
+      qemuKVM:
+        bridge: vbr-1-host-hub
+  machines:
+    master-0:
+      resources:
+        cpu: 9
+        memoryMiB: 19456
+        diskGiB: 120
+      rootDeviceHints:
+        deviceName: /dev/vda
+      interfaces:
+        enp1s0:
+          networkRef:
+            name: primary
+          ipAddress: 192.168.130.20
+          macAddress: 52:54:00:21:11:10
+      qemuKVM:
+        hostRef:
+          name: local-qemu-host
+  endpoints:
+    api:
+      address: 192.168.130.10
+    apiInt:
+      address: 192.168.130.10
+    ingress:
+      address: 192.168.130.11
+  loadBalancers:
+    lb-qemu-1-host-hub:
+      placement:
+        providerHostRef:
+          name: local-qemu-host
+      endpoints:
+        - api
+        - apiInt
+        - ingress
+  nameResolution:
+    managed:
+      providerHostRefs:
+        - name: local-qemu-host
+      additionalIngressHosts:
+        - console-openshift-console.apps.qemu-1-host-hub.gitups.test
+        - oauth-openshift.apps.qemu-1-host-hub.gitups.test

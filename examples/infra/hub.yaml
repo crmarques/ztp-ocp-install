@@ -1,0 +1,62 @@
+apiVersion: gitups.io/v1alpha1
+kind: ClusterInfrastructure
+metadata:
+  name: hub
+spec:
+  providerRef:
+    name: lab-provider
+  networks:
+    primary:
+      cidr: 192.168.122.0/24
+      gateway: 192.168.122.1
+      dnsServers:
+        - 192.168.122.1
+      qemuKVM:
+        bridge: vbr-hub
+  machines:
+    master-0:
+      interfaces:
+        primary:
+          networkRef:
+            name: primary
+          ipAddress: 192.168.122.20
+      rootDeviceHints:
+        deviceName: /dev/vda
+      qemuKVM:
+        hostRef:
+          name: hub-sno-host
+  endpoints:
+    api:
+      address: 192.168.122.10
+    apiInt:
+      address: 192.168.122.10
+    ingress:
+      address: 192.168.122.11
+  loadBalancers:
+    default:
+      placement:
+        providerHostRef:
+          name: hub-sno-host
+      endpoints:
+        - api
+        - apiInt
+        - ingress
+  nameResolution:
+    managed:
+      providerHostRefs:
+        - name: hub-sno-host
+---
+apiVersion: gitups.io/v1alpha1
+kind: OCPCluster
+metadata:
+  name: hub
+spec:
+  role: hub
+  topology: single-node
+  infrastructureRef:
+    name: hub
+  install:
+    method: agent
+  nodes:
+    master-0:
+      role: control-plane

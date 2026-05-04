@@ -1,0 +1,35 @@
+apiVersion: gitups.io/v1alpha1
+kind: InfrastructureProvider
+metadata:
+  name: lab-provider
+spec:
+  qemuKVM:
+    hosts:
+      hub-sno-host:
+        address: 10.10.10.1
+        sshKeyRef:
+          name: lab-provider-key
+        capabilities:
+          - libvirt
+          - hosts-file
+      spoke-01-host:
+        address: 10.10.10.2
+        sshKeyRef:
+          name: lab-provider-key
+        capabilities:
+          - libvirt
+          - hosts-file
+      spoke-02-host:
+        address: 10.10.10.3
+        sshKeyRef:
+          name: lab-provider-key
+        capabilities:
+          - libvirt
+          - hosts-file
+    bmcEmulation:
+      enabled: true
+      protocol: redfish
+      port: 8000
+      auth:
+        credentialRef:
+          name: lab-bmc-credentials

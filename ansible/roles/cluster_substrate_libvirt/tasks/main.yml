@@ -1,0 +1,370 @@
+---
+- name: Create QEMU storage directory for cluster infrastructure
+  ansible.builtin.file:
+    path: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}/qemu"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Write cluster virtualization settings
+  ansible.builtin.copy:
+    dest: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}/qemu/virtualization.yml"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      type: {{ gitups_current_cluster.provider.virtualization.type }}
+      libvirt:
+        network: {{ gitups_current_cluster.provider.virtualization.libvirt.network }}
+        bridge: {{ gitups_current_cluster.provider.virtualization.libvirt.bridge }}
+      defaultNode:
+        cpu: {{ gitups_current_cluster.provider.virtualization.defaultNode.cpu }}
+        memoryMiB: {{ gitups_current_cluster.provider.virtualization.defaultNode.memoryMiB }}
+        diskGiB: {{ gitups_current_cluster.provider.virtualization.defaultNode.diskGiB }}
+      nodes:
+      {% for node in gitups_current_cluster.provider.nodes %}
+        - name: {{ node.name }}
+          role: {{ node.role }}
+          hostRef: {{ node.hostRef }}
+          ipAddress: {{ node.ipAddress }}
+          macAddress: {{ node.macAddress }}
+          resources:
+            cpu: {{ node.resources.cpu }}
+            memoryMiB: {{ node.resources.memoryMiB }}
+            diskGiB: {{ node.resources.diskGiB }}
+      {% endfor %}
+
+- name: List defined libvirt networks
+  community.libvirt.virt_net:
+    command: list_nets
+  register: gitups_libvirt_net_list
+  changed_when: false
+
+- name: Resolve target libvirt network presence
+  ansible.builtin.set_fact:
+    gitups_libvirt_net_exists: "{{ gitups_current_cluster.provider.virtualization.libvirt.network in (gitups_libvirt_net_list.list_nets | default([])) }}"
+  changed_when: false
+
+- name: Read existing libvirt network XML
+  community.libvirt.virt_net:
+    command: get_xml
+    name: "{{ gitups_current_cluster.provider.virtualization.libvirt.network }}"
+  register: gitups_libvirt_net_existing_xml
+  failed_when: false
+  changed_when: false
+  when: gitups_libvirt_net_exists
+
+# net-define rejects XML whose UUID differs from the persistent
+# definition's, so reuse the existing UUID when present and synthesize a
+# stable one otherwise.
+- name: Resolve libvirt network UUID
+  ansible.builtin.set_fact:
+    gitups_libvirt_net_uuid: >-
+      {{
+        ((gitups_libvirt_net_existing_xml.get_xml | default(''))
+          | regex_search('[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'))
+        if gitups_libvirt_net_exists
+        else (gitups_current_cluster.name ~ '-net-' ~ gitups_current_cluster.provider.virtualization.libvirt.network) | to_uuid
+      }}
+  changed_when: false
+
+# Pick the cluster machineNetwork whose qemuKVM sub-block names this
+# bridge so the bridge IP/prefix come from the same desired-state object
+# that drives node NMState; fall back to the first network when only one
+# is present.
+- name: Resolve machine network for this libvirt network
+  ansible.builtin.set_fact:
+    gitups_libvirt_machine_network: >-
+      {{
+        (gitups_current_cluster.network.machineNetworks
+          | selectattr('qemuKVM', 'defined')
+          | selectattr('qemuKVM.bridge', 'equalto', gitups_current_cluster.provider.virtualization.libvirt.bridge)
+          | list
+          | first)
+        | default(gitups_current_cluster.network.machineNetworks | first)
+      }}
+  changed_when: false
+
+- name: Render libvirt network XML
+  ansible.builtin.set_fact:
+    gitups_libvirt_net_xml_content: |
+      <network>
+        <name>{{ gitups_current_cluster.provider.virtualization.libvirt.network }}</name>
+        <uuid>{{ gitups_libvirt_net_uuid }}</uuid>
+        <forward mode='nat'>
+          <nat>
+            <port start='1024' end='65535'/>
+          </nat>
+        </forward>
+        <bridge name='{{ gitups_current_cluster.provider.virtualization.libvirt.bridge }}' stp='on' delay='0'/>
+        {% if (gitups_current_cluster.provider.virtualization.libvirt.dnsHosts | default([])) | length > 0 %}
+        <dns>
+        {% for host in gitups_current_cluster.provider.virtualization.libvirt.dnsHosts %}
+          <host ip='{{ host.ip }}'>
+            {% for hostname in host.hostnames %}
+            <hostname>{{ hostname }}</hostname>
+            {% endfor %}
+          </host>
+        {% endfor %}
+        </dns>
+        {% endif %}
+        <ip address='{{ gitups_libvirt_machine_network.gateway }}' prefix='{{ gitups_libvirt_machine_network.cidr.split("/") | last }}'>
+          <dhcp>
+          {% for node in gitups_current_cluster.provider.nodes %}
+          {% if (node.macAddress | default('') | length > 0) and (node.ipAddress | default('') | length > 0) %}
+            <host mac='{{ node.macAddress }}' name='{{ gitups_current_cluster.name }}-{{ node.name }}' ip='{{ node.ipAddress }}'/>
+          {% endif %}
+          {% endfor %}
+          </dhcp>
+        </ip>
+      </network>
+
+- name: Persist libvirt network XML to disk for inspection
+  ansible.builtin.copy:
+    dest: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}/qemu/network.xml"
+    owner: root
+    group: root
+    mode: "0644"
+    content: "{{ gitups_libvirt_net_xml_content }}"
+  register: gitups_libvirt_net_xml_file
+
+# When our named network does not yet exist, libvirt's net-define
+# rejects the XML if any other (often stale) network already claims this
+# bridge. Detect the conflict by reading every other network's XML and
+# tear it down first.
+- name: Reconcile libvirt bridge conflicts before defining network
+  when: not gitups_libvirt_net_exists
+  block:
+    - name: Read XML for every other libvirt network
+      community.libvirt.virt_net:
+        command: get_xml
+        name: "{{ item }}"
+      register: gitups_libvirt_other_net_xmls
+      loop: "{{ (gitups_libvirt_net_list.list_nets | default([])) | reject('equalto', gitups_current_cluster.provider.virtualization.libvirt.network) | list }}"
+      failed_when: false
+      changed_when: false
+
+    - name: Resolve libvirt networks claiming this bridge
+      ansible.builtin.set_fact:
+        gitups_libvirt_conflicting_nets: >-
+          {{
+            gitups_libvirt_other_net_xmls.results
+            | default([])
+            | selectattr('get_xml', 'defined')
+            | selectattr('get_xml', 'search', "<bridge name='" ~ gitups_current_cluster.provider.virtualization.libvirt.bridge ~ "'")
+            | map(attribute='item')
+            | list
+          }}
+      changed_when: false
+
+    - name: Stop and undefine conflicting libvirt networks
+      community.libvirt.virt_net:
+        name: "{{ item }}"
+        state: absent
+      loop: "{{ gitups_libvirt_conflicting_nets }}"
+      failed_when: false
+
+# net-define updates the persistent definition but the running network
+# keeps the old XML until destroyed; tear down before redefining when
+# XML changed.
+- name: Stop libvirt network before applying XML changes
+  community.libvirt.virt_net:
+    name: "{{ gitups_current_cluster.provider.virtualization.libvirt.network }}"
+    state: inactive
+  when:
+    - gitups_libvirt_net_exists
+    - gitups_libvirt_net_xml_file.changed
+
+- name: Define libvirt network
+  community.libvirt.virt_net:
+    name: "{{ gitups_current_cluster.provider.virtualization.libvirt.network }}"
+    state: present
+    xml: "{{ gitups_libvirt_net_xml_content }}"
+
+- name: Mark libvirt network autostart
+  community.libvirt.virt_net:
+    name: "{{ gitups_current_cluster.provider.virtualization.libvirt.network }}"
+    autostart: true
+
+- name: Start libvirt network
+  community.libvirt.virt_net:
+    name: "{{ gitups_current_cluster.provider.virtualization.libvirt.network }}"
+    state: active
+
+- name: Check firewalld state
+  ansible.builtin.command:
+    argv:
+      - firewall-cmd
+      - --state
+  register: gitups_firewalld_state
+  changed_when: false
+  failed_when: false
+
+- name: Resolve firewalld zone for libvirt bridge
+  ansible.builtin.command:
+    argv:
+      - firewall-cmd
+      - "--get-zone-of-interface={{ gitups_current_cluster.provider.virtualization.libvirt.bridge }}"
+  register: gitups_libvirt_firewalld_zone
+  changed_when: false
+  failed_when: false
+  when:
+    - gitups_firewalld_state.rc == 0
+    - gitups_current_cluster.provider.bootArtifactsHttp.enabled | default(false) | bool
+
+# A freshly-defined libvirt bridge is not bound to any firewalld zone
+# until something (libvirtd hook, NetworkManager, an admin) places it
+# there. When no zone is reported, attach the bridge to the libvirt
+# zone (always present on RHEL/Fedora hosts that ship libvirt) so the
+# port-open task below has a target.
+#
+# Driven by firewall-cmd directly rather than ansible.posix.firewalld:
+# the 2.1.0 release of ansible.posix ships the firewalld module_util
+# with an import of `_respawn` that is absent from the collection,
+# which fails task execution at import time.
+- name: Attach libvirt bridge to libvirt firewalld zone when unzoned (runtime)
+  ansible.builtin.command:
+    argv:
+      - firewall-cmd
+      - "--zone=libvirt"
+      - "--change-interface={{ gitups_current_cluster.provider.virtualization.libvirt.bridge }}"
+  changed_when: true
+  when:
+    - gitups_firewalld_state.rc == 0
+    - gitups_current_cluster.provider.bootArtifactsHttp.enabled | default(false) | bool
+    - (gitups_libvirt_firewalld_zone.rc != 0) or ((gitups_libvirt_firewalld_zone.stdout | default('') | trim | length) == 0)
+
+- name: Attach libvirt bridge to libvirt firewalld zone when unzoned (permanent)
+  ansible.builtin.command:
+    argv:
+      - firewall-cmd
+      - --permanent
+      - "--zone=libvirt"
+      - "--change-interface={{ gitups_current_cluster.provider.virtualization.libvirt.bridge }}"
+  changed_when: true
+  when:
+    - gitups_firewalld_state.rc == 0
+    - gitups_current_cluster.provider.bootArtifactsHttp.enabled | default(false) | bool
+    - (gitups_libvirt_firewalld_zone.rc != 0) or ((gitups_libvirt_firewalld_zone.stdout | default('') | trim | length) == 0)
+
+- name: Re-resolve firewalld zone for libvirt bridge
+  ansible.builtin.command:
+    argv:
+      - firewall-cmd
+      - "--get-zone-of-interface={{ gitups_current_cluster.provider.virtualization.libvirt.bridge }}"
+  register: gitups_libvirt_firewalld_zone
+  changed_when: false
+  failed_when: gitups_libvirt_firewalld_zone.rc != 0
+  when:
+    - gitups_firewalld_state.rc == 0
+    - gitups_current_cluster.provider.bootArtifactsHttp.enabled | default(false) | bool
+
+- name: Open boot artifacts HTTP firewall port (runtime)
+  ansible.builtin.command:
+    argv:
+      - firewall-cmd
+      - "--zone={{ gitups_libvirt_firewalld_zone.stdout | trim }}"
+      - "--add-port={{ gitups_current_cluster.provider.bootArtifactsHttp.port | int }}/tcp"
+  register: gitups_boot_port_runtime_open
+  changed_when: "'ALREADY_ENABLED' not in (gitups_boot_port_runtime_open.stdout | default('') ~ gitups_boot_port_runtime_open.stderr | default(''))"
+  when:
+    - gitups_firewalld_state.rc == 0
+    - gitups_current_cluster.provider.bootArtifactsHttp.enabled | default(false) | bool
+
+- name: Open boot artifacts HTTP firewall port (permanent)
+  ansible.builtin.command:
+    argv:
+      - firewall-cmd
+      - --permanent
+      - "--zone={{ gitups_libvirt_firewalld_zone.stdout | trim }}"
+      - "--add-port={{ gitups_current_cluster.provider.bootArtifactsHttp.port | int }}/tcp"
+  register: gitups_boot_port_permanent_open
+  changed_when: "'ALREADY_ENABLED' not in (gitups_boot_port_permanent_open.stdout | default('') ~ gitups_boot_port_permanent_open.stderr | default(''))"
+  when:
+    - gitups_firewalld_state.rc == 0
+    - gitups_current_cluster.provider.bootArtifactsHttp.enabled | default(false) | bool
+
+- name: Check QEMU emulator candidates
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: gitups_qemu_emulator_candidate_stats
+  loop:
+    - /usr/bin/qemu-kvm
+    - /usr/libexec/qemu-kvm
+    - /usr/bin/qemu-system-x86_64
+
+- name: Select QEMU emulator path
+  ansible.builtin.set_fact:
+    gitups_qemu_emulator_path: "{{ gitups_qemu_emulator_candidate_stats.results | selectattr('stat.exists') | map(attribute='item') | first | default('') }}"
+
+- name: Fail when QEMU emulator is unavailable
+  ansible.builtin.fail:
+    msg: "No QEMU emulator found. Expected one of: /usr/bin/qemu-kvm, /usr/libexec/qemu-kvm, /usr/bin/qemu-system-x86_64"
+  when: gitups_qemu_emulator_path == ""
+
+- name: Create QEMU node directories
+  ansible.builtin.file:
+    path: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}/qemu/{{ item.name }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ gitups_current_cluster.provider.nodes }}"
+
+- name: Create QEMU node disks
+  ansible.builtin.command:
+    argv:
+      - qemu-img
+      - create
+      - -f
+      - qcow2
+      - "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}/qemu/{{ item.name }}/disk.qcow2"
+      - "{{ item.resources.diskGiB }}G"
+  args:
+    creates: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}/qemu/{{ item.name }}/disk.qcow2"
+  loop: "{{ gitups_current_cluster.provider.nodes }}"
+
+- name: Read XML for existing libvirt domains in this cluster
+  community.libvirt.virt:
+    command: get_xml
+    name: "{{ gitups_current_cluster.name }}-{{ item.name }}"
+  register: gitups_qemu_domain_xmls
+  failed_when: false
+  changed_when: false
+  loop: "{{ gitups_current_cluster.provider.nodes }}"
+
+- name: Resolve libvirt domain UUIDs
+  ansible.builtin.set_fact:
+    gitups_qemu_node_uuids: >-
+      {{
+        gitups_qemu_node_uuids | default({}) | combine({
+          item.item.name: (
+            (item.get_xml | default('') | regex_search('[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'))
+            if (item.get_xml | default('') | length) > 0
+            else (gitups_current_cluster.name ~ '-' ~ item.item.name) | to_uuid
+          )
+        })
+      }}
+  loop: "{{ gitups_qemu_domain_xmls.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+
+- name: Render libvirt domain XML
+  ansible.builtin.template:
+    src: domain.xml.j2
+    dest: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}/qemu/{{ item.name }}/domain.xml"
+    owner: root
+    group: root
+    mode: "0644"
+  vars:
+    gitups_qemu_node: "{{ item }}"
+  loop: "{{ gitups_current_cluster.provider.nodes }}"
+
+# Always re-define so XML changes (cdrom, boot order) reach existing
+# domains; the module is idempotent on a no-op redefine.
+- name: Define libvirt domains
+  community.libvirt.virt:
+    command: define
+    xml: "{{ lookup('ansible.builtin.file', gitups_host_state_dir ~ '/' ~ gitups_current_cluster.name ~ '/qemu/' ~ item.name ~ '/domain.xml') }}"
+  loop: "{{ gitups_current_cluster.provider.nodes }}"

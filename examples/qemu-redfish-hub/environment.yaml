@@ -1,0 +1,45 @@
+apiVersion: gitups.io/v1alpha1
+kind: Environment
+metadata:
+  name: disconnected-hub
+spec:
+  baseDomain: disconnected.example.test
+  ocpInstall:
+    disconnected:
+      proxy:
+        httpProxy: http://proxy.disconnected.example.test:3128
+        httpsProxy: http://proxy.disconnected.example.test:3128
+        noProxy:
+          - .disconnected.example.test
+          - 192.168.130.0/24
+      registries:
+        mirror:
+          url: registry.disconnected.example.test:5000
+          credentialsRef:
+            name: disconnected-hub-registry
+          trustBundle:
+            generatedSelfSigned:
+              secretRef:
+                name: disconnected-hub-registry-ca
+              commonName: registry.disconnected.example.test
+        imageDigestSources:
+          - source: quay.io/openshift-release-dev/ocp-release
+            mirrors:
+              - registry.disconnected.example.test:5000/openshift/release-images
+          - source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
+            mirrors:
+              - registry.disconnected.example.test:5000/openshift/release
+  secrets:
+    pullSecretRef:
+      name: openshift-pull-secret
+    clusterSSHKeyRef:
+      name: cluster-admin-key
+  openshift:
+    release:
+      channel: stable-4.21
+      version: 4.21.10
+  componentImages:
+    load-balancer:
+      haproxy:
+        local: registry.disconnected.example.test:5000/library/haproxy:3.2.15
+        public: docker.io/library/haproxy:3.2.15
