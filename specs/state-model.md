@@ -18,15 +18,21 @@ stable spec coverage of a real multi-provider deployment.
 | Layer | Kind | Owns |
 | --- | --- | --- |
 | Global UX | `Environment` | base domain, OpenShift install mode (typed sub-blocks: `connected` / `restricted` / `disconnected`), shared secret refs, OpenShift release defaults, component image pins |
-| Substrate | `InfrastructureProvider` | provider capabilities and connections (`qemuKVM` / `bareMetal` / `vmware` / `openShiftVirtualization`), provider hosts, BMC / Redfish service settings, reusable machine profiles |
-| Cluster infra | `ClusterInfrastructure` | per-cluster network instances (with provider-typed sub-blocks), machines (with provider-typed placement), endpoints (api / api-int / ingress with VIPs), load balancers, managed name-resolution placement |
+| Substrate | `InfrastructureProvider` | provider hosts (shared pool with structural connection sub-block), capability sub-blocks (`machine` / `loadBalancer` / `nameResolution`) — each independently optional |
+| Cluster infra | `ClusterInfrastructure` | provider composition (`providerRefs` list), per-cluster network instances (with provider-typed sub-blocks), machines (with provider-typed placement), endpoints (api / api-int / ingress with VIPs), load-balancer endpoint binds |
 | Cluster intent | `OCPCluster` | role, topology, install method/overrides, networking (clusterNetwork / serviceNetwork), OCP node identity |
 
-`InfrastructureProvider` declares only what the provider *is and exposes*:
-how to reach it, which hosts and capabilities it carries, and reusable
-templates. Anything created or attached *for a particular cluster* —
-networks, machines, endpoints, load balancers — belongs on
-`ClusterInfrastructure`.
+`InfrastructureProvider` is **capability-oriented**. Each top-level
+capability sub-block (`machine`, `loadBalancer`, `nameResolution`) is
+**independently optional**: a provider declares only what it supplies. At
+least one capability must be set. `spec.hosts` is also optional — capabilities
+that need an SSH-reachable Linux host reference an entry by name; capabilities
+that talk to an appliance via API embed their endpoint inline.
+
+`ClusterInfrastructure.spec.providerRefs` is a **list**: a cluster may
+compose machines from one provider and load balancing from another. The
+union of referenced providers' capabilities must contain at most one
+contributor per capability.
 
 ## `Environment`
 
@@ -82,18 +88,49 @@ kind: InfrastructureProvider
 metadata:
   name: qemu-redfish-provider
 spec:
-  qemuKVM:
-    hosts: {}
-    bmcEmulation: {}
-    machineProfiles: {}
+  hosts:
+    qemu-host:
+      ssh:
+        address: 192.168.10.11
+        keyRef:
+          name: qemu-host-ssh
+      capabilities:
+        - libvirt
+        - hosts-file
+  machine:
+    libvirt:
+      hostRefs:
+        - name: qemu-host
+      bmcEmulation: {}
+      machineProfiles: {}
+  loadBalancer:
+    haProxy:
+      hostRef:
+        name: qemu-host
+  nameResolution:
+    hostsFile:
+      hostRefs:
+        - name: qemu-host
 ```
 
 Rules:
 
-- Provider type is structural: exactly one of `qemuKVM`, `bareMetal`,
-  `vmware`, `openShiftVirtualization`. There is no `spec.type` field.
-- Owns provider hosts, provider endpoints, provider credentials, BMC /
-  Redfish service settings, and reusable machine profiles.
+- `spec` is capability-oriented. Each top-level sub-block is independently
+  optional: `machine` (substrate flavors `libvirt | baremetal | vsphere |
+  kubevirt`), `loadBalancer` (flavors `haProxy`, …), `nameResolution`
+  (flavors `hostsFile`, …). At least one capability must be set.
+- `spec.hosts` is the shared host pool. Each entry carries a structural
+  connection sub-block — v1 ships only `ssh`. Capabilities reference hosts
+  by name (`hostRef` / `hostRefs`); appliance-style capabilities embed the
+  endpoint inline and need no host pool.
+- Each capability sub-block (`machine`, `loadBalancer`, `nameResolution`)
+  is itself a structural-discriminator union: exactly one flavor sub-block
+  is set. There is no `type` / `mode` / `kind` discriminator string.
+- Omitting `loadBalancer` or `nameResolution` means **external** — the
+  operator owns that concern for clusters bound to this provider.
+- Owns: provider host pool with capabilities, machine substrate (with
+  BMC service settings and reusable machine profiles for libvirt), load
+  balancer placement, name resolution placement.
 - Must not own per-cluster network instances (bridge names, portgroups,
   CIDRs), per-machine placement, OpenShift role, release, install config,
   OCP node roles, cluster VIPs, or cluster endpoint definitions.
@@ -106,15 +143,15 @@ kind: ClusterInfrastructure
 metadata:
     name: hub
 spec:
-  providerRef:
-    name: qemu-redfish-provider
+  providerRefs:
+    - name: qemu-redfish-provider
   networks:
     primary:
       cidr: 192.168.130.0/24
       gateway: 192.168.130.1
       dnsServers:
         - 192.168.130.1
-      qemuKVM:
+      libvirt:
         bridge: vbr-hub
   machines:
     master-0:
@@ -128,7 +165,7 @@ spec:
           macAddress: 52:54:00:21:11:10
       rootDeviceHints:
         deviceName: /dev/vda
-      qemuKVM:
+      libvirt:
         hostRef:
           name: qemu-host
   endpoints:
@@ -140,39 +177,39 @@ spec:
       address: 192.168.130.11
   loadBalancers:
     default:
-      placement:
-        providerHostRef:
-          name: qemu-host
       endpoints:
         - api
         - apiInt
         - ingress
-  nameResolution:
-    managed:
-      providerHostRefs:
-        - name: qemu-host
 ```
 
 Rules:
 
+- `providerRefs` is a non-empty list. The closure of all referenced
+  providers' capabilities supplies what the cluster needs; at most one
+  contributor per capability (`machine`, `loadBalancer`, `nameResolution`)
+  is allowed in the closure. A bare-metal `machine` provider can be
+  composed with an haProxy `loadBalancer` provider on a separate host.
 - Per-cluster network instances live here. Each entry under `spec.networks`
-  carries the IP layer (CIDR, gateway, DNS) plus a provider-typed sub-block
-  that realises the network on the provider (`qemuKVM.bridge`,
-  `vmware.portgroup`, …). The sub-block must match the provider's
-  `spec.<provider>` sub-block.
-- VIPs, endpoint addresses, load-balancer bindings, and DNS / name-resolution
-  placement live here.
+  carries the IP layer (CIDR, gateway, DNS) plus a substrate-typed sub-block
+  that realises the network (`libvirt.bridge`, `vsphere.portgroup`, …). The
+  sub-block must match the closure-supplied machine flavor.
+- VIPs, endpoint addresses, and load-balancer endpoint binds live here.
+  Load-balancer **placement** lives on the provider's
+  `loadBalancer.<flavor>` capability — clusters declare which endpoints to
+  bind, not where the LB runs.
 - Standard OpenShift load-balancer ports are implied by endpoint names
   (`api` → 6443, `apiInt` → 22623, `ingress` → 80/443) unless an entry
   explicitly overrides them.
-- A default load balancer may bind all standard endpoints by name.
-- Provider-specific machine placement (`qemuKVM.hostRef`, `bareMetal.bmc`,
-  `vmware.{datastore,folder,template}`) lives here because it allocates
-  machines on a provider; the placement sub-block must match the
-  provider's `spec.<provider>` sub-block.
-- `nameResolution` carries exactly one of `managed` or `external`.
-  `external` is the empty selection (the operator owns DNS); `managed`
-  delegates `/etc/hosts` placement on listed provider hosts.
+- A default load balancer may bind all standard endpoints by name. Omitting
+  `loadBalancers` entirely means external (operator-owned).
+- Provider-specific machine placement (`libvirt.hostRef`, `baremetal.bmc`,
+  `vsphere.{datastore,folder,template}`) lives here because it allocates
+  machines on a provider; the placement sub-block must match the closure's
+  machine flavor.
+- Name resolution placement is **not** declared here — it lives on the
+  supplying provider's `nameResolution.hostsFile` capability. Omission of
+  the capability on every referenced provider means external DNS.
 - Must not copy provider host addresses, registry URLs, base domain, or
   OpenShift release.
 

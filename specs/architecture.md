@@ -51,19 +51,29 @@ BMC → real bare metal → vSphere) edits `InfrastructureProvider` and
   Spec objects do not carry `type`, `mode`, or `kind` discriminator
   strings beside the sub-block. Validation enforces "exactly one of {…}"
   on:
-  - `InfrastructureProvider.spec.{qemuKVM | bareMetal | vmware | openShiftVirtualization}`
+  - `InfrastructureProvider.spec.machine.{libvirt | baremetal | vsphere | kubevirt}`
+  - `InfrastructureProvider.spec.loadBalancer.{haProxy | …}`
+  - `InfrastructureProvider.spec.nameResolution.{hostsFile | …}`
+  - `InfrastructureProvider.spec.hosts.<name>.{ssh | …}` (host connection)
   - per-machine placement on `ClusterInfrastructure.spec.machines.<name>`
   - per-network realisation on `ClusterInfrastructure.spec.networks.<name>`
-  - `ClusterInfrastructure.spec.nameResolution.{managed | external}`
   - `Environment.spec.ocpInstall.{connected | restricted | disconnected}`
 
-`InfrastructureProvider` declares **capabilities and connections**: the
-provider's identity, hosts to talk to, supporting services (BMC emulation),
-and reusable templates (machine profiles). It never declares per-cluster
-instances. Anything that exists *because a particular cluster needs it* —
-networks, machines, endpoints, load balancers — is declared on
-`ClusterInfrastructure` with a provider-typed sub-block when the realisation
-is provider-specific.
+`InfrastructureProvider` is **capability-oriented**: the top-level
+sub-blocks (`machine`, `loadBalancer`, `nameResolution`) are
+*independently optional* — at least one must be set, but a provider may
+supply any subset. The host pool (`spec.hosts`) is a shared resource;
+appliance-style capabilities (BigIP, vCenter API) embed their endpoint
+inline and need no host pool.
+
+`ClusterInfrastructure.spec.providerRefs` is a list. The closure of all
+referenced providers' capabilities must contain at most one contributor
+per capability. The renderer materialises this as a `ProviderClosure`:
+a typed view that exposes the merged hosts pool plus the
+machine/loadBalancer/nameResolution suppliers. Anything that exists
+*because a particular cluster needs it* — networks, machines, endpoints,
+load-balancer endpoint binds — is declared on `ClusterInfrastructure`
+with a substrate-typed sub-block when the realisation is provider-specific.
 
 ## Provider Adapters
 
@@ -134,7 +144,7 @@ and per-provider Ansible vars. They drive dynamic role-name dispatch:
 
 | Var | Drives |
 | --- | --- |
-| `provider.kind` | structural discriminator (`qemu-kvm \| baremetal \| vmware \| openshift-virtualization`) |
+| `provider.kind` | machine flavor on the closure (`libvirt \| baremetal \| vsphere \| kubevirt`) |
 | `provider.substrateRole` | `role: cluster_substrate_<substrateRole>` |
 | `provider.bmcRole` | `role: provider_bmc_<bmcRole>` and `include_role: hub_boot_<bmcRole>` |
 | `provider.bootArtifactsHttp.{enabled,bindAddress,port}` | gates `provider_boot_artifacts_http` |

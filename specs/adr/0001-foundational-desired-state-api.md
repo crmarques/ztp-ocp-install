@@ -32,15 +32,26 @@ layer below by name; no layer copies facts from the layer it references.
 | Layer | Kind | Owns |
 | --- | --- | --- |
 | Global UX | `Environment` | base domain, OpenShift install mode (typed sub-blocks), shared secret refs, OpenShift release defaults, component image pins |
-| Substrate | `InfrastructureProvider` | provider capabilities and connections (`qemuKVM` / `bareMetal` / `vmware` / `openShiftVirtualization`), provider hosts, BMC / Redfish service settings, reusable machine profiles |
-| Cluster infra | `ClusterInfrastructure` | machines (with provider-typed placement), per-cluster networks (with provider-typed sub-blocks), endpoints (api / api-int / ingress with VIPs), load balancers, managed name-resolution placement |
+| Substrate | `InfrastructureProvider` | shared host pool, capability sub-blocks (`machine` / `loadBalancer` / `nameResolution`) — each independently optional |
+| Cluster infra | `ClusterInfrastructure` | provider composition (`providerRefs` list), machines (with substrate-typed placement), per-cluster networks (with substrate-typed sub-blocks), endpoints (api / api-int / ingress with VIPs), load-balancer endpoint binds |
 | Cluster intent | `OCPCluster` | role, topology, install method/overrides, networking (clusterNetwork / serviceNetwork), OCP node identity |
 
-`InfrastructureProvider` declares **capabilities and connections** only.
+`InfrastructureProvider` is **capability-oriented**. Capabilities
+(`machine`, `loadBalancer`, `nameResolution`) are independently optional
+sub-blocks; a provider declares only what it supplies. The host pool
+(`spec.hosts`) is a shared resource referenced by capabilities that need
+SSH-reachable Linux hosts.
+
 Per-cluster network instances live on `ClusterInfrastructure` because they
 exist *for a particular cluster*. The pattern mirrors machine placement: a
-structural sub-block on `ClusterInfrastructure.spec.networks.<name>.{qemuKVM
-| vmware | …}` realises the network on the referenced provider.
+structural sub-block on `ClusterInfrastructure.spec.networks.<name>.{libvirt
+| vsphere | …}` realises the network on the substrate.
+
+`ClusterInfrastructure.spec.providerRefs` is a list. A cluster may compose
+machines from one provider and load balancing from another — the union of
+referenced providers' capabilities must contribute at most one supplier per
+capability. This preserves R1: an LB-only `InfrastructureProvider` (e.g.
+BigIP, future) can be added without editing the cluster's machine provider.
 
 `OCPCluster` is provider-agnostic. Swapping QEMU/KVM with emulated BMC for
 real bare metal — or for vSphere — touches `InfrastructureProvider` and
@@ -74,10 +85,16 @@ Three permanent rules govern the schema:
 - **R3 Structural discriminators only.** Where one of N typed sub-blocks
   may be present, the presence of the sub-block is the discriminator. No
   `type`, `mode`, or `kind` discriminator string sits beside the sub-block.
-  This applies to `InfrastructureProvider.spec.{qemuKVM | bareMetal | vmware
-  | openShiftVirtualization}`, to per-machine placement and per-network
-  realisation on `ClusterInfrastructure`, and to
-  `Environment.spec.ocpInstall.{connected | restricted | disconnected}`.
+  This applies to `InfrastructureProvider.spec.machine.{libvirt | baremetal
+  | vsphere | kubevirt}`, `InfrastructureProvider.spec.loadBalancer.{haProxy
+  | …}`, `InfrastructureProvider.spec.nameResolution.{hostsFile | …}`, the
+  host connection sub-block on `InfrastructureProvider.spec.hosts.<name>.{ssh
+  | …}`, per-machine placement and per-network realisation on
+  `ClusterInfrastructure`, and `Environment.spec.ocpInstall.{connected |
+  restricted | disconnected}`. Capability sub-blocks themselves
+  (`machine`, `loadBalancer`, `nameResolution`) are *independently optional*
+  rather than a discriminated union — omission means the provider does not
+  supply that capability.
 
 ## Consequences
 
