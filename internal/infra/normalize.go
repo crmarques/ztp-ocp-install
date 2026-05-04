@@ -19,7 +19,7 @@ func Normalize(state *v1alpha1.State) {
 	}
 	for i := range state.ClusterInfrastructures {
 		ci := &state.ClusterInfrastructures[i]
-		normalizeClusterInfrastructure(ci, providerByName(state, ci.Spec.ProviderRef.Name))
+		normalizeClusterInfrastructure(ci, providerByName(state, v1alpha1.FirstProviderRefName(*ci)))
 	}
 	env := primaryEnvironment(state)
 	for i := range state.OCPClusters {
@@ -394,7 +394,7 @@ func providerForInfra(state *v1alpha1.State, ci *v1alpha1.ClusterInfrastructure)
 	if ci == nil {
 		return nil
 	}
-	return providerByName(state, ci.Spec.ProviderRef.Name)
+	return providerByName(state, v1alpha1.FirstProviderRefName(*ci))
 }
 
 func clusterInfraByName(state *v1alpha1.State, name string) *v1alpha1.ClusterInfrastructure {

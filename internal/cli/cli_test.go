@@ -133,8 +133,8 @@ kind: ClusterInfrastructure
 metadata:
   name: vmware
 spec:
-  providerRef:
-    name: vmware-provider
+  providerRefs:
+    - name: vmware-provider
   networks:
     primary:
       cidr: 192.168.155.0/24
@@ -225,8 +225,8 @@ kind: ClusterInfrastructure
 metadata:
   name: hub-infra
 spec:
-  providerRef:
-    name: provider
+  providerRefs:
+    - name: provider
   networks:
     primary:
       cidr: 192.168.155.0/24

@@ -3,8 +3,8 @@ kind: ClusterInfrastructure
 metadata:
   name: spoke-02
 spec:
-  providerRef:
-    name: lab-spoke-02-provider
+  providerRefs:
+    - name: lab-spoke-02-provider
   networks:
     primary:
       cidr: 192.168.124.0/24

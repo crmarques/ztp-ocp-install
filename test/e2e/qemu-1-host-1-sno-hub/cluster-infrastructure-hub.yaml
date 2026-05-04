@@ -3,8 +3,8 @@ kind: ClusterInfrastructure
 metadata:
   name: qemu-1-host-hub
 spec:
-  providerRef:
-    name: qemu-1-host-provider
+  providerRefs:
+    - name: qemu-1-host-provider
   networks:
     primary:
       cidr: 192.168.130.0/24

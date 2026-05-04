@@ -3,8 +3,8 @@ kind: ClusterInfrastructure
 metadata:
   name: hub
 spec:
-  providerRef:
-    name: qemu-redfish-provider
+  providerRefs:
+    - name: qemu-redfish-provider
   networks:
     primary:
       cidr: 192.168.130.0/24

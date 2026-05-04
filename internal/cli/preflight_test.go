@@ -631,7 +631,7 @@ func TestPreflightChecksBMCEmulationAndMachineCredentials(t *testing.T) {
 		ClusterInfrastructures: []v1alpha1.ClusterInfrastructure{{
 			Metadata: v1alpha1.Metadata{Name: "ci"},
 			Spec: v1alpha1.ClusterInfrastructureSpec{
-				ProviderRef: v1alpha1.LocalObjectReference{Name: "qemu-1-host-provider"},
+				ProviderRefs: []v1alpha1.LocalObjectReference{{Name: "qemu-1-host-provider"}},
 				Machines: map[string]v1alpha1.MachineSpec{
 					"master-0": {
 						Baremetal: &v1alpha1.MachineBaremetalSpec{BMC: &v1alpha1.MachineBMCSpec{

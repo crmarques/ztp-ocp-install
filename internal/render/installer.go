@@ -179,11 +179,11 @@ func clusterInfrastructureForOCP(state v1alpha1.State, ocp v1alpha1.OCPCluster) 
 
 func providerForInfrastructure(state v1alpha1.State, infra v1alpha1.ClusterInfrastructure) (v1alpha1.InfrastructureProvider, error) {
 	for _, provider := range state.InfrastructureProviders {
-		if provider.Metadata.Name == infra.Spec.ProviderRef.Name {
+		if provider.Metadata.Name == v1alpha1.FirstProviderRefName(infra) {
 			return provider, nil
 		}
 	}
-	return v1alpha1.InfrastructureProvider{}, fmt.Errorf("%s: providerRef %q not found", infra.Metadata.Name, infra.Spec.ProviderRef.Name)
+	return v1alpha1.InfrastructureProvider{}, fmt.Errorf("%s: providerRef %q not found", infra.Metadata.Name, v1alpha1.FirstProviderRefName(infra))
 }
 
 func networkingConfig(infra v1alpha1.ClusterInfrastructure, ocp v1alpha1.OCPCluster) map[string]any {

@@ -182,8 +182,8 @@ kind: ClusterInfrastructure
 metadata:
   name: c
 spec:
-  providerRef:
-    name: p
+  providerRefs:
+    - name: p
   networks:
     primary:
       cidr: 192.168.180.0/24
@@ -265,8 +265,8 @@ kind: ClusterInfrastructure
 metadata:
   name: ` + name + `
 spec:
-  providerRef:
-    name: ` + providerName + `
+  providerRefs:
+    - name: ` + providerName + `
   networks:
     primary:
       cidr: ` + cidr + `

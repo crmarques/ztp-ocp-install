@@ -386,9 +386,13 @@ func validateClusterInfrastructures(state v1alpha1.State) []string {
 			errs = append(errs, fmt.Sprintf("duplicate ClusterInfrastructure %q", ci.Metadata.Name))
 		}
 		seen[ci.Metadata.Name] = true
-		provider, ok := providers[ci.Spec.ProviderRef.Name]
+		if len(ci.Spec.ProviderRefs) == 0 {
+			errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s providerRefs is required", ci.Metadata.Name))
+			continue
+		}
+		provider, ok := providers[v1alpha1.FirstProviderRefName(ci)]
 		if !ok {
-			errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s providerRef %q does not match any InfrastructureProvider", ci.Metadata.Name, ci.Spec.ProviderRef.Name))
+			errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s providerRefs %q does not match any InfrastructureProvider", ci.Metadata.Name, v1alpha1.FirstProviderRefName(ci)))
 			continue
 		}
 		errs = append(errs, validateNetworks(ci, provider)...)

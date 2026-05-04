@@ -286,7 +286,7 @@ func ensureApplySupported(state v1alpha1.State) error {
 		providers[provider.Metadata.Name] = provider
 	}
 	for _, item := range state.ClusterInfrastructures {
-		provider := providers[item.Spec.ProviderRef.Name]
+		provider := providers[v1alpha1.FirstProviderRefName(item)]
 		kind := v1alpha1.MachineFlavor(provider)
 		if kind != v1alpha1.MachineFlavorLibvirt {
 			return fmt.Errorf("%s: apply currently supports only provider kind %q, got %q", item.Metadata.Name, v1alpha1.MachineFlavorLibvirt, kind)

@@ -3,8 +3,8 @@ kind: ClusterInfrastructure
 metadata:
   name: qemu-3-hosts-sno-hub
 spec:
-  providerRef:
-    name: qemu-3-hosts-sno-hub-provider
+  providerRefs:
+    - name: qemu-3-hosts-sno-hub-provider
   networks:
     primary:
       cidr: 192.168.150.0/24

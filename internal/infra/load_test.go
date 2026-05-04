@@ -401,8 +401,8 @@ kind: ClusterInfrastructure
 metadata:
   name: %s
 spec:
-  providerRef:
-    name: %s
+  providerRefs:
+    - name: %s
   networks:
     primary:
       cidr: %s
@@ -471,8 +471,8 @@ kind: ClusterInfrastructure
 metadata:
   name: baremetal
 spec:
-  providerRef:
-    name: baremetal-provider
+  providerRefs:
+    - name: baremetal-provider
   networks:
     primary:
       cidr: 192.168.180.0/24
@@ -547,8 +547,8 @@ kind: ClusterInfrastructure
 metadata:
   name: vmware
 spec:
-  providerRef:
-    name: vmware-provider
+  providerRefs:
+    - name: vmware-provider
   networks:
     primary:
       cidr: 192.168.181.0/24

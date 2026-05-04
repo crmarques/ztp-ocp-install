@@ -3,6 +3,8 @@
 // InfrastructureProvider, ClusterInfrastructure, OCPCluster.
 package v1alpha1
 
+import "fmt"
+
 const (
 	APIVersion = "gitups.io/v1alpha1"
 
@@ -320,11 +322,114 @@ type ClusterInfrastructure struct {
 }
 
 type ClusterInfrastructureSpec struct {
-	ProviderRef   LocalObjectReference          `yaml:"providerRef" json:"providerRef"`
+	ProviderRefs  []LocalObjectReference        `yaml:"providerRefs" json:"providerRefs"`
 	Networks      map[string]MachineNetworkSpec `yaml:"networks,omitempty" json:"networks,omitempty"`
 	Machines      map[string]MachineSpec        `yaml:"machines,omitempty" json:"machines,omitempty"`
 	Endpoints     ClusterEndpointsSpec          `yaml:"endpoints,omitempty" json:"endpoints,omitempty"`
 	LoadBalancers map[string]LoadBalancerSpec   `yaml:"loadBalancers,omitempty" json:"loadBalancers,omitempty"`
+}
+
+// ProviderClosure is the merged view of all providers a ClusterInfrastructure
+// references via spec.providerRefs. Each capability sub-pointer is set by at
+// most one supplying provider in the closure; the validator rejects multiple
+// suppliers for the same capability. Hosts is the union of all referenced
+// providers' host pools (host names must be unique across the closure).
+//
+// MachineProviderName / LoadBalancerProviderName / NameResolutionProviderName
+// record which provider supplied that capability — used for renderer
+// dispatch and error messages.
+type ProviderClosure struct {
+	Hosts                       map[string]ProviderHostSpec
+	Machine                     *MachineCapabilitySpec
+	LoadBalancer                *LoadBalancerCapabilitySpec
+	NameResolution              *NameResolutionCapabilitySpec
+	MachineProviderName         string
+	LoadBalancerProviderName    string
+	NameResolutionProviderName  string
+	// ProviderRefNames lists the provider names in the order declared on the
+	// ClusterInfrastructure; renderer entry points use this to keep deterministic
+	// output across multi-provider closures.
+	ProviderRefNames            []string
+}
+
+// FirstProviderRefName returns the first declared provider name on a
+// ClusterInfrastructure, or the empty string when none is declared. Used by
+// renderer entry points that have not yet been migrated to ProviderClosure;
+// multi-provider clusters route through BuildProviderClosure.
+func FirstProviderRefName(ci ClusterInfrastructure) string {
+	if len(ci.Spec.ProviderRefs) == 0 {
+		return ""
+	}
+	return ci.Spec.ProviderRefs[0].Name
+}
+
+// MachineFlavor reports the machine-flavor discriminator on a closure.
+func (c ProviderClosure) MachineFlavor() string {
+	if c.Machine == nil {
+		return ""
+	}
+	switch {
+	case c.Machine.Libvirt != nil:
+		return MachineFlavorLibvirt
+	case c.Machine.Baremetal != nil:
+		return MachineFlavorBaremetal
+	case c.Machine.Vsphere != nil:
+		return MachineFlavorVsphere
+	case c.Machine.Kubevirt != nil:
+		return MachineFlavorKubevirt
+	default:
+		return ""
+	}
+}
+
+// BuildProviderClosure resolves a cluster's providerRefs against the loaded
+// provider set and merges their capabilities. Errors are returned as a slice;
+// validation reports them. The closure is best-effort — even when errors
+// exist, the returned closure carries whatever could be merged so renderer
+// callers can produce partial output for diagnostics.
+func BuildProviderClosure(ci ClusterInfrastructure, providers map[string]InfrastructureProvider) (ProviderClosure, []string) {
+	closure := ProviderClosure{Hosts: map[string]ProviderHostSpec{}}
+	var errs []string
+	for _, ref := range ci.Spec.ProviderRefs {
+		closure.ProviderRefNames = append(closure.ProviderRefNames, ref.Name)
+		p, ok := providers[ref.Name]
+		if !ok {
+			errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s providerRefs %q does not match any InfrastructureProvider", ci.Metadata.Name, ref.Name))
+			continue
+		}
+		for hostName, host := range p.Spec.Hosts {
+			if _, dup := closure.Hosts[hostName]; dup {
+				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s providerRefs union contains duplicate host %q", ci.Metadata.Name, hostName))
+				continue
+			}
+			closure.Hosts[hostName] = host
+		}
+		if p.Spec.Machine != nil {
+			if closure.Machine != nil {
+				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s providerRefs union has multiple suppliers for machine capability (%s, %s)", ci.Metadata.Name, closure.MachineProviderName, ref.Name))
+			} else {
+				closure.Machine = p.Spec.Machine
+				closure.MachineProviderName = ref.Name
+			}
+		}
+		if p.Spec.LoadBalancer != nil {
+			if closure.LoadBalancer != nil {
+				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s providerRefs union has multiple suppliers for loadBalancer capability (%s, %s)", ci.Metadata.Name, closure.LoadBalancerProviderName, ref.Name))
+			} else {
+				closure.LoadBalancer = p.Spec.LoadBalancer
+				closure.LoadBalancerProviderName = ref.Name
+			}
+		}
+		if p.Spec.NameResolution != nil {
+			if closure.NameResolution != nil {
+				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s providerRefs union has multiple suppliers for nameResolution capability (%s, %s)", ci.Metadata.Name, closure.NameResolutionProviderName, ref.Name))
+			} else {
+				closure.NameResolution = p.Spec.NameResolution
+				closure.NameResolutionProviderName = ref.Name
+			}
+		}
+	}
+	return closure, errs
 }
 
 // MachineNetworkSpec describes a network instance the cluster needs on the

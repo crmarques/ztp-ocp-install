@@ -377,7 +377,7 @@ func Vars(state v1alpha1.State) VarsFile {
 	ocpByInfra := ocpByInfrastructure(state.OCPClusters)
 	env := primaryEnvironment(state)
 	for _, item := range state.ClusterInfrastructures {
-		provider := providers[item.Spec.ProviderRef.Name]
+		provider := providers[v1alpha1.FirstProviderRefName(item)]
 		ocp := ocpByInfra[item.Metadata.Name]
 		clusters = append(clusters, clusterVars(item, provider, ocp, env))
 	}
@@ -745,7 +745,7 @@ func providerBMCNodes(provider v1alpha1.InfrastructureProvider, state v1alpha1.S
 	}
 	var result []ProviderBMCNodeVars
 	for _, infra := range state.ClusterInfrastructures {
-		if infra.Spec.ProviderRef.Name != provider.Metadata.Name {
+		if v1alpha1.FirstProviderRefName(infra) != provider.Metadata.Name {
 			continue
 		}
 		machineNames := sortedKeys(infra.Spec.Machines)
@@ -946,7 +946,7 @@ func sharedLoadBalancerVars(state v1alpha1.State, env *v1alpha1.Environment) []S
 	var result []SharedLoadBalancerVars
 	for _, infra := range state.ClusterInfrastructures {
 		ocp := ocpByInfra[infra.Metadata.Name]
-		provider := providers[infra.Spec.ProviderRef.Name]
+		provider := providers[v1alpha1.FirstProviderRefName(infra)]
 		if provider.Spec.LoadBalancer == nil || provider.Spec.LoadBalancer.HAProxy == nil {
 			continue
 		}
@@ -961,7 +961,7 @@ func sharedLoadBalancerVars(state v1alpha1.State, env *v1alpha1.Environment) []S
 			item := SharedLoadBalancerVars{
 				Name:        lbName,
 				ClusterName: infra.Metadata.Name,
-				ProviderRef: infra.Spec.ProviderRef.Name,
+				ProviderRef: v1alpha1.FirstProviderRefName(infra),
 				Image:       imageRef,
 				Runtime:     runtime,
 				Placement:   LoadBalancerPlacementVars{ProviderHostRef: hostRef},

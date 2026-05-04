@@ -3,8 +3,8 @@ kind: ClusterInfrastructure
 metadata:
   name: qemu-3-hosts-ocp-02
 spec:
-  providerRef:
-    name: qemu-3-hosts-sno-ocp-02-provider
+  providerRefs:
+    - name: qemu-3-hosts-sno-ocp-02-provider
   networks:
     primary:
       cidr: 192.168.152.0/24

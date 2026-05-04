@@ -69,7 +69,7 @@ func Inventory(state v1alpha1.State) InventoryFile {
 	}
 	ocpByInfra := ocpByInfrastructure(state.OCPClusters)
 	for _, item := range state.ClusterInfrastructures {
-		provider := providers[item.Spec.ProviderRef.Name]
+		provider := providers[v1alpha1.FirstProviderRefName(item)]
 		if v1alpha1.ProviderMachineLibvirt(provider) == nil {
 			continue
 		}
