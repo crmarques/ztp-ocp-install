@@ -1,0 +1,17 @@
+apiVersion: gitups.io/v1alpha1
+kind: InfrastructureProvider
+metadata:
+  name: edge-haproxy-provider
+spec:
+  hosts:
+    edge-host:
+      ssh:
+        address: 10.0.0.5
+        keyRef:
+          name: edge-host-ssh
+      capabilities:
+        - haproxy
+  loadBalancer:
+    haProxy:
+      hostRef:
+        name: edge-host

@@ -1,0 +1,43 @@
+apiVersion: gitups.io/v1alpha1
+kind: ClusterInfrastructure
+metadata:
+  name: managed
+spec:
+  providerRefs:
+    - name: baremetal-redfish-provider
+    - name: edge-haproxy-provider
+  networks:
+    primary:
+      cidr: 192.168.131.0/24
+      gateway: 192.168.131.1
+      dnsServers:
+        - 192.168.131.1
+  machines:
+    master-0:
+      interfaces:
+        primary:
+          networkRef:
+            name: primary
+          ipAddress: 192.168.131.20
+          macAddress: 52:54:00:21:12:10
+      rootDeviceHints:
+        deviceName: /dev/sda
+      baremetal:
+        bmc:
+          address: redfish-virtualmedia+https://bmc-managed-0.example.test/redfish/v1/Systems/1
+          credentialRef:
+            name: baremetal-redfish-bmc
+          disableCertificateVerification: true
+  endpoints:
+    api:
+      address: 192.168.131.10
+    apiInt:
+      address: 192.168.131.10
+    ingress:
+      address: 192.168.131.11
+  loadBalancers:
+    default:
+      endpoints:
+        - api
+        - apiInt
+        - ingress

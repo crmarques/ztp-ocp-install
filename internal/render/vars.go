@@ -370,7 +370,7 @@ func Vars(state v1alpha1.State) VarsFile {
 	ocpByInfra := ocpByInfrastructure(state.OCPClusters)
 	env := primaryEnvironment(state)
 	for _, item := range state.ClusterInfrastructures {
-		provider := providers[v1alpha1.FirstProviderRefName(item)]
+		provider := closureProvider(item, providers)
 		ocp := ocpByInfra[item.Metadata.Name]
 		clusters = append(clusters, clusterVars(item, provider, ocp, env))
 	}
@@ -939,7 +939,7 @@ func sharedLoadBalancerVars(state v1alpha1.State, env *v1alpha1.Environment) []S
 	var result []SharedLoadBalancerVars
 	for _, infra := range state.ClusterInfrastructures {
 		ocp := ocpByInfra[infra.Metadata.Name]
-		provider := providers[v1alpha1.FirstProviderRefName(infra)]
+		provider := closureProvider(infra, providers)
 		if provider.Spec.LoadBalancer == nil || provider.Spec.LoadBalancer.HAProxy == nil {
 			continue
 		}
@@ -954,7 +954,7 @@ func sharedLoadBalancerVars(state v1alpha1.State, env *v1alpha1.Environment) []S
 			item := SharedLoadBalancerVars{
 				Name:        lbName,
 				ClusterName: infra.Metadata.Name,
-				ProviderRef: v1alpha1.FirstProviderRefName(infra),
+				ProviderRef: provider.Metadata.Name,
 				Image:       imageRef,
 				Runtime:     runtime,
 				Placement:   LoadBalancerPlacementVars{ProviderHostRef: hostRef},
@@ -1113,6 +1113,31 @@ func primaryInterface(machine v1alpha1.MachineSpec) v1alpha1.MachineInterfaceSpe
 	}
 	keys := sortedKeys(machine.Interfaces)
 	return machine.Interfaces[keys[0]]
+}
+
+// closureProvider folds a cluster's providerRefs union into a single
+// InfrastructureProvider so single-provider renderer code paths (machine
+// + loadBalancer + nameResolution) keep working over multi-provider
+// closures. Metadata.name is the LB-supplying provider when present, else
+// the first ref — used for output labels.
+func closureProvider(ci v1alpha1.ClusterInfrastructure, providers map[string]v1alpha1.InfrastructureProvider) v1alpha1.InfrastructureProvider {
+	closure, _ := v1alpha1.BuildProviderClosure(ci, providers)
+	name := closure.LoadBalancerProviderName
+	if name == "" {
+		name = closure.MachineProviderName
+	}
+	if name == "" {
+		name = v1alpha1.FirstProviderRefName(ci)
+	}
+	return v1alpha1.InfrastructureProvider{
+		Metadata: v1alpha1.Metadata{Name: name},
+		Spec: v1alpha1.InfrastructureProviderSpec{
+			Hosts:          closure.Hosts,
+			Machine:        closure.Machine,
+			LoadBalancer:   closure.LoadBalancer,
+			NameResolution: closure.NameResolution,
+		},
+	}
 }
 
 func providerIndex(items []v1alpha1.InfrastructureProvider) map[string]v1alpha1.InfrastructureProvider {

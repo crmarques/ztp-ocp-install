@@ -556,6 +556,36 @@ func TestRenderBareMetalProjectsPerMachineBMC(t *testing.T) {
 	}
 }
 
+func TestRenderMultiProviderClosure(t *testing.T) {
+	state, err := infra.LoadNormalizeValidate([]string{"../../examples/baremetal-edge-lb-fleet"})
+	if err != nil {
+		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
+	}
+	stateDir := t.TempDir()
+	result, err := All(stateDir, state)
+	if err != nil {
+		t.Fatalf("render All returned error: %v", err)
+	}
+	varsFile := readFile(t, result.VarsPath)
+	for _, expected := range []string{
+		"kind: baremetal",
+		"substrateRole: baremetal",
+		"providerRef: edge-haproxy-provider",
+		"providerHostRef: edge-host",
+	} {
+		if !strings.Contains(varsFile, expected) {
+			t.Fatalf("multi-provider vars missing %q\n%s", expected, varsFile)
+		}
+	}
+	for _, leak := range []string{
+		"substrateRole: libvirt",
+	} {
+		if strings.Contains(varsFile, leak) {
+			t.Fatalf("multi-provider vars unexpectedly contains %q\n%s", leak, varsFile)
+		}
+	}
+}
+
 func TestProviderDispatchCoversAllKinds(t *testing.T) {
 	tasks := readFile(t, "../../ansible/playbooks/infra-prepare.yml")
 	for _, expected := range []string{

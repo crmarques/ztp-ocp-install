@@ -245,34 +245,38 @@ func validateProviders(providers []v1alpha1.InfrastructureProvider) []string {
 		}
 		seen[p.Metadata.Name] = true
 		errs = append(errs, validateProviderHosts(p)...)
-		if p.Spec.Machine == nil {
-			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec.machine is required", p.Metadata.Name))
-			continue
+		// At least one capability sub-block must be set; each is independently
+		// optional so a provider may supply machines, load balancing, name
+		// resolution, or any combination.
+		if p.Spec.Machine == nil && p.Spec.LoadBalancer == nil && p.Spec.NameResolution == nil {
+			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec must set at least one capability sub-block (machine, loadBalancer, nameResolution)", p.Metadata.Name))
 		}
-		set := 0
-		if p.Spec.Machine.Libvirt != nil {
-			set++
-		}
-		if p.Spec.Machine.Baremetal != nil {
-			set++
-		}
-		if p.Spec.Machine.Vsphere != nil {
-			set++
-		}
-		if p.Spec.Machine.Kubevirt != nil {
-			set++
-		}
-		if set != 1 {
-			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec.machine must set exactly one of {libvirt, baremetal, vsphere, kubevirt}", p.Metadata.Name))
-		}
-		if p.Spec.Machine.Libvirt != nil {
-			errs = append(errs, validateLibvirtProvider(p)...)
-		}
-		if p.Spec.Machine.Vsphere != nil {
-			errs = append(errs, validateVsphereProvider(p)...)
-		}
-		if p.Spec.Machine.Kubevirt != nil {
-			errs = append(errs, validateKubevirtProvider(p)...)
+		if p.Spec.Machine != nil {
+			set := 0
+			if p.Spec.Machine.Libvirt != nil {
+				set++
+			}
+			if p.Spec.Machine.Baremetal != nil {
+				set++
+			}
+			if p.Spec.Machine.Vsphere != nil {
+				set++
+			}
+			if p.Spec.Machine.Kubevirt != nil {
+				set++
+			}
+			if set != 1 {
+				errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec.machine must set exactly one of {libvirt, baremetal, vsphere, kubevirt}", p.Metadata.Name))
+			}
+			if p.Spec.Machine.Libvirt != nil {
+				errs = append(errs, validateLibvirtProvider(p)...)
+			}
+			if p.Spec.Machine.Vsphere != nil {
+				errs = append(errs, validateVsphereProvider(p)...)
+			}
+			if p.Spec.Machine.Kubevirt != nil {
+				errs = append(errs, validateKubevirtProvider(p)...)
+			}
 		}
 		errs = append(errs, validateProviderLoadBalancer(p)...)
 		errs = append(errs, validateProviderNameResolution(p)...)
@@ -390,17 +394,32 @@ func validateClusterInfrastructures(state v1alpha1.State) []string {
 			errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s providerRefs is required", ci.Metadata.Name))
 			continue
 		}
-		provider, ok := providers[v1alpha1.FirstProviderRefName(ci)]
-		if !ok {
-			errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s providerRefs %q does not match any InfrastructureProvider", ci.Metadata.Name, v1alpha1.FirstProviderRefName(ci)))
-			continue
-		}
-		errs = append(errs, validateNetworks(ci, provider)...)
-		errs = append(errs, validateMachines(ci, provider)...)
+		closure, closureErrs := v1alpha1.BuildProviderClosure(ci, providers)
+		errs = append(errs, closureErrs...)
+		closureProvider := synthesizeClosureProvider(ci, closure)
+		errs = append(errs, validateNetworks(ci, closureProvider)...)
+		errs = append(errs, validateMachines(ci, closureProvider)...)
 		errs = append(errs, validateEndpoints(ci)...)
-		errs = append(errs, validateLoadBalancers(ci, provider)...)
+		errs = append(errs, validateLoadBalancers(ci, closureProvider)...)
 	}
 	return errs
+}
+
+// synthesizeClosureProvider folds a ProviderClosure into a single
+// InfrastructureProvider value so validators (and renderers) that take a
+// single provider continue to work over a multi-provider cluster's union.
+// The synthesised provider's metadata.name is the cluster name to keep
+// error messages distinguishable.
+func synthesizeClosureProvider(ci v1alpha1.ClusterInfrastructure, closure v1alpha1.ProviderClosure) v1alpha1.InfrastructureProvider {
+	return v1alpha1.InfrastructureProvider{
+		Metadata: v1alpha1.Metadata{Name: strings.Join(closure.ProviderRefNames, "+")},
+		Spec: v1alpha1.InfrastructureProviderSpec{
+			Hosts:          closure.Hosts,
+			Machine:        closure.Machine,
+			LoadBalancer:   closure.LoadBalancer,
+			NameResolution: closure.NameResolution,
+		},
+	}
 }
 
 func validateNetworks(ci v1alpha1.ClusterInfrastructure, provider v1alpha1.InfrastructureProvider) []string {

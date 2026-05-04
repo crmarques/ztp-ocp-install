@@ -1,0 +1,13 @@
+apiVersion: gitups.io/v1alpha1
+kind: Environment
+metadata:
+  name: edge-lb-env
+spec:
+  baseDomain: example.test
+  ocpInstall:
+    connected: {}
+  secrets:
+    pullSecretRef:
+      name: openshift-pull-secret
+    clusterSSHKeyRef:
+      name: cluster-admin-key
