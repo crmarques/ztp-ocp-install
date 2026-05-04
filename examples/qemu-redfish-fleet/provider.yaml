@@ -35,3 +35,7 @@ spec:
     haProxy:
       hostRef:
         name: qemu-host
+  nameResolution:
+    hostsFile:
+      hostRefs:
+        - name: qemu-host

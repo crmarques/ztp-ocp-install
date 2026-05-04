@@ -22,9 +22,6 @@ const (
 	OCPInstallKindRestricted   = "restricted"
 	OCPInstallKindDisconnected = "disconnected"
 
-	NameResolutionKindManaged  = "managed"
-	NameResolutionKindExternal = "external"
-
 	OCPRoleHub                = "hub"
 	OCPRoleManaged            = "managed"
 	OCPTopologySingleNode     = "single-node"
@@ -214,9 +211,23 @@ type InfrastructureProvider struct {
 // API embed their endpoint in the capability block — the host pool stays
 // optional so appliance-style providers need not declare it.
 type InfrastructureProviderSpec struct {
-	Hosts        map[string]ProviderHostSpec  `yaml:"hosts,omitempty" json:"hosts,omitempty"`
-	Machine      *MachineCapabilitySpec       `yaml:"machine,omitempty" json:"machine,omitempty"`
-	LoadBalancer *LoadBalancerCapabilitySpec  `yaml:"loadBalancer,omitempty" json:"loadBalancer,omitempty"`
+	Hosts          map[string]ProviderHostSpec    `yaml:"hosts,omitempty" json:"hosts,omitempty"`
+	Machine        *MachineCapabilitySpec         `yaml:"machine,omitempty" json:"machine,omitempty"`
+	LoadBalancer   *LoadBalancerCapabilitySpec    `yaml:"loadBalancer,omitempty" json:"loadBalancer,omitempty"`
+	NameResolution *NameResolutionCapabilitySpec  `yaml:"nameResolution,omitempty" json:"nameResolution,omitempty"`
+}
+
+// NameResolutionCapabilitySpec is the structural-discriminator union for the
+// name-resolution capability. v1 ships only hostsFile (managed /etc/hosts on
+// listed provider hosts). Omission of the capability block on a provider
+// means external — the operator owns DNS for clusters bound to that provider.
+type NameResolutionCapabilitySpec struct {
+	HostsFile *NameResolutionHostsFileSpec `yaml:"hostsFile,omitempty" json:"hostsFile,omitempty"`
+}
+
+type NameResolutionHostsFileSpec struct {
+	HostRefs               []LocalObjectReference `yaml:"hostRefs,omitempty" json:"hostRefs,omitempty"`
+	AdditionalIngressHosts []string               `yaml:"additionalIngressHosts,omitempty" json:"additionalIngressHosts,omitempty"`
 }
 
 // LoadBalancerCapabilitySpec is the structural-discriminator union for the
@@ -309,12 +320,11 @@ type ClusterInfrastructure struct {
 }
 
 type ClusterInfrastructureSpec struct {
-	ProviderRef    LocalObjectReference          `yaml:"providerRef" json:"providerRef"`
-	Networks       map[string]MachineNetworkSpec `yaml:"networks,omitempty" json:"networks,omitempty"`
-	Machines       map[string]MachineSpec        `yaml:"machines,omitempty" json:"machines,omitempty"`
-	Endpoints      ClusterEndpointsSpec          `yaml:"endpoints,omitempty" json:"endpoints,omitempty"`
-	LoadBalancers  map[string]LoadBalancerSpec   `yaml:"loadBalancers,omitempty" json:"loadBalancers,omitempty"`
-	NameResolution NameResolutionSpec            `yaml:"nameResolution,omitempty" json:"nameResolution,omitempty"`
+	ProviderRef   LocalObjectReference          `yaml:"providerRef" json:"providerRef"`
+	Networks      map[string]MachineNetworkSpec `yaml:"networks,omitempty" json:"networks,omitempty"`
+	Machines      map[string]MachineSpec        `yaml:"machines,omitempty" json:"machines,omitempty"`
+	Endpoints     ClusterEndpointsSpec          `yaml:"endpoints,omitempty" json:"endpoints,omitempty"`
+	LoadBalancers map[string]LoadBalancerSpec   `yaml:"loadBalancers,omitempty" json:"loadBalancers,omitempty"`
 }
 
 // MachineNetworkSpec describes a network instance the cluster needs on the
@@ -414,20 +424,6 @@ type LoadBalancerSpec struct {
 	Endpoints []string `yaml:"endpoints" json:"endpoints"`
 }
 
-// NameResolutionSpec is structural: exactly one of Managed or External is set.
-// External is the empty selection (the operator owns DNS); Managed delegates
-// /etc/hosts placement on listed provider hosts (state-model.md R3).
-type NameResolutionSpec struct {
-	Managed  *ManagedNameResolutionSpec  `yaml:"managed,omitempty" json:"managed,omitempty"`
-	External *ExternalNameResolutionSpec `yaml:"external,omitempty" json:"external,omitempty"`
-}
-
-type ExternalNameResolutionSpec struct{}
-
-type ManagedNameResolutionSpec struct {
-	ProviderHostRefs       []LocalObjectReference `yaml:"providerHostRefs,omitempty" json:"providerHostRefs,omitempty"`
-	AdditionalIngressHosts []string               `yaml:"additionalIngressHosts,omitempty" json:"additionalIngressHosts,omitempty"`
-}
 
 // ----- OCPCluster -----
 
@@ -587,20 +583,6 @@ func OCPInstallProxyOf(env Environment) *OCPInstallProxy {
 		return env.Spec.OCPInstall.Restricted.Proxy
 	default:
 		return nil
-	}
-}
-
-// NameResolutionKind reports the structural discriminator of a
-// NameResolutionSpec. Returns "" when neither sub-block is set; validation
-// rejects that case.
-func NameResolutionKind(spec NameResolutionSpec) string {
-	switch {
-	case spec.Managed != nil:
-		return NameResolutionKindManaged
-	case spec.External != nil:
-		return NameResolutionKindExternal
-	default:
-		return ""
 	}
 }
 

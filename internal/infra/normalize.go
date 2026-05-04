@@ -87,9 +87,6 @@ func normalizeClusterInfrastructure(ci *v1alpha1.ClusterInfrastructure, provider
 	if ci.Kind == "" {
 		ci.Kind = v1alpha1.KindClusterInfrastructure
 	}
-	if v1alpha1.NameResolutionKind(ci.Spec.NameResolution) == "" {
-		ci.Spec.NameResolution.External = &v1alpha1.ExternalNameResolutionSpec{}
-	}
 	for name, m := range ci.Spec.Machines {
 		applyMachineProfile(&m, provider)
 		applyMachineDefaultResources(&m, provider)

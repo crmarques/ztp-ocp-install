@@ -54,10 +54,6 @@ spec:
         - api
         - apiInt
         - ingress
-  nameResolution:
-    managed:
-      providerHostRefs:
-        - name: spoke-02-host
 ---
 apiVersion: gitups.io/v1alpha1
 kind: OCPCluster

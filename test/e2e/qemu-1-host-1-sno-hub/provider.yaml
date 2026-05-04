@@ -27,3 +27,10 @@ spec:
     haProxy:
       hostRef:
         name: local-qemu-host
+  nameResolution:
+    hostsFile:
+      hostRefs:
+        - name: local-qemu-host
+      additionalIngressHosts:
+        - console-openshift-console.apps.qemu-1-host-hub.gitups.test
+        - oauth-openshift.apps.qemu-1-host-hub.gitups.test

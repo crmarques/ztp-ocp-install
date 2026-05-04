@@ -38,10 +38,6 @@ spec:
         - api
         - apiInt
         - ingress
-  nameResolution:
-    managed:
-      providerHostRefs:
-        - name: hub-sno-host
 ---
 apiVersion: gitups.io/v1alpha1
 kind: OCPCluster

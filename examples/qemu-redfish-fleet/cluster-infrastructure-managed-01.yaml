@@ -69,7 +69,3 @@ spec:
         - api
         - apiInt
         - ingress
-  nameResolution:
-    managed:
-      providerHostRefs:
-        - name: qemu-host

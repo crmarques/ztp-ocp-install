@@ -275,6 +275,7 @@ func validateProviders(providers []v1alpha1.InfrastructureProvider) []string {
 			errs = append(errs, validateKubevirtProvider(p)...)
 		}
 		errs = append(errs, validateProviderLoadBalancer(p)...)
+		errs = append(errs, validateProviderNameResolution(p)...)
 	}
 	return errs
 }
@@ -394,7 +395,6 @@ func validateClusterInfrastructures(state v1alpha1.State) []string {
 		errs = append(errs, validateMachines(ci, provider)...)
 		errs = append(errs, validateEndpoints(ci)...)
 		errs = append(errs, validateLoadBalancers(ci, provider)...)
-		errs = append(errs, validateNameResolution(ci, provider)...)
 	}
 	return errs
 }
@@ -562,30 +562,26 @@ func validateLoadBalancers(ci v1alpha1.ClusterInfrastructure, provider v1alpha1.
 	return errs
 }
 
-func validateNameResolution(ci v1alpha1.ClusterInfrastructure, provider v1alpha1.InfrastructureProvider) []string {
+func validateProviderNameResolution(p v1alpha1.InfrastructureProvider) []string {
+	if p.Spec.NameResolution == nil {
+		return nil
+	}
 	var errs []string
-	set := 0
-	if ci.Spec.NameResolution.Managed != nil {
-		set++
-	}
-	if ci.Spec.NameResolution.External != nil {
-		set++
-	}
-	if set != 1 {
-		errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s nameResolution must set exactly one of {managed, external}", ci.Metadata.Name))
+	if p.Spec.NameResolution.HostsFile == nil {
+		errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec.nameResolution must set exactly one of {hostsFile}", p.Metadata.Name))
 		return errs
 	}
-	if ci.Spec.NameResolution.Managed == nil {
-		return errs
-	}
-	for _, ref := range ci.Spec.NameResolution.Managed.ProviderHostRefs {
-		host, ok := provider.Spec.Hosts[ref.Name]
+	for i, ref := range p.Spec.NameResolution.HostsFile.HostRefs {
+		host, ok := p.Spec.Hosts[ref.Name]
 		if !ok {
-			errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s nameResolution.managed.providerHostRefs %q not defined on InfrastructureProvider/%s", ci.Metadata.Name, ref.Name, provider.Metadata.Name))
+			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s nameResolution.hostsFile.hostRefs[%d] %q not defined under spec.hosts", p.Metadata.Name, i, ref.Name))
 			continue
 		}
+		if host.SSH == nil {
+			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s nameResolution.hostsFile.hostRefs[%d] %q must have ssh connection set", p.Metadata.Name, i, ref.Name))
+		}
 		if !hasCapability(host.Capabilities, v1alpha1.CapabilityHostsFile) {
-			errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s nameResolution.managed.providerHostRefs %q lacks capability %q", ci.Metadata.Name, ref.Name, v1alpha1.CapabilityHostsFile))
+			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s nameResolution.hostsFile.hostRefs[%d] %q lacks capability %q", p.Metadata.Name, i, ref.Name, v1alpha1.CapabilityHostsFile))
 		}
 	}
 	return errs

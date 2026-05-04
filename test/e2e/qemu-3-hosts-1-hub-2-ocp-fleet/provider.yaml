@@ -33,6 +33,13 @@ spec:
     haProxy:
       hostRef:
         name: hub-host
+  nameResolution:
+    hostsFile:
+      hostRefs:
+        - name: hub-host
+      additionalIngressHosts:
+        - console-openshift-console.apps.qemu-3-hosts-hub.gitups.test
+        - oauth-openshift.apps.qemu-3-hosts-hub.gitups.test
 ---
 apiVersion: gitups.io/v1alpha1
 kind: InfrastructureProvider
@@ -69,6 +76,13 @@ spec:
     haProxy:
       hostRef:
         name: ocp-01-host
+  nameResolution:
+    hostsFile:
+      hostRefs:
+        - name: ocp-01-host
+      additionalIngressHosts:
+        - console-openshift-console.apps.qemu-3-hosts-ocp-01.gitups.test
+        - oauth-openshift.apps.qemu-3-hosts-ocp-01.gitups.test
 ---
 apiVersion: gitups.io/v1alpha1
 kind: InfrastructureProvider
@@ -105,3 +119,10 @@ spec:
     haProxy:
       hostRef:
         name: ocp-02-host
+  nameResolution:
+    hostsFile:
+      hostRefs:
+        - name: ocp-02-host
+      additionalIngressHosts:
+        - console-openshift-console.apps.qemu-3-hosts-ocp-02.gitups.test
+        - oauth-openshift.apps.qemu-3-hosts-ocp-02.gitups.test

@@ -82,9 +82,6 @@ func TestLoadNormalizeValidateOneHostSample(t *testing.T) {
 		t.Fatalf("provider BMC port got %d, want %d", got, want)
 	}
 	for _, item := range state.ClusterInfrastructures {
-		if item.Spec.NameResolution.Managed == nil {
-			t.Fatalf("%s expected managed name resolution", item.Metadata.Name)
-		}
 		machine, ok := item.Spec.Machines["master-0"]
 		if !ok {
 			t.Fatalf("%s missing master-0 machine", item.Metadata.Name)

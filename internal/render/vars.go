@@ -441,7 +441,7 @@ func clusterVars(item v1alpha1.ClusterInfrastructure, provider v1alpha1.Infrastr
 			Nodes:     ocpClusterNodes(item, ocp),
 		},
 		Provider: providerVars(item, provider, ocp, env),
-		Network:  networkVars(item),
+		Network:  networkVars(item, provider),
 	}
 }
 
@@ -852,13 +852,13 @@ func nodeRolesByMachineRef(ocp v1alpha1.OCPCluster) map[string]string {
 	return out
 }
 
-func networkVars(item v1alpha1.ClusterInfrastructure) ClusterNetworkVars {
+func networkVars(item v1alpha1.ClusterInfrastructure, provider v1alpha1.InfrastructureProvider) ClusterNetworkVars {
 	endpoints := endpointVars(item.Spec.Endpoints)
 	return ClusterNetworkVars{
 		MachineNetworks: machineNetworksList(item),
 		Endpoints:       endpoints,
 		LoadBalancer:    clusterLoadBalancerVars(item),
-		NameResolution:  nameResolutionVars(item),
+		NameResolution:  nameResolutionVars(item, provider),
 		APIVIP:          endpoints.API.Address,
 		IngressVIP:      endpoints.Ingress.Address,
 		Records: DNSRecords{
@@ -1052,13 +1052,13 @@ func endpointAddressFromCI(infra v1alpha1.ClusterInfrastructure, ep string) stri
 	return ""
 }
 
-func nameResolutionVars(item v1alpha1.ClusterInfrastructure) NameResolutionVars {
-	if item.Spec.NameResolution.Managed == nil {
+func nameResolutionVars(item v1alpha1.ClusterInfrastructure, provider v1alpha1.InfrastructureProvider) NameResolutionVars {
+	if provider.Spec.NameResolution == nil || provider.Spec.NameResolution.HostsFile == nil {
 		return NameResolutionVars{Mode: "external"}
 	}
-	managed := item.Spec.NameResolution.Managed
-	refs := make([]string, 0, len(managed.ProviderHostRefs))
-	for _, r := range managed.ProviderHostRefs {
+	hf := provider.Spec.NameResolution.HostsFile
+	refs := make([]string, 0, len(hf.HostRefs))
+	for _, r := range hf.HostRefs {
 		refs = append(refs, r.Name)
 	}
 	result := NameResolutionVars{
@@ -1068,8 +1068,8 @@ func nameResolutionVars(item v1alpha1.ClusterInfrastructure) NameResolutionVars 
 		},
 	}
 	result.Managed.HostsFile = &HostsFileVars{
-		AdditionalIngressHosts: append([]string(nil), managed.AdditionalIngressHosts...),
-		Entries:                hostsFileEntries(item, managed.AdditionalIngressHosts),
+		AdditionalIngressHosts: append([]string(nil), hf.AdditionalIngressHosts...),
+		Entries:                hostsFileEntries(item, hf.AdditionalIngressHosts),
 	}
 	return result
 }
