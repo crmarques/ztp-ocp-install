@@ -108,7 +108,7 @@ func TestPreflightHubPhaseDemandsOpenShiftCLIs(t *testing.T) {
 func TestPreflightInfraPhaseChecksKvmWhenQemuKvmProvider(t *testing.T) {
 	state := v1alpha1.State{
 		InfrastructureProviders: []v1alpha1.InfrastructureProvider{
-			{Spec: v1alpha1.InfrastructureProviderSpec{QemuKVM: &v1alpha1.QemuKVMProviderSpec{}}},
+			{Spec: v1alpha1.InfrastructureProviderSpec{Machine: &v1alpha1.MachineCapabilitySpec{Libvirt: &v1alpha1.MachineProviderLibvirtSpec{}}}},
 		},
 	}
 	deps := fakeDeps(map[string]string{
@@ -134,7 +134,7 @@ func TestPreflightInfraPhaseChecksKvmWhenQemuKvmProvider(t *testing.T) {
 func TestPreflightInfraPhaseSkipsKvmWithoutQemuKvm(t *testing.T) {
 	state := v1alpha1.State{
 		InfrastructureProviders: []v1alpha1.InfrastructureProvider{
-			{Spec: v1alpha1.InfrastructureProviderSpec{BareMetal: &v1alpha1.BareMetalProviderSpec{}}},
+			{Spec: v1alpha1.InfrastructureProviderSpec{Machine: &v1alpha1.MachineCapabilitySpec{Baremetal: &v1alpha1.MachineProviderBaremetalSpec{}}}},
 		},
 	}
 	deps := fakeDeps(map[string]string{
@@ -359,13 +359,13 @@ func TestPreflightInfraPhaseChecksBMCPortsAvailable(t *testing.T) {
 	state := v1alpha1.State{
 		InfrastructureProviders: []v1alpha1.InfrastructureProvider{{
 			Metadata: v1alpha1.Metadata{Name: "qemu-1-host-provider"},
-			Spec: v1alpha1.InfrastructureProviderSpec{QemuKVM: &v1alpha1.QemuKVMProviderSpec{
+			Spec: v1alpha1.InfrastructureProviderSpec{Machine: &v1alpha1.MachineCapabilitySpec{Libvirt: &v1alpha1.MachineProviderLibvirtSpec{
 				BMCEmulation: &v1alpha1.BMCEmulationSpec{
 					Enabled:     v1alpha1.BoolPtr(true),
 					BindAddress: "0.0.0.0",
 					Port:        8000,
 				},
-			}},
+			}}},
 		}},
 	}
 	deps := fakeDepsWithListen(map[string]string{
@@ -399,13 +399,13 @@ func TestPreflightInfraPhaseFailsWhenBMCPortInUse(t *testing.T) {
 	state := v1alpha1.State{
 		InfrastructureProviders: []v1alpha1.InfrastructureProvider{{
 			Metadata: v1alpha1.Metadata{Name: "qemu-1-host-provider"},
-			Spec: v1alpha1.InfrastructureProviderSpec{QemuKVM: &v1alpha1.QemuKVMProviderSpec{
+			Spec: v1alpha1.InfrastructureProviderSpec{Machine: &v1alpha1.MachineCapabilitySpec{Libvirt: &v1alpha1.MachineProviderLibvirtSpec{
 				BMCEmulation: &v1alpha1.BMCEmulationSpec{
 					Enabled:     v1alpha1.BoolPtr(true),
 					BindAddress: "0.0.0.0",
 					Port:        8000,
 				},
-			}},
+			}}},
 		}},
 	}
 	deps := fakeDepsWithListen(map[string]string{
@@ -439,12 +439,12 @@ func TestPreflightInfraPhaseSkipsBMCPortsWhenEmulationDisabled(t *testing.T) {
 	state := v1alpha1.State{
 		InfrastructureProviders: []v1alpha1.InfrastructureProvider{{
 			Metadata: v1alpha1.Metadata{Name: "qemu-no-bmc"},
-			Spec: v1alpha1.InfrastructureProviderSpec{QemuKVM: &v1alpha1.QemuKVMProviderSpec{
+			Spec: v1alpha1.InfrastructureProviderSpec{Machine: &v1alpha1.MachineCapabilitySpec{Libvirt: &v1alpha1.MachineProviderLibvirtSpec{
 				BMCEmulation: &v1alpha1.BMCEmulationSpec{
 					Enabled: v1alpha1.BoolPtr(false),
 					Port:    8000,
 				},
-			}},
+			}}},
 		}},
 	}
 	deps := fakeDepsWithListen(map[string]string{
@@ -572,14 +572,14 @@ func TestPreflightChecksProviderHostSSHKeyRef(t *testing.T) {
 	state := v1alpha1.State{
 		InfrastructureProviders: []v1alpha1.InfrastructureProvider{{
 			Metadata: v1alpha1.Metadata{Name: "qemu-1-host-provider"},
-			Spec: v1alpha1.InfrastructureProviderSpec{QemuKVM: &v1alpha1.QemuKVMProviderSpec{
-				Hosts: map[string]v1alpha1.QemuKVMHostSpec{
+			Spec: v1alpha1.InfrastructureProviderSpec{Machine: &v1alpha1.MachineCapabilitySpec{Libvirt: &v1alpha1.MachineProviderLibvirtSpec{
+				Hosts: map[string]v1alpha1.LibvirtHostSpec{
 					"local-qemu-host": {
 						Address:   "localhost",
 						SSHKeyRef: v1alpha1.SecretRef{Name: "local-qemu-host-admin-key"},
 					},
 				},
-			}},
+			}}},
 		}},
 	}
 	deps := fakeDepsWithStat(map[string]string{
@@ -608,8 +608,8 @@ func TestPreflightChecksBMCEmulationAndMachineCredentials(t *testing.T) {
 	state := v1alpha1.State{
 		InfrastructureProviders: []v1alpha1.InfrastructureProvider{{
 			Metadata: v1alpha1.Metadata{Name: "qemu-1-host-provider"},
-			Spec: v1alpha1.InfrastructureProviderSpec{QemuKVM: &v1alpha1.QemuKVMProviderSpec{
-				Hosts: map[string]v1alpha1.QemuKVMHostSpec{
+			Spec: v1alpha1.InfrastructureProviderSpec{Machine: &v1alpha1.MachineCapabilitySpec{Libvirt: &v1alpha1.MachineProviderLibvirtSpec{
+				Hosts: map[string]v1alpha1.LibvirtHostSpec{
 					"local-qemu-host": {Address: "localhost", SSHKeyRef: v1alpha1.SecretRef{Name: "host-key"}},
 				},
 				BMCEmulation: &v1alpha1.BMCEmulationSpec{
@@ -618,7 +618,7 @@ func TestPreflightChecksBMCEmulationAndMachineCredentials(t *testing.T) {
 						CredentialRef: v1alpha1.SecretRef{Name: "qemu-1-host-bmc-credentials"},
 					},
 				},
-			}},
+			}}},
 		}},
 		ClusterInfrastructures: []v1alpha1.ClusterInfrastructure{{
 			Metadata: v1alpha1.Metadata{Name: "ci"},
@@ -670,18 +670,18 @@ func TestPreflightChecksVMwareAndOSVProviderRefs(t *testing.T) {
 		InfrastructureProviders: []v1alpha1.InfrastructureProvider{
 			{
 				Metadata: v1alpha1.Metadata{Name: "vmw"},
-				Spec: v1alpha1.InfrastructureProviderSpec{VMware: &v1alpha1.VMwareProviderSpec{
+				Spec: v1alpha1.InfrastructureProviderSpec{Machine: &v1alpha1.MachineCapabilitySpec{Vsphere: &v1alpha1.MachineProviderVsphereSpec{
 					VCenterRef: v1alpha1.SecretRef{Name: "lab-vcenter"},
 					Datacenter: "dc",
 					Cluster:    "cl",
-				}},
+				}}},
 			},
 			{
 				Metadata: v1alpha1.Metadata{Name: "osv"},
-				Spec: v1alpha1.InfrastructureProviderSpec{OpenShiftVirtualization: &v1alpha1.OpenShiftVirtualizationSpec{
+				Spec: v1alpha1.InfrastructureProviderSpec{Machine: &v1alpha1.MachineCapabilitySpec{Kubevirt: &v1alpha1.MachineProviderKubevirtSpec{
 					ClusterRef: v1alpha1.SecretRef{Name: "lab-osv-cluster"},
 					Namespace:  "lab",
-				}},
+				}}},
 			},
 		},
 	}
@@ -692,8 +692,8 @@ func TestPreflightChecksVMwareAndOSVProviderRefs(t *testing.T) {
 	}, false, map[string]bool{"/secrets": true})
 	checks := collectPreflightChecks(state, nil, true, "/secrets", defaultHostStateDir, deps)
 	want := []string{
-		"provider vmw vmware vCenterRef at /secrets/lab-vcenter",
-		"provider osv openShiftVirtualization clusterRef at /secrets/lab-osv-cluster",
+		"provider vmw vsphere vCenterRef at /secrets/lab-vcenter",
+		"provider osv kubevirt clusterRef at /secrets/lab-osv-cluster",
 	}
 	for _, w := range want {
 		var found *preflightCheck

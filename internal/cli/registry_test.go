@@ -164,14 +164,15 @@ kind: InfrastructureProvider
 metadata:
   name: p
 spec:
-  qemuKVM:
-    hosts:
-      h:
-        address: 10.0.0.1
-        sshKeyRef:
-          name: k
-        capabilities:
-          - libvirt
+  machine:
+    libvirt:
+      hosts:
+        h:
+          address: 10.0.0.1
+          sshKeyRef:
+            name: k
+          capabilities:
+            - libvirt
 ---
 apiVersion: gitups.io/v1alpha1
 kind: ClusterInfrastructure
@@ -243,14 +244,15 @@ kind: InfrastructureProvider
 metadata:
   name: ` + providerName + `
 spec:
-  qemuKVM:
-    hosts:
-      host-01:
-        address: 10.0.0.1
-        sshKeyRef:
-          name: k
-        capabilities:
-          - libvirt
+  machine:
+    libvirt:
+      hosts:
+        host-01:
+          address: 10.0.0.1
+          sshKeyRef:
+            name: k
+          capabilities:
+            - libvirt
 ---
 apiVersion: gitups.io/v1alpha1
 kind: ClusterInfrastructure

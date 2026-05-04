@@ -253,7 +253,7 @@ type MachineNetworkVars struct {
 	Gateway    string                     `yaml:"gateway,omitempty" json:"gateway,omitempty"`
 	DNSServers []string                   `yaml:"dnsServers,omitempty" json:"dnsServers,omitempty"`
 	Libvirt    *MachineNetworkLibvirtVars `yaml:"libvirt,omitempty" json:"libvirt,omitempty"`
-	VMware     *MachineNetworkVMwareVars  `yaml:"vmware,omitempty" json:"vmware,omitempty"`
+	Vsphere    *MachineNetworkVsphereVars `yaml:"vsphere,omitempty" json:"vsphere,omitempty"`
 }
 
 type MachineNetworkLibvirtVars struct {
@@ -261,7 +261,7 @@ type MachineNetworkLibvirtVars struct {
 	Bridge         string `yaml:"bridge" json:"bridge"`
 }
 
-type MachineNetworkVMwareVars struct {
+type MachineNetworkVsphereVars struct {
 	Portgroup string `yaml:"portgroup,omitempty" json:"portgroup,omitempty"`
 }
 
@@ -610,12 +610,12 @@ func ocpClusterNodes(item v1alpha1.ClusterInfrastructure, ocp v1alpha1.OCPCluste
 
 func providerVars(item v1alpha1.ClusterInfrastructure, provider v1alpha1.InfrastructureProvider, ocp v1alpha1.OCPCluster, env *v1alpha1.Environment) ProviderVars {
 	var result ProviderVars
-	result.Kind = v1alpha1.ProviderKind(provider)
+	result.Kind = v1alpha1.MachineFlavor(provider)
 	result.SubstrateRole, result.BmcRole, result.BootArtifactsHttp = providerDispatch(provider)
-	if provider.Spec.QemuKVM == nil {
+	if v1alpha1.ProviderMachineLibvirt(provider) == nil {
 		return result
 	}
-	q := provider.Spec.QemuKVM
+	q := provider.Spec.Machine.Libvirt
 	result.InfrastructureHosts = providerHostVars(q)
 	result.Virtualization = &ProviderVirtualizationVars{
 		Type:        v1alpha1.VirtualizationTypeLibvirt,
@@ -639,29 +639,29 @@ func providerVars(item v1alpha1.ClusterInfrastructure, provider v1alpha1.Infrast
 //   - BootArtifactsHttp → enables provider_boot_artifacts_http when the
 //     substrate cannot deliver the agent rootfs / boot artifacts out-of-band.
 func providerDispatch(provider v1alpha1.InfrastructureProvider) (string, string, ProviderBootArtifactsHTTPVars) {
-	switch v1alpha1.ProviderKind(provider) {
-	case v1alpha1.ProviderKindQemuKVM:
+	switch v1alpha1.MachineFlavor(provider) {
+	case v1alpha1.MachineFlavorLibvirt:
 		http := ProviderBootArtifactsHTTPVars{}
-		if provider.Spec.QemuKVM != nil && provider.Spec.QemuKVM.BMCEmulation != nil && provider.Spec.QemuKVM.BMCEmulation.Port > 0 {
+		if v1alpha1.ProviderMachineLibvirt(provider) != nil && provider.Spec.Machine.Libvirt.BMCEmulation != nil && provider.Spec.Machine.Libvirt.BMCEmulation.Port > 0 {
 			http = ProviderBootArtifactsHTTPVars{
 				Enabled:     true,
 				BindAddress: "0.0.0.0",
-				Port:        provider.Spec.QemuKVM.BMCEmulation.Port + 2,
+				Port:        provider.Spec.Machine.Libvirt.BMCEmulation.Port + 2,
 			}
 		}
 		return "libvirt", "emulated", http
-	case v1alpha1.ProviderKindBareMetal:
+	case v1alpha1.MachineFlavorBaremetal:
 		return "baremetal", "redfish", ProviderBootArtifactsHTTPVars{}
-	case v1alpha1.ProviderKindVMware:
+	case v1alpha1.MachineFlavorVsphere:
 		return "vsphere", "none", ProviderBootArtifactsHTTPVars{}
-	case v1alpha1.ProviderKindOpenShiftVirt:
+	case v1alpha1.MachineFlavorKubevirt:
 		return "kubevirt", "none", ProviderBootArtifactsHTTPVars{}
 	default:
 		return "", "none", ProviderBootArtifactsHTTPVars{}
 	}
 }
 
-func providerHostVars(q *v1alpha1.QemuKVMProviderSpec) []ProviderHostVars {
+func providerHostVars(q *v1alpha1.MachineProviderLibvirtSpec) []ProviderHostVars {
 	names := sortedKeys(q.Hosts)
 	out := make([]ProviderHostVars, 0, len(names))
 	for _, name := range names {
@@ -678,7 +678,7 @@ func providerHostVars(q *v1alpha1.QemuKVMProviderSpec) []ProviderHostVars {
 	return out
 }
 
-func defaultNodeVars(q *v1alpha1.QemuKVMProviderSpec) VirtualNodeResourceVars {
+func defaultNodeVars(q *v1alpha1.MachineProviderLibvirtSpec) VirtualNodeResourceVars {
 	if len(q.MachineProfiles) == 0 {
 		return VirtualNodeResourceVars{
 			CPU:       v1alpha1.DefaultNodeCPU,
@@ -701,15 +701,15 @@ func providerComponentVars(state v1alpha1.State) []ProviderComponentVars {
 		substrateRole, bmcRole, http := providerDispatch(provider)
 		item := ProviderComponentVars{
 			Name:              provider.Metadata.Name,
-			Kind:              v1alpha1.ProviderKind(provider),
+			Kind:              v1alpha1.MachineFlavor(provider),
 			SubstrateRole:     substrateRole,
 			BmcRole:           bmcRole,
 			BootArtifactsHttp: http,
 		}
-		if provider.Spec.QemuKVM != nil {
-			item.InfrastructureHosts = providerHostVars(provider.Spec.QemuKVM)
-			if provider.Spec.QemuKVM.BMCEmulation != nil {
-				item.BMC = bmcVars(provider.Spec.QemuKVM.BMCEmulation, providerBMCNodes(provider, state))
+		if v1alpha1.ProviderMachineLibvirt(provider) != nil {
+			item.InfrastructureHosts = providerHostVars(provider.Spec.Machine.Libvirt)
+			if provider.Spec.Machine.Libvirt.BMCEmulation != nil {
+				item.BMC = bmcVars(provider.Spec.Machine.Libvirt.BMCEmulation, providerBMCNodes(provider, state))
 			}
 		}
 		result = append(result, item)
@@ -737,7 +737,7 @@ func bmcVars(source *v1alpha1.BMCEmulationSpec, nodes []ProviderBMCNodeVars) *Pr
 }
 
 func providerBMCNodes(provider v1alpha1.InfrastructureProvider, state v1alpha1.State) []ProviderBMCNodeVars {
-	if provider.Spec.QemuKVM == nil {
+	if v1alpha1.ProviderMachineLibvirt(provider) == nil {
 		return nil
 	}
 	var result []ProviderBMCNodeVars
@@ -765,7 +765,7 @@ func providerBMCNodes(provider v1alpha1.InfrastructureProvider, state v1alpha1.S
 	return result
 }
 
-func libvirtVars(item v1alpha1.ClusterInfrastructure, q *v1alpha1.QemuKVMProviderSpec, env *v1alpha1.Environment) *LibvirtVars {
+func libvirtVars(item v1alpha1.ClusterInfrastructure, q *v1alpha1.MachineProviderLibvirtSpec, env *v1alpha1.Environment) *LibvirtVars {
 	if len(item.Spec.Networks) == 0 || q == nil {
 		return nil
 	}
@@ -897,8 +897,8 @@ func machineNetworksList(item v1alpha1.ClusterInfrastructure) []MachineNetworkVa
 				Bridge:         n.Libvirt.Bridge,
 			}
 		}
-		if n.VMware != nil {
-			entry.VMware = &MachineNetworkVMwareVars{Portgroup: n.VMware.Portgroup}
+		if n.Vsphere != nil {
+			entry.Vsphere = &MachineNetworkVsphereVars{Portgroup: n.Vsphere.Portgroup}
 		}
 		out = append(out, entry)
 	}
@@ -993,7 +993,7 @@ func frontendForEndpoint(infra v1alpha1.ClusterInfrastructure, ocp v1alpha1.OCPC
 // expose a host-local bridge (e.g. baremetal, vSphere) — in those cases the
 // upstream network owns address plumbing and the VIP is reached out-of-band.
 func vipBridgeAttachment(infra v1alpha1.ClusterInfrastructure, provider v1alpha1.InfrastructureProvider, bindAddress string) *LoadBalancerVIPBridgeAttachment {
-	if v1alpha1.ProviderKind(provider) != v1alpha1.ProviderKindQemuKVM {
+	if v1alpha1.MachineFlavor(provider) != v1alpha1.MachineFlavorLibvirt {
 		return nil
 	}
 	if bindAddress == "" {

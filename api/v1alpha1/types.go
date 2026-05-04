@@ -13,10 +13,10 @@ const (
 	KindInfrastructureState    = "InfrastructureState"
 	KindGitupsLock             = "GitupsLock"
 
-	ProviderKindQemuKVM       = "qemu-kvm"
-	ProviderKindBareMetal     = "baremetal"
-	ProviderKindVMware        = "vmware"
-	ProviderKindOpenShiftVirt = "openshift-virtualization"
+	MachineFlavorLibvirt   = "libvirt"
+	MachineFlavorBaremetal = "baremetal"
+	MachineFlavorVsphere   = "vsphere"
+	MachineFlavorKubevirt  = "kubevirt"
 
 	OCPInstallKindConnected    = "connected"
 	OCPInstallKindRestricted   = "restricted"
@@ -203,20 +203,31 @@ type InfrastructureProvider struct {
 	SourcePath string                     `yaml:"-" json:"-"`
 }
 
+// InfrastructureProviderSpec is capability-oriented: each top-level field is
+// an independent capability the provider may supply. v1 ships only the
+// `machine` capability; later rounds add `loadBalancer`, `nameResolution`, …
+// At least one capability sub-block must be set.
 type InfrastructureProviderSpec struct {
-	QemuKVM                 *QemuKVMProviderSpec         `yaml:"qemuKVM,omitempty" json:"qemuKVM,omitempty"`
-	BareMetal               *BareMetalProviderSpec       `yaml:"bareMetal,omitempty" json:"bareMetal,omitempty"`
-	VMware                  *VMwareProviderSpec          `yaml:"vmware,omitempty" json:"vmware,omitempty"`
-	OpenShiftVirtualization *OpenShiftVirtualizationSpec `yaml:"openShiftVirtualization,omitempty" json:"openShiftVirtualization,omitempty"`
+	Machine *MachineCapabilitySpec `yaml:"machine,omitempty" json:"machine,omitempty"`
 }
 
-type QemuKVMProviderSpec struct {
-	Hosts           map[string]QemuKVMHostSpec    `yaml:"hosts,omitempty" json:"hosts,omitempty"`
+// MachineCapabilitySpec is the substrate-flavor union for the machine
+// capability. Exactly one flavor sub-block is set (state-model R3); the
+// presence of the sub-block is the discriminator.
+type MachineCapabilitySpec struct {
+	Libvirt   *MachineProviderLibvirtSpec   `yaml:"libvirt,omitempty" json:"libvirt,omitempty"`
+	Baremetal *MachineProviderBaremetalSpec `yaml:"baremetal,omitempty" json:"baremetal,omitempty"`
+	Vsphere   *MachineProviderVsphereSpec   `yaml:"vsphere,omitempty" json:"vsphere,omitempty"`
+	Kubevirt  *MachineProviderKubevirtSpec  `yaml:"kubevirt,omitempty" json:"kubevirt,omitempty"`
+}
+
+type MachineProviderLibvirtSpec struct {
+	Hosts           map[string]LibvirtHostSpec    `yaml:"hosts,omitempty" json:"hosts,omitempty"`
 	BMCEmulation    *BMCEmulationSpec             `yaml:"bmcEmulation,omitempty" json:"bmcEmulation,omitempty"`
 	MachineProfiles map[string]MachineProfileSpec `yaml:"machineProfiles,omitempty" json:"machineProfiles,omitempty"`
 }
 
-type QemuKVMHostSpec struct {
+type LibvirtHostSpec struct {
 	Address      string    `yaml:"address" json:"address"`
 	User         string    `yaml:"user,omitempty" json:"user,omitempty"`
 	SSHKeyRef    SecretRef `yaml:"sshKeyRef" json:"sshKeyRef"`
@@ -243,17 +254,17 @@ type MachineProfileSpec struct {
 	DiskGiB   int `yaml:"diskGiB,omitempty" json:"diskGiB,omitempty"`
 }
 
-type BareMetalProviderSpec struct {
+type MachineProviderBaremetalSpec struct {
 	BMCProtocol string `yaml:"bmcProtocol,omitempty" json:"bmcProtocol,omitempty"`
 }
 
-type VMwareProviderSpec struct {
+type MachineProviderVsphereSpec struct {
 	VCenterRef SecretRef `yaml:"vCenterRef" json:"vCenterRef"`
 	Datacenter string    `yaml:"datacenter" json:"datacenter"`
 	Cluster    string    `yaml:"cluster" json:"cluster"`
 }
 
-type OpenShiftVirtualizationSpec struct {
+type MachineProviderKubevirtSpec struct {
 	ClusterRef      SecretRef             `yaml:"clusterRef" json:"clusterRef"`
 	Namespace       string                `yaml:"namespace" json:"namespace"`
 	StorageClassRef *LocalObjectReference `yaml:"storageClassRef,omitempty" json:"storageClassRef,omitempty"`
@@ -287,14 +298,14 @@ type MachineNetworkSpec struct {
 	Gateway    string                     `yaml:"gateway,omitempty" json:"gateway,omitempty"`
 	DNSServers []string                   `yaml:"dnsServers,omitempty" json:"dnsServers,omitempty"`
 	Libvirt    *MachineNetworkLibvirtSpec `yaml:"libvirt,omitempty" json:"libvirt,omitempty"`
-	VMware     *MachineNetworkVMwareSpec  `yaml:"vmware,omitempty" json:"vmware,omitempty"`
+	Vsphere    *MachineNetworkVsphereSpec `yaml:"vsphere,omitempty" json:"vsphere,omitempty"`
 }
 
 type MachineNetworkLibvirtSpec struct {
 	Bridge string `yaml:"bridge" json:"bridge"`
 }
 
-type MachineNetworkVMwareSpec struct {
+type MachineNetworkVsphereSpec struct {
 	Portgroup string `yaml:"portgroup,omitempty" json:"portgroup,omitempty"`
 }
 
@@ -305,7 +316,7 @@ type MachineSpec struct {
 	RootDeviceHints *RootDeviceHintsSpec            `yaml:"rootDeviceHints,omitempty" json:"rootDeviceHints,omitempty"`
 	Libvirt         *MachineLibvirtSpec             `yaml:"libvirt,omitempty" json:"libvirt,omitempty"`
 	Baremetal       *MachineBaremetalSpec           `yaml:"baremetal,omitempty" json:"baremetal,omitempty"`
-	VMware          *MachineVMwareSpec              `yaml:"vmware,omitempty" json:"vmware,omitempty"`
+	Vsphere         *MachineVsphereSpec             `yaml:"vsphere,omitempty" json:"vsphere,omitempty"`
 }
 
 type MachineResourcesSpec struct {
@@ -349,7 +360,7 @@ type MachineBMCSpec struct {
 	DisableCertificateVerification bool      `yaml:"disableCertificateVerification,omitempty" json:"disableCertificateVerification,omitempty"`
 }
 
-type MachineVMwareSpec struct {
+type MachineVsphereSpec struct {
 	Datastore string `yaml:"datastore,omitempty" json:"datastore,omitempty"`
 	Folder    string `yaml:"folder,omitempty" json:"folder,omitempty"`
 	Template  string `yaml:"template,omitempty" json:"template,omitempty"`
@@ -468,39 +479,49 @@ type OCPClusterNetworkCIDR struct {
 
 // ----- Discriminator helpers -----
 
-// ProviderKind reports the structural discriminator of an
-// InfrastructureProvider. Returns the empty string when no recognised
-// sub-block is set; validation rejects that case.
-func ProviderKind(provider InfrastructureProvider) string {
+// MachineFlavor reports the structural discriminator of an
+// InfrastructureProvider's machine capability. Returns the empty string when
+// no recognised flavor sub-block is set; validation rejects that case.
+func MachineFlavor(provider InfrastructureProvider) string {
+	if provider.Spec.Machine == nil {
+		return ""
+	}
 	switch {
-	case provider.Spec.QemuKVM != nil:
-		return ProviderKindQemuKVM
-	case provider.Spec.BareMetal != nil:
-		return ProviderKindBareMetal
-	case provider.Spec.VMware != nil:
-		return ProviderKindVMware
-	case provider.Spec.OpenShiftVirtualization != nil:
-		return ProviderKindOpenShiftVirt
+	case provider.Spec.Machine.Libvirt != nil:
+		return MachineFlavorLibvirt
+	case provider.Spec.Machine.Baremetal != nil:
+		return MachineFlavorBaremetal
+	case provider.Spec.Machine.Vsphere != nil:
+		return MachineFlavorVsphere
+	case provider.Spec.Machine.Kubevirt != nil:
+		return MachineFlavorKubevirt
 	default:
 		return ""
 	}
 }
 
-// MachineKind reports the structural discriminator of a MachineSpec, mapped
-// onto the provider-kind constants so cross-layer comparisons against
-// ProviderKind() continue to work. The YAML field names use substrate-flavor
-// vocabulary (libvirt / baremetal / vmware) rather than product names.
+// MachineKind reports the structural discriminator of a MachineSpec, returning
+// the substrate-flavor name that aligns with MachineFlavor() on the provider.
 func MachineKind(machine MachineSpec) string {
 	switch {
 	case machine.Libvirt != nil:
-		return ProviderKindQemuKVM
+		return MachineFlavorLibvirt
 	case machine.Baremetal != nil:
-		return ProviderKindBareMetal
-	case machine.VMware != nil:
-		return ProviderKindVMware
+		return MachineFlavorBaremetal
+	case machine.Vsphere != nil:
+		return MachineFlavorVsphere
 	default:
 		return ""
 	}
+}
+
+// ProviderMachineLibvirt returns the libvirt machine-capability spec on
+// provider, or nil. Convenience for the common consumer pattern.
+func ProviderMachineLibvirt(provider InfrastructureProvider) *MachineProviderLibvirtSpec {
+	if provider.Spec.Machine == nil {
+		return nil
+	}
+	return provider.Spec.Machine.Libvirt
 }
 
 // OCPInstallKind reports the structural discriminator of an Environment's

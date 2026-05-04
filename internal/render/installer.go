@@ -155,7 +155,7 @@ func disconnectedBootArtifactsConfig(infra v1alpha1.ClusterInfrastructure, provi
 	if env == nil || v1alpha1.OCPInstallKind(*env) != v1alpha1.OCPInstallKindDisconnected {
 		return nil
 	}
-	if provider.Spec.QemuKVM == nil || provider.Spec.QemuKVM.BMCEmulation == nil || provider.Spec.QemuKVM.BMCEmulation.Port == 0 {
+	if v1alpha1.ProviderMachineLibvirt(provider) == nil || provider.Spec.Machine.Libvirt.BMCEmulation == nil || provider.Spec.Machine.Libvirt.BMCEmulation.Port == 0 {
 		return nil
 	}
 	machineNetworks := machineNetworksList(infra)
@@ -164,7 +164,7 @@ func disconnectedBootArtifactsConfig(infra v1alpha1.ClusterInfrastructure, provi
 	}
 	return map[string]any{
 		"minimalISO":           true,
-		"bootArtifactsBaseURL": fmt.Sprintf("http://%s:%d/", machineNetworks[0].Gateway, provider.Spec.QemuKVM.BMCEmulation.Port+2),
+		"bootArtifactsBaseURL": fmt.Sprintf("http://%s:%d/", machineNetworks[0].Gateway, provider.Spec.Machine.Libvirt.BMCEmulation.Port+2),
 	}
 }
 
@@ -246,15 +246,15 @@ func platformConfig(provider v1alpha1.InfrastructureProvider, infra v1alpha1.Clu
 	if infra.Spec.Endpoints.Ingress != nil {
 		ingressAddress = infra.Spec.Endpoints.Ingress.Address
 	}
-	switch v1alpha1.ProviderKind(provider) {
-	case v1alpha1.ProviderKindQemuKVM, v1alpha1.ProviderKindBareMetal:
+	switch v1alpha1.MachineFlavor(provider) {
+	case v1alpha1.MachineFlavorLibvirt, v1alpha1.MachineFlavorBaremetal:
 		return map[string]any{
 			"baremetal": map[string]any{
 				"apiVIPs":     []any{apiAddress},
 				"ingressVIPs": []any{ingressAddress},
 			},
 		}
-	case v1alpha1.ProviderKindVMware:
+	case v1alpha1.MachineFlavorVsphere:
 		return map[string]any{
 			"vsphere": map[string]any{
 				"apiVIPs":     []any{apiAddress},

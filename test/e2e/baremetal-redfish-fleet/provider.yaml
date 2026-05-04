@@ -3,5 +3,6 @@ kind: InfrastructureProvider
 metadata:
   name: baremetal-redfish-provider
 spec:
-  bareMetal:
-    bmcProtocol: redfish
+  machine:
+    baremetal:
+      bmcProtocol: redfish

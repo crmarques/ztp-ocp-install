@@ -71,11 +71,11 @@ func openshiftInstallVersions(state v1alpha1.State) []string {
 
 func usesSushyTools(state v1alpha1.State) bool {
 	for _, provider := range state.InfrastructureProviders {
-		if provider.Spec.QemuKVM != nil &&
-			provider.Spec.QemuKVM.BMCEmulation != nil &&
-			provider.Spec.QemuKVM.BMCEmulation.Enabled != nil &&
-			*provider.Spec.QemuKVM.BMCEmulation.Enabled &&
-			provider.Spec.QemuKVM.BMCEmulation.Emulator == v1alpha1.DefaultBMCEmulator {
+		if v1alpha1.ProviderMachineLibvirt(provider) != nil &&
+			provider.Spec.Machine.Libvirt.BMCEmulation != nil &&
+			provider.Spec.Machine.Libvirt.BMCEmulation.Enabled != nil &&
+			*provider.Spec.Machine.Libvirt.BMCEmulation.Enabled &&
+			provider.Spec.Machine.Libvirt.BMCEmulation.Emulator == v1alpha1.DefaultBMCEmulator {
 			return true
 		}
 	}

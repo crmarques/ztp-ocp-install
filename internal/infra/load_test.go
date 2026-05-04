@@ -78,7 +78,7 @@ func TestLoadNormalizeValidateOneHostSample(t *testing.T) {
 	if got, want := totalLBs, 1; got != want {
 		t.Fatalf("got %d load balancers, want %d", got, want)
 	}
-	if got, want := state.InfrastructureProviders[0].Spec.QemuKVM.BMCEmulation.Port, 8000; got != want {
+	if got, want := state.InfrastructureProviders[0].Spec.Machine.Libvirt.BMCEmulation.Port, 8000; got != want {
 		t.Fatalf("provider BMC port got %d, want %d", got, want)
 	}
 	for _, item := range state.ClusterInfrastructures {
@@ -190,17 +190,17 @@ func TestDefaultsAreApplied(t *testing.T) {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
 	provider := state.InfrastructureProviders[0]
-	host, ok := provider.Spec.QemuKVM.Hosts["host-01"]
+	host, ok := provider.Spec.Machine.Libvirt.Hosts["host-01"]
 	if !ok {
 		t.Fatalf("host-01 missing from provider")
 	}
 	if got, want := host.User, "root"; got != want {
 		t.Fatalf("default user got %q, want %q", got, want)
 	}
-	if provider.Spec.QemuKVM.BMCEmulation.Enabled == nil || !*provider.Spec.QemuKVM.BMCEmulation.Enabled {
+	if provider.Spec.Machine.Libvirt.BMCEmulation.Enabled == nil || !*provider.Spec.Machine.Libvirt.BMCEmulation.Enabled {
 		t.Fatalf("expected BMC enabled default")
 	}
-	if got, want := provider.Spec.QemuKVM.BMCEmulation.Port, 8000; got != want {
+	if got, want := provider.Spec.Machine.Libvirt.BMCEmulation.Port, 8000; got != want {
 		t.Fatalf("default BMC port got %d, want %d", got, want)
 	}
 	item := state.ClusterInfrastructures[0]
@@ -382,15 +382,16 @@ kind: InfrastructureProvider
 metadata:
   name: %s
 spec:
-  qemuKVM:
-    hosts:
-      host-01:
-        address: 10.0.0.1
-        sshKeyRef:
-          name: default-key
-        capabilities:
-          - libvirt
-    bmcEmulation: {}
+  machine:
+    libvirt:
+      hosts:
+        host-01:
+          address: 10.0.0.1
+          sshKeyRef:
+            name: default-key
+          capabilities:
+            - libvirt
+      bmcEmulation: {}
 ---
 apiVersion: gitups.io/v1alpha1
 kind: ClusterInfrastructure
@@ -459,7 +460,8 @@ kind: InfrastructureProvider
 metadata:
   name: baremetal-provider
 spec:
-  bareMetal: {}
+  machine:
+    baremetal: {}
 ---
 apiVersion: gitups.io/v1alpha1
 kind: ClusterInfrastructure
@@ -530,11 +532,12 @@ kind: InfrastructureProvider
 metadata:
   name: vmware-provider
 spec:
-  vmware:
-    vCenterRef:
-      name: example-vcenter
-    datacenter: example-dc
-    cluster: example-cluster
+  machine:
+    vsphere:
+      vCenterRef:
+        name: example-vcenter
+      datacenter: example-dc
+      cluster: example-cluster
 ---
 apiVersion: gitups.io/v1alpha1
 kind: ClusterInfrastructure
@@ -554,7 +557,7 @@ spec:
             name: primary
           ipAddress: 192.168.181.20
           macAddress: 52:54:00:00:00:20
-      vmware:
+      vsphere:
         folder: example/vmware
         template: rhcos-4.21
   endpoints:

@@ -47,12 +47,12 @@ func Inventory(state v1alpha1.State) InventoryFile {
 	}
 	providers := providerIndex(state.InfrastructureProviders)
 	for _, provider := range state.InfrastructureProviders {
-		if provider.Spec.QemuKVM == nil {
+		if v1alpha1.ProviderMachineLibvirt(provider) == nil {
 			continue
 		}
-		hostNames := sortedKeys(provider.Spec.QemuKVM.Hosts)
+		hostNames := sortedKeys(provider.Spec.Machine.Libvirt.Hosts)
 		for _, hostName := range hostNames {
-			host := provider.Spec.QemuKVM.Hosts[hostName]
+			host := provider.Spec.Machine.Libvirt.Hosts[hostName]
 			inventoryName := fmt.Sprintf("%s-%s", provider.Metadata.Name, hostName)
 			groups["gitups_provider_hosts"].Hosts[inventoryName] = InventoryHost{
 				AnsibleHost:        host.Address,
@@ -67,7 +67,7 @@ func Inventory(state v1alpha1.State) InventoryFile {
 	ocpByInfra := ocpByInfrastructure(state.OCPClusters)
 	for _, item := range state.ClusterInfrastructures {
 		provider := providers[item.Spec.ProviderRef.Name]
-		if provider.Spec.QemuKVM == nil {
+		if v1alpha1.ProviderMachineLibvirt(provider) == nil {
 			continue
 		}
 		ocp := ocpByInfra[item.Metadata.Name]
@@ -75,9 +75,9 @@ func Inventory(state v1alpha1.State) InventoryFile {
 		if ocp.Spec.Role == v1alpha1.OCPRoleHub {
 			roleGroup = "gitups_hub_hosts"
 		}
-		hostNames := sortedKeys(provider.Spec.QemuKVM.Hosts)
+		hostNames := sortedKeys(provider.Spec.Machine.Libvirt.Hosts)
 		for _, hostName := range hostNames {
-			host := provider.Spec.QemuKVM.Hosts[hostName]
+			host := provider.Spec.Machine.Libvirt.Hosts[hostName]
 			inventoryName := fmt.Sprintf("%s-%s", item.Metadata.Name, hostName)
 			inventoryHost := InventoryHost{
 				AnsibleHost:        host.Address,

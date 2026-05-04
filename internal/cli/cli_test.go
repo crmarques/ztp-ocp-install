@@ -121,11 +121,12 @@ kind: InfrastructureProvider
 metadata:
   name: vmware-provider
 spec:
-  vmware:
-    vCenterRef:
-      name: example-vcenter
-    datacenter: example-dc
-    cluster: example-cluster
+  machine:
+    vsphere:
+      vCenterRef:
+        name: example-vcenter
+      datacenter: example-dc
+      cluster: example-cluster
 ---
 apiVersion: gitups.io/v1alpha1
 kind: ClusterInfrastructure
@@ -145,7 +146,7 @@ spec:
             name: primary
           ipAddress: 192.168.155.20
           macAddress: 52:54:00:00:00:20
-      vmware:
+      vsphere:
         folder: example/vmware
         template: rhcos-4.21
   endpoints:
@@ -179,7 +180,7 @@ spec:
 	if code == 0 {
 		t.Fatal("expected unsupported provider failure")
 	}
-	if !strings.Contains(stderr.String(), "apply currently supports only provider kind \"qemu-kvm\"") {
+	if !strings.Contains(stderr.String(), "apply currently supports only provider kind \"libvirt\"") {
 		t.Fatalf("unexpected stderr: %s", stderr.String())
 	}
 }
@@ -206,14 +207,15 @@ kind: InfrastructureProvider
 metadata:
   name: provider
 spec:
-  qemuKVM:
-    hosts:
-      host-01:
-        address: localhost
-        sshKeyRef:
-          name: default-key
-        capabilities:
-          - libvirt
+  machine:
+    libvirt:
+      hosts:
+        host-01:
+          address: localhost
+          sshKeyRef:
+            name: default-key
+          capabilities:
+            - libvirt
 ---
 apiVersion: gitups.io/v1alpha1
 kind: ClusterInfrastructure

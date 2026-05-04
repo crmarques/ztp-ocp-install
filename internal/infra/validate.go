@@ -244,76 +244,80 @@ func validateProviders(providers []v1alpha1.InfrastructureProvider) []string {
 			errs = append(errs, fmt.Sprintf("duplicate InfrastructureProvider %q", p.Metadata.Name))
 		}
 		seen[p.Metadata.Name] = true
+		if p.Spec.Machine == nil {
+			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec.machine is required", p.Metadata.Name))
+			continue
+		}
 		set := 0
-		if p.Spec.QemuKVM != nil {
+		if p.Spec.Machine.Libvirt != nil {
 			set++
 		}
-		if p.Spec.BareMetal != nil {
+		if p.Spec.Machine.Baremetal != nil {
 			set++
 		}
-		if p.Spec.VMware != nil {
+		if p.Spec.Machine.Vsphere != nil {
 			set++
 		}
-		if p.Spec.OpenShiftVirtualization != nil {
+		if p.Spec.Machine.Kubevirt != nil {
 			set++
 		}
 		if set != 1 {
-			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec must set exactly one of {qemuKVM, bareMetal, vmware, openShiftVirtualization}", p.Metadata.Name))
+			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec.machine must set exactly one of {libvirt, baremetal, vsphere, kubevirt}", p.Metadata.Name))
 		}
-		if p.Spec.QemuKVM != nil {
-			errs = append(errs, validateQemuKVMProvider(p)...)
+		if p.Spec.Machine.Libvirt != nil {
+			errs = append(errs, validateLibvirtProvider(p)...)
 		}
-		if p.Spec.VMware != nil {
-			errs = append(errs, validateVMwareProvider(p)...)
+		if p.Spec.Machine.Vsphere != nil {
+			errs = append(errs, validateVsphereProvider(p)...)
 		}
-		if p.Spec.OpenShiftVirtualization != nil {
-			errs = append(errs, validateOSVProvider(p)...)
+		if p.Spec.Machine.Kubevirt != nil {
+			errs = append(errs, validateKubevirtProvider(p)...)
 		}
 	}
 	return errs
 }
 
-func validateQemuKVMProvider(p v1alpha1.InfrastructureProvider) []string {
+func validateLibvirtProvider(p v1alpha1.InfrastructureProvider) []string {
 	var errs []string
-	for hostName, host := range p.Spec.QemuKVM.Hosts {
+	for hostName, host := range p.Spec.Machine.Libvirt.Hosts {
 		if hostName == "" {
-			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s qemuKVM.hosts has empty host key", p.Metadata.Name))
+			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s machine.libvirt.hosts has empty host key", p.Metadata.Name))
 		}
 		if host.Address == "" {
-			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s qemuKVM.hosts[%s].address is required", p.Metadata.Name, hostName))
+			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s machine.libvirt.hosts[%s].address is required", p.Metadata.Name, hostName))
 		}
 		if host.SSHKeyRef.Name == "" {
-			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s qemuKVM.hosts[%s].sshKeyRef.name is required", p.Metadata.Name, hostName))
+			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s machine.libvirt.hosts[%s].sshKeyRef.name is required", p.Metadata.Name, hostName))
 		}
 	}
 	return errs
 }
 
-func validateVMwareProvider(p v1alpha1.InfrastructureProvider) []string {
+func validateVsphereProvider(p v1alpha1.InfrastructureProvider) []string {
 	var errs []string
-	v := p.Spec.VMware
+	v := p.Spec.Machine.Vsphere
 	if v.VCenterRef.Name == "" {
-		errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s vmware.vCenterRef.name is required", p.Metadata.Name))
+		errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s machine.vsphere.vCenterRef.name is required", p.Metadata.Name))
 	}
 	for _, field := range []struct{ name, value string }{
 		{"datacenter", v.Datacenter},
 		{"cluster", v.Cluster},
 	} {
 		if field.value == "" {
-			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s vmware.%s is required", p.Metadata.Name, field.name))
+			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s machine.vsphere.%s is required", p.Metadata.Name, field.name))
 		}
 	}
 	return errs
 }
 
-func validateOSVProvider(p v1alpha1.InfrastructureProvider) []string {
+func validateKubevirtProvider(p v1alpha1.InfrastructureProvider) []string {
 	var errs []string
-	osv := p.Spec.OpenShiftVirtualization
-	if osv.ClusterRef.Name == "" {
-		errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s openShiftVirtualization.clusterRef.name is required", p.Metadata.Name))
+	kv := p.Spec.Machine.Kubevirt
+	if kv.ClusterRef.Name == "" {
+		errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s machine.kubevirt.clusterRef.name is required", p.Metadata.Name))
 	}
-	if osv.Namespace == "" {
-		errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s openShiftVirtualization.namespace is required", p.Metadata.Name))
+	if kv.Namespace == "" {
+		errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s machine.kubevirt.namespace is required", p.Metadata.Name))
 	}
 	return errs
 }
@@ -347,7 +351,7 @@ func validateClusterInfrastructures(state v1alpha1.State) []string {
 
 func validateNetworks(ci v1alpha1.ClusterInfrastructure, provider v1alpha1.InfrastructureProvider) []string {
 	var errs []string
-	providerKind := v1alpha1.ProviderKind(provider)
+	providerKind := v1alpha1.MachineFlavor(provider)
 	for name, network := range ci.Spec.Networks {
 		if _, _, err := net.ParseCIDR(network.CIDR); err != nil {
 			errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s networks[%s].cidr %q invalid: %v", ci.Metadata.Name, name, network.CIDR, err))
@@ -361,14 +365,14 @@ func validateNetworks(ci v1alpha1.ClusterInfrastructure, provider v1alpha1.Infra
 			}
 		}
 		switch providerKind {
-		case v1alpha1.ProviderKindQemuKVM:
+		case v1alpha1.MachineFlavorLibvirt:
 			if network.Libvirt == nil || network.Libvirt.Bridge == "" {
 				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s networks[%s].libvirt.bridge is required for qemu-kvm provider", ci.Metadata.Name, name))
 			}
-			if network.VMware != nil {
+			if network.Vsphere != nil {
 				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s networks[%s].vmware does not match InfrastructureProvider/%s kind %q", ci.Metadata.Name, name, provider.Metadata.Name, providerKind))
 			}
-		case v1alpha1.ProviderKindVMware:
+		case v1alpha1.MachineFlavorVsphere:
 			if network.Libvirt != nil {
 				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s networks[%s].libvirt does not match InfrastructureProvider/%s kind %q", ci.Metadata.Name, name, provider.Metadata.Name, providerKind))
 			}
@@ -376,7 +380,7 @@ func validateNetworks(ci v1alpha1.ClusterInfrastructure, provider v1alpha1.Infra
 			if network.Libvirt != nil {
 				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s networks[%s].libvirt does not match InfrastructureProvider/%s kind %q", ci.Metadata.Name, name, provider.Metadata.Name, providerKind))
 			}
-			if network.VMware != nil {
+			if network.Vsphere != nil {
 				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s networks[%s].vmware does not match InfrastructureProvider/%s kind %q", ci.Metadata.Name, name, provider.Metadata.Name, providerKind))
 			}
 		}
@@ -386,7 +390,7 @@ func validateNetworks(ci v1alpha1.ClusterInfrastructure, provider v1alpha1.Infra
 
 func validateMachines(ci v1alpha1.ClusterInfrastructure, provider v1alpha1.InfrastructureProvider) []string {
 	var errs []string
-	providerKind := v1alpha1.ProviderKind(provider)
+	providerKind := v1alpha1.MachineFlavor(provider)
 	for name, machine := range ci.Spec.Machines {
 		set := 0
 		if machine.Libvirt != nil {
@@ -395,7 +399,7 @@ func validateMachines(ci v1alpha1.ClusterInfrastructure, provider v1alpha1.Infra
 		if machine.Baremetal != nil {
 			set++
 		}
-		if machine.VMware != nil {
+		if machine.Vsphere != nil {
 			set++
 		}
 		if set != 1 {
@@ -404,8 +408,8 @@ func validateMachines(ci v1alpha1.ClusterInfrastructure, provider v1alpha1.Infra
 		if machineKind := v1alpha1.MachineKind(machine); machineKind != "" && machineKind != providerKind {
 			errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s machines[%s] kind %q does not match InfrastructureProvider/%s kind %q", ci.Metadata.Name, name, machineKind, provider.Metadata.Name, providerKind))
 		}
-		if machine.Libvirt != nil && provider.Spec.QemuKVM != nil {
-			if _, ok := provider.Spec.QemuKVM.Hosts[machine.Libvirt.HostRef.Name]; !ok {
+		if machine.Libvirt != nil && provider.Spec.Machine != nil && provider.Spec.Machine.Libvirt != nil {
+			if _, ok := provider.Spec.Machine.Libvirt.Hosts[machine.Libvirt.HostRef.Name]; !ok {
 				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s machines[%s].libvirt.hostRef %q not defined on InfrastructureProvider/%s", ci.Metadata.Name, name, machine.Libvirt.HostRef.Name, provider.Metadata.Name))
 			}
 		}
@@ -484,8 +488,8 @@ func validateLoadBalancers(ci v1alpha1.ClusterInfrastructure, provider v1alpha1.
 			errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s loadBalancers[%s].placement.providerHostRef.name is required", ci.Metadata.Name, lbName))
 			continue
 		}
-		if provider.Spec.QemuKVM != nil {
-			if _, ok := provider.Spec.QemuKVM.Hosts[lb.Placement.ProviderHostRef.Name]; !ok {
+		if provider.Spec.Machine != nil && provider.Spec.Machine.Libvirt != nil {
+			if _, ok := provider.Spec.Machine.Libvirt.Hosts[lb.Placement.ProviderHostRef.Name]; !ok {
 				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s loadBalancers[%s].placement.providerHostRef %q not defined on InfrastructureProvider/%s", ci.Metadata.Name, lbName, lb.Placement.ProviderHostRef.Name, provider.Metadata.Name))
 			}
 		}
@@ -531,10 +535,10 @@ func validateNameResolution(ci v1alpha1.ClusterInfrastructure, provider v1alpha1
 		return errs
 	}
 	for _, ref := range ci.Spec.NameResolution.Managed.ProviderHostRefs {
-		if provider.Spec.QemuKVM == nil {
+		if provider.Spec.Machine == nil || provider.Spec.Machine.Libvirt == nil {
 			continue
 		}
-		host, ok := provider.Spec.QemuKVM.Hosts[ref.Name]
+		host, ok := provider.Spec.Machine.Libvirt.Hosts[ref.Name]
 		if !ok {
 			errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s nameResolution.managed.providerHostRefs %q not defined on InfrastructureProvider/%s", ci.Metadata.Name, ref.Name, provider.Metadata.Name))
 			continue

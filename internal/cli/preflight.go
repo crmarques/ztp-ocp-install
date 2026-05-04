@@ -77,7 +77,7 @@ func phaseInScope(name string, selected []Phase, hasState bool) bool {
 
 func stateNeedsQemuKvm(state v1alpha1.State) bool {
 	for _, p := range state.InfrastructureProviders {
-		if v1alpha1.ProviderKind(p) == v1alpha1.ProviderKindQemuKVM {
+		if v1alpha1.MachineFlavor(p) == v1alpha1.MachineFlavorLibvirt {
 			return true
 		}
 	}
@@ -109,10 +109,10 @@ func kvmCheck(deps preflightDeps) preflightCheck {
 func bmcPortChecks(state v1alpha1.State, deps preflightDeps) []preflightCheck {
 	var checks []preflightCheck
 	for _, p := range state.InfrastructureProviders {
-		if p.Spec.QemuKVM == nil || p.Spec.QemuKVM.BMCEmulation == nil {
+		if v1alpha1.ProviderMachineLibvirt(p) == nil || p.Spec.Machine.Libvirt.BMCEmulation == nil {
 			continue
 		}
-		bmc := p.Spec.QemuKVM.BMCEmulation
+		bmc := p.Spec.Machine.Libvirt.BMCEmulation
 		if bmc.Enabled == nil || !*bmc.Enabled {
 			continue
 		}
@@ -264,9 +264,9 @@ func collectSecretRefRequirements(state v1alpha1.State) []secretRefRequirement {
 	}
 
 	for _, p := range state.InfrastructureProviders {
-		if p.Spec.QemuKVM != nil {
-			for _, hostName := range sortedMapKeys(p.Spec.QemuKVM.Hosts) {
-				host := p.Spec.QemuKVM.Hosts[hostName]
+		if v1alpha1.ProviderMachineLibvirt(p) != nil {
+			for _, hostName := range sortedMapKeys(p.Spec.Machine.Libvirt.Hosts) {
+				host := p.Spec.Machine.Libvirt.Hosts[hostName]
 				if host.SSHKeyRef.Name == "" {
 					continue
 				}
@@ -276,7 +276,7 @@ func collectSecretRefRequirements(state v1alpha1.State) []secretRefRequirement {
 					phase:   "infra",
 				})
 			}
-			if bmc := p.Spec.QemuKVM.BMCEmulation; bmc != nil && bmc.Auth != nil && bmc.Auth.CredentialRef.Name != "" {
+			if bmc := p.Spec.Machine.Libvirt.BMCEmulation; bmc != nil && bmc.Auth != nil && bmc.Auth.CredentialRef.Name != "" {
 				out = append(out, secretRefRequirement{
 					refName: bmc.Auth.CredentialRef.Name,
 					label:   fmt.Sprintf("provider %s bmcEmulation credentialRef", p.Metadata.Name),
@@ -284,17 +284,17 @@ func collectSecretRefRequirements(state v1alpha1.State) []secretRefRequirement {
 				})
 			}
 		}
-		if p.Spec.VMware != nil && p.Spec.VMware.VCenterRef.Name != "" {
+		if p.Spec.Machine != nil && p.Spec.Machine.Vsphere != nil && p.Spec.Machine.Vsphere.VCenterRef.Name != "" {
 			out = append(out, secretRefRequirement{
-				refName: p.Spec.VMware.VCenterRef.Name,
-				label:   fmt.Sprintf("provider %s vmware vCenterRef", p.Metadata.Name),
+				refName: p.Spec.Machine.Vsphere.VCenterRef.Name,
+				label:   fmt.Sprintf("provider %s vsphere vCenterRef", p.Metadata.Name),
 				phase:   "infra",
 			})
 		}
-		if p.Spec.OpenShiftVirtualization != nil && p.Spec.OpenShiftVirtualization.ClusterRef.Name != "" {
+		if p.Spec.Machine != nil && p.Spec.Machine.Kubevirt != nil && p.Spec.Machine.Kubevirt.ClusterRef.Name != "" {
 			out = append(out, secretRefRequirement{
-				refName: p.Spec.OpenShiftVirtualization.ClusterRef.Name,
-				label:   fmt.Sprintf("provider %s openShiftVirtualization clusterRef", p.Metadata.Name),
+				refName: p.Spec.Machine.Kubevirt.ClusterRef.Name,
+				label:   fmt.Sprintf("provider %s kubevirt clusterRef", p.Metadata.Name),
 				phase:   "infra",
 			})
 		}

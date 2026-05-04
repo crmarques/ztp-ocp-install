@@ -51,15 +51,15 @@ func normalizeProvider(p *v1alpha1.InfrastructureProvider) {
 	if p.Kind == "" {
 		p.Kind = v1alpha1.KindInfrastructureProvider
 	}
-	if p.Spec.QemuKVM != nil {
-		for name, host := range p.Spec.QemuKVM.Hosts {
+	if p.Spec.Machine != nil && p.Spec.Machine.Libvirt != nil {
+		for name, host := range p.Spec.Machine.Libvirt.Hosts {
 			if host.User == "" {
 				host.User = v1alpha1.DefaultHostUser
 			}
-			p.Spec.QemuKVM.Hosts[name] = host
+			p.Spec.Machine.Libvirt.Hosts[name] = host
 		}
-		if p.Spec.QemuKVM.BMCEmulation != nil {
-			normalizeBMCEmulation(p.Spec.QemuKVM.BMCEmulation)
+		if p.Spec.Machine.Libvirt.BMCEmulation != nil {
+			normalizeBMCEmulation(p.Spec.Machine.Libvirt.BMCEmulation)
 		}
 	}
 }
@@ -101,10 +101,10 @@ func normalizeClusterInfrastructure(ci *v1alpha1.ClusterInfrastructure, provider
 }
 
 func applyMachineProfile(m *v1alpha1.MachineSpec, provider *v1alpha1.InfrastructureProvider) {
-	if m.ProfileRef == nil || provider == nil || provider.Spec.QemuKVM == nil {
+	if m.ProfileRef == nil || provider == nil || provider.Spec.Machine == nil || provider.Spec.Machine.Libvirt == nil {
 		return
 	}
-	profile, ok := provider.Spec.QemuKVM.MachineProfiles[m.ProfileRef.Name]
+	profile, ok := provider.Spec.Machine.Libvirt.MachineProfiles[m.ProfileRef.Name]
 	if !ok {
 		return
 	}
@@ -123,7 +123,7 @@ func applyMachineProfile(m *v1alpha1.MachineSpec, provider *v1alpha1.Infrastruct
 }
 
 func applyMachineDefaultResources(m *v1alpha1.MachineSpec, provider *v1alpha1.InfrastructureProvider) {
-	if provider == nil || provider.Spec.QemuKVM == nil {
+	if provider == nil || provider.Spec.Machine == nil || provider.Spec.Machine.Libvirt == nil {
 		return
 	}
 	if m.Libvirt == nil {
