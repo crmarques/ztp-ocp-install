@@ -67,7 +67,22 @@ func validateEnvironments(envs []v1alpha1.Environment) []string {
 		}
 		errs = append(errs, validateOCPInstall(env)...)
 		errs = append(errs, validateEnvironmentSecrets(env)...)
+		errs = append(errs, validateEnvironmentKeys(env)...)
 		errs = append(errs, validateComponentImages(env)...)
+	}
+	return errs
+}
+
+func validateEnvironmentKeys(env v1alpha1.Environment) []string {
+	var errs []string
+	for name, key := range env.Spec.Keys {
+		if !dnsLabel.MatchString(name) {
+			errs = append(errs, fmt.Sprintf("Environment/%s spec.keys key %q is not a DNS label", env.Metadata.Name, name))
+			continue
+		}
+		if key.File == "" {
+			errs = append(errs, fmt.Sprintf("Environment/%s spec.keys[%s] requires a source (file)", env.Metadata.Name, name))
+		}
 	}
 	return errs
 }

@@ -420,6 +420,143 @@ func TestSecretsPullSecretSetRejectsInvalidInputs(t *testing.T) {
 	}
 }
 
+func TestSecretsSyncSymlinksSSHKeyAndCopiesPullSecret(t *testing.T) {
+	dir := t.TempDir()
+	sshSource := filepath.Join(dir, "id_demo")
+	if err := os.WriteFile(sshSource, []byte("PRIVATE-KEY\n"), 0o600); err != nil {
+		t.Fatalf("write ssh source: %v", err)
+	}
+	pullSource := filepath.Join(dir, "pull-secret.json")
+	pullBytes := []byte(`{"auths":{"registry.example.com":{"auth":"redacted"}}}` + "\n")
+	if err := os.WriteFile(pullSource, pullBytes, 0o644); err != nil {
+		t.Fatalf("write pull source: %v", err)
+	}
+	statePath := filepath.Join(dir, "state.yaml")
+	state := `apiVersion: gitups.io/v1alpha1
+kind: Environment
+metadata:
+  name: sync-env
+spec:
+  baseDomain: example.com
+  ocpInstall:
+    connected: {}
+  secrets:
+    pullSecretRef:
+      name: pull-secret
+    clusterSSHKeyRef:
+      name: cluster-ssh-key
+  keys:
+    cluster-ssh-key:
+      file: ` + sshSource + `
+    pull-secret:
+      file: ` + pullSource + `
+---
+apiVersion: gitups.io/v1alpha1
+kind: InfrastructureProvider
+metadata:
+  name: provider
+spec:
+  hosts:
+    host-01:
+      ssh:
+        address: localhost
+        keyRef:
+          name: cluster-ssh-key
+      capabilities:
+        - libvirt
+  machine:
+    libvirt:
+      hostRefs:
+        - name: host-01
+---
+apiVersion: gitups.io/v1alpha1
+kind: ClusterInfrastructure
+metadata:
+  name: hub-infra
+spec:
+  providerRefs:
+    - name: provider
+  networks:
+    primary:
+      cidr: 192.168.155.0/24
+      libvirt:
+        bridge: virbr0
+  machines:
+    master-0:
+      interfaces:
+        enp1s0:
+          networkRef:
+            name: primary
+          ipAddress: 192.168.155.20
+      libvirt:
+        hostRef:
+          name: host-01
+  endpoints:
+    api:
+      address: 192.168.155.10
+    apiInt:
+      address: 192.168.155.10
+    ingress:
+      address: 192.168.155.11
+---
+apiVersion: gitups.io/v1alpha1
+kind: OCPCluster
+metadata:
+  name: hub
+spec:
+  role: hub
+  topology: single-node
+  infrastructureRef:
+    name: hub-infra
+  install:
+    method: agent
+  nodes:
+    master-0:
+      role: control-plane
+`
+	if err := os.WriteFile(statePath, []byte(state), 0o644); err != nil {
+		t.Fatalf("write state: %v", err)
+	}
+	secretsDir := filepath.Join(dir, "secrets")
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Run(context.Background(), []string{"secrets", "sync", "-f", statePath, "--secrets-dir", secretsDir}, nil, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("first sync code got %d, stderr: %s", code, stderr.String())
+	}
+	sshTarget := filepath.Join(secretsDir, "cluster-ssh-key")
+	link, err := os.Readlink(sshTarget)
+	if err != nil {
+		t.Fatalf("readlink ssh target: %v", err)
+	}
+	if link != sshSource {
+		t.Fatalf("ssh link got %q, want %q", link, sshSource)
+	}
+	pullTarget := filepath.Join(secretsDir, "pull-secret")
+	if info, err := os.Lstat(pullTarget); err != nil {
+		t.Fatalf("lstat pull target: %v", err)
+	} else if info.Mode()&os.ModeSymlink != 0 {
+		t.Fatalf("pull-secret should be a regular file, got symlink")
+	}
+	gotPull, err := os.ReadFile(pullTarget)
+	if err != nil {
+		t.Fatalf("read pull target: %v", err)
+	}
+	if !bytes.Equal(gotPull, pullBytes) {
+		t.Fatalf("pull bytes got %q, want %q", gotPull, pullBytes)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = Run(context.Background(), []string{"secrets", "sync", "-f", statePath, "--secrets-dir", secretsDir}, nil, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("second sync code got %d, stderr: %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "up-to-date") {
+		t.Fatalf("second sync stdout missing up-to-date: %s", stdout.String())
+	}
+}
+
 func TestSecretsBMCSetGeneratesAndOverwrites(t *testing.T) {
 	dir := t.TempDir()
 	secretsDir := filepath.Join(dir, "secrets")

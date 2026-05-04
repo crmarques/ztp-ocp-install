@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 
@@ -43,8 +44,219 @@ func newSecretsCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 		newSecretsGenerateCmd(stdout, stderr),
 		newSecretsPullSecretCmd(stdout, stderr),
 		newSecretsBMCCmd(stdout, stderr),
+		newSecretsSyncCmd(stdout, stderr),
 	)
 	return cmd
+}
+
+// newSecretsSyncCmd materialises every Environment.spec.keys[name] entry into
+// <secretsDir>/<name>. SSH refs are symlinked to the resolved source so the
+// operator's ~/.ssh/ stays the single source of truth; non-SSH refs are
+// copied with mode 0600.
+func newSecretsSyncCmd(stdout io.Writer, _ io.Writer) *cobra.Command {
+	var (
+		files      []string
+		secretsDir string
+		force      bool
+	)
+	secretsDir = defaultSecretsDir()
+	cmd := &cobra.Command{
+		Use:   "sync",
+		Short: "Materialize Environment.spec.keys entries into the secrets directory",
+		Args:  cobra.NoArgs,
+	}
+	cmd.Flags().StringArrayVarP(&files, "file", "f", nil, "Gitups YAML file or directory; may be repeated")
+	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory for local install secret material")
+	cmd.Flags().BoolVar(&force, "force", false, "overwrite existing entries whose contents or symlink target differ")
+	cmd.RunE = func(_ *cobra.Command, _ []string) error {
+		state, err := infra.LoadNormalizeValidate(files)
+		if err != nil {
+			return failErr(1, err)
+		}
+		env := primaryEnvironmentForSync(state)
+		if env == nil || len(env.Spec.Keys) == 0 {
+			printTitle(stdout, "Secrets")
+			fmt.Fprintln(stdout, "secrets sync: no Environment.spec.keys declared")
+			return nil
+		}
+		if err := os.MkdirAll(secretsDir, 0o700); err != nil {
+			return failErr(1, fmt.Errorf("create secrets directory %s: %w", secretsDir, err))
+		}
+		if err := os.Chmod(secretsDir, 0o700); err != nil {
+			return failErr(1, fmt.Errorf("chmod secrets directory %s: %w", secretsDir, err))
+		}
+		sshRefs := sshRefNamesForState(state)
+		envSourceDir := filepath.Dir(env.SourcePath)
+		printTitle(stdout, "Secrets")
+		for _, name := range sortedKeyNames(env.Spec.Keys) {
+			key := env.Spec.Keys[name]
+			source, err := resolveKeyFilePath(key.File, envSourceDir)
+			if err != nil {
+				return failErr(1, fmt.Errorf("environment key %q: %w", name, err))
+			}
+			info, err := os.Stat(source)
+			if err != nil {
+				return failErr(1, fmt.Errorf("environment key %q: source %s: %w", name, source, err))
+			}
+			if info.IsDir() {
+				return failErr(1, fmt.Errorf("environment key %q: source %s is a directory; expected a file", name, source))
+			}
+			target := filepath.Join(secretsDir, name)
+			action, err := materializeKey(target, source, sshRefs[name], force)
+			if err != nil {
+				return failErr(1, fmt.Errorf("environment key %q: %w", name, err))
+			}
+			printOK(stdout, name, fmt.Sprintf("%s (%s)", action, target))
+		}
+		return nil
+	}
+	return cmd
+}
+
+// resolveKeyFilePath expands a `file:` source: leading `~/` is mapped to the
+// user's home directory; relative paths are interpreted relative to the
+// Environment YAML's source directory; absolute paths are used as-is.
+func resolveKeyFilePath(file, envSourceDir string) (string, error) {
+	if file == "" {
+		return "", errors.New("file source is empty")
+	}
+	if strings.HasPrefix(file, "~/") || file == "~" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("resolve home directory: %w", err)
+		}
+		if file == "~" {
+			return home, nil
+		}
+		return filepath.Join(home, file[2:]), nil
+	}
+	if filepath.IsAbs(file) {
+		return filepath.Clean(file), nil
+	}
+	if envSourceDir == "" || envSourceDir == "." {
+		abs, err := filepath.Abs(file)
+		if err != nil {
+			return "", fmt.Errorf("resolve %s: %w", file, err)
+		}
+		return abs, nil
+	}
+	return filepath.Clean(filepath.Join(envSourceDir, file)), nil
+}
+
+// sshRefNamesForState returns the set of SecretRef names that name an SSH
+// key — provider host SSH keys and the cluster SSH key. These are the refs
+// that get symlinked into <secretsDir>/<name> rather than copied.
+func sshRefNamesForState(state v1alpha1.State) map[string]bool {
+	out := map[string]bool{}
+	for _, env := range state.Environments {
+		if name := env.Spec.Secrets.ClusterSSHKeyRef.Name; name != "" {
+			out[name] = true
+		}
+	}
+	for _, p := range state.InfrastructureProviders {
+		for _, host := range p.Spec.Hosts {
+			if host.SSH != nil && host.SSH.KeyRef.Name != "" {
+				out[host.SSH.KeyRef.Name] = true
+			}
+		}
+	}
+	return out
+}
+
+func materializeKey(target, source string, asSymlink, force bool) (string, error) {
+	if asSymlink {
+		return materializeSymlink(target, source, force)
+	}
+	return materializeCopy(target, source, force)
+}
+
+func materializeSymlink(target, source string, force bool) (string, error) {
+	info, err := os.Lstat(target)
+	switch {
+	case err == nil && info.Mode()&os.ModeSymlink != 0:
+		current, lerr := os.Readlink(target)
+		if lerr == nil && current == source {
+			return "up-to-date", nil
+		}
+		if !force {
+			return "", fmt.Errorf("existing symlink %s -> %s differs from declared source %s; rerun with --force to relink", target, current, source)
+		}
+		if rerr := os.Remove(target); rerr != nil {
+			return "", fmt.Errorf("remove stale symlink %s: %w", target, rerr)
+		}
+	case err == nil:
+		if !force {
+			return "", fmt.Errorf("existing regular file %s would be replaced by symlink to %s; rerun with --force", target, source)
+		}
+		if rerr := os.Remove(target); rerr != nil {
+			return "", fmt.Errorf("remove existing file %s: %w", target, rerr)
+		}
+	case !os.IsNotExist(err):
+		return "", fmt.Errorf("stat %s: %w", target, err)
+	}
+	if err := os.Symlink(source, target); err != nil {
+		return "", fmt.Errorf("symlink %s -> %s: %w", target, source, err)
+	}
+	return "linked", nil
+}
+
+func materializeCopy(target, source string, force bool) (string, error) {
+	data, err := os.ReadFile(source)
+	if err != nil {
+		return "", fmt.Errorf("read %s: %w", source, err)
+	}
+	info, err := os.Lstat(target)
+	switch {
+	case err == nil && info.Mode()&os.ModeSymlink != 0:
+		if !force {
+			return "", fmt.Errorf("%s is a symlink; rerun with --force to replace with a copied file", target)
+		}
+		if rerr := os.Remove(target); rerr != nil {
+			return "", fmt.Errorf("remove existing symlink %s: %w", target, rerr)
+		}
+	case err == nil:
+		existing, rerr := os.ReadFile(target)
+		if rerr == nil && bytesEqual(existing, data) {
+			return "up-to-date", nil
+		}
+		if !force {
+			return "", fmt.Errorf("%s already exists with different contents; rerun with --force to overwrite", target)
+		}
+	case !os.IsNotExist(err):
+		return "", fmt.Errorf("stat %s: %w", target, err)
+	}
+	if err := atomicWriteFile(target, data, 0o600); err != nil {
+		return "", err
+	}
+	return "copied", nil
+}
+
+func bytesEqual(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func sortedKeyNames(m map[string]v1alpha1.EnvironmentKeySpec) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func primaryEnvironmentForSync(state v1alpha1.State) *v1alpha1.Environment {
+	if len(state.Environments) == 0 {
+		return nil
+	}
+	return &state.Environments[0]
 }
 
 func newSecretsGenerateCmd(stdout io.Writer, _ io.Writer) *cobra.Command {

@@ -106,8 +106,18 @@ type EnvironmentSpec struct {
 	BaseDomain      string                                   `yaml:"baseDomain,omitempty" json:"baseDomain,omitempty"`
 	OCPInstall      EnvironmentOCPInstallSpec                `yaml:"ocpInstall,omitempty" json:"ocpInstall,omitempty"`
 	Secrets         EnvironmentSecretsSpec                   `yaml:"secrets,omitempty" json:"secrets,omitempty"`
+	Keys            map[string]EnvironmentKeySpec            `yaml:"keys,omitempty" json:"keys,omitempty"`
 	OpenShift       EnvironmentOpenShiftSpec                 `yaml:"openshift,omitempty" json:"openshift,omitempty"`
 	ComponentImages map[string]map[string]ComponentImageSpec `yaml:"componentImages,omitempty" json:"componentImages,omitempty"`
+}
+
+// EnvironmentKeySpec declares the source for a named key whose name is
+// referenced by one or more SecretRefs in the desired state. Exactly one
+// source field is set; only `file` is supported today. `gitups secrets sync`
+// materializes each declared key into <secretsDir>/<name> (symlink for SSH
+// refs, copy for other ref kinds).
+type EnvironmentKeySpec struct {
+	File string `yaml:"file,omitempty" json:"file,omitempty"`
 }
 
 // EnvironmentOCPInstallSpec selects how the OpenShift install reaches its
