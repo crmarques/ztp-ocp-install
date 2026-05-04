@@ -207,8 +207,31 @@ type InfrastructureProvider struct {
 // an independent capability the provider may supply. v1 ships only the
 // `machine` capability; later rounds add `loadBalancer`, `nameResolution`, …
 // At least one capability sub-block must be set.
+//
+// Hosts is a shared provider host pool, optional. Capabilities that need an
+// SSH-reachable Linux host (libvirt substrate, future haProxy / hostsFile)
+// reference an entry by name. Capabilities that talk to an appliance over an
+// API embed their endpoint in the capability block — the host pool stays
+// optional so appliance-style providers need not declare it.
 type InfrastructureProviderSpec struct {
-	Machine *MachineCapabilitySpec `yaml:"machine,omitempty" json:"machine,omitempty"`
+	Hosts   map[string]ProviderHostSpec `yaml:"hosts,omitempty" json:"hosts,omitempty"`
+	Machine *MachineCapabilitySpec      `yaml:"machine,omitempty" json:"machine,omitempty"`
+}
+
+// ProviderHostSpec describes one host in the provider's pool. The connection
+// sub-block (ssh in v1) is the structural discriminator; future appliance
+// providers may add httpsApi etc. LibvirtURI is a libvirt-only hint that
+// happens to live on the host so the substrate can connect remotely.
+type ProviderHostSpec struct {
+	SSH          *ProviderHostSSHSpec `yaml:"ssh,omitempty" json:"ssh,omitempty"`
+	LibvirtURI   string               `yaml:"libvirtURI,omitempty" json:"libvirtURI,omitempty"`
+	Capabilities []string             `yaml:"capabilities,omitempty" json:"capabilities,omitempty"`
+}
+
+type ProviderHostSSHSpec struct {
+	Address string    `yaml:"address" json:"address"`
+	User    string    `yaml:"user,omitempty" json:"user,omitempty"`
+	KeyRef  SecretRef `yaml:"keyRef" json:"keyRef"`
 }
 
 // MachineCapabilitySpec is the substrate-flavor union for the machine
@@ -222,17 +245,9 @@ type MachineCapabilitySpec struct {
 }
 
 type MachineProviderLibvirtSpec struct {
-	Hosts           map[string]LibvirtHostSpec    `yaml:"hosts,omitempty" json:"hosts,omitempty"`
+	HostRefs        []LocalObjectReference        `yaml:"hostRefs,omitempty" json:"hostRefs,omitempty"`
 	BMCEmulation    *BMCEmulationSpec             `yaml:"bmcEmulation,omitempty" json:"bmcEmulation,omitempty"`
 	MachineProfiles map[string]MachineProfileSpec `yaml:"machineProfiles,omitempty" json:"machineProfiles,omitempty"`
-}
-
-type LibvirtHostSpec struct {
-	Address      string    `yaml:"address" json:"address"`
-	User         string    `yaml:"user,omitempty" json:"user,omitempty"`
-	SSHKeyRef    SecretRef `yaml:"sshKeyRef" json:"sshKeyRef"`
-	LibvirtURI   string    `yaml:"libvirtURI,omitempty" json:"libvirtURI,omitempty"`
-	Capabilities []string  `yaml:"capabilities,omitempty" json:"capabilities,omitempty"`
 }
 
 type BMCEmulationSpec struct {

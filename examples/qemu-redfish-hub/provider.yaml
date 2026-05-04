@@ -3,16 +3,19 @@ kind: InfrastructureProvider
 metadata:
   name: qemu-redfish-provider
 spec:
+  hosts:
+    qemu-host:
+      ssh:
+        address: 192.168.10.11
+        keyRef:
+          name: qemu-host-ssh
+      capabilities:
+        - libvirt
+        - hosts-file
   machine:
     libvirt:
-      hosts:
-        qemu-host:
-          address: 192.168.10.11
-          sshKeyRef:
-            name: qemu-host-ssh
-          capabilities:
-            - libvirt
-            - hosts-file
+      hostRefs:
+        - name: qemu-host
       bmcEmulation:
         enabled: true
         protocol: redfish

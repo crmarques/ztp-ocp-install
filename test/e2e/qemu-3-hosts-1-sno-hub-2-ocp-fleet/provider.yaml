@@ -3,39 +3,46 @@ kind: InfrastructureProvider
 metadata:
   name: qemu-3-hosts-sno-hub-fleet-provider
 spec:
+  hosts:
+    hub-host:
+      ssh:
+        address: 192.168.140.10
+        user: root
+        keyRef:
+          name: provider-host-admin-key
+      libvirtURI: qemu:///system
+      capabilities:
+        - libvirt
+        - container-runtime
+        - hosts-file
+    ocp-01-host:
+      ssh:
+        address: 192.168.140.11
+        user: root
+        keyRef:
+          name: provider-host-admin-key
+      libvirtURI: qemu:///system
+      capabilities:
+        - libvirt
+        - container-runtime
+        - hosts-file
+    ocp-02-host:
+      ssh:
+        address: 192.168.140.12
+        user: root
+        keyRef:
+          name: provider-host-admin-key
+      libvirtURI: qemu:///system
+      capabilities:
+        - libvirt
+        - container-runtime
+        - hosts-file
   machine:
     libvirt:
-      hosts:
-        hub-host:
-          address: 192.168.140.10
-          user: root
-          sshKeyRef:
-            name: provider-host-admin-key
-          libvirtURI: qemu:///system
-          capabilities:
-            - libvirt
-            - container-runtime
-            - hosts-file
-        ocp-01-host:
-          address: 192.168.140.11
-          user: root
-          sshKeyRef:
-            name: provider-host-admin-key
-          libvirtURI: qemu:///system
-          capabilities:
-            - libvirt
-            - container-runtime
-            - hosts-file
-        ocp-02-host:
-          address: 192.168.140.12
-          user: root
-          sshKeyRef:
-            name: provider-host-admin-key
-          libvirtURI: qemu:///system
-          capabilities:
-            - libvirt
-            - container-runtime
-            - hosts-file
+      hostRefs:
+        - name: hub-host
+        - name: ocp-01-host
+        - name: ocp-02-host
       bmcEmulation:
         port: 8000
         auth:

@@ -3,18 +3,21 @@ kind: InfrastructureProvider
 metadata:
   name: qemu-1-host-provider
 spec:
+  hosts:
+    local-qemu-host:
+      ssh:
+        address: localhost
+        keyRef:
+          name: local-qemu-host-admin-key
+      libvirtURI: qemu:///system
+      capabilities:
+        - libvirt
+        - container-runtime
+        - hosts-file
   machine:
     libvirt:
-      hosts:
-        local-qemu-host:
-          address: localhost
-          sshKeyRef:
-            name: local-qemu-host-admin-key
-          libvirtURI: qemu:///system
-          capabilities:
-            - libvirt
-            - container-runtime
-            - hosts-file
+      hostRefs:
+        - name: local-qemu-host
       bmcEmulation:
         port: 8000
         auth:

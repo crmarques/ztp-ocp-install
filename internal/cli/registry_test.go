@@ -164,15 +164,18 @@ kind: InfrastructureProvider
 metadata:
   name: p
 spec:
+  hosts:
+    h:
+      ssh:
+        address: 10.0.0.1
+        keyRef:
+          name: k
+      capabilities:
+        - libvirt
   machine:
     libvirt:
-      hosts:
-        h:
-          address: 10.0.0.1
-          sshKeyRef:
-            name: k
-          capabilities:
-            - libvirt
+      hostRefs:
+        - name: h
 ---
 apiVersion: gitups.io/v1alpha1
 kind: ClusterInfrastructure
@@ -244,15 +247,18 @@ kind: InfrastructureProvider
 metadata:
   name: ` + providerName + `
 spec:
+  hosts:
+    host-01:
+      ssh:
+        address: 10.0.0.1
+        keyRef:
+          name: k
+      capabilities:
+        - libvirt
   machine:
     libvirt:
-      hosts:
-        host-01:
-          address: 10.0.0.1
-          sshKeyRef:
-            name: k
-          capabilities:
-            - libvirt
+      hostRefs:
+        - name: host-01
 ---
 apiVersion: gitups.io/v1alpha1
 kind: ClusterInfrastructure

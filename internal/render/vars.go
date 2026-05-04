@@ -616,7 +616,7 @@ func providerVars(item v1alpha1.ClusterInfrastructure, provider v1alpha1.Infrast
 		return result
 	}
 	q := provider.Spec.Machine.Libvirt
-	result.InfrastructureHosts = providerHostVars(q)
+	result.InfrastructureHosts = providerHostVars(provider.Spec.Hosts)
 	result.Virtualization = &ProviderVirtualizationVars{
 		Type:        v1alpha1.VirtualizationTypeLibvirt,
 		Libvirt:     libvirtVars(item, q, env),
@@ -661,19 +661,22 @@ func providerDispatch(provider v1alpha1.InfrastructureProvider) (string, string,
 	}
 }
 
-func providerHostVars(q *v1alpha1.MachineProviderLibvirtSpec) []ProviderHostVars {
-	names := sortedKeys(q.Hosts)
+func providerHostVars(hosts map[string]v1alpha1.ProviderHostSpec) []ProviderHostVars {
+	names := sortedKeys(hosts)
 	out := make([]ProviderHostVars, 0, len(names))
 	for _, name := range names {
-		host := q.Hosts[name]
-		out = append(out, ProviderHostVars{
+		host := hosts[name]
+		entry := ProviderHostVars{
 			Name:         name,
-			Address:      host.Address,
-			User:         host.User,
-			SSHKeyRef:    host.SSHKeyRef.Name,
 			LibvirtURI:   host.LibvirtURI,
 			Capabilities: append([]string(nil), host.Capabilities...),
-		})
+		}
+		if host.SSH != nil {
+			entry.Address = host.SSH.Address
+			entry.User = host.SSH.User
+			entry.SSHKeyRef = host.SSH.KeyRef.Name
+		}
+		out = append(out, entry)
 	}
 	return out
 }
@@ -707,7 +710,7 @@ func providerComponentVars(state v1alpha1.State) []ProviderComponentVars {
 			BootArtifactsHttp: http,
 		}
 		if v1alpha1.ProviderMachineLibvirt(provider) != nil {
-			item.InfrastructureHosts = providerHostVars(provider.Spec.Machine.Libvirt)
+			item.InfrastructureHosts = providerHostVars(provider.Spec.Hosts)
 			if provider.Spec.Machine.Libvirt.BMCEmulation != nil {
 				item.BMC = bmcVars(provider.Spec.Machine.Libvirt.BMCEmulation, providerBMCNodes(provider, state))
 			}

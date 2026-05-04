@@ -3,30 +3,37 @@ kind: InfrastructureProvider
 metadata:
   name: lab-provider
 spec:
+  hosts:
+    hub-sno-host:
+      ssh:
+        address: 10.10.10.1
+        keyRef:
+          name: lab-provider-key
+      capabilities:
+        - libvirt
+        - hosts-file
+    spoke-01-host:
+      ssh:
+        address: 10.10.10.2
+        keyRef:
+          name: lab-provider-key
+      capabilities:
+        - libvirt
+        - hosts-file
+    spoke-02-host:
+      ssh:
+        address: 10.10.10.3
+        keyRef:
+          name: lab-provider-key
+      capabilities:
+        - libvirt
+        - hosts-file
   machine:
     libvirt:
-      hosts:
-        hub-sno-host:
-          address: 10.10.10.1
-          sshKeyRef:
-            name: lab-provider-key
-          capabilities:
-            - libvirt
-            - hosts-file
-        spoke-01-host:
-          address: 10.10.10.2
-          sshKeyRef:
-            name: lab-provider-key
-          capabilities:
-            - libvirt
-            - hosts-file
-        spoke-02-host:
-          address: 10.10.10.3
-          sshKeyRef:
-            name: lab-provider-key
-          capabilities:
-            - libvirt
-            - hosts-file
+      hostRefs:
+        - name: hub-sno-host
+        - name: spoke-01-host
+        - name: spoke-02-host
       bmcEmulation:
         enabled: true
         protocol: redfish

@@ -190,11 +190,14 @@ func TestDefaultsAreApplied(t *testing.T) {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
 	provider := state.InfrastructureProviders[0]
-	host, ok := provider.Spec.Machine.Libvirt.Hosts["host-01"]
+	host, ok := provider.Spec.Hosts["host-01"]
 	if !ok {
 		t.Fatalf("host-01 missing from provider")
 	}
-	if got, want := host.User, "root"; got != want {
+	if host.SSH == nil {
+		t.Fatalf("host-01 missing ssh connection")
+	}
+	if got, want := host.SSH.User, "root"; got != want {
 		t.Fatalf("default user got %q, want %q", got, want)
 	}
 	if provider.Spec.Machine.Libvirt.BMCEmulation.Enabled == nil || !*provider.Spec.Machine.Libvirt.BMCEmulation.Enabled {
@@ -382,15 +385,18 @@ kind: InfrastructureProvider
 metadata:
   name: %s
 spec:
+  hosts:
+    host-01:
+      ssh:
+        address: 10.0.0.1
+        keyRef:
+          name: default-key
+      capabilities:
+        - libvirt
   machine:
     libvirt:
-      hosts:
-        host-01:
-          address: 10.0.0.1
-          sshKeyRef:
-            name: default-key
-          capabilities:
-            - libvirt
+      hostRefs:
+        - name: host-01
       bmcEmulation: {}
 ---
 apiVersion: gitups.io/v1alpha1

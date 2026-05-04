@@ -207,15 +207,18 @@ kind: InfrastructureProvider
 metadata:
   name: provider
 spec:
+  hosts:
+    host-01:
+      ssh:
+        address: localhost
+        keyRef:
+          name: default-key
+      capabilities:
+        - libvirt
   machine:
     libvirt:
-      hosts:
-        host-01:
-          address: localhost
-          sshKeyRef:
-            name: default-key
-          capabilities:
-            - libvirt
+      hostRefs:
+        - name: host-01
 ---
 apiVersion: gitups.io/v1alpha1
 kind: ClusterInfrastructure

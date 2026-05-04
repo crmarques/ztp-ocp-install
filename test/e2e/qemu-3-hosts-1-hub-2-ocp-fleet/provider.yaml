@@ -3,19 +3,22 @@ kind: InfrastructureProvider
 metadata:
   name: qemu-3-hosts-hub-provider
 spec:
+  hosts:
+    hub-host:
+      ssh:
+        address: 192.168.140.10
+        user: root
+        keyRef:
+          name: provider-host-admin-key
+      libvirtURI: qemu:///system
+      capabilities:
+        - libvirt
+        - container-runtime
+        - hosts-file
   machine:
     libvirt:
-      hosts:
-        hub-host:
-          address: 192.168.140.10
-          user: root
-          sshKeyRef:
-            name: provider-host-admin-key
-          libvirtURI: qemu:///system
-          capabilities:
-            - libvirt
-            - container-runtime
-            - hosts-file
+      hostRefs:
+        - name: hub-host
       bmcEmulation:
         port: 8000
         auth:
@@ -32,19 +35,22 @@ kind: InfrastructureProvider
 metadata:
   name: qemu-3-hosts-ocp-01-provider
 spec:
+  hosts:
+    ocp-01-host:
+      ssh:
+        address: 192.168.140.11
+        user: root
+        keyRef:
+          name: provider-host-admin-key
+      libvirtURI: qemu:///system
+      capabilities:
+        - libvirt
+        - container-runtime
+        - hosts-file
   machine:
     libvirt:
-      hosts:
-        ocp-01-host:
-          address: 192.168.140.11
-          user: root
-          sshKeyRef:
-            name: provider-host-admin-key
-          libvirtURI: qemu:///system
-          capabilities:
-            - libvirt
-            - container-runtime
-            - hosts-file
+      hostRefs:
+        - name: ocp-01-host
       bmcEmulation:
         port: 8000
         auth:
@@ -61,19 +67,22 @@ kind: InfrastructureProvider
 metadata:
   name: qemu-3-hosts-ocp-02-provider
 spec:
+  hosts:
+    ocp-02-host:
+      ssh:
+        address: 192.168.140.12
+        user: root
+        keyRef:
+          name: provider-host-admin-key
+      libvirtURI: qemu:///system
+      capabilities:
+        - libvirt
+        - container-runtime
+        - hosts-file
   machine:
     libvirt:
-      hosts:
-        ocp-02-host:
-          address: 192.168.140.12
-          user: root
-          sshKeyRef:
-            name: provider-host-admin-key
-          libvirtURI: qemu:///system
-          capabilities:
-            - libvirt
-            - container-runtime
-            - hosts-file
+      hostRefs:
+        - name: ocp-02-host
       bmcEmulation:
         port: 8000
         auth:

@@ -264,19 +264,19 @@ func collectSecretRefRequirements(state v1alpha1.State) []secretRefRequirement {
 	}
 
 	for _, p := range state.InfrastructureProviders {
-		if v1alpha1.ProviderMachineLibvirt(p) != nil {
-			for _, hostName := range sortedMapKeys(p.Spec.Machine.Libvirt.Hosts) {
-				host := p.Spec.Machine.Libvirt.Hosts[hostName]
-				if host.SSHKeyRef.Name == "" {
-					continue
-				}
-				out = append(out, secretRefRequirement{
-					refName: host.SSHKeyRef.Name,
-					label:   fmt.Sprintf("provider %s host %s sshKeyRef", p.Metadata.Name, hostName),
-					phase:   "infra",
-				})
+		for _, hostName := range sortedMapKeys(p.Spec.Hosts) {
+			host := p.Spec.Hosts[hostName]
+			if host.SSH == nil || host.SSH.KeyRef.Name == "" {
+				continue
 			}
-			if bmc := p.Spec.Machine.Libvirt.BMCEmulation; bmc != nil && bmc.Auth != nil && bmc.Auth.CredentialRef.Name != "" {
+			out = append(out, secretRefRequirement{
+				refName: host.SSH.KeyRef.Name,
+				label:   fmt.Sprintf("provider %s host %s sshKeyRef", p.Metadata.Name, hostName),
+				phase:   "infra",
+			})
+		}
+		if libvirt := v1alpha1.ProviderMachineLibvirt(p); libvirt != nil {
+			if bmc := libvirt.BMCEmulation; bmc != nil && bmc.Auth != nil && bmc.Auth.CredentialRef.Name != "" {
 				out = append(out, secretRefRequirement{
 					refName: bmc.Auth.CredentialRef.Name,
 					label:   fmt.Sprintf("provider %s bmcEmulation credentialRef", p.Metadata.Name),

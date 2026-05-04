@@ -572,14 +572,19 @@ func TestPreflightChecksProviderHostSSHKeyRef(t *testing.T) {
 	state := v1alpha1.State{
 		InfrastructureProviders: []v1alpha1.InfrastructureProvider{{
 			Metadata: v1alpha1.Metadata{Name: "qemu-1-host-provider"},
-			Spec: v1alpha1.InfrastructureProviderSpec{Machine: &v1alpha1.MachineCapabilitySpec{Libvirt: &v1alpha1.MachineProviderLibvirtSpec{
-				Hosts: map[string]v1alpha1.LibvirtHostSpec{
+			Spec: v1alpha1.InfrastructureProviderSpec{
+				Hosts: map[string]v1alpha1.ProviderHostSpec{
 					"local-qemu-host": {
-						Address:   "localhost",
-						SSHKeyRef: v1alpha1.SecretRef{Name: "local-qemu-host-admin-key"},
+						SSH: &v1alpha1.ProviderHostSSHSpec{
+							Address: "localhost",
+							KeyRef:  v1alpha1.SecretRef{Name: "local-qemu-host-admin-key"},
+						},
 					},
 				},
-			}}},
+				Machine: &v1alpha1.MachineCapabilitySpec{Libvirt: &v1alpha1.MachineProviderLibvirtSpec{
+					HostRefs: []v1alpha1.LocalObjectReference{{Name: "local-qemu-host"}},
+				}},
+			},
 		}},
 	}
 	deps := fakeDepsWithStat(map[string]string{
@@ -608,17 +613,20 @@ func TestPreflightChecksBMCEmulationAndMachineCredentials(t *testing.T) {
 	state := v1alpha1.State{
 		InfrastructureProviders: []v1alpha1.InfrastructureProvider{{
 			Metadata: v1alpha1.Metadata{Name: "qemu-1-host-provider"},
-			Spec: v1alpha1.InfrastructureProviderSpec{Machine: &v1alpha1.MachineCapabilitySpec{Libvirt: &v1alpha1.MachineProviderLibvirtSpec{
-				Hosts: map[string]v1alpha1.LibvirtHostSpec{
-					"local-qemu-host": {Address: "localhost", SSHKeyRef: v1alpha1.SecretRef{Name: "host-key"}},
+			Spec: v1alpha1.InfrastructureProviderSpec{
+				Hosts: map[string]v1alpha1.ProviderHostSpec{
+					"local-qemu-host": {SSH: &v1alpha1.ProviderHostSSHSpec{Address: "localhost", KeyRef: v1alpha1.SecretRef{Name: "host-key"}}},
 				},
-				BMCEmulation: &v1alpha1.BMCEmulationSpec{
-					Enabled: v1alpha1.BoolPtr(false),
-					Auth: &v1alpha1.BMCAuthSpec{
-						CredentialRef: v1alpha1.SecretRef{Name: "qemu-1-host-bmc-credentials"},
+				Machine: &v1alpha1.MachineCapabilitySpec{Libvirt: &v1alpha1.MachineProviderLibvirtSpec{
+					HostRefs: []v1alpha1.LocalObjectReference{{Name: "local-qemu-host"}},
+					BMCEmulation: &v1alpha1.BMCEmulationSpec{
+						Enabled: v1alpha1.BoolPtr(false),
+						Auth: &v1alpha1.BMCAuthSpec{
+							CredentialRef: v1alpha1.SecretRef{Name: "qemu-1-host-bmc-credentials"},
+						},
 					},
-				},
-			}}},
+				}},
+			},
 		}},
 		ClusterInfrastructures: []v1alpha1.ClusterInfrastructure{{
 			Metadata: v1alpha1.Metadata{Name: "ci"},

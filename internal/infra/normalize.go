@@ -51,16 +51,14 @@ func normalizeProvider(p *v1alpha1.InfrastructureProvider) {
 	if p.Kind == "" {
 		p.Kind = v1alpha1.KindInfrastructureProvider
 	}
-	if p.Spec.Machine != nil && p.Spec.Machine.Libvirt != nil {
-		for name, host := range p.Spec.Machine.Libvirt.Hosts {
-			if host.User == "" {
-				host.User = v1alpha1.DefaultHostUser
-			}
-			p.Spec.Machine.Libvirt.Hosts[name] = host
+	for name, host := range p.Spec.Hosts {
+		if host.SSH != nil && host.SSH.User == "" {
+			host.SSH.User = v1alpha1.DefaultHostUser
 		}
-		if p.Spec.Machine.Libvirt.BMCEmulation != nil {
-			normalizeBMCEmulation(p.Spec.Machine.Libvirt.BMCEmulation)
-		}
+		p.Spec.Hosts[name] = host
+	}
+	if p.Spec.Machine != nil && p.Spec.Machine.Libvirt != nil && p.Spec.Machine.Libvirt.BMCEmulation != nil {
+		normalizeBMCEmulation(p.Spec.Machine.Libvirt.BMCEmulation)
 	}
 }
 

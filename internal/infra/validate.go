@@ -244,6 +244,7 @@ func validateProviders(providers []v1alpha1.InfrastructureProvider) []string {
 			errs = append(errs, fmt.Sprintf("duplicate InfrastructureProvider %q", p.Metadata.Name))
 		}
 		seen[p.Metadata.Name] = true
+		errs = append(errs, validateProviderHosts(p)...)
 		if p.Spec.Machine == nil {
 			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec.machine is required", p.Metadata.Name))
 			continue
@@ -279,15 +280,38 @@ func validateProviders(providers []v1alpha1.InfrastructureProvider) []string {
 
 func validateLibvirtProvider(p v1alpha1.InfrastructureProvider) []string {
 	var errs []string
-	for hostName, host := range p.Spec.Machine.Libvirt.Hosts {
+	for i, ref := range p.Spec.Machine.Libvirt.HostRefs {
+		if ref.Name == "" {
+			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s machine.libvirt.hostRefs[%d].name is required", p.Metadata.Name, i))
+			continue
+		}
+		host, ok := p.Spec.Hosts[ref.Name]
+		if !ok {
+			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s machine.libvirt.hostRefs[%d] %q not defined under spec.hosts", p.Metadata.Name, i, ref.Name))
+			continue
+		}
+		if host.SSH == nil {
+			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s machine.libvirt.hostRefs[%d] %q must have ssh connection set", p.Metadata.Name, i, ref.Name))
+		}
+	}
+	return errs
+}
+
+func validateProviderHosts(p v1alpha1.InfrastructureProvider) []string {
+	var errs []string
+	for hostName, host := range p.Spec.Hosts {
 		if hostName == "" {
-			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s machine.libvirt.hosts has empty host key", p.Metadata.Name))
+			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s hosts has empty host key", p.Metadata.Name))
 		}
-		if host.Address == "" {
-			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s machine.libvirt.hosts[%s].address is required", p.Metadata.Name, hostName))
+		if host.SSH == nil {
+			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s hosts[%s] must set ssh connection", p.Metadata.Name, hostName))
+			continue
 		}
-		if host.SSHKeyRef.Name == "" {
-			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s machine.libvirt.hosts[%s].sshKeyRef.name is required", p.Metadata.Name, hostName))
+		if host.SSH.Address == "" {
+			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s hosts[%s].ssh.address is required", p.Metadata.Name, hostName))
+		}
+		if host.SSH.KeyRef.Name == "" {
+			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s hosts[%s].ssh.keyRef.name is required", p.Metadata.Name, hostName))
 		}
 	}
 	return errs
@@ -409,7 +433,7 @@ func validateMachines(ci v1alpha1.ClusterInfrastructure, provider v1alpha1.Infra
 			errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s machines[%s] kind %q does not match InfrastructureProvider/%s kind %q", ci.Metadata.Name, name, machineKind, provider.Metadata.Name, providerKind))
 		}
 		if machine.Libvirt != nil && provider.Spec.Machine != nil && provider.Spec.Machine.Libvirt != nil {
-			if _, ok := provider.Spec.Machine.Libvirt.Hosts[machine.Libvirt.HostRef.Name]; !ok {
+			if _, ok := provider.Spec.Hosts[machine.Libvirt.HostRef.Name]; !ok {
 				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s machines[%s].libvirt.hostRef %q not defined on InfrastructureProvider/%s", ci.Metadata.Name, name, machine.Libvirt.HostRef.Name, provider.Metadata.Name))
 			}
 		}
@@ -489,7 +513,7 @@ func validateLoadBalancers(ci v1alpha1.ClusterInfrastructure, provider v1alpha1.
 			continue
 		}
 		if provider.Spec.Machine != nil && provider.Spec.Machine.Libvirt != nil {
-			if _, ok := provider.Spec.Machine.Libvirt.Hosts[lb.Placement.ProviderHostRef.Name]; !ok {
+			if _, ok := provider.Spec.Hosts[lb.Placement.ProviderHostRef.Name]; !ok {
 				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s loadBalancers[%s].placement.providerHostRef %q not defined on InfrastructureProvider/%s", ci.Metadata.Name, lbName, lb.Placement.ProviderHostRef.Name, provider.Metadata.Name))
 			}
 		}
@@ -535,10 +559,7 @@ func validateNameResolution(ci v1alpha1.ClusterInfrastructure, provider v1alpha1
 		return errs
 	}
 	for _, ref := range ci.Spec.NameResolution.Managed.ProviderHostRefs {
-		if provider.Spec.Machine == nil || provider.Spec.Machine.Libvirt == nil {
-			continue
-		}
-		host, ok := provider.Spec.Machine.Libvirt.Hosts[ref.Name]
+		host, ok := provider.Spec.Hosts[ref.Name]
 		if !ok {
 			errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s nameResolution.managed.providerHostRefs %q not defined on InfrastructureProvider/%s", ci.Metadata.Name, ref.Name, provider.Metadata.Name))
 			continue

@@ -50,17 +50,20 @@ func Inventory(state v1alpha1.State) InventoryFile {
 		if v1alpha1.ProviderMachineLibvirt(provider) == nil {
 			continue
 		}
-		hostNames := sortedKeys(provider.Spec.Machine.Libvirt.Hosts)
+		hostNames := sortedKeys(provider.Spec.Hosts)
 		for _, hostName := range hostNames {
-			host := provider.Spec.Machine.Libvirt.Hosts[hostName]
+			host := provider.Spec.Hosts[hostName]
+			if host.SSH == nil {
+				continue
+			}
 			inventoryName := fmt.Sprintf("%s-%s", provider.Metadata.Name, hostName)
 			groups["gitups_provider_hosts"].Hosts[inventoryName] = InventoryHost{
-				AnsibleHost:        host.Address,
-				AnsibleConnection:  ansibleConnection(host.Address),
-				AnsibleUser:        host.User,
+				AnsibleHost:        host.SSH.Address,
+				AnsibleConnection:  ansibleConnection(host.SSH.Address),
+				AnsibleUser:        host.SSH.User,
 				GitupsProviderName: provider.Metadata.Name,
 				GitupsHostName:     hostName,
-				GitupsSSHKeyRef:    host.SSHKeyRef.Name,
+				GitupsSSHKeyRef:    host.SSH.KeyRef.Name,
 			}
 		}
 	}
@@ -75,19 +78,22 @@ func Inventory(state v1alpha1.State) InventoryFile {
 		if ocp.Spec.Role == v1alpha1.OCPRoleHub {
 			roleGroup = "gitups_hub_hosts"
 		}
-		hostNames := sortedKeys(provider.Spec.Machine.Libvirt.Hosts)
+		hostNames := sortedKeys(provider.Spec.Hosts)
 		for _, hostName := range hostNames {
-			host := provider.Spec.Machine.Libvirt.Hosts[hostName]
+			host := provider.Spec.Hosts[hostName]
+			if host.SSH == nil {
+				continue
+			}
 			inventoryName := fmt.Sprintf("%s-%s", item.Metadata.Name, hostName)
 			inventoryHost := InventoryHost{
-				AnsibleHost:        host.Address,
-				AnsibleConnection:  ansibleConnection(host.Address),
-				AnsibleUser:        host.User,
+				AnsibleHost:        host.SSH.Address,
+				AnsibleConnection:  ansibleConnection(host.SSH.Address),
+				AnsibleUser:        host.SSH.User,
 				GitupsProviderName: provider.Metadata.Name,
 				GitupsClusterName:  item.Metadata.Name,
 				GitupsClusterRole:  ocp.Spec.Role,
 				GitupsHostName:     hostName,
-				GitupsSSHKeyRef:    host.SSHKeyRef.Name,
+				GitupsSSHKeyRef:    host.SSH.KeyRef.Name,
 			}
 			groups["gitups_infra_hosts"].Hosts[inventoryName] = inventoryHost
 			groups[roleGroup].Hosts[inventoryName] = inventoryHost
