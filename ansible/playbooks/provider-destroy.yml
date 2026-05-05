@@ -2,7 +2,8 @@
 - name: Tear down Gitups provider-scoped infrastructure
   hosts: gitups_provider_hosts
   gather_facts: false
-  become: true
+  # Escalation comes from `ansible_become: true` rendered onto every provider
+  # host in the inventory; see internal/render/inventory.go.
 
   pre_tasks:
     - name: Select provider for current host

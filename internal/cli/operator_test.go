@@ -234,7 +234,6 @@ func TestOperatorBootstrapDryRunPlansCLIsFromState(t *testing.T) {
 		"setup-controller-clis.yml",
 		"gitups_openshift_release_version=4.21.10",
 		"gitups_clis_install_dir=/usr/local/bin",
-		"--ask-become-pass",
 	} {
 		if !strings.Contains(out, expected) {
 			t.Fatalf("CLI dry-run missing %q\n%s", expected, out)

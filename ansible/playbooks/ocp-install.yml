@@ -1,16 +1,16 @@
 ---
 - name: Install OpenShift cluster via openshift-install agent
   hosts: gitups_ocp_hosts
-  # Default-fact gathering happens under become: true, so `min` is sufficient
-  # for what every role on this play needs (os_family for package dispatch).
-  # `env` is gathered separately as the connection user in pre_tasks because
-  # ocp_install_agent prepends ansible_facts.env.PATH to PATH for the
-  # openshift-install lookup, and a sudo'd setup would capture root's PATH
-  # rather than the invoking shell's.
+  # Default-fact gathering inherits `ansible_become: true` from the inventory
+  # (every provider host carries it; see internal/render/inventory.go), so
+  # `min` is enough for what every role on this play needs (os_family for
+  # package dispatch). `env` is gathered separately as the connection user
+  # in pre_tasks below because ocp_install_agent prepends
+  # ansible_facts.env.PATH to PATH for the openshift-install lookup, and a
+  # sudo'd setup would capture root's PATH rather than the invoking shell's.
   gather_subset:
     - "!all"
     - min
-  become: true
   environment: "{{ gitups_proxy_env | default({}) }}"
 
   pre_tasks:

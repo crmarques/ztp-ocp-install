@@ -35,7 +35,7 @@ func newRootCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Comm
 		newPreflightCmd(stdout, stderr),
 		newPlanCmd(stdout),
 		newApplyCmd(stdin, stdout, stderr),
-		newDestroyCmd(stdout, stderr),
+		newDestroyCmd(stdin, stdout, stderr),
 		newStatusCmd(stdout),
 		newSecretsCmd(stdout, stderr),
 	)

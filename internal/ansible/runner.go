@@ -26,7 +26,6 @@ type RunSpec struct {
 	ExtraVarPairs     []string
 	ArtifactsDir      string
 	Check             bool
-	AskBecomePass     bool
 }
 
 type Runner interface {
@@ -55,9 +54,6 @@ func (r CommandRunner) Command(spec RunSpec) []string {
 	}
 	if spec.Check {
 		args = append(args, "--check")
-	}
-	if spec.AskBecomePass {
-		args = append(args, "--ask-become-pass")
 	}
 	return args
 }

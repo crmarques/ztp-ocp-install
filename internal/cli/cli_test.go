@@ -1056,6 +1056,7 @@ func TestDestroyRemovesStateDirOnSuccess(t *testing.T) {
 	if _, err := os.Stat("/bin/true"); err != nil {
 		t.Skip("/bin/true not available")
 	}
+	stubSudoReadyAlwaysOK(t)
 	stateDir := t.TempDir()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -1081,6 +1082,7 @@ func TestDestroyScopedHubKeepsStateDir(t *testing.T) {
 	if _, err := os.Stat("/bin/true"); err != nil {
 		t.Skip("/bin/true not available")
 	}
+	stubSudoReadyAlwaysOK(t)
 	stateDir := t.TempDir()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -1106,6 +1108,7 @@ func TestDestroyKeepStateDirFlagPreservesStateDir(t *testing.T) {
 	if _, err := os.Stat("/bin/true"); err != nil {
 		t.Skip("/bin/true not available")
 	}
+	stubSudoReadyAlwaysOK(t)
 	stateDir := t.TempDir()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -1221,7 +1224,12 @@ func TestDiffReportsNoDriftAfterFreshRender(t *testing.T) {
 	}
 }
 
-func TestApplyDryRunDefaultsToAskBecomePass(t *testing.T) {
+// TestApplyDryRunDescribesSudoExpectation pins the user-facing escalation
+// summary so the gitups-runs-as-root / NOPASSWD-sudo expectation is always
+// announced before any phase runs. This replaced the old
+// `--ask-become-pass` flag and its in-process password file: gitups no
+// longer reads or stores a sudo password.
+func TestApplyDryRunDescribesSudoExpectation(t *testing.T) {
 	stateDir := t.TempDir()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -1234,27 +1242,11 @@ func TestApplyDryRunDefaultsToAskBecomePass(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "--ask-become-pass") {
-		t.Fatalf("stdout missing default --ask-become-pass\n%s", stdout.String())
-	}
-}
-
-func TestApplyDryRunOptOutAskBecomePass(t *testing.T) {
-	stateDir := t.TempDir()
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	code := Run(context.Background(), []string{
-		"apply", "ocp",
-		"-f", "../../test/e2e/libvirt-1-host-1-sno-hub",
-		"--state-dir", stateDir,
-		"--dry-run",
-		"--ask-become-pass=false",
-	}, nil, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
+	if strings.Contains(stdout.String(), "ANSIBLE_BECOME_PASSWORD_FILE") {
+		t.Fatalf("stdout must not reference ANSIBLE_BECOME_PASSWORD_FILE; gitups no longer writes a password file\n%s", stdout.String())
 	}
 	if strings.Contains(stdout.String(), "--ask-become-pass") {
-		t.Fatalf("stdout should not include --ask-become-pass when opted out\n%s", stdout.String())
+		t.Fatalf("stdout must not reference --ask-become-pass; flag was removed\n%s", stdout.String())
 	}
 }
 
@@ -1316,6 +1308,17 @@ func stubPreflightAlwaysOK(t *testing.T) {
 	})
 }
 
+// stubSudoReadyAlwaysOK pretends the controller already satisfies the
+// "running as root or NOPASSWD sudo" precondition that ensureSudoReady
+// otherwise enforces. CI hosts typically prompt for sudo, so without this
+// stub apply / setup tests would all exit at the gate.
+func stubSudoReadyAlwaysOK(t *testing.T) {
+	t.Helper()
+	orig := ensureSudoReady
+	ensureSudoReady = func() error { return nil }
+	t.Cleanup(func() { ensureSudoReady = orig })
+}
+
 func TestApplyConfirmationDecline(t *testing.T) {
 	stubPreflightAlwaysOK(t)
 	stateDir := t.TempDir()
@@ -1339,6 +1342,7 @@ func TestApplyConfirmationDecline(t *testing.T) {
 
 func TestApplyYesSkipsConfirmationAndStopsBeforeAnsible(t *testing.T) {
 	stubPreflightAlwaysOK(t)
+	stubSudoReadyAlwaysOK(t)
 	stateDir := t.TempDir()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer

@@ -8,7 +8,8 @@
   gather_subset:
     - "!all"
     - min
-  become: true
+  # Escalation comes from `ansible_become: true` rendered onto every provider
+  # host in the inventory; see internal/render/inventory.go.
   environment: "{{ gitups_proxy_env | default({}) }}"
 
   pre_tasks:

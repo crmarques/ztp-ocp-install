@@ -8,7 +8,9 @@
   gather_subset:
     - "!all"
     - min
-  become: true
+  # Escalation comes from `ansible_become: true` rendered onto every provider
+  # host in the inventory. The controller is never a target of this play, so
+  # there is no user/root distinction to draw at the play level.
   environment: "{{ gitups_proxy_env | default({}) }}"
 
   pre_tasks:

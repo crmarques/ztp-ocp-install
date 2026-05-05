@@ -55,7 +55,6 @@ func newSetupControllerCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) 
 		dryRun        bool
 		yes           bool
 		venv          bool
-		askBecomePass bool
 		cliInstallDir string
 	)
 	cmd := &cobra.Command{
@@ -69,14 +68,16 @@ func newSetupControllerCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) 
 			"preparation. When -f is supplied the OCP release version is read from\n" +
 			"the state and an embedded ansible playbook downloads `oc`, `kubectl`,\n" +
 			"and `openshift-install` from mirror.openshift.com (no token required)\n" +
-			"into the chosen install directory.",
+			"into the chosen install directory.\n\n" +
+			"Run as root (`sudo gitups setup controller`) or have NOPASSWD sudo\n" +
+			"configured for this user; gitups never reads or stores a sudo\n" +
+			"password.",
 		Args: cobra.NoArgs,
 	}
 	cf := addCommonFlags(cmd)
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print bootstrap commands without executing them")
 	cmd.Flags().BoolVar(&yes, "yes", false, "skip the bootstrap confirmation prompt")
 	cmd.Flags().BoolVar(&venv, "venv", true, "install ansible-core into a gitups-managed venv instead of via the system package manager")
-	cmd.Flags().BoolVar(&askBecomePass, "ask-become-pass", true, "prompt for the sudo password when the OCP CLI installer playbook escalates")
 	cmd.Flags().StringVar(&cliInstallDir, "cli-install-dir", "/usr/local/bin", "directory the OCP CLI installer playbook writes oc, kubectl, and openshift-install into")
 	cmd.RunE = func(c *cobra.Command, _ []string) error {
 		family, err := detectOSFamily(defaultOSReleasePath)
@@ -95,7 +96,7 @@ func newSetupControllerCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) 
 		if err != nil {
 			return failErr(1, err)
 		}
-		cliSpec := planControllerCLIInstall(state, cf.stateDir, cliInstallDir, askBecomePass, venv)
+		cliSpec := planControllerCLIInstall(state, cf.stateDir, cliInstallDir, venv)
 
 		printTitle(stdout, "Controller setup")
 		fmt.Fprintf(stdout, "OS family: %s\n", family)
@@ -122,6 +123,9 @@ func newSetupControllerCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) 
 		}
 		if !yes && !confirm(stdin, stdout, "Continue with bootstrap? [y/N]: ") {
 			return failErr(1, errors.New("bootstrap aborted"))
+		}
+		if err := ensureSudoReady(); err != nil {
+			return failErr(1, err)
 		}
 		if err := runBootstrapPlan(c.Context(), stdin, stdout, stderr, plan); err != nil {
 			return err
@@ -222,10 +226,9 @@ type controllerCLIInstallSpec struct {
 	InstallDir        string
 	StateDir          string
 	Executable        string
-	AskBecomePass     bool
 }
 
-func planControllerCLIInstall(state v1alpha1.State, stateDir string, installDir string, askBecomePass bool, venv bool) *controllerCLIInstallSpec {
+func planControllerCLIInstall(state v1alpha1.State, stateDir string, installDir string, venv bool) *controllerCLIInstallSpec {
 	version := strings.TrimSpace(stateOpenshiftReleaseVersion(state))
 	if version == "" {
 		return nil
@@ -239,7 +242,6 @@ func planControllerCLIInstall(state v1alpha1.State, stateDir string, installDir 
 		InstallDir:        installDir,
 		StateDir:          stateDir,
 		Executable:        exe,
-		AskBecomePass:     askBecomePass,
 	}
 }
 
@@ -261,22 +263,22 @@ func stateOpenshiftReleaseVersion(state v1alpha1.State) string {
 }
 
 // PlannedCommand returns the ansible-playbook invocation displayed in the
-// dry-run plan. The bundle path is computed from the configured state-dir and
-// will exist by the time runControllerCLIInstall actually executes the
-// command (which extracts the embedded bundle first).
+// dry-run plan. The bundle path is computed from the configured state-dir
+// and will exist by the time runControllerCLIInstall actually executes the
+// command (which extracts the embedded bundle first). Sudo escalation is
+// expected to come from running the gitups process under sudo or from
+// NOPASSWD on the controller — the playbook's per-task `become: true`
+// stays on the inventory's local host and finds an already-root process
+// (or a passwordless sudo) when it fires.
 func (s controllerCLIInstallSpec) PlannedCommand() []string {
 	bundleDir := filepath.Join(s.StateDir, ansibleBundleDirName)
-	args := []string{
+	return []string{
 		s.Executable,
 		"-i", filepath.Join(bundleDir, controllerCLILocalInventory),
 		filepath.Join(bundleDir, "playbooks", "setup-controller-clis.yml"),
 		"-e", "gitups_openshift_release_version=" + s.OCPReleaseVersion,
 		"-e", "gitups_clis_install_dir=" + s.InstallDir,
 	}
-	if s.AskBecomePass {
-		args = append(args, "--ask-become-pass")
-	}
-	return args
 }
 
 // runControllerCLIInstall extracts the embedded ansible bundle, writes a
@@ -294,7 +296,14 @@ func runControllerCLIInstall(ctx context.Context, stdin io.Reader, stdout io.Wri
 	if err := os.WriteFile(inventoryPath, []byte(inventory), 0o600); err != nil {
 		return fmt.Errorf("write controller-clis inventory: %w", err)
 	}
-	args := spec.PlannedCommand()
+	bundleDirAbs := filepath.Join(spec.StateDir, ansibleBundleDirName)
+	args := []string{
+		spec.Executable,
+		"-i", filepath.Join(bundleDirAbs, controllerCLILocalInventory),
+		filepath.Join(bundleDirAbs, "playbooks", "setup-controller-clis.yml"),
+		"-e", "gitups_openshift_release_version=" + spec.OCPReleaseVersion,
+		"-e", "gitups_clis_install_dir=" + spec.InstallDir,
+	}
 	fmt.Fprintf(stdout, "\n>>> install OCP CLIs %s into %s\n", spec.OCPReleaseVersion, spec.InstallDir)
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 	cmd.Stdout = stdout

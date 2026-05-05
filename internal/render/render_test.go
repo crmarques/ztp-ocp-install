@@ -351,6 +351,7 @@ func TestRenderOneHostUsesLocalConnection(t *testing.T) {
 	for _, expected := range []string{
 		"ansible_host: localhost",
 		"ansible_connection: local",
+		"ansible_become: true",
 		"gitups_cluster_name: local-libvirt-1-host-hub",
 	} {
 		if !strings.Contains(inventory, expected) {
