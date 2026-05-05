@@ -133,6 +133,10 @@ Rules:
   connection sub-block — v1 ships only `ssh`. Capabilities reference hosts
   by name (`hostRef` / `hostRefs`); appliance-style capabilities embed the
   endpoint inline and need no host pool.
+- `spec.hosts.<name>.ssh.user` defaults to the invoking controller user when
+  omitted. Gitups still treats the host as a provider-host target and uses
+  Ansible root escalation for mutating provider, cluster, and OCP workflows,
+  including `ssh.address: localhost`.
 - Each capability sub-block (`machine`, `loadBalancer`, `nameResolution`,
   `registry`) is itself a structural-discriminator union: exactly one
   flavor sub-block is set. There is no `type` / `mode` / `kind`
@@ -322,7 +326,7 @@ The user-facing CLI is:
 | Command | Reads input? | Mutates? | Purpose |
 | --- | --- | --- | --- |
 | `doctor` | no | no | Controller baseline prerequisite checks. |
-| `setup controller` | optional | yes | Installs minimal pinned controller dependencies, preferring managed packages and the Gitups-managed Ansible venv. |
+| `setup controller` | optional | yes | Installs pinned controller-local dependencies, defaulting to the user-owned Gitups-managed Ansible venv; system-package mode is explicit. |
 | `init --template <name> --out <dir>` | no | local only | Writes current validating desired-state templates. |
 | `validate` | yes | no | Strict schema, defaulting, and cross-reference validation. |
 | `preflight` | yes | no | Local checks plus read-only Ansible checks against provider and cluster hosts. |

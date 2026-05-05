@@ -10,6 +10,18 @@ import (
 	"testing"
 )
 
+func TestCommandRunnerIncludesAskBecomePass(t *testing.T) {
+	command := CommandRunner{}.Command(RunSpec{
+		Inventory:     "inventory.yaml",
+		Playbook:      "playbook.yml",
+		ExtraVars:     "vars.yml",
+		AskBecomePass: true,
+	})
+	if got := command[len(command)-1]; got != "--ask-become-pass" {
+		t.Fatalf("last arg got %q, want --ask-become-pass; command=%v", got, command)
+	}
+}
+
 func TestCommandRunnerSavesCombinedOutputLogOnFailure(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("test uses a POSIX shell script")

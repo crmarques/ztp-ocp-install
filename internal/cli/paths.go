@@ -37,7 +37,11 @@ func defaultSecretsDir() string {
 }
 
 func openshiftInstallSearchDirs(hostStateDir string) []string {
-	return []string{"/usr/local/bin", filepath.Join(hostStateDir, "tools")}
+	return []string{defaultControllerCLIInstallDir(), "/usr/local/bin", filepath.Join(hostStateDir, "tools")}
+}
+
+func defaultControllerCLIInstallDir() string {
+	return filepath.Join(defaultGitupsHome(), "bin")
 }
 
 func ansibleVenvDir() string {

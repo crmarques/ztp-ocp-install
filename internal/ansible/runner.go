@@ -26,6 +26,7 @@ type RunSpec struct {
 	ExtraVarPairs     []string
 	ArtifactsDir      string
 	Check             bool
+	AskBecomePass     bool
 }
 
 type Runner interface {
@@ -54,6 +55,9 @@ func (r CommandRunner) Command(spec RunSpec) []string {
 	}
 	if spec.Check {
 		args = append(args, "--check")
+	}
+	if spec.AskBecomePass {
+		args = append(args, "--ask-become-pass")
 	}
 	return args
 }
@@ -110,7 +114,7 @@ func (r CommandRunner) Run(ctx context.Context, spec RunSpec) error {
 // site-packages directory when gitups is invoked under sudo. Returns ""
 // otherwise. This lets the runner pick up an `ansible` installed via
 // `pip install --user` even though root's sys.path does not include the
-// invoking user's home — keeping `sudo gitups apply` working without a
+// invoking user's home — allowing a sudo-wrapped invocation to work without a
 // manual `PYTHONPATH=…` env wrapper.
 func sudoUserSitePackages() string {
 	sudoUser := os.Getenv("SUDO_USER")

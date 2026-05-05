@@ -64,6 +64,11 @@ service-user access become harder and less predictable.
 
 - Prefer least-privilege service accounts and scoped kubeconfigs.
 - Separate bootstrap privileges from steady-state GitOps privileges.
+- Keep controller-local setup unprivileged unless a specific controller
+  action cannot work without elevation. Provider-host apply and destroy
+  workflows escalate through Ansible become on the target host; a
+  provider-host address of `localhost` does not turn that workflow into
+  controller-local setup.
 - Document required permissions for each workflow.
 
 ## Supply Chain

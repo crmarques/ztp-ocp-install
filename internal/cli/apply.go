@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -38,13 +37,14 @@ func newApplyCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Com
 
 func newApplyScopeCmd(scope string, stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Command {
 	var (
-		dryRun       bool
-		check        bool
-		yes          bool
-		executable   string
-		extraVars    []string
-		secretsDir   string
-		hostStateDir string
+		dryRun        bool
+		check         bool
+		askBecomePass bool
+		yes           bool
+		executable    string
+		extraVars     []string
+		secretsDir    string
+		hostStateDir  string
 	)
 	secretsDir = defaultSecretsDir()
 	hostStateDir = defaultHostStateDir
@@ -56,6 +56,7 @@ func newApplyScopeCmd(scope string, stdin io.Reader, stdout io.Writer, stderr io
 	cf := addCommonFlags(cmd)
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "render artifacts and print the Ansible commands without executing them")
 	cmd.Flags().BoolVar(&check, "check", false, "pass --check to ansible-playbook")
+	cmd.Flags().BoolVar(&askBecomePass, "ask-become-pass", true, "prompt for the Ansible become password; pass --ask-become-pass=false when provider hosts allow passwordless sudo")
 	cmd.Flags().BoolVar(&yes, "yes", false, "skip the apply confirmation prompt")
 	cmd.Flags().StringVar(&executable, "ansible-playbook", resolveAnsiblePlaybook(), "ansible-playbook executable to run (defaults to the gitups-managed venv when present)")
 	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material")
@@ -84,15 +85,10 @@ func newApplyScopeCmd(scope string, stdin io.Reader, stdout io.Writer, stderr io
 				return err
 			}
 		}
-		printApplySummary(stdout, selected, dryRun)
+		printApplySummary(stdout, selected, askBecomePass, dryRun)
 		if !dryRun && !yes {
 			if !confirm(stdin, stdout, "Continue with apply? [y/N]: ") {
 				return failErr(1, errors.New("apply aborted"))
-			}
-		}
-		if !dryRun {
-			if err := ensureSudoReady(); err != nil {
-				return failErr(1, err)
 			}
 		}
 		result, err := render.All(cf.stateDir, state)
@@ -124,31 +120,34 @@ func newApplyScopeCmd(scope string, stdin io.Reader, stdout io.Writer, stderr io
 		}
 		pairs = append(pairs, resolvedOCPBinaryPairs(selected, hostStateDirAbs)...)
 		pairs = append(pairs, extraVars...)
+		workflow, err := applyWorkflow(scope)
+		if err != nil {
+			return failErr(1, err)
+		}
 		runner := ansible.CommandRunner{Stdout: stdout, Stderr: stderr}
 		ctx := c.Context()
-		for _, phase := range selected {
-			spec := ansible.RunSpec{
-				Executable:        executable,
-				AnsibleCfg:        filepath.Join(bundleDir, embedded.AnsibleCfgRelPath),
-				RolesPath:         filepath.Join(bundleDir, embedded.RolesRelPath),
-				CollectionsPath:   filepath.Join(bundleDir, embedded.CollectionsRelPath),
-				FilterPluginsPath: filepath.Join(bundleDir, embedded.FilterPluginsRelPath),
-				Inventory:         result.InventoryPath,
-				Playbook:          filepath.Join(bundleDir, phase.ApplyPlaybook),
-				ExtraVars:         result.VarsPath,
-				ExtraVarPairs:     pairs,
-				ArtifactsDir:      filepath.Join(result.ArtifactsDir, phase.Name),
-				Check:             check,
-			}
-			command := runner.Command(spec)
-			if dryRun {
-				fmt.Fprintf(stdout, "dry-run ansible command [phase=%s]: %s\n", phase.Name, shellQuote(command))
-				continue
-			}
-			printPhaseStart(stdout, phase)
-			if err := runner.Run(ctx, spec); err != nil {
-				return failErr(1, err)
-			}
+		spec := ansible.RunSpec{
+			Executable:        executable,
+			AnsibleCfg:        filepath.Join(bundleDir, embedded.AnsibleCfgRelPath),
+			RolesPath:         filepath.Join(bundleDir, embedded.RolesRelPath),
+			CollectionsPath:   filepath.Join(bundleDir, embedded.CollectionsRelPath),
+			FilterPluginsPath: filepath.Join(bundleDir, embedded.FilterPluginsRelPath),
+			Inventory:         result.InventoryPath,
+			Playbook:          filepath.Join(bundleDir, workflow.Playbook),
+			ExtraVars:         result.VarsPath,
+			ExtraVarPairs:     pairs,
+			ArtifactsDir:      filepath.Join(result.ArtifactsDir, workflow.ArtifactsDir),
+			Check:             check,
+			AskBecomePass:     askBecomePass,
+		}
+		command := runner.Command(spec)
+		if dryRun {
+			fmt.Fprintf(stdout, "dry-run ansible command [workflow=%s]: %s\n", workflow.Name, shellQuote(command))
+			return nil
+		}
+		printWorkflowStart(stdout, workflow.Name, selected, askBecomePass)
+		if err := runner.Run(ctx, spec); err != nil {
+			return failErr(1, err)
 		}
 		return nil
 	}
@@ -172,16 +171,16 @@ func newDestroyCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.C
 	return cmd
 }
 
-func newDestroyScopeCmd(scope string, stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Command {
+func newDestroyScopeCmd(scope string, _ io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Command {
 	var (
-		dryRun       bool
-		yes          bool
-		executable   string
-		extraVars    []string
-		secretsDir   string
-		hostStateDir string
+		dryRun        bool
+		askBecomePass bool
+		yes           bool
+		executable    string
+		extraVars     []string
+		secretsDir    string
+		hostStateDir  string
 	)
-	_ = stdin // destroy is non-interactive past --yes; stdin reserved for symmetry with apply
 	secretsDir = defaultSecretsDir()
 	hostStateDir = defaultHostStateDir
 	cmd := &cobra.Command{
@@ -191,6 +190,7 @@ func newDestroyScopeCmd(scope string, stdin io.Reader, stdout io.Writer, stderr 
 	}
 	cf := addCommonFlags(cmd)
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the Ansible commands without executing them")
+	cmd.Flags().BoolVar(&askBecomePass, "ask-become-pass", true, "prompt for the Ansible become password; pass --ask-become-pass=false when provider hosts allow passwordless sudo")
 	cmd.Flags().BoolVar(&yes, "yes", false, "skip the destroy confirmation prompt")
 	cmd.Flags().StringVar(&executable, "ansible-playbook", resolveAnsiblePlaybook(), "ansible-playbook executable to run (defaults to the gitups-managed venv when present)")
 	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material")
@@ -221,6 +221,7 @@ func newDestroyScopeCmd(scope string, stdin io.Reader, stdout io.Writer, stderr 
 			return failErr(1, errors.New("destroy refused: pass --yes to confirm teardown, or --dry-run to preview"))
 		}
 		printTitle(stdout, "Destroy")
+		printDestroySummary(stdout, selected, askBecomePass, dryRun)
 		result, err := render.All(cf.stateDir, state)
 		if err != nil {
 			return failErr(1, err)
@@ -252,37 +253,36 @@ func newDestroyScopeCmd(scope string, stdin io.Reader, stdout io.Writer, stderr 
 			pairs = append(pairs, "gitups_keep_mirrored_images=true")
 		}
 		pairs = append(pairs, extraVars...)
-		if !dryRun {
-			if err := ensureSudoReady(); err != nil {
-				return failErr(1, err)
-			}
+		workflow, err := destroyWorkflow(scope, selected)
+		if err != nil {
+			return failErr(1, err)
 		}
 		runner := ansible.CommandRunner{Stdout: stdout, Stderr: stderr}
 		ctx := c.Context()
-		for _, phase := range selected {
-			spec := ansible.RunSpec{
-				Executable:        executable,
-				AnsibleCfg:        filepath.Join(bundleDir, embedded.AnsibleCfgRelPath),
-				RolesPath:         filepath.Join(bundleDir, embedded.RolesRelPath),
-				CollectionsPath:   filepath.Join(bundleDir, embedded.CollectionsRelPath),
-				FilterPluginsPath: filepath.Join(bundleDir, embedded.FilterPluginsRelPath),
-				Inventory:         result.InventoryPath,
-				Playbook:          filepath.Join(bundleDir, phase.DestroyPlaybook),
-				ExtraVars:         result.VarsPath,
-				ExtraVarPairs:     pairs,
-				ArtifactsDir:      filepath.Join(result.ArtifactsDir, phase.Name+"-destroy"),
-			}
-			command := runner.Command(spec)
-			if dryRun {
-				fmt.Fprintf(stdout, "dry-run ansible command [phase=%s destroy]: %s\n", phase.Name, shellQuote(command))
-				continue
-			}
+		spec := ansible.RunSpec{
+			Executable:        executable,
+			AnsibleCfg:        filepath.Join(bundleDir, embedded.AnsibleCfgRelPath),
+			RolesPath:         filepath.Join(bundleDir, embedded.RolesRelPath),
+			CollectionsPath:   filepath.Join(bundleDir, embedded.CollectionsRelPath),
+			FilterPluginsPath: filepath.Join(bundleDir, embedded.FilterPluginsRelPath),
+			Inventory:         result.InventoryPath,
+			Playbook:          filepath.Join(bundleDir, workflow.Playbook),
+			ExtraVars:         result.VarsPath,
+			ExtraVarPairs:     pairs,
+			ArtifactsDir:      filepath.Join(result.ArtifactsDir, workflow.ArtifactsDir),
+			AskBecomePass:     askBecomePass,
+		}
+		command := runner.Command(spec)
+		if dryRun {
+			fmt.Fprintf(stdout, "dry-run ansible command [workflow=%s destroy]: %s\n", workflow.Name, shellQuote(command))
+		} else {
+			printWorkflowStart(stdout, workflow.Name, selected, askBecomePass)
 			if err := runner.Run(ctx, spec); err != nil {
 				return failErr(1, err)
 			}
 		}
 		// `destroy all` owns the entire state-dir teardown: rendered artifacts,
-		// extracted ansible bundle, and per-phase ansible logs all live under
+		// extracted ansible bundle, and ansible logs all live under
 		// stateDirAbs and refer to infrastructure that no longer exists. Scoped
 		// destroys leave state in place because the remaining scopes still need it.
 		if dryRun {
@@ -353,7 +353,7 @@ func runApplyHostCheck(stdout io.Writer, stderr io.Writer, state v1alpha1.State,
 // ----- helpers reused by apply + destroy --------------------------------------
 
 // resolvedOCPBinaryPairs returns extra-var pairs for binaries the ocp phase
-// needs as absolute paths, so the ansible role can locate them under sudo's
+// needs as absolute paths, so the ansible role can locate them under become's
 // reduced PATH. Silent on miss: preflight is the place that surfaces missing
 // binaries; if the user has overridden via --extra-var, that wins because it
 // is appended after.
@@ -375,74 +375,114 @@ func resolvedOCPBinaryPairs(selected []Phase, hostStateDir string) []string {
 	return []string{"gitups_openshift_install=" + path}
 }
 
-// printApplySummary lists the phases apply will run and marks which need
-// root. Provider hosts always escalate (ansible_become: true is rendered
-// onto every host in the inventory); the supported invocation patterns —
-// `sudo gitups apply` for local provider hosts, NOPASSWD sudo for remote
-// provider hosts — are surfaced here so the confirmation prompt is
-// informed.
-func printApplySummary(w io.Writer, selected []Phase, dryRun bool) {
-	fmt.Fprintln(w, "apply plan:")
-	needsRoot := false
+type phaseWorkflow struct {
+	Name         string
+	Playbook     string
+	ArtifactsDir string
+}
+
+func applyWorkflow(scope string) (phaseWorkflow, error) {
+	switch scope {
+	case "infra":
+		return phaseWorkflow{Name: "infra", Playbook: "playbooks/apply-infra.yml", ArtifactsDir: "infra"}, nil
+	case "ocp":
+		return phaseWorkflow{Name: "ocp", Playbook: "playbooks/apply-ocp.yml", ArtifactsDir: "ocp"}, nil
+	default:
+		return phaseWorkflow{}, fmt.Errorf("apply scope %q has no workflow playbook", scope)
+	}
+}
+
+func destroyWorkflow(scope string, selected []Phase) (phaseWorkflow, error) {
+	if len(selected) == 1 {
+		p := selected[0]
+		return phaseWorkflow{Name: p.Name, Playbook: p.DestroyPlaybook, ArtifactsDir: p.Name + "-destroy"}, nil
+	}
+	switch scope {
+	case "infra":
+		return phaseWorkflow{Name: "infra", Playbook: "playbooks/destroy-infra.yml", ArtifactsDir: "infra-destroy"}, nil
+	case "all":
+		return phaseWorkflow{Name: "all", Playbook: "playbooks/destroy-all.yml", ArtifactsDir: "all-destroy"}, nil
+	default:
+		return phaseWorkflow{}, fmt.Errorf("destroy scope %q has no workflow playbook", scope)
+	}
+}
+
+// printApplySummary lists the phases apply will run, marks which need root
+// on the target hosts, and tells the user how Ansible will obtain escalation.
+func printApplySummary(w io.Writer, selected []Phase, askBecomePass bool, dryRun bool) {
+	printWorkflowSummary(w, "apply plan:", selected, askBecomePass, dryRun)
+}
+
+func printDestroySummary(w io.Writer, selected []Phase, askBecomePass bool, dryRun bool) {
+	printWorkflowSummary(w, "destroy plan:", selected, askBecomePass, dryRun)
+}
+
+func printWorkflowSummary(w io.Writer, title string, selected []Phase, askBecomePass bool, dryRun bool) {
+	fmt.Fprintln(w, title)
+	rootPhases := 0
 	for _, p := range selected {
 		marker := ""
 		if p.NeedsRoot {
 			marker = " [root]"
-			needsRoot = true
+			rootPhases++
 		}
 		fmt.Fprintf(w, "  - %s%s — %s\n", p.Name, marker, p.Description)
 	}
-	if needsRoot {
+	if rootPhases > 0 {
 		switch {
 		case dryRun:
 			fmt.Fprintln(w, "[root] phases require sudo escalation; this is a dry run, no commands execute.")
+		case askBecomePass && rootPhases > 1:
+			fmt.Fprintln(w, "[root] phases run as root on provider hosts; ansible will prompt once for the BECOME (sudo) password and reuse it for this workflow.")
+		case askBecomePass:
+			fmt.Fprintln(w, "[root] phases run as root on provider hosts; ansible will prompt for the BECOME (sudo) password.")
 		default:
-			fmt.Fprintln(w, "[root] phases require sudo escalation; gitups must run as root (`sudo gitups apply`) or the connection user must have NOPASSWD sudo on each provider host.")
+			fmt.Fprintln(w, "[root] phases run as root on provider hosts; --ask-become-pass=false requires passwordless sudo or an already-root connection user.")
 		}
 	}
 }
 
-// printPhaseStart announces the phase that is about to run. Sudo
-// availability has already been checked up front, so each phase just
-// records which step is starting.
-func printPhaseStart(w io.Writer, phase Phase) {
-	if phase.NeedsRoot {
-		fmt.Fprintf(w, "\n>>> running phase %q [root] — %s\n", phase.Name, phase.Description)
+func printWorkflowStart(w io.Writer, workflowName string, selected []Phase, askBecomePass bool) {
+	if len(selected) == 1 {
+		printPhaseStart(w, selected[0], askBecomePass)
+		return
+	}
+	if rootPhaseCount(selected) > 0 {
+		fmt.Fprintf(w, "\n>>> running workflow %q [root] — phases: %s\n", workflowName, phaseList(selected))
+		if askBecomePass {
+			fmt.Fprintln(w, ">>> ansible may prompt once for the sudo (BECOME) password for this workflow.")
+		}
+		return
+	}
+	fmt.Fprintf(w, "\n>>> running workflow %q — phases: %s\n", workflowName, phaseList(selected))
+}
+
+// printPhaseStart announces the phase that is about to run so the user knows
+// which remote root step the upcoming Ansible become prompt authorizes.
+func printPhaseStart(w io.Writer, phase Phase, askBecomePass bool) {
+	if phase.NeedsRoot && askBecomePass {
+		fmt.Fprintf(w, "\n>>> running phase %q [root] — %s\n>>> ansible may prompt for the sudo (BECOME) password for this phase.\n", phase.Name, phase.Description)
 		return
 	}
 	fmt.Fprintf(w, "\n>>> running phase %q — %s\n", phase.Name, phase.Description)
 }
 
-// ensureSudoReady is gitups's pre-flight gate against the failure mode that
-// originally surfaced as ansible's "Duplicate become password prompt": the
-// process has neither root privileges nor passwordless sudo, ansible's
-// per-task sudo invocations stall on a password prompt that never gets
-// answered (or worse, gets answered wrong and silently rejected). We
-// require one of the two supported invocation patterns and refuse to start
-// otherwise. Remote provider hosts are not probed from here — their sudo
-// policy lives on the target box; the play itself surfaces the failure if
-// NOPASSWD is missing there.
-//
-// The package-level variable lets tests substitute a no-op while still
-// exercising the rest of the apply / destroy / setup-controller flow on
-// CI hosts where the developer's interactive sudo would block the check.
-var ensureSudoReady = ensureSudoReadyImpl
+func rootPhaseCount(selected []Phase) int {
+	count := 0
+	for _, p := range selected {
+		if p.NeedsRoot {
+			count++
+		}
+	}
+	return count
+}
 
-func ensureSudoReadyImpl() error {
-	if os.Geteuid() == 0 {
-		return nil
+func phaseList(selected []Phase) string {
+	names := make([]string, 0, len(selected))
+	for _, p := range selected {
+		names = append(names, p.Name)
 	}
-	if _, err := exec.LookPath("sudo"); err != nil {
-		return fmt.Errorf("gitups apply requires either being run as root (`sudo gitups apply`) or `sudo` on PATH for passwordless escalation; sudo not found: %w", err)
-	}
-	cmd := exec.Command("sudo", "-n", "true")
-	cmd.Stdin = nil
-	cmd.Stdout = io.Discard
-	cmd.Stderr = io.Discard
-	if err := cmd.Run(); err != nil {
-		return errors.New("gitups apply requires either running under sudo (`sudo gitups apply`) or passwordless sudo configured for the gitups user; refusing to start because `sudo -n true` failed (interactive sudo prompts mid-play would deadlock ansible)")
-	}
-	return nil
+	return strings.Join(names, ", ")
 }
 
 // confirm reads a single line from stdin and returns true for "y"/"yes".

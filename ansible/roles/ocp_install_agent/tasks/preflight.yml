@@ -8,7 +8,7 @@
 
 - name: Resolve hub cluster install context
   ansible.builtin.set_fact:
-    gitups_ocp_install: "{{ gitups_current_cluster.ocp.install }}"
+    gitups_ocp_cluster_install: "{{ gitups_current_cluster.ocp.install }}"
     gitups_ocp_release: "{{ gitups_current_cluster.ocp.release }}"
     gitups_ocp_installer_dir: "{{ gitups_state_dir }}/{{ gitups_current_cluster.ocp.installer.relativeDir }}"
     gitups_ocp_installer_relative_work: "{{ gitups_current_cluster.ocp.installer.relativeDir }}/work"
@@ -100,13 +100,13 @@
 
 - name: Resolve generated self-signed certificate requests
   ansible.builtin.set_fact:
-    gitups_ocp_generated_self_signed_certificates: "{{ gitups_ocp_install.generatedSecrets | default([]) | selectattr('type', 'equalto', 'self-signed-certificate') | list }}"
+    gitups_ocp_generated_self_signed_certificates: "{{ gitups_ocp_cluster_install.generatedSecrets | default([]) | selectattr('type', 'equalto', 'self-signed-certificate') | list }}"
   changed_when: false
 
 - name: Fail when install method is not agent
   ansible.builtin.fail:
-    msg: "ocp_install_agent only supports install method 'agent', got '{{ gitups_ocp_install.method }}'"
-  when: gitups_ocp_install.method != 'agent'
+    msg: "ocp_install_agent only supports install method 'agent', got '{{ gitups_ocp_cluster_install.method | default('<unset>') }}'"
+  when: (gitups_ocp_cluster_install.method | default('')) != 'agent'
 
 - name: Resolve openshift-install binary
   ansible.builtin.command:

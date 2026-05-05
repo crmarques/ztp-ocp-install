@@ -59,8 +59,9 @@ gitups destroy all -f test/e2e/<case> --state-dir /tmp/gitups-<case> --yes
 
 - Linux host with KVM support (`/dev/kvm`) for libvirt cases.
 - Go toolchain compatible with `go.mod`.
-- `ansible-playbook`, `python3`, `pip3`, and `sudo` on `PATH`.
-- Permission to manage host runtime state under `/var/lib/gitups`.
+- `ansible-playbook`, `python3`, and `pip3` on the controller `PATH`.
+- Permission to escalate to root on provider hosts and manage host runtime
+  state under `/var/lib/gitups`.
 - Required install secrets under `~/.gitups/secrets` or `--secrets-dir`.
 
 ## Logs And Artifacts

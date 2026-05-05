@@ -110,6 +110,11 @@ reconciled workload clusters remains possible without schema rework.
 - Inventory and variables are generated from desired state. Users do not
   maintain inventory, `group_vars`, or `host_vars` as source-of-truth
   configuration.
+- Controller setup and provider-host convergence are separate workflows.
+  Controller-local Ansible runs as the invoking user by default. Provider,
+  cluster, and OCP apply/destroy playbooks target provider hosts and execute
+  through root escalation, even when the provider host address is
+  `localhost`.
 - Repository-owned Ansible content lives under `/ansible` and is embedded
   into the `gitups` binary via `internal/embedded` (build-time copy into
   `internal/embedded/bundle/`, captured by `//go:embed`). At runtime the

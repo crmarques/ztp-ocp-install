@@ -24,7 +24,6 @@ func TestOperatorCheckUniversalChecksWithoutInputs(t *testing.T) {
 		"Doctor",
 		"ansible-playbook on PATH",
 		"python3 on PATH",
-		"sudo on PATH",
 	} {
 		if !strings.Contains(out, expected) {
 			t.Fatalf("stdout missing %q\n%s", expected, out)
@@ -95,42 +94,26 @@ func TestOperatorBootstrapPlanDebianFamily(t *testing.T) {
 	}
 }
 
-// In `--venv` mode ansible-core moves out of the system package set and
-// into a pip install inside the gitups-managed venv. The system step still
-// runs to install python3 / python3-pip; the venv steps come after.
-func TestOperatorBootstrapPlanVenvModeMovesAnsibleToVenv(t *testing.T) {
+func TestOperatorBootstrapPlanVenvModeStaysUserOwned(t *testing.T) {
 	plan, err := controllerBootstrapPlanForMode("redhat", bootstrapMode{venv: true})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(plan) != 4 {
-		t.Fatalf("expected 4 steps (system pkgs + venv create + pip upgrade + pip install ansible-core), got %d: %+v", len(plan), plan)
+	if len(plan) != 3 {
+		t.Fatalf("expected 3 user-owned venv steps, got %d: %+v", len(plan), plan)
 	}
-	systemStep := strings.Join(plan[0].cmd, " ")
-	if strings.Contains(systemStep, " ansible-core") {
-		t.Fatalf("venv mode must not install ansible-core via the package manager: %s", systemStep)
+	for _, step := range plan {
+		if step.cmd[0] == "sudo" {
+			t.Fatalf("default venv setup must not require controller sudo: %+v", plan)
+		}
 	}
-	if !strings.Contains(systemStep, " python3-pip") {
-		t.Fatalf("venv mode still needs python3-pip in the system set: %s", systemStep)
-	}
-	venvCreate := strings.Join(plan[1].cmd, " ")
+	venvCreate := strings.Join(plan[0].cmd, " ")
 	if !strings.Contains(venvCreate, "python3 -m venv") {
 		t.Fatalf("expected python3 -m venv step, got %s", venvCreate)
 	}
-	pipInstall := strings.Join(plan[3].cmd, " ")
+	pipInstall := strings.Join(plan[2].cmd, " ")
 	if !strings.Contains(pipInstall, "ansible-core==") {
 		t.Fatalf("expected pinned ansible-core install, got %s", pipInstall)
-	}
-}
-
-func TestOperatorBootstrapPlanVenvModeAddsPythonVenvOnDebian(t *testing.T) {
-	plan, err := controllerBootstrapPlanForMode("debian", bootstrapMode{venv: true})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	systemStep := strings.Join(plan[0].cmd, " ")
-	if !strings.Contains(systemStep, " python3-venv") {
-		t.Fatalf("debian venv mode must install python3-venv (apt does not bundle it with python3): %s", systemStep)
 	}
 }
 
@@ -180,7 +163,7 @@ func TestOperatorBootstrapDryRunPrintsPlanAndDoesNotExecute(t *testing.T) {
 		"Controller setup",
 		"OS family:",
 		"planned actions:",
-		"install controller packages",
+		"create ansible-core venv",
 	} {
 		if !strings.Contains(out, expected) {
 			t.Fatalf("stdout missing %q\n%s", expected, out)
@@ -216,6 +199,7 @@ func TestOperatorBootstrapDryRunPlansCLIsFromState(t *testing.T) {
 		t.Skipf("/etc/os-release missing on this host: %v", err)
 	}
 	t.Setenv("HOME", t.TempDir())
+	wantInstallDir := defaultControllerCLIInstallDir()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	stateDir := t.TempDir()
@@ -233,7 +217,7 @@ func TestOperatorBootstrapDryRunPlansCLIsFromState(t *testing.T) {
 		"install OCP CLIs",
 		"setup-controller-clis.yml",
 		"gitups_openshift_release_version=4.21.10",
-		"gitups_clis_install_dir=/usr/local/bin",
+		"gitups_clis_install_dir=" + wantInstallDir,
 	} {
 		if !strings.Contains(out, expected) {
 			t.Fatalf("CLI dry-run missing %q\n%s", expected, out)

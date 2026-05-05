@@ -260,6 +260,23 @@ func TestDefaultsAreApplied(t *testing.T) {
 	}
 }
 
+func TestNormalizeDefaultsRemoteHostUserToInvokingUser(t *testing.T) {
+	t.Setenv("USER", "controller-user")
+	t.Setenv("LOGNAME", "")
+	dir := t.TempDir()
+	path := filepath.Join(dir, "minimal.yaml")
+	body := strings.Replace(validStateYAML("minimal", "minimal-provider", "192.168.150.0/24", "192.168.150.10", "192.168.150.11", "192.168.150.20"), "        user: gitups\n", "", 1)
+	writeFile(t, path, body)
+	state, err := LoadNormalizeValidate([]string{path})
+	if err != nil {
+		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
+	}
+	host := state.InfrastructureProviders[0].Spec.Hosts["host-01"]
+	if got, want := host.SSH.User, "controller-user"; got != want {
+		t.Fatalf("ssh user got %q, want %q", got, want)
+	}
+}
+
 func TestValidationRejectsDuplicateNames(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "first.yaml"), validStateYAML("duplicate", "provider-a", "192.168.151.0/24", "192.168.151.10", "192.168.151.11", "192.168.151.20"))

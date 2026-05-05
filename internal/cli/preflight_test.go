@@ -70,7 +70,7 @@ func TestPreflightUniversalOnlyWithoutInputs(t *testing.T) {
 		"sudo":             "/usr/bin/sudo",
 	}, false)
 	checks := collectPreflightChecks(v1alpha1.State{}, nil, false, defaultSecretsDir(), defaultHostStateDir, deps)
-	if len(checks) != 3 {
+	if len(checks) != 2 {
 		t.Fatalf("expected only universal checks, got %d: %+v", len(checks), checks)
 	}
 	for _, c := range checks {

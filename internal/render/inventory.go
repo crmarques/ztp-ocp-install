@@ -2,6 +2,7 @@ package render
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/crmarques/ztp-ocp-install-lab/api/v1alpha1"
 )
@@ -23,7 +24,6 @@ type InventoryHost struct {
 	AnsibleHost        string `yaml:"ansible_host" json:"ansible_host"`
 	AnsibleConnection  string `yaml:"ansible_connection,omitempty" json:"ansible_connection,omitempty"`
 	AnsibleUser        string `yaml:"ansible_user" json:"ansible_user"`
-	AnsibleBecome      bool   `yaml:"ansible_become" json:"ansible_become"`
 	GitupsProviderName string `yaml:"gitups_provider_name,omitempty" json:"gitups_provider_name,omitempty"`
 	GitupsClusterName  string `yaml:"gitups_cluster_name,omitempty" json:"gitups_cluster_name,omitempty"`
 	GitupsHostName     string `yaml:"gitups_host_name" json:"gitups_host_name"`
@@ -55,7 +55,6 @@ func Inventory(state v1alpha1.State) InventoryFile {
 				AnsibleHost:        host.SSH.Address,
 				AnsibleConnection:  ansibleConnection(host.SSH.Address),
 				AnsibleUser:        host.SSH.User,
-				AnsibleBecome:      true,
 				GitupsProviderName: provider.Metadata.Name,
 				GitupsHostName:     hostName,
 				GitupsSSHKeyRef:    host.SSH.KeyRef.Name,
@@ -81,7 +80,6 @@ func Inventory(state v1alpha1.State) InventoryFile {
 				AnsibleHost:        host.SSH.Address,
 				AnsibleConnection:  ansibleConnection(host.SSH.Address),
 				AnsibleUser:        host.SSH.User,
-				AnsibleBecome:      true,
 				GitupsProviderName: closure.MachineProviderName,
 				GitupsClusterName:  item.Metadata.Name,
 				GitupsHostName:     hostName,
@@ -102,7 +100,7 @@ func Inventory(state v1alpha1.State) InventoryFile {
 }
 
 func ansibleConnection(address string) string {
-	switch address {
+	switch strings.ToLower(strings.TrimSpace(address)) {
 	case "localhost", "127.0.0.1", "::1":
 		return "local"
 	default:

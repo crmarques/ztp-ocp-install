@@ -41,7 +41,6 @@ func collectPreflightChecks(state v1alpha1.State, selected []Phase, hasState boo
 	checks := []preflightCheck{
 		binaryCheck("ansible-playbook", []string{filepath.Join(ansibleVenvDir(), "bin")}, deps),
 		binaryCheck("python3", nil, deps),
-		binaryCheck("sudo", nil, deps),
 	}
 	if phaseInScope("provider", selected, hasState) && stateNeedsLibvirt(state) {
 		// BMC emulator, vmedia HTTP, and boot-artifacts HTTP all bind during
@@ -55,8 +54,8 @@ func collectPreflightChecks(state v1alpha1.State, selected []Phase, hasState boo
 	if phaseInScope("ocp", selected, hasState) {
 		checks = append(checks,
 			binaryCheck("openshift-install", openshiftInstallSearchDirs(hostStateDir), deps),
-			binaryCheck("oc", nil, deps),
-			binaryCheck("kubectl", nil, deps),
+			binaryCheck("oc", openshiftInstallSearchDirs(hostStateDir), deps),
+			binaryCheck("kubectl", openshiftInstallSearchDirs(hostStateDir), deps),
 		)
 		if hasState && ocpNeedsOpenSSL(state, secretsDir, deps) {
 			checks = append(checks, binaryCheck("openssl", nil, deps))

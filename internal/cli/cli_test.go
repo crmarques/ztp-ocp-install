@@ -906,14 +906,17 @@ func TestApplyDryRunRendersAndPrintsAnsibleCommandsForAllPhases(t *testing.T) {
 	for _, expected := range []string{
 		"rendered:",
 		filepath.Join(stateDir, "ansible", "inventory.yaml"),
-		"dry-run ansible command [phase=provider]: ansible-playbook",
-		"playbooks/provider-prepare.yml",
-		"dry-run ansible command [phase=cluster]: ansible-playbook",
-		"playbooks/cluster-prepare.yml",
+		"- provider [root]",
+		"- cluster [root]",
+		"dry-run ansible command [workflow=infra]: ansible-playbook",
+		"playbooks/apply-infra.yml",
 	} {
 		if !strings.Contains(output, expected) {
 			t.Fatalf("stdout missing %q\n%s", expected, output)
 		}
+	}
+	if got := strings.Count(output, "--ask-become-pass"); got != 1 {
+		t.Fatalf("infra apply should ask become once, got %d prompts\n%s", got, output)
 	}
 	for _, unexpected := range []string{"ocp-install.yml", "gitops-publish.yml"} {
 		if strings.Contains(output, unexpected) {
@@ -991,10 +994,10 @@ func TestApplyHubDryRunOnlyRunsHubScope(t *testing.T) {
 		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
 	}
 	output := stdout.String()
-	if !strings.Contains(output, "playbooks/ocp-install.yml") {
-		t.Fatalf("stdout missing ocp-install.yml: %s", output)
+	if !strings.Contains(output, "playbooks/apply-ocp.yml") {
+		t.Fatalf("stdout missing apply-ocp.yml: %s", output)
 	}
-	for _, leaked := range []string{"provider-prepare.yml", "cluster-prepare.yml", "gitops-publish.yml"} {
+	for _, leaked := range []string{"provider-prepare.yml", "cluster-prepare.yml", "ocp-install.yml", "gitops-publish.yml"} {
 		if strings.Contains(output, leaked) {
 			t.Fatalf("hub-scope apply leaked %s:\n%s", leaked, output)
 		}
@@ -1032,14 +1035,25 @@ func TestDestroyDryRunPrintsPhasesInReverse(t *testing.T) {
 		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
 	}
 	output := stdout.String()
-	hubIdx := strings.Index(output, "ocp-destroy.yml")
-	clusterIdx := strings.Index(output, "cluster-destroy.yml")
-	providerIdx := strings.Index(output, "provider-destroy.yml")
+	hubIdx := strings.Index(output, "- ocp [root]")
+	clusterIdx := strings.Index(output, "- cluster [root]")
+	providerIdx := strings.Index(output, "- provider [root]")
 	if hubIdx < 0 || clusterIdx < 0 || providerIdx < 0 {
 		t.Fatalf("missing destroy phase entries:\n%s", output)
 	}
 	if !(hubIdx < clusterIdx && clusterIdx < providerIdx) {
 		t.Fatalf("destroy phases not in reverse order (hub=%d cluster=%d provider=%d)\n%s", hubIdx, clusterIdx, providerIdx, output)
+	}
+	for _, expected := range []string{
+		"dry-run ansible command [workflow=all destroy]: ansible-playbook",
+		"playbooks/destroy-all.yml",
+	} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("stdout missing %q\n%s", expected, output)
+		}
+	}
+	if got := strings.Count(output, "--ask-become-pass"); got != 1 {
+		t.Fatalf("destroy all should ask become once, got %d prompts\n%s", got, output)
 	}
 	if strings.Contains(output, "gitops-unpublish.yml") {
 		t.Fatalf("destroy all must not include unfinished gitops publication teardown:\n%s", output)
@@ -1052,11 +1066,39 @@ func TestDestroyDryRunPrintsPhasesInReverse(t *testing.T) {
 	}
 }
 
+func TestDestroyInfraDryRunUsesSingleWorkflowBecomePrompt(t *testing.T) {
+	stateDir := t.TempDir()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Run(context.Background(), []string{
+		"destroy", "infra",
+		"-f", "../../examples/infra",
+		"--state-dir", stateDir,
+		"--dry-run",
+	}, nil, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
+	}
+	output := stdout.String()
+	for _, expected := range []string{
+		"- cluster [root]",
+		"- provider [root]",
+		"dry-run ansible command [workflow=infra destroy]: ansible-playbook",
+		"playbooks/destroy-infra.yml",
+	} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("stdout missing %q\n%s", expected, output)
+		}
+	}
+	if got := strings.Count(output, "--ask-become-pass"); got != 1 {
+		t.Fatalf("destroy infra should ask become once, got %d prompts\n%s", got, output)
+	}
+}
+
 func TestDestroyRemovesStateDirOnSuccess(t *testing.T) {
 	if _, err := os.Stat("/bin/true"); err != nil {
 		t.Skip("/bin/true not available")
 	}
-	stubSudoReadyAlwaysOK(t)
 	stateDir := t.TempDir()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -1082,7 +1124,6 @@ func TestDestroyScopedHubKeepsStateDir(t *testing.T) {
 	if _, err := os.Stat("/bin/true"); err != nil {
 		t.Skip("/bin/true not available")
 	}
-	stubSudoReadyAlwaysOK(t)
 	stateDir := t.TempDir()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -1108,7 +1149,6 @@ func TestDestroyKeepStateDirFlagPreservesStateDir(t *testing.T) {
 	if _, err := os.Stat("/bin/true"); err != nil {
 		t.Skip("/bin/true not available")
 	}
-	stubSudoReadyAlwaysOK(t)
 	stateDir := t.TempDir()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -1224,12 +1264,7 @@ func TestDiffReportsNoDriftAfterFreshRender(t *testing.T) {
 	}
 }
 
-// TestApplyDryRunDescribesSudoExpectation pins the user-facing escalation
-// summary so the gitups-runs-as-root / NOPASSWD-sudo expectation is always
-// announced before any phase runs. This replaced the old
-// `--ask-become-pass` flag and its in-process password file: gitups no
-// longer reads or stores a sudo password.
-func TestApplyDryRunDescribesSudoExpectation(t *testing.T) {
+func TestApplyDryRunUsesAnsibleBecomePrompt(t *testing.T) {
 	stateDir := t.TempDir()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -1243,10 +1278,19 @@ func TestApplyDryRunDescribesSudoExpectation(t *testing.T) {
 		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
 	}
 	if strings.Contains(stdout.String(), "ANSIBLE_BECOME_PASSWORD_FILE") {
-		t.Fatalf("stdout must not reference ANSIBLE_BECOME_PASSWORD_FILE; gitups no longer writes a password file\n%s", stdout.String())
+		t.Fatalf("stdout must not reference ANSIBLE_BECOME_PASSWORD_FILE; ansible should prompt directly\n%s", stdout.String())
 	}
-	if strings.Contains(stdout.String(), "--ask-become-pass") {
-		t.Fatalf("stdout must not reference --ask-become-pass; flag was removed\n%s", stdout.String())
+	if !strings.Contains(stdout.String(), "--ask-become-pass") {
+		t.Fatalf("stdout must include --ask-become-pass for remote become prompts\n%s", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "dry-run ansible command [workflow=ocp]: ansible-playbook") {
+		t.Fatalf("stdout must use the ocp workflow playbook\n%s", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "playbooks/apply-ocp.yml") {
+		t.Fatalf("stdout missing apply-ocp wrapper playbook\n%s", stdout.String())
+	}
+	if strings.Contains(stdout.String(), "playbooks/ocp-install.yml") {
+		t.Fatalf("apply ocp should run through apply-ocp.yml, not directly through ocp-install.yml\n%s", stdout.String())
 	}
 }
 
@@ -1275,13 +1319,6 @@ func TestApplyDryRunPrintsEscalationSummary(t *testing.T) {
 	}
 }
 
-func stubListenAlwaysFree(t *testing.T) {
-	t.Helper()
-	original := defaultPreflightDeps.tryListen
-	defaultPreflightDeps.tryListen = func(_ string, _ string) error { return nil }
-	t.Cleanup(func() { defaultPreflightDeps.tryListen = original })
-}
-
 // stubPreflightAlwaysOK lets tests that exercise downstream apply flow assume
 // preflight passes: TCP listeners are free and any lookup under the default
 // secrets directory reports a regular file. Other statPath callers (/dev/kvm,
@@ -1308,17 +1345,6 @@ func stubPreflightAlwaysOK(t *testing.T) {
 	})
 }
 
-// stubSudoReadyAlwaysOK pretends the controller already satisfies the
-// "running as root or NOPASSWD sudo" precondition that ensureSudoReady
-// otherwise enforces. CI hosts typically prompt for sudo, so without this
-// stub apply / setup tests would all exit at the gate.
-func stubSudoReadyAlwaysOK(t *testing.T) {
-	t.Helper()
-	orig := ensureSudoReady
-	ensureSudoReady = func() error { return nil }
-	t.Cleanup(func() { ensureSudoReady = orig })
-}
-
 func TestApplyConfirmationDecline(t *testing.T) {
 	stubPreflightAlwaysOK(t)
 	stateDir := t.TempDir()
@@ -1342,7 +1368,6 @@ func TestApplyConfirmationDecline(t *testing.T) {
 
 func TestApplyYesSkipsConfirmationAndStopsBeforeAnsible(t *testing.T) {
 	stubPreflightAlwaysOK(t)
-	stubSudoReadyAlwaysOK(t)
 	stateDir := t.TempDir()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer

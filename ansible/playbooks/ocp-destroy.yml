@@ -2,8 +2,7 @@
 - name: Tear down OpenShift cluster install state
   hosts: gitups_ocp_hosts
   gather_facts: false
-  # Escalation comes from `ansible_become: true` rendered onto every provider
-  # host in the inventory; see internal/render/inventory.go.
+  become: true
 
   pre_tasks:
     - name: Select cluster infrastructure for current host

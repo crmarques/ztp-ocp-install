@@ -31,16 +31,12 @@ func ansibleCorePinnedVersion() (string, error) {
 	return "", fmt.Errorf("ansible-core pin missing from render.ComponentPins")
 }
 
-// `setup` groups commands that prepare the controller running gitups. The
-// intent is that a fresh machine starts with only the gitups binary plus
-// user-authored desired-state YAML; `setup controller` installs the minimal
-// pinned dependencies needed for the selected workflow.
 func newSetupCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "setup",
 		Short: "Prepare the controller machine running gitups",
 		Long: "Subcommands provision the controller machine running gitups.\n" +
-			"`setup controller` installs the minimal packages and managed ansible-core runtime\n" +
+			"`setup controller` installs the managed ansible-core runtime\n" +
 			"needed for `gitups preflight`, `gitups plan`, and `gitups apply`.",
 	}
 	cmd.AddCommand(
@@ -60,29 +56,32 @@ func newSetupControllerCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) 
 	cmd := &cobra.Command{
 		Use:   "controller",
 		Short: "Install controller-only prerequisites",
-		Long: "Installs only the dependencies that gitups itself runs on the control\n" +
-			"host: a small package set, a gitups-managed ansible-core venv, and the\n" +
-			"OpenShift CLIs `oc`, `kubectl`, and `openshift-install`.\n\n" +
+		Long: "Installs controller-local dependencies that gitups itself runs on\n" +
+			"the control host: a gitups-managed ansible-core venv and, when -f\n" +
+			"is supplied, the OpenShift CLIs `oc`, `kubectl`, and\n" +
+			"`openshift-install`.\n\n" +
 			"Provider-side dependencies (libvirt, qemu-kvm, podman) are never\n" +
 			"installed on the controller — they belong to the provider host's own\n" +
 			"preparation. When -f is supplied the OCP release version is read from\n" +
 			"the state and an embedded ansible playbook downloads `oc`, `kubectl`,\n" +
 			"and `openshift-install` from mirror.openshift.com (no token required)\n" +
-			"into the chosen install directory.\n\n" +
-			"Run as root (`sudo gitups setup controller`) or have NOPASSWD sudo\n" +
-			"configured for this user; gitups never reads or stores a sudo\n" +
-			"password.",
+			"into the chosen install directory. The default install directory\n" +
+			"lives under Gitups home and does not require controller sudo.",
 		Args: cobra.NoArgs,
 	}
 	cf := addCommonFlags(cmd)
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print bootstrap commands without executing them")
 	cmd.Flags().BoolVar(&yes, "yes", false, "skip the bootstrap confirmation prompt")
 	cmd.Flags().BoolVar(&venv, "venv", true, "install ansible-core into a gitups-managed venv instead of via the system package manager")
-	cmd.Flags().StringVar(&cliInstallDir, "cli-install-dir", "/usr/local/bin", "directory the OCP CLI installer playbook writes oc, kubectl, and openshift-install into")
+	cmd.Flags().StringVar(&cliInstallDir, "cli-install-dir", defaultControllerCLIInstallDir(), "directory the OCP CLI installer playbook writes oc, kubectl, and openshift-install into")
 	cmd.RunE = func(c *cobra.Command, _ []string) error {
-		family, err := detectOSFamily(defaultOSReleasePath)
-		if err != nil {
-			return failErr(1, err)
+		family := ""
+		if !venv {
+			detected, err := detectOSFamily(defaultOSReleasePath)
+			if err != nil {
+				return failErr(1, err)
+			}
+			family = detected
 		}
 		var state v1alpha1.State
 		if len(cf.files) > 0 {
@@ -99,10 +98,11 @@ func newSetupControllerCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) 
 		cliSpec := planControllerCLIInstall(state, cf.stateDir, cliInstallDir, venv)
 
 		printTitle(stdout, "Controller setup")
-		fmt.Fprintf(stdout, "OS family: %s\n", family)
 		if venv {
+			fmt.Fprintln(stdout, "OS family: not required for managed venv")
 			fmt.Fprintf(stdout, "ansible-core target: managed venv at %s\n", ansibleVenvDir())
 		} else {
+			fmt.Fprintf(stdout, "OS family: %s\n", family)
 			fmt.Fprintln(stdout, "ansible-core target: system package manager")
 		}
 		printSubtitle(stdout, "planned actions:")
@@ -123,9 +123,6 @@ func newSetupControllerCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) 
 		}
 		if !yes && !confirm(stdin, stdout, "Continue with bootstrap? [y/N]: ") {
 			return failErr(1, errors.New("bootstrap aborted"))
-		}
-		if err := ensureSudoReady(); err != nil {
-			return failErr(1, err)
 		}
 		if err := runBootstrapPlan(c.Context(), stdin, stdout, stderr, plan); err != nil {
 			return err
@@ -165,49 +162,37 @@ type bootstrapStep struct {
 }
 
 // controllerBootstrapPlanForMode composes the bootstrap steps for the detected
-// OS family and the chosen runtime mode. The package set is intentionally
-// controller-only: ansible-core runtime, python3, sudo, git. Provider-side
-// packages (libvirt, qemu-kvm, podman, skopeo) are never installed by this
-// command — they belong to the provider host's own setup, even when the
-// controller and the provider happen to share a machine.
-//
-// In `--venv` mode, ansible-core is removed from the system package set
-// and instead pip-installed into a gitups-managed venv. python3 plus
-// python3-pip stay in the system set because the venv needs them to bootstrap.
+// OS family and the chosen runtime mode. The default `--venv` mode stays
+// controller-local and user-owned: it creates a venv under Gitups home and
+// pip-installs the pinned ansible-core there. The explicit `--venv=false`
+// mode is the root-requiring system-package path. Provider-side packages
+// (libvirt, qemu-kvm, podman, skopeo) are never installed by this command.
 func controllerBootstrapPlanForMode(family string, mode bootstrapMode) ([]bootstrapStep, error) {
-	packages := basePackages(family)
 	if mode.venv {
-		packages = filterOut(packages, "ansible-core")
-		packages = appendUnique(packages, basePackagesForVenv(family)...)
+		pin, err := ansibleCorePinnedVersion()
+		if err != nil {
+			return nil, err
+		}
+		return []bootstrapStep{
+			{
+				label: "create ansible-core venv at " + ansibleVenvDir(),
+				cmd:   []string{"python3", "-m", "venv", ansibleVenvDir()},
+			},
+			{
+				label: "upgrade pip in venv",
+				cmd:   []string{ansibleVenvBin("pip"), "install", "--upgrade", "pip"},
+			},
+			{
+				label: "install ansible-core==" + pin + " into venv",
+				cmd:   []string{ansibleVenvBin("pip"), "install", "ansible-core==" + pin},
+			},
+		}, nil
 	}
-	packages = dedupe(packages)
-
-	steps := []bootstrapStep{{
+	packages := dedupe(basePackages(family))
+	return []bootstrapStep{{
 		label: "install controller packages",
 		cmd:   installCommand(family, packages),
-	}}
-	if !mode.venv {
-		return steps, nil
-	}
-	pin, err := ansibleCorePinnedVersion()
-	if err != nil {
-		return nil, err
-	}
-	steps = append(steps,
-		bootstrapStep{
-			label: "create ansible-core venv at " + ansibleVenvDir(),
-			cmd:   []string{"python3", "-m", "venv", ansibleVenvDir()},
-		},
-		bootstrapStep{
-			label: "upgrade pip in venv",
-			cmd:   []string{ansibleVenvBin("pip"), "install", "--upgrade", "pip"},
-		},
-		bootstrapStep{
-			label: "install ansible-core==" + pin + " into venv",
-			cmd:   []string{ansibleVenvBin("pip"), "install", "ansible-core==" + pin},
-		},
-	)
-	return steps, nil
+	}}, nil
 }
 
 // controllerBootstrapPlan is the convenience entry the system-package mode uses;
@@ -265,11 +250,9 @@ func stateOpenshiftReleaseVersion(state v1alpha1.State) string {
 // PlannedCommand returns the ansible-playbook invocation displayed in the
 // dry-run plan. The bundle path is computed from the configured state-dir
 // and will exist by the time runControllerCLIInstall actually executes the
-// command (which extracts the embedded bundle first). Sudo escalation is
-// expected to come from running the gitups process under sudo or from
-// NOPASSWD on the controller — the playbook's per-task `become: true`
-// stays on the inventory's local host and finds an already-root process
-// (or a passwordless sudo) when it fires.
+// command (which extracts the embedded bundle first). The controller CLI
+// playbook runs as the invoking user; the default install directory is
+// user-owned Gitups state rather than a root-owned system path.
 func (s controllerCLIInstallSpec) PlannedCommand() []string {
 	bundleDir := filepath.Join(s.StateDir, ansibleBundleDirName)
 	return []string{
@@ -322,43 +305,6 @@ func runControllerCLIInstall(ctx context.Context, stdin io.Reader, stdout io.Wri
 }
 
 const controllerCLILocalInventory = "_setup-controller-localhost.ini"
-
-// basePackagesForVenv adds the venv-creation prerequisite that the system
-// package set otherwise omits. On Debian/Ubuntu, `python3 -m venv` requires
-// the `python3-venv` apt package; Fedora/RHEL ship venv as part of python3.
-func basePackagesForVenv(family string) []string {
-	switch family {
-	case "debian":
-		return []string{"python3-venv"}
-	}
-	return nil
-}
-
-func filterOut(in []string, drop string) []string {
-	out := in[:0]
-	for _, item := range in {
-		if item == drop {
-			continue
-		}
-		out = append(out, item)
-	}
-	return out
-}
-
-func appendUnique(in []string, extras ...string) []string {
-	seen := map[string]struct{}{}
-	for _, item := range in {
-		seen[item] = struct{}{}
-	}
-	for _, extra := range extras {
-		if _, ok := seen[extra]; ok {
-			continue
-		}
-		in = append(in, extra)
-		seen[extra] = struct{}{}
-	}
-	return in
-}
 
 func basePackages(family string) []string {
 	switch family {

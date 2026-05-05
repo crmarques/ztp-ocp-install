@@ -8,8 +8,9 @@
   gather_subset:
     - "!all"
     - min
-  # Escalation comes from `ansible_become: true` rendered onto every provider
-  # host in the inventory; see internal/render/inventory.go.
+  become: true
+  # Provider hosts are remote execution targets, even when their address is
+  # localhost. Controller-local setup lives in setup-controller-clis.yml.
   environment: "{{ gitups_proxy_env | default({}) }}"
 
   pre_tasks:

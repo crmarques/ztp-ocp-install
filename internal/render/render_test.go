@@ -337,7 +337,7 @@ func TestRenderMirrorRegistryRunVars(t *testing.T) {
 	}
 }
 
-func TestRenderOneHostUsesLocalConnection(t *testing.T) {
+func TestRenderOneHostTreatsLocalhostAsProviderHost(t *testing.T) {
 	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/local-libvirt-1-host-1-sno-hub"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
@@ -351,12 +351,18 @@ func TestRenderOneHostUsesLocalConnection(t *testing.T) {
 	for _, expected := range []string{
 		"ansible_host: localhost",
 		"ansible_connection: local",
-		"ansible_become: true",
 		"gitups_cluster_name: local-libvirt-1-host-hub",
 	} {
 		if !strings.Contains(inventory, expected) {
 			t.Fatalf("inventory missing %q\n%s", expected, inventory)
 		}
+	}
+	if strings.Contains(inventory, "ansible_become:") {
+		t.Fatalf("provider root escalation belongs on mutating playbooks, not inventory\n%s", inventory)
+	}
+	playbook := readFile(t, "../../ansible/playbooks/ocp-destroy.yml")
+	if !strings.Contains(playbook, "become: true") {
+		t.Fatalf("ocp-destroy.yml must keep provider-host root escalation\n%s", playbook)
 	}
 }
 
@@ -449,6 +455,36 @@ func TestOCPInstallRoleDoesNotBlockPublicRegistries(t *testing.T) {
 			if strings.Contains(body, unexpected) {
 				t.Fatalf("ocp_install_agent/%s contains public-registry blocking behavior %q\n%s", e.Name(), unexpected, body)
 			}
+		}
+	}
+}
+
+func TestOCPInstallRoleDoesNotShadowEnvironmentInstallVars(t *testing.T) {
+	preflight := readFile(t, "../../ansible/roles/ocp_install_agent/tasks/preflight.yml")
+	secrets := readFile(t, "../../ansible/roles/ocp_install_agent/tasks/secrets.yml")
+	combined := preflight + "\n" + secrets
+	for _, expected := range []string{
+		"gitups_ocp_cluster_install: \"{{ gitups_current_cluster.ocp.install }}\"",
+		"gitups_ocp_cluster_install.method",
+		"gitups_ocp_cluster_install.generatedSecrets",
+		"gitups_ocp_cluster_install.pullSecretRef",
+		"gitups_ocp_cluster_install.sshKeyRef",
+		"gitups_ocp_cluster_install.additionalTrustBundleRef",
+	} {
+		if !strings.Contains(combined, expected) {
+			t.Fatalf("ocp_install_agent must use cluster install fact %q\n%s", expected, combined)
+		}
+	}
+	for _, unexpected := range []string{
+		"gitups_ocp_install: \"{{ gitups_current_cluster.ocp.install }}\"",
+		"gitups_ocp_install.method",
+		"gitups_ocp_install.generatedSecrets",
+		"gitups_ocp_install.pullSecretRef",
+		"gitups_ocp_install.sshKeyRef",
+		"gitups_ocp_install.additionalTrustBundleRef",
+	} {
+		if strings.Contains(combined, unexpected) {
+			t.Fatalf("ocp_install_agent shadows environment install vars with %q\n%s", unexpected, combined)
 		}
 	}
 }

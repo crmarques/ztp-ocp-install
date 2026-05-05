@@ -3,7 +3,6 @@ package infra
 import (
 	"crypto/sha256"
 	"fmt"
-	"net"
 	"os"
 	"strings"
 
@@ -39,7 +38,7 @@ func normalizeEnvironment(env *v1alpha1.Environment) {
 
 func normalizeProvider(p *v1alpha1.InfrastructureProvider) {
 	for name, host := range p.Spec.Hosts {
-		if host.SSH != nil && host.SSH.User == "" && isLocalSSHAddress(host.SSH.Address) {
+		if host.SSH != nil && host.SSH.User == "" {
 			host.SSH.User = currentUsername()
 		}
 		p.Spec.Hosts[name] = host
@@ -336,20 +335,6 @@ func clusterInfraByName(state *v1alpha1.State, name string) *v1alpha1.ClusterInf
 		}
 	}
 	return nil
-}
-
-func isLocalSSHAddress(address string) bool {
-	host := strings.TrimSpace(address)
-	if parsedHost, _, err := net.SplitHostPort(host); err == nil {
-		host = parsedHost
-	}
-	host = strings.Trim(host, "[]")
-	switch strings.ToLower(host) {
-	case "localhost", "127.0.0.1", "::1":
-		return true
-	default:
-		return false
-	}
 }
 
 func currentUsername() string {

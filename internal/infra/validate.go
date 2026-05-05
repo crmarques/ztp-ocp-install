@@ -278,9 +278,6 @@ func validateProviders(providers []v1alpha1.InfrastructureProvider) []string {
 		}
 		seen[p.Metadata.Name] = true
 		errs = append(errs, validateProviderHosts(p)...)
-		// At least one capability sub-block must be set; each is independently
-		// optional so a provider may supply machines, load balancing, name
-		// resolution, registry mirror, or any combination.
 		if p.Spec.Machine == nil && p.Spec.LoadBalancer == nil && p.Spec.NameResolution == nil && p.Spec.Registry == nil {
 			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec must set at least one capability sub-block (machine, loadBalancer, nameResolution, registry)", p.Metadata.Name))
 		}
@@ -407,7 +404,7 @@ func validateProviderHosts(p v1alpha1.InfrastructureProvider) []string {
 			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s hosts[%s].ssh.address is required", p.Metadata.Name, hostName))
 		}
 		if host.SSH.User == "" {
-			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s hosts[%s].ssh.user is required for remote hosts; localhost defaults to the invoking user", p.Metadata.Name, hostName))
+			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s hosts[%s].ssh.user is required when the invoking user cannot be detected", p.Metadata.Name, hostName))
 		}
 		if host.SSH.KeyRef.Name == "" {
 			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s hosts[%s].ssh.keyRef.name is required", p.Metadata.Name, hostName))

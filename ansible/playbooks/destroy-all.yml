@@ -1,0 +1,4 @@
+---
+- import_playbook: ocp-destroy.yml
+- import_playbook: cluster-destroy.yml
+- import_playbook: provider-destroy.yml

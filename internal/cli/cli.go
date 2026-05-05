@@ -411,14 +411,6 @@ func extractBundle(stateDir string) (string, error) {
 	return filepath.Abs(bundleDir)
 }
 
-func loadAndRender(files []string, stateDir string) (render.Result, error) {
-	state, err := infra.LoadNormalizeValidate(files)
-	if err != nil {
-		return render.Result{}, err
-	}
-	return render.All(stateDir, state)
-}
-
 // applySupportedMachineFlavors lists the InfrastructureProvider machine
 // flavors that the apply path currently supports end-to-end (preflight →
 // render → ansible bundle → e2e fixture). Adding a new flavor here is the

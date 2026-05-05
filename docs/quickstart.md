@@ -12,9 +12,10 @@ local registry mirror (disconnected install).
 
 - Linux host with KVM support (`/dev/kvm` present).
 - Go toolchain compatible with `go.mod`.
-- `python3` and `sudo` on `PATH`; `gitups setup controller` installs a
+- `python3` on `PATH`; `gitups setup controller` installs a
   pinned Ansible runtime into the Gitups-managed venv by default.
-- Permission to manage root-owned host runtime state under `/var/lib/gitups`.
+- Permission to manage root-owned host runtime state under `/var/lib/gitups`
+  on provider hosts.
 - Install secret material under `~/.gitups/secrets` or a chosen
   `--secrets-dir`.
 
