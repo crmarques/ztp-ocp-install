@@ -495,7 +495,7 @@ func ocpInstallVars(ocp v1alpha1.OCPCluster, env *v1alpha1.Environment) OCPInsta
 		SSHKeyRef:                ocp.Spec.Install.SSHKeyRef.Name,
 		ReleaseImageOverride:     releaseImageOverride(ocp),
 		AdditionalTrustBundleRef: ocp.Spec.Install.AdditionalTrustBundleRef.Name,
-		GeneratedSecrets:         generatedSecretVars(ocp.Spec.Install.GeneratedSecrets),
+		GeneratedSecrets:         generatedSecretVarsFromEnv(env, ocp),
 		LocalRegistry:            localRegistryVars(env, ocp),
 	}
 }
@@ -545,17 +545,31 @@ func mirrorRegistryHostname(url string) string {
 	return url
 }
 
-func generatedSecretVars(items []v1alpha1.GeneratedSecretSpec) []GeneratedSecretVars {
-	result := make([]GeneratedSecretVars, 0, len(items))
-	for _, item := range items {
-		entry := GeneratedSecretVars{
-			Name: item.Name,
-			Type: item.Type,
+// generatedSecretVarsFromEnv projects every Environment.spec.keys entry
+// whose source is `generated.selfSignedCertificate` into the per-cluster
+// install vars consumed by hub_install_agent. Credentials-style generated
+// keys are not exposed here — they are materialized once by `gitups
+// secrets generate` on the operator host and read by ansible directly.
+func generatedSecretVarsFromEnv(env *v1alpha1.Environment, ocp v1alpha1.OCPCluster) []GeneratedSecretVars {
+	if env == nil || ocp.Spec.Role != v1alpha1.OCPRoleHub {
+		return nil
+	}
+	names := make([]string, 0, len(env.Spec.Keys))
+	for name, key := range env.Spec.Keys {
+		if key.Generated == nil || key.Generated.SelfSignedCertificate == nil {
+			continue
 		}
-		if item.SelfSignedCertificate != nil {
-			entry.SelfSignedCertificate = selfSignedCertificateVars(*item.SelfSignedCertificate)
-		}
-		result = append(result, entry)
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	result := make([]GeneratedSecretVars, 0, len(names))
+	for _, name := range names {
+		cert := env.Spec.Keys[name].Generated.SelfSignedCertificate
+		result = append(result, GeneratedSecretVars{
+			Name:                  name,
+			Type:                  v1alpha1.GeneratedSecretSelfSigned,
+			SelfSignedCertificate: selfSignedCertificateVars(*cert),
+		})
 	}
 	return result
 }
@@ -1202,14 +1216,10 @@ func mirrorRegistryRunVars(state v1alpha1.State, env *v1alpha1.Environment) []Mi
 	urlPort := mirrorURLPortRender(mirror.URL)
 	credName := mirror.CredentialsRef.Name
 	var caCertName, caKeyName string
-	if mirror.TrustBundle != nil {
-		if mirror.TrustBundle.GeneratedSelfSigned != nil {
-			caCertName = mirror.TrustBundle.GeneratedSelfSigned.SecretRef.Name
-			if caCertName != "" {
-				caKeyName = caCertName + ".key"
-			}
-		} else if mirror.TrustBundle.BundleRef != nil {
-			caCertName = mirror.TrustBundle.BundleRef.Name
+	if mirror.TrustBundleRef.Name != "" {
+		caCertName = mirror.TrustBundleRef.Name
+		if key, ok := env.Spec.Keys[caCertName]; ok && key.Generated != nil && key.Generated.SelfSignedCertificate != nil {
+			caKeyName = caCertName + ".key"
 		}
 	}
 	regImage := componentImageURLs(env, v1alpha1.ComponentCategoryRegistry, v1alpha1.ComponentTypeMirrorRegistry)

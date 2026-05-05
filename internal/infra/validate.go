@@ -80,8 +80,35 @@ func validateEnvironmentKeys(env v1alpha1.Environment) []string {
 			errs = append(errs, fmt.Sprintf("Environment/%s spec.keys key %q is not a DNS label", env.Metadata.Name, name))
 			continue
 		}
-		if key.File == "" {
-			errs = append(errs, fmt.Sprintf("Environment/%s spec.keys[%s] requires a source (file)", env.Metadata.Name, name))
+		hasFile := key.File != ""
+		hasGenerated := key.Generated != nil
+		switch {
+		case hasFile && hasGenerated:
+			errs = append(errs, fmt.Sprintf("Environment/%s spec.keys[%s] sets both file and generated; pick exactly one source", env.Metadata.Name, name))
+		case !hasFile && !hasGenerated:
+			errs = append(errs, fmt.Sprintf("Environment/%s spec.keys[%s] requires a source (file or generated)", env.Metadata.Name, name))
+		case hasGenerated:
+			errs = append(errs, validateGeneratedKey(env.Metadata.Name, name, key.Generated)...)
+		}
+	}
+	return errs
+}
+
+func validateGeneratedKey(envName, keyName string, gen *v1alpha1.EnvironmentKeyGenerated) []string {
+	var errs []string
+	hasCreds := gen.Credentials != nil
+	hasCert := gen.SelfSignedCertificate != nil
+	switch {
+	case hasCreds && hasCert:
+		errs = append(errs, fmt.Sprintf("Environment/%s spec.keys[%s].generated sets both credentials and selfSignedCertificate; pick exactly one", envName, keyName))
+	case !hasCreds && !hasCert:
+		errs = append(errs, fmt.Sprintf("Environment/%s spec.keys[%s].generated requires one of {credentials, selfSignedCertificate}", envName, keyName))
+	case hasCert:
+		if gen.SelfSignedCertificate.CommonName == "" {
+			errs = append(errs, fmt.Sprintf("Environment/%s spec.keys[%s].generated.selfSignedCertificate.commonName is required", envName, keyName))
+		}
+		if gen.SelfSignedCertificate.ValidityDays < 0 {
+			errs = append(errs, fmt.Sprintf("Environment/%s spec.keys[%s].generated.selfSignedCertificate.validityDays must not be negative", envName, keyName))
 		}
 	}
 	return errs
@@ -201,17 +228,8 @@ func validateRegistriesBlock(env v1alpha1.Environment, registries *v1alpha1.OCPI
 		if registries.Mirror.URL == "" {
 			errs = append(errs, fmt.Sprintf("%s.registries.mirror.url is required", owner))
 		}
-		if requireMirror && registries.Mirror.TrustBundle == nil {
-			errs = append(errs, fmt.Sprintf("%s.registries.mirror.trustBundle is required", owner))
-		}
-		if registries.Mirror.TrustBundle != nil {
-			tb := registries.Mirror.TrustBundle
-			if tb.BundleRef == nil && tb.GeneratedSelfSigned == nil {
-				errs = append(errs, fmt.Sprintf("%s.registries.mirror.trustBundle requires bundleRef or generatedSelfSigned", owner))
-			}
-			if tb.BundleRef != nil && tb.GeneratedSelfSigned != nil {
-				errs = append(errs, fmt.Sprintf("%s.registries.mirror.trustBundle: only one of bundleRef or generatedSelfSigned", owner))
-			}
+		if requireMirror && registries.Mirror.TrustBundleRef.Name == "" {
+			errs = append(errs, fmt.Sprintf("%s.registries.mirror.trustBundleRef is required", owner))
 		}
 	}
 	if requireMirror {

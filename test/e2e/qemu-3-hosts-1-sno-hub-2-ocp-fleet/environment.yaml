@@ -11,11 +11,8 @@ spec:
           url: registry.mirror.local:5000
           credentialsRef:
             name: mirror-registry-credentials
-          trustBundle:
-            generatedSelfSigned:
-              secretRef:
-                name: mirror-registry-ca
-              commonName: registry.mirror.local
+          trustBundleRef:
+            name: mirror-registry-ca
         imageDigestSources:
           - source: quay.io/openshift-release-dev/ocp-release
             mirrors:
@@ -28,6 +25,19 @@ spec:
       name: openshift-pull-secret
     clusterSSHKeyRef:
       name: cluster-admin-key
+  keys:
+    mirror-registry-ca:
+      generated:
+        selfSignedCertificate:
+          commonName: registry.mirror.local
+    mirror-registry-credentials:
+      generated:
+        credentials:
+          username: admin
+    qemu-3-hosts-sno-hub-fleet-bmc-credentials:
+      generated:
+        credentials:
+          username: admin
   openshift:
     release:
       channel: stable-4.21

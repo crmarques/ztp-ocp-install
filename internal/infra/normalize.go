@@ -42,6 +42,7 @@ func normalizeEnvironment(env *v1alpha1.Environment) {
 	if v1alpha1.OCPInstallKind(*env) == "" {
 		env.Spec.OCPInstall.Connected = &v1alpha1.ConnectedSpec{}
 	}
+	defaultEnvironmentKeys(env)
 }
 
 func normalizeProvider(p *v1alpha1.InfrastructureProvider) {
@@ -179,7 +180,6 @@ func normalizeOCPCluster(ocp *v1alpha1.OCPCluster, env *v1alpha1.Environment, ci
 	}
 	applyEnvironmentInstallDefaults(ocp, env)
 	applyOCPInstallEnvIntoInstall(ocp, env)
-	defaultGeneratedSecretValidity(ocp.Spec.Install.GeneratedSecrets)
 	defaultEndpointHostnames(ci, env, ocp.Metadata.Name)
 	for nodeName, node := range ocp.Spec.Nodes {
 		if node.MachineRef == nil || node.MachineRef.Name == "" {
@@ -225,18 +225,9 @@ func applyOCPInstallEnvIntoInstall(ocp *v1alpha1.OCPCluster, env *v1alpha1.Envir
 	if registries == nil {
 		return
 	}
-	if registries.Mirror != nil && registries.Mirror.TrustBundle != nil {
+	if registries.Mirror != nil && registries.Mirror.TrustBundleRef.Name != "" {
 		if ocp.Spec.Install.AdditionalTrustBundleRef.Name == "" {
-			tb := registries.Mirror.TrustBundle
-			switch {
-			case tb.BundleRef != nil:
-				ocp.Spec.Install.AdditionalTrustBundleRef = *tb.BundleRef
-			case tb.GeneratedSelfSigned != nil:
-				ocp.Spec.Install.AdditionalTrustBundleRef = tb.GeneratedSelfSigned.SecretRef
-				if !generatedSecretsContains(ocp.Spec.Install.GeneratedSecrets, tb.GeneratedSelfSigned.SecretRef.Name) {
-					ocp.Spec.Install.GeneratedSecrets = append(ocp.Spec.Install.GeneratedSecrets, generatedSelfSignedFromCA(*tb.GeneratedSelfSigned))
-				}
-			}
+			ocp.Spec.Install.AdditionalTrustBundleRef = registries.Mirror.TrustBundleRef
 		}
 	}
 	if kind == v1alpha1.OCPInstallKindDisconnected {
@@ -319,44 +310,27 @@ func defaultDisconnectedImageSourcePolicy(sources []v1alpha1.ImageDigestSource) 
 	}
 }
 
-func defaultGeneratedSecretValidity(items []v1alpha1.GeneratedSecretSpec) {
-	for i := range items {
-		if items[i].SelfSignedCertificate == nil {
+// defaultEnvironmentKeys fills in defaults for declared key sources:
+// `validityDays` for generated self-signed certs, and a default username
+// of "admin" for generated credentials when the user did not name one.
+func defaultEnvironmentKeys(env *v1alpha1.Environment) {
+	if env == nil {
+		return
+	}
+	for name, key := range env.Spec.Keys {
+		if key.Generated == nil {
 			continue
 		}
-		if items[i].SelfSignedCertificate.ValidityDays == 0 {
-			items[i].SelfSignedCertificate.ValidityDays = v1alpha1.DefaultCertificateDays
+		if cert := key.Generated.SelfSignedCertificate; cert != nil && cert.ValidityDays == 0 {
+			cert.ValidityDays = v1alpha1.DefaultCertificateDays
+			key.Generated.SelfSignedCertificate = cert
 		}
-		if items[i].Type == "" {
-			items[i].Type = v1alpha1.GeneratedSecretSelfSigned
+		if creds := key.Generated.Credentials; creds != nil && creds.Username == "" {
+			creds.Username = "admin"
+			key.Generated.Credentials = creds
 		}
+		env.Spec.Keys[name] = key
 	}
-}
-
-func generatedSelfSignedFromCA(ca v1alpha1.GeneratedSelfSignedCASpec) v1alpha1.GeneratedSecretSpec {
-	validity := ca.ValidityDays
-	if validity == 0 {
-		validity = v1alpha1.DefaultCertificateDays
-	}
-	return v1alpha1.GeneratedSecretSpec{
-		Name: ca.SecretRef.Name,
-		Type: v1alpha1.GeneratedSecretSelfSigned,
-		SelfSignedCertificate: &v1alpha1.SelfSignedCertificateSpec{
-			CommonName:   ca.CommonName,
-			DNSNames:     append([]string(nil), ca.DNSNames...),
-			IPAddresses:  append([]string(nil), ca.IPAddresses...),
-			ValidityDays: validity,
-		},
-	}
-}
-
-func generatedSecretsContains(items []v1alpha1.GeneratedSecretSpec, name string) bool {
-	for _, item := range items {
-		if item.Name == name {
-			return true
-		}
-	}
-	return false
 }
 
 func defaultEndpointHostnames(ci *v1alpha1.ClusterInfrastructure, env *v1alpha1.Environment, ocpName string) {

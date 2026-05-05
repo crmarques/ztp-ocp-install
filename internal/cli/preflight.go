@@ -56,6 +56,7 @@ func collectPreflightChecks(state v1alpha1.State, selected []Phase, hasState boo
 	}
 	if hasState {
 		checks = append(checks, secretRefChecks(state, secretsDir, selected, deps)...)
+		checks = append(checks, generatedSelfSignedDriftChecks(state, secretsDir)...)
 	}
 	return checks
 }
@@ -352,11 +353,16 @@ func environmentForChecks(state v1alpha1.State) *v1alpha1.Environment {
 	return &state.Environments[0]
 }
 
+// allGeneratedSecretNames returns the set of SecretRef names that
+// `gitups secrets generate` will materialise — every Environment.spec.keys
+// entry whose source is `generated:` (cert or credentials).
 func allGeneratedSecretNames(state v1alpha1.State) map[string]bool {
 	out := map[string]bool{}
-	for _, cluster := range state.OCPClusters {
-		for _, item := range cluster.Spec.Install.GeneratedSecrets {
-			out[item.Name] = true
+	if env := primaryEnvironmentForSync(state); env != nil {
+		for name, key := range env.Spec.Keys {
+			if key.Generated != nil {
+				out[name] = true
+			}
 		}
 	}
 	return out
@@ -371,15 +377,22 @@ func sortedMapKeys[V any](m map[string]V) []string {
 	return out
 }
 
+// hubNeedsOpenSSL reports whether the hub install will fall back to the
+// in-cluster ansible cert generator (`community.crypto.openssl_*`) — i.e.
+// at least one Environment.spec.keys[name].generated.selfSignedCertificate
+// has not yet been materialised on the operator host. The fallback path
+// requires `openssl` on PATH; the operator-side path does not.
 func hubNeedsOpenSSL(state v1alpha1.State, secretsDir string, deps preflightDeps) bool {
-	for _, cluster := range state.OCPClusters {
-		if cluster.Spec.Role != v1alpha1.OCPRoleHub {
+	env := primaryEnvironmentForSync(state)
+	if env == nil {
+		return false
+	}
+	for name, key := range env.Spec.Keys {
+		if key.Generated == nil || key.Generated.SelfSignedCertificate == nil {
 			continue
 		}
-		for _, item := range cluster.Spec.Install.GeneratedSecrets {
-			if item.Type == v1alpha1.GeneratedSecretSelfSigned && !generatedCertificatePairExists(item.Name, secretsDir, deps) {
-				return true
-			}
+		if !generatedCertificatePairExists(name, secretsDir, deps) {
+			return true
 		}
 	}
 	return false
@@ -393,12 +406,48 @@ func generatedCertificatePairExists(refName, secretsDir string, deps preflightDe
 	return certErr == nil && keyErr == nil && !certInfo.IsDir() && !keyInfo.IsDir()
 }
 
-func generatedSecretNames(install v1alpha1.OCPInstallSpec) map[string]bool {
-	result := map[string]bool{}
-	for _, item := range install.GeneratedSecrets {
-		result[item.Name] = true
+// generatedSelfSignedDriftChecks fails the preflight when a previously
+// materialised self-signed cert on disk no longer matches the desired
+// SelfSignedCertificateSpec (commonName / dnsNames / ipAddresses). Without
+// this, apply happily reuses the stale cert and the failure surfaces deep
+// inside ansible (e.g. mirror push fails with x509 SAN mismatch).
+func generatedSelfSignedDriftChecks(state v1alpha1.State, secretsDir string) []preflightCheck {
+	requests, err := generatedSelfSignedRequests(state)
+	if err != nil {
+		return []preflightCheck{{
+			name:   "generated self-signed certificate requests are consistent",
+			ok:     false,
+			detail: err.Error(),
+		}}
 	}
-	return result
+	var checks []preflightCheck
+	for _, req := range requests {
+		certPath := filepath.Join(secretsDir, req.name)
+		keyPath := certPath + ".key"
+		certExists, err := regularFileExists(certPath)
+		if err != nil {
+			checks = append(checks, preflightCheck{
+				name:   "generated self-signed certificate " + req.name + " on disk matches desired spec",
+				ok:     false,
+				detail: err.Error(),
+			})
+			continue
+		}
+		if !certExists {
+			continue
+		}
+		name := "generated self-signed certificate " + req.name + " on disk matches desired spec"
+		if err := verifySelfSignedCertificateMatchesRequest(certPath, req.certificate); err != nil {
+			checks = append(checks, preflightCheck{
+				name:   name,
+				ok:     false,
+				detail: fmt.Sprintf("%v — remove %s and %s, then re-run `gitups secrets generate`", err, certPath, keyPath),
+			})
+			continue
+		}
+		checks = append(checks, preflightCheck{name: name, ok: true})
+	}
+	return checks
 }
 
 func defaultLookPath(name string, extraDirs []string) (string, error) {

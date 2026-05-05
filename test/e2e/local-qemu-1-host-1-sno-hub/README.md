@@ -48,8 +48,6 @@ ssh-keygen -t ed25519 -f ~/.ssh/gitups-local-qemu-host -N '' -C gitups-local-qem
 install -m 0600 ~/.ssh/gitups-local-qemu-host ~/.gitups/secrets/local-qemu-host-admin-key
 install -m 0600 /dev/stdin ~/.ssh/authorized_keys < <(cat ~/.ssh/authorized_keys 2>/dev/null; cat ~/.ssh/gitups-local-qemu-host.pub)
 gitups secrets pull-secret set --name openshift-pull-secret --from-file ~/pull-secret.json
-gitups secrets bmc set --name local-qemu-1-host-bmc-credentials --generate
-gitups secrets bmc set --name mirror-registry-credentials --generate
 gitups secrets generate -f test/e2e/local-qemu-1-host-1-sno-hub
 ```
 

@@ -41,6 +41,11 @@ spec:
       name: openshift-pull-secret
     clusterSSHKeyRef:
       name: cluster-admin-key
+  keys:
+    qemu-3-hosts-hub-fleet-bmc-credentials:
+      generated:
+        credentials:
+          username: admin
   openshift:
     release:
       channel: stable-4.21

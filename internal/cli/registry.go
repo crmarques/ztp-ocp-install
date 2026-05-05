@@ -242,23 +242,20 @@ func loadRegistryCredentials(secretsDir, name string) (registryCredentials, erro
 
 func buildRegistryHTTPClient(secretsDir string, mirror *v1alpha1.OCPInstallRegistryMirror, insecure bool) (*http.Client, error) {
 	tlsConfig := &tls.Config{InsecureSkipVerify: insecure}
-	if !insecure && mirror != nil && mirror.TrustBundle != nil {
-		ref := registryTrustRefName(mirror.TrustBundle)
-		if ref != "" {
-			path := filepath.Join(secretsDir, ref)
-			data, err := os.ReadFile(path)
-			if err != nil {
-				return nil, fmt.Errorf("read mirror trust bundle %s: %w", path, err)
-			}
-			pool, err := x509.SystemCertPool()
-			if err != nil || pool == nil {
-				pool = x509.NewCertPool()
-			}
-			if !pool.AppendCertsFromPEM(data) {
-				return nil, fmt.Errorf("mirror trust bundle %s: no PEM certificates parsed", path)
-			}
-			tlsConfig.RootCAs = pool
+	if !insecure && mirror != nil && mirror.TrustBundleRef.Name != "" {
+		path := filepath.Join(secretsDir, mirror.TrustBundleRef.Name)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("read mirror trust bundle %s: %w", path, err)
 		}
+		pool, err := x509.SystemCertPool()
+		if err != nil || pool == nil {
+			pool = x509.NewCertPool()
+		}
+		if !pool.AppendCertsFromPEM(data) {
+			return nil, fmt.Errorf("mirror trust bundle %s: no PEM certificates parsed", path)
+		}
+		tlsConfig.RootCAs = pool
 	}
 	return &http.Client{
 		Timeout: registryProbeTimeout,
@@ -266,19 +263,6 @@ func buildRegistryHTTPClient(secretsDir string, mirror *v1alpha1.OCPInstallRegis
 			TLSClientConfig: tlsConfig,
 		},
 	}, nil
-}
-
-func registryTrustRefName(tb *v1alpha1.OCPInstallRegistryTrustCA) string {
-	if tb == nil {
-		return ""
-	}
-	if tb.BundleRef != nil {
-		return tb.BundleRef.Name
-	}
-	if tb.GeneratedSelfSigned != nil {
-		return tb.GeneratedSelfSigned.SecretRef.Name
-	}
-	return ""
 }
 
 // probeRegistryImage queries the registry v2 manifest API for either a

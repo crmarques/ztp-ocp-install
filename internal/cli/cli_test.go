@@ -201,6 +201,11 @@ spec:
       name: pull-secret
     clusterSSHKeyRef:
       name: ssh-key
+  keys:
+    registry-lab-ca:
+      generated:
+        selfSignedCertificate:
+          commonName: registry.lab.test
 ---
 apiVersion: gitups.io/v1alpha1
 kind: InfrastructureProvider
@@ -263,10 +268,6 @@ spec:
     method: agent
     additionalTrustBundleRef:
       name: registry-lab-ca
-    generatedSecrets:
-      - name: registry-lab-ca
-        selfSignedCertificate:
-          commonName: registry.lab.test
   nodes:
     master-0:
       role: control-plane
@@ -339,6 +340,166 @@ func mustReadFile(t *testing.T, path string) []byte {
 		t.Fatalf("read fixture: %v", err)
 	}
 	return data
+}
+
+const generatedCredentialsFixture = `apiVersion: gitups.io/v1alpha1
+kind: Environment
+metadata:
+  name: cred-env
+spec:
+  baseDomain: example.com
+  ocpInstall:
+    connected: {}
+  secrets:
+    pullSecretRef:
+      name: pull-secret
+    clusterSSHKeyRef:
+      name: ssh-key
+  keys:
+    bmc-credentials:
+      generated:
+        credentials:
+          username: admin
+    mirror-creds:
+      generated:
+        credentials: {}
+---
+apiVersion: gitups.io/v1alpha1
+kind: InfrastructureProvider
+metadata:
+  name: provider
+spec:
+  hosts:
+    host-01:
+      ssh:
+        address: localhost
+        keyRef:
+          name: default-key
+      capabilities:
+        - libvirt
+  machine:
+    libvirt:
+      hostRefs:
+        - name: host-01
+---
+apiVersion: gitups.io/v1alpha1
+kind: ClusterInfrastructure
+metadata:
+  name: hub-infra
+spec:
+  providerRefs:
+    - name: provider
+  networks:
+    primary:
+      cidr: 192.168.155.0/24
+      libvirt:
+        bridge: virbr0
+  machines:
+    master-0:
+      interfaces:
+        enp1s0:
+          networkRef:
+            name: primary
+          ipAddress: 192.168.155.20
+      libvirt:
+        hostRef:
+          name: host-01
+  endpoints:
+    api:
+      address: 192.168.155.10
+    apiInt:
+      address: 192.168.155.10
+    ingress:
+      address: 192.168.155.11
+---
+apiVersion: gitups.io/v1alpha1
+kind: OCPCluster
+metadata:
+  name: hub
+spec:
+  role: hub
+  topology: single-node
+  infrastructureRef:
+    name: hub-infra
+  install:
+    method: agent
+  nodes:
+    master-0:
+      role: control-plane
+`
+
+func TestSecretsGenerateMaterializesCredentials(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.yaml")
+	if err := os.WriteFile(statePath, []byte(generatedCredentialsFixture), 0o644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+	secretsDir := filepath.Join(dir, "secrets")
+	var stdout, stderr bytes.Buffer
+	if code := Run(context.Background(), []string{"secrets", "generate", "-f", statePath, "--secrets-dir", secretsDir}, nil, &stdout, &stderr); code != 0 {
+		t.Fatalf("first run code=%d stderr=%s", code, stderr.String())
+	}
+	for _, name := range []string{"bmc-credentials", "mirror-creds"} {
+		body, err := os.ReadFile(filepath.Join(secretsDir, name))
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		text := strings.TrimRight(string(body), "\n")
+		parts := strings.SplitN(text, ":", 2)
+		if len(parts) != 2 {
+			t.Fatalf("%s: expected user:pass, got %q", name, text)
+		}
+		// Both keys default username to "admin" — explicit on bmc-credentials,
+		// defaulted by normalize for mirror-creds.
+		if parts[0] != "admin" {
+			t.Fatalf("%s: username got %q, want admin", name, parts[0])
+		}
+		if len(parts[1]) < 24 {
+			t.Fatalf("%s: password too short (%d chars), want a strong random", name, len(parts[1]))
+		}
+		if info, err := os.Stat(filepath.Join(secretsDir, name)); err != nil {
+			t.Fatalf("stat %s: %v", name, err)
+		} else if mode := info.Mode().Perm(); mode != 0o600 {
+			t.Fatalf("%s mode got %v, want 0600", name, mode)
+		}
+	}
+
+	// Idempotent: rerunning preserves the existing password.
+	bmcBefore, err := os.ReadFile(filepath.Join(secretsDir, "bmc-credentials"))
+	if err != nil {
+		t.Fatalf("read bmc before: %v", err)
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if code := Run(context.Background(), []string{"secrets", "generate", "-f", statePath, "--secrets-dir", secretsDir}, nil, &stdout, &stderr); code != 0 {
+		t.Fatalf("second run code=%d stderr=%s", code, stderr.String())
+	}
+	bmcAfter, err := os.ReadFile(filepath.Join(secretsDir, "bmc-credentials"))
+	if err != nil {
+		t.Fatalf("read bmc after: %v", err)
+	}
+	if !bytes.Equal(bmcBefore, bmcAfter) {
+		t.Fatal("expected credentials to be reused on second run, got rewrite")
+	}
+	if !strings.Contains(stdout.String(), "reused existing credentials") {
+		t.Fatalf("expected reuse output, got %s", stdout.String())
+	}
+
+	// Username drift fails fast with a remediation hint.
+	driftFixture := strings.Replace(generatedCredentialsFixture, "username: admin", "username: operator", 1)
+	driftPath := filepath.Join(dir, "drift.yaml")
+	if err := os.WriteFile(driftPath, []byte(driftFixture), 0o644); err != nil {
+		t.Fatalf("write drift fixture: %v", err)
+	}
+	stdout.Reset()
+	stderr.Reset()
+	code := Run(context.Background(), []string{"secrets", "generate", "-f", driftPath, "--secrets-dir", secretsDir}, nil, &stdout, &stderr)
+	if code == 0 {
+		t.Fatalf("expected username drift to fail, stdout=%s", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "operator") || !strings.Contains(stderr.String(), "remove") {
+		t.Fatalf("expected drift remediation hint, stderr=%s", stderr.String())
+	}
 }
 
 func TestSecretsPullSecretSetWritesAndOverwrites(t *testing.T) {

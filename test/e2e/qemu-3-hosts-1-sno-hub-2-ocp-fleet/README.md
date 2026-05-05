@@ -45,8 +45,6 @@ ssh-keygen -t ed25519 -f ~/.ssh/gitups-qemu-3-hosts -N '' -C gitups-qemu-3-hosts
 install -m 0600 ~/.ssh/gitups-qemu-3-hosts     ~/.gitups/secrets/provider-host-admin-key
 install -m 0600 ~/.ssh/gitups-qemu-3-hosts.pub ~/.gitups/secrets/cluster-admin-key
 gitups secrets pull-secret set --name openshift-pull-secret --from-file ~/pull-secret.json
-gitups secrets bmc set --name qemu-3-hosts-sno-hub-fleet-bmc-credentials --generate
-gitups secrets bmc set --name mirror-registry-credentials --generate
 gitups secrets generate -f test/e2e/qemu-3-hosts-1-sno-hub-2-ocp-fleet
 ```
 

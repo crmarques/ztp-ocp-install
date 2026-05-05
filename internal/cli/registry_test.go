@@ -137,11 +137,8 @@ spec:
           url: ` + bare + `
           credentialsRef:
             name: registry-lab-credentials
-          trustBundle:
-            generatedSelfSigned:
-              secretRef:
-                name: registry-lab-ca
-              commonName: ` + bare + `
+          trustBundleRef:
+            name: registry-lab-ca
         imageDigestSources:
           - source: quay.io/openshift-release-dev/ocp-release
             mirrors:
@@ -154,6 +151,15 @@ spec:
       name: openshift-pull-secret
     clusterSSHKeyRef:
       name: cluster-admin-key
+  keys:
+    registry-lab-ca:
+      generated:
+        selfSignedCertificate:
+          commonName: ` + bare + `
+    registry-lab-credentials:
+      generated:
+        credentials:
+          username: admin
   openshift:
     release:
       channel: stable-4.21

@@ -395,6 +395,8 @@ func TestRenderVarsExposeOCPInstallMetadata(t *testing.T) {
 		"registry.mirror.local:5000/openshift/release-images",
 		"registry.mirror.local:5000/openshift/release",
 		"sourcePolicy: NeverContactSource",
+		"additionalTrustBundle: <gitups-trust-bundle-ref:mirror-registry-ca>",
+		"additionalTrustBundlePolicy: Always",
 	} {
 		if !strings.Contains(installConfig, expected) {
 			t.Fatalf("install-config missing %q\n%s", expected, installConfig)
@@ -491,11 +493,8 @@ spec:
           url: registry.lab.test:5000
           credentialsRef:
             name: registry-lab-credentials
-          trustBundle:
-            generatedSelfSigned:
-              secretRef:
-                name: registry-lab-ca
-              commonName: registry.lab.test
+          trustBundleRef:
+            name: registry-lab-ca
         imageDigestSources:
           - source: quay.io/openshift-release-dev/ocp-release
             mirrors:
@@ -508,6 +507,15 @@ spec:
       name: openshift-pull-secret
     clusterSSHKeyRef:
       name: cluster-admin-key
+  keys:
+    registry-lab-ca:
+      generated:
+        selfSignedCertificate:
+          commonName: registry.lab.test
+    registry-lab-credentials:
+      generated:
+        credentials:
+          username: admin
   openshift:
     release:
       channel: stable-4.21

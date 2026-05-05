@@ -25,10 +25,11 @@
 `Environment.spec.ocpInstall.disconnected` requires registry mirrors and
 trust material defined inside the `disconnected` sub-block. The validator
 rejects `disconnected` without both. Trust bundle material is referenced
-by `SecretRef.name`; bundle bytes are never inlined into YAML. Lab
-environments may request generated self-signed registry trust through
-`trustBundle.generatedSelfSigned`, but Gitups writes the certificate and
-private key only to the local secrets directory.
+by `registries.mirror.trustBundleRef.name`; bundle bytes are never
+inlined into YAML. Lab environments may request generated self-signed
+registry trust by declaring the same name in
+`Environment.spec.keys[name].generated.selfSignedCertificate`, and Gitups
+writes the certificate and private key only to the local secrets directory.
 Disconnected mode requires OpenShift `imageDigestSources` for the mirrored
 release payload sources. Gitups renders those sources with
 `NeverContactSource`, rejects mirror entries outside the configured

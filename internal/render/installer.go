@@ -65,6 +65,12 @@ func InstallerConfig(state v1alpha1.State, ocp v1alpha1.OCPCluster) (map[string]
 	}
 	if ocp.Spec.Install.AdditionalTrustBundleRef.Name != "" {
 		base["additionalTrustBundle"] = secretRefPlaceholder("trust-bundle", ocp.Spec.Install.AdditionalTrustBundleRef.Name)
+		// Always apply the bundle to all image pulls. The default
+		// (Proxyonly) only applies it when a proxy is configured, so a
+		// disconnected install whose mirror has a self-signed cert never
+		// propagates the CA into the booting node — image pulls then
+		// fail TLS and the agent never reaches SSH.
+		base["additionalTrustBundlePolicy"] = "Always"
 	}
 	if mirrors := imageDigestSourcesConfig(ocp.Spec.Install.ImageDigestSources); len(mirrors) > 0 {
 		base["imageDigestSources"] = mirrors

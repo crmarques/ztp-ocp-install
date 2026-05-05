@@ -279,7 +279,7 @@ func TestValidationRejectsAgentConfigMinimalISOOverride(t *testing.T) {
 	body := strings.Replace(
 		validStateYAML("disconnected-full-iso", "disconnected-provider", "192.168.155.0/24", "192.168.155.10", "192.168.155.11", "192.168.155.20"),
 		"  ocpInstall:\n    connected: {}\n",
-		"  ocpInstall:\n    disconnected:\n      registries:\n        mirror:\n          url: registry.lab.test:5000\n          credentialsRef:\n            name: registry-lab-credentials\n          trustBundle:\n            bundleRef:\n              name: registry-lab-ca\n",
+		"  ocpInstall:\n    disconnected:\n      registries:\n        mirror:\n          url: registry.lab.test:5000\n          credentialsRef:\n            name: registry-lab-credentials\n          trustBundleRef:\n            name: registry-lab-ca\n",
 		1,
 	)
 	body = strings.Replace(body, "  install:\n    method: agent\n", "  install:\n    method: agent\n    agentConfigOverrides:\n      minimalISO: false\n", 1)
@@ -312,7 +312,7 @@ func TestValidationRejectsDisconnectedAllowContactingSource(t *testing.T) {
 	body := strings.Replace(
 		validStateYAML("disconnected-source-policy", "disconnected-source-policy-provider", "192.168.156.0/24", "192.168.156.10", "192.168.156.11", "192.168.156.20"),
 		"  ocpInstall:\n    connected: {}\n",
-		"  ocpInstall:\n    disconnected:\n      registries:\n        mirror:\n          url: registry.lab.test:5000\n          credentialsRef:\n            name: registry-lab-credentials\n          trustBundle:\n            bundleRef:\n              name: registry-lab-ca\n        imageDigestSources:\n          - source: quay.io/openshift-release-dev/ocp-release\n            mirrors:\n              - registry.lab.test:5000/openshift/release-images\n            sourcePolicy: AllowContactingSource\n          - source: quay.io/openshift-release-dev/ocp-v4.0-art-dev\n            mirrors:\n              - registry.lab.test:5000/openshift/release\n",
+		"  ocpInstall:\n    disconnected:\n      registries:\n        mirror:\n          url: registry.lab.test:5000\n          credentialsRef:\n            name: registry-lab-credentials\n          trustBundleRef:\n            name: registry-lab-ca\n        imageDigestSources:\n          - source: quay.io/openshift-release-dev/ocp-release\n            mirrors:\n              - registry.lab.test:5000/openshift/release-images\n            sourcePolicy: AllowContactingSource\n          - source: quay.io/openshift-release-dev/ocp-v4.0-art-dev\n            mirrors:\n              - registry.lab.test:5000/openshift/release\n",
 		1,
 	)
 	writeFile(t, filepath.Join(dir, "disconnected-source-policy.yaml"), body)
@@ -330,7 +330,7 @@ func TestValidationRejectsDisconnectedExternalOpenShiftMirror(t *testing.T) {
 	body := strings.Replace(
 		validStateYAML("disconnected-external-mirror", "disconnected-external-mirror-provider", "192.168.157.0/24", "192.168.157.10", "192.168.157.11", "192.168.157.20"),
 		"  ocpInstall:\n    connected: {}\n",
-		"  ocpInstall:\n    disconnected:\n      registries:\n        mirror:\n          url: registry.lab.test:5000\n          credentialsRef:\n            name: registry-lab-credentials\n          trustBundle:\n            bundleRef:\n              name: registry-lab-ca\n        imageDigestSources:\n          - source: quay.io/openshift-release-dev/ocp-release\n            mirrors:\n              - quay.io/openshift-release-dev/ocp-release\n          - source: quay.io/openshift-release-dev/ocp-v4.0-art-dev\n            mirrors:\n              - registry.lab.test:5000/openshift/release\n",
+		"  ocpInstall:\n    disconnected:\n      registries:\n        mirror:\n          url: registry.lab.test:5000\n          credentialsRef:\n            name: registry-lab-credentials\n          trustBundleRef:\n            name: registry-lab-ca\n        imageDigestSources:\n          - source: quay.io/openshift-release-dev/ocp-release\n            mirrors:\n              - quay.io/openshift-release-dev/ocp-release\n          - source: quay.io/openshift-release-dev/ocp-v4.0-art-dev\n            mirrors:\n              - registry.lab.test:5000/openshift/release\n",
 		1,
 	)
 	writeFile(t, filepath.Join(dir, "disconnected-external-mirror.yaml"), body)
@@ -602,11 +602,8 @@ const disconnectedRegistriesBlock = `  ocpInstall:
           url: registry.lab.test:5000
           credentialsRef:
             name: registry-lab-credentials
-          trustBundle:
-            generatedSelfSigned:
-              secretRef:
-                name: registry-lab-ca
-              commonName: registry.lab.test
+          trustBundleRef:
+            name: registry-lab-ca
         imageDigestSources:
           - source: quay.io/openshift-release-dev/ocp-release
             mirrors:
@@ -614,6 +611,15 @@ const disconnectedRegistriesBlock = `  ocpInstall:
           - source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
             mirrors:
               - registry.lab.test:5000/openshift/release
+  keys:
+    registry-lab-ca:
+      generated:
+        selfSignedCertificate:
+          commonName: registry.lab.test
+    registry-lab-credentials:
+      generated:
+        credentials:
+          username: admin
 `
 
 func disconnectedYAML(name, providerName, cidr, apiVIP, ingressVIP, nodeIP string, withMirrorRegistry bool, mirrorRegistryPort int) string {
@@ -698,5 +704,106 @@ func TestValidationRejectsMirrorRegistryPortMismatch(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "does not match Environment ocpInstall.registries.mirror.url port") {
 		t.Fatalf("expected port mismatch error, got %v", err)
+	}
+}
+
+func keysFixtureYAML(keysBlock string) string {
+	return `apiVersion: gitups.io/v1alpha1
+kind: Environment
+metadata:
+  name: keys-env
+spec:
+  baseDomain: example.com
+  ocpInstall:
+    connected: {}
+  secrets:
+    pullSecretRef:
+      name: pull-secret
+    clusterSSHKeyRef:
+      name: ssh-key
+` + keysBlock
+}
+
+func TestValidationRejectsKeyWithBothFileAndGenerated(t *testing.T) {
+	dir := t.TempDir()
+	body := keysFixtureYAML(`  keys:
+    bad:
+      file: ~/example.txt
+      generated:
+        credentials:
+          username: admin
+`)
+	writeFile(t, filepath.Join(dir, "env.yaml"), body)
+	_, err := LoadNormalizeValidate([]string{dir})
+	if err == nil {
+		t.Fatal("expected dual-source rejection")
+	}
+	if !strings.Contains(err.Error(), "pick exactly one source") {
+		t.Fatalf("expected dual-source error, got %v", err)
+	}
+}
+
+func TestValidationRejectsGeneratedKeyWithBothCredentialsAndCert(t *testing.T) {
+	dir := t.TempDir()
+	body := keysFixtureYAML(`  keys:
+    bad:
+      generated:
+        credentials:
+          username: admin
+        selfSignedCertificate:
+          commonName: example.test
+`)
+	writeFile(t, filepath.Join(dir, "env.yaml"), body)
+	_, err := LoadNormalizeValidate([]string{dir})
+	if err == nil {
+		t.Fatal("expected generated-source dual-kind rejection")
+	}
+	if !strings.Contains(err.Error(), "pick exactly one") {
+		t.Fatalf("expected generated dual-kind error, got %v", err)
+	}
+}
+
+func TestValidationRejectsGeneratedSelfSignedWithoutCommonName(t *testing.T) {
+	dir := t.TempDir()
+	body := keysFixtureYAML(`  keys:
+    bad:
+      generated:
+        selfSignedCertificate: {}
+`)
+	writeFile(t, filepath.Join(dir, "env.yaml"), body)
+	_, err := LoadNormalizeValidate([]string{dir})
+	if err == nil {
+		t.Fatal("expected commonName rejection")
+	}
+	if !strings.Contains(err.Error(), "commonName is required") {
+		t.Fatalf("expected commonName error, got %v", err)
+	}
+}
+
+func TestNormalizeDefaultsGeneratedKeyValidityAndUsername(t *testing.T) {
+	dir := t.TempDir()
+	body := keysFixtureYAML(`  keys:
+    cred:
+      generated:
+        credentials: {}
+    cert:
+      generated:
+        selfSignedCertificate:
+          commonName: example.test
+`)
+	writeFile(t, filepath.Join(dir, "env.yaml"), body)
+	state, err := LoadNormalizeValidate([]string{dir})
+	if err != nil {
+		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
+	}
+	if len(state.Environments) != 1 {
+		t.Fatalf("expected 1 environment, got %d", len(state.Environments))
+	}
+	keys := state.Environments[0].Spec.Keys
+	if got := keys["cred"].Generated.Credentials.Username; got != "admin" {
+		t.Fatalf("credentials.username got %q, want admin (default)", got)
+	}
+	if got := keys["cert"].Generated.SelfSignedCertificate.ValidityDays; got != v1alpha1.DefaultCertificateDays {
+		t.Fatalf("selfSignedCertificate.validityDays got %d, want %d (default)", got, v1alpha1.DefaultCertificateDays)
 	}
 }

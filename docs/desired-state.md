@@ -188,6 +188,12 @@ gitups secrets bmc set --name baremetal-redfish-bmc --username admin --password-
 gitups secrets generate -f examples/qemu-redfish-hub
 ```
 
-Generated self-signed registry trust is declared by reference, for example
-`trustBundle.generatedSelfSigned.secretRef.name`; Gitups writes the generated
-certificate material to the local secrets directory, never to the repo.
+Both file-sourced and gitups-generated secrets are declared in
+`Environment.spec.keys[name]`. A `file:` source points at operator-supplied
+material on disk; a `generated:` source asks gitups to materialize the
+secret itself — either a `username:password\n` file (`generated.credentials`)
+or a self-signed cert/key pair (`generated.selfSignedCertificate`). The
+mirror trust bundle is wired via `registries.mirror.trustBundleRef.name`;
+the matching `keys[name].generated.selfSignedCertificate` decides how that
+reference is sourced. `gitups secrets generate -f` reads the keys map and
+materializes every entry; the secret bytes never reach committed YAML.

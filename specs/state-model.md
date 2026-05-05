@@ -69,12 +69,16 @@ Rules:
 - `ocpInstall.connected` is an empty struct. No proxy, mirror, or trust
   material may be declared inside it.
 - `ocpInstall.restricted` and `ocpInstall.disconnected` carry typed
-  `proxy`, `registries`, and `trustBundle` blocks. `disconnected`
-  additionally requires registry mirrors and trust material; the validator
-  rejects `disconnected` without both.
-- Registry trust material is referenced by name. Lab environments may request
-  `trustBundle.generatedSelfSigned`, which creates local secret files at
-  apply/generate time rather than inlining certificate bytes in YAML.
+  `proxy` and `registries` blocks. The mirror's CA is referenced via
+  `registries.mirror.trustBundleRef.name`. `disconnected` additionally
+  requires registry mirrors and a non-empty `trustBundleRef`; the
+  validator rejects `disconnected` without both.
+- Every secret name lives under `Environment.spec.keys[name]`, with
+  exactly one source set: `file:` for operator-supplied material on
+  disk, or `generated:` for material gitups produces (a
+  `username:password\n` credentials file or a self-signed cert/key
+  pair). `gitups secrets generate -f` materializes both kinds; the
+  bytes never appear in YAML.
 - `Environment` owns proxy, registry mirrors, trust bundles, secret refs,
   OpenShift defaults, and component image pins.
 - `Environment` must not define machines, provider hosts, BMC settings,

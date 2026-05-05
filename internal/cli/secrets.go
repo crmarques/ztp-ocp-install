@@ -277,12 +277,13 @@ func newSecretsGenerateCmd(stdout io.Writer, _ io.Writer) *cobra.Command {
 		if err != nil {
 			return failErr(1, err)
 		}
-		requests, err := generatedSelfSignedRequests(state)
+		certRequests, err := generatedSelfSignedRequests(state)
 		if err != nil {
 			return failErr(1, err)
 		}
+		credRequests := generatedCredentialsRequestsFor(state)
 		printTitle(stdout, "Secrets")
-		if len(requests) == 0 {
+		if len(certRequests) == 0 && len(credRequests) == 0 {
 			fmt.Fprintln(stdout, "secrets: no generated secret requests found")
 			return nil
 		}
@@ -292,8 +293,15 @@ func newSecretsGenerateCmd(stdout io.Writer, _ io.Writer) *cobra.Command {
 		if err := os.Chmod(secretsDir, 0o700); err != nil {
 			return failErr(1, fmt.Errorf("chmod secrets directory %s: %w", secretsDir, err))
 		}
-		for _, request := range requests {
+		for _, request := range certRequests {
 			action, err := materializeSelfSignedCertificate(secretsDir, request)
+			if err != nil {
+				return failErr(1, err)
+			}
+			printOK(stdout, request.name, action)
+		}
+		for _, request := range credRequests {
+			action, err := materializeGeneratedCredentials(secretsDir, request)
 			if err != nil {
 				return failErr(1, err)
 			}
@@ -302,6 +310,46 @@ func newSecretsGenerateCmd(stdout io.Writer, _ io.Writer) *cobra.Command {
 		return nil
 	}
 	return cmd
+}
+
+// materializeGeneratedCredentials writes <secretsDir>/<name> as the single
+// line "<username>:<random-password>" with mode 0600. Existing files are
+// reused as-is to keep the BMC/registry/proxy callers stable; if the file
+// is present but its username prefix does not match the desired spec we
+// fail loudly with a remediation hint, mirroring the cert drift check.
+func materializeGeneratedCredentials(secretsDir string, request generatedCredentialsRequest) (string, error) {
+	target := filepath.Join(secretsDir, request.name)
+	wantUser := request.credentials.Username
+	if wantUser == "" {
+		wantUser = "admin"
+	}
+	exists, err := regularFileExists(target)
+	if err != nil {
+		return "", err
+	}
+	if exists {
+		data, err := os.ReadFile(target)
+		if err != nil {
+			return "", fmt.Errorf("read existing credentials %s: %w", target, err)
+		}
+		gotUser, _, perr := parseBMCCredentials(data)
+		if perr != nil {
+			return "", fmt.Errorf("existing credentials %s: %w; remove the file to regenerate", target, perr)
+		}
+		if gotUser != wantUser {
+			return "", fmt.Errorf("existing credentials %q at %s use username %q but desired spec wants %q; remove %s to regenerate", request.name, target, gotUser, wantUser, target)
+		}
+		return "reused existing credentials", nil
+	}
+	password, err := generateBMCPassword()
+	if err != nil {
+		return "", err
+	}
+	payload := []byte(wantUser + ":" + password + "\n")
+	if err := atomicWriteFile(target, payload, 0o600); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("generated %s (user %q)", target, wantUser), nil
 }
 
 func newSecretsPullSecretCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
@@ -570,31 +618,51 @@ func validatePullSecretJSON(data []byte) error {
 }
 
 func generatedSelfSignedRequests(state v1alpha1.State) ([]generatedSelfSignedRequest, error) {
-	byName := map[string]v1alpha1.SelfSignedCertificateSpec{}
-	var names []string
-	for _, cluster := range state.OCPClusters {
-		for _, item := range cluster.Spec.Install.GeneratedSecrets {
-			if item.Type != v1alpha1.GeneratedSecretSelfSigned || item.SelfSignedCertificate == nil {
-				continue
-			}
-			cert := *item.SelfSignedCertificate
-			cert.DNSNames = append([]string(nil), cert.DNSNames...)
-			cert.IPAddresses = append([]string(nil), cert.IPAddresses...)
-			if existing, ok := byName[item.Name]; ok {
-				if !reflect.DeepEqual(existing, cert) {
-					return nil, fmt.Errorf("generated secret %q has conflicting self-signed certificate requests", item.Name)
-				}
-				continue
-			}
-			byName[item.Name] = cert
-			names = append(names, item.Name)
-		}
+	env := primaryEnvironmentForSync(state)
+	if env == nil {
+		return nil, nil
 	}
+	names := make([]string, 0, len(env.Spec.Keys))
+	for name, key := range env.Spec.Keys {
+		if key.Generated == nil || key.Generated.SelfSignedCertificate == nil {
+			continue
+		}
+		names = append(names, name)
+	}
+	sort.Strings(names)
 	result := make([]generatedSelfSignedRequest, 0, len(names))
 	for _, name := range names {
-		result = append(result, generatedSelfSignedRequest{name: name, certificate: byName[name]})
+		cert := *env.Spec.Keys[name].Generated.SelfSignedCertificate
+		cert.DNSNames = append([]string(nil), cert.DNSNames...)
+		cert.IPAddresses = append([]string(nil), cert.IPAddresses...)
+		result = append(result, generatedSelfSignedRequest{name: name, certificate: cert})
 	}
 	return result, nil
+}
+
+type generatedCredentialsRequest struct {
+	name        string
+	credentials v1alpha1.GeneratedCredentialsSpec
+}
+
+func generatedCredentialsRequestsFor(state v1alpha1.State) []generatedCredentialsRequest {
+	env := primaryEnvironmentForSync(state)
+	if env == nil {
+		return nil
+	}
+	names := make([]string, 0, len(env.Spec.Keys))
+	for name, key := range env.Spec.Keys {
+		if key.Generated == nil || key.Generated.Credentials == nil {
+			continue
+		}
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	out := make([]generatedCredentialsRequest, 0, len(names))
+	for _, name := range names {
+		out = append(out, generatedCredentialsRequest{name: name, credentials: *env.Spec.Keys[name].Generated.Credentials})
+	}
+	return out
 }
 
 func materializeSelfSignedCertificate(secretsDir string, request generatedSelfSignedRequest) (string, error) {

@@ -48,8 +48,6 @@ ssh-keygen -t ed25519 -f ~/.ssh/gitups-remote-qemu-host -N '' -C gitups-remote-q
 install -m 0600 ~/.ssh/gitups-remote-qemu-host ~/.gitups/secrets/remote-qemu-host-admin-key
 ssh-copy-id -i ~/.ssh/gitups-remote-qemu-host.pub root@192.168.140.10
 gitups secrets pull-secret set --name openshift-pull-secret --from-file ~/pull-secret.json
-gitups secrets bmc set --name qemu-1-host-bmc-credentials --generate
-gitups secrets bmc set --name mirror-registry-credentials --generate
 gitups secrets generate -f test/e2e/qemu-1-host-1-sno-hub
 ```
 

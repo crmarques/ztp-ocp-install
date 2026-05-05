@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -297,6 +298,16 @@ func TestPreflightHubChecksDisconnectedRegistryCredentials(t *testing.T) {
 
 func TestPreflightHubGeneratedTrustBundleChecksOpenSSL(t *testing.T) {
 	state := v1alpha1.State{
+		Environments: []v1alpha1.Environment{{
+			Metadata: v1alpha1.Metadata{Name: "env"},
+			Spec: v1alpha1.EnvironmentSpec{
+				Keys: map[string]v1alpha1.EnvironmentKeySpec{
+					"trust": {Generated: &v1alpha1.EnvironmentKeyGenerated{
+						SelfSignedCertificate: &v1alpha1.SelfSignedCertificateSpec{CommonName: "registry.lab.test"},
+					}},
+				},
+			},
+		}},
 		OCPClusters: []v1alpha1.OCPCluster{
 			{
 				Metadata: v1alpha1.Metadata{Name: "hub"},
@@ -306,12 +317,6 @@ func TestPreflightHubGeneratedTrustBundleChecksOpenSSL(t *testing.T) {
 						PullSecretRef:            v1alpha1.SecretRef{Name: "pull-secret"},
 						SSHKeyRef:                v1alpha1.SecretRef{Name: "ssh-key"},
 						AdditionalTrustBundleRef: v1alpha1.SecretRef{Name: "trust"},
-						GeneratedSecrets: []v1alpha1.GeneratedSecretSpec{
-							{
-								Name: "trust",
-								Type: v1alpha1.GeneratedSecretSelfSigned,
-							},
-						},
 					},
 				},
 			},
@@ -351,6 +356,110 @@ func TestPreflightHubGeneratedTrustBundleChecksOpenSSL(t *testing.T) {
 	for name := range want {
 		if !seen[name] {
 			t.Fatalf("missing expected check %q in %+v", name, checks)
+		}
+	}
+}
+
+func TestPreflightFailsWhenSelfSignedCertOnDiskDoesNotMatchSpec(t *testing.T) {
+	secretsDir := t.TempDir()
+	state := v1alpha1.State{
+		Environments: []v1alpha1.Environment{{
+			Metadata: v1alpha1.Metadata{Name: "env"},
+			Spec: v1alpha1.EnvironmentSpec{
+				Keys: map[string]v1alpha1.EnvironmentKeySpec{
+					"trust": {Generated: &v1alpha1.EnvironmentKeyGenerated{
+						SelfSignedCertificate: &v1alpha1.SelfSignedCertificateSpec{
+							CommonName:   "registry.lab.test",
+							ValidityDays: v1alpha1.DefaultCertificateDays,
+						},
+					}},
+				},
+			},
+		}},
+		OCPClusters: []v1alpha1.OCPCluster{
+			{
+				Metadata: v1alpha1.Metadata{Name: "hub"},
+				Spec: v1alpha1.OCPClusterSpec{
+					Role: v1alpha1.OCPRoleHub,
+					Install: v1alpha1.OCPInstallSpec{
+						PullSecretRef:            v1alpha1.SecretRef{Name: "pull-secret"},
+						SSHKeyRef:                v1alpha1.SecretRef{Name: "ssh-key"},
+						AdditionalTrustBundleRef: v1alpha1.SecretRef{Name: "trust"},
+					},
+				},
+			},
+		},
+	}
+	staleRequest := generatedSelfSignedRequest{
+		name: "trust",
+		certificate: v1alpha1.SelfSignedCertificateSpec{
+			CommonName:   "registry.other.test",
+			ValidityDays: v1alpha1.DefaultCertificateDays,
+		},
+	}
+	if _, err := materializeSelfSignedCertificate(secretsDir, staleRequest); err != nil {
+		t.Fatalf("seed stale cert: %v", err)
+	}
+	checks := generatedSelfSignedDriftChecks(state, secretsDir)
+	if len(checks) == 0 {
+		t.Fatalf("expected drift check, got none")
+	}
+	var found *preflightCheck
+	for i, c := range checks {
+		if strings.Contains(c.name, "trust") {
+			found = &checks[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatalf("missing drift check for trust: %+v", checks)
+	}
+	if found.ok {
+		t.Fatalf("expected drift check to fail, got %+v", *found)
+	}
+	wantPath := filepath.Join(secretsDir, "trust")
+	if !strings.Contains(found.detail, wantPath) {
+		t.Fatalf("expected detail to mention cert path %s, got %q", wantPath, found.detail)
+	}
+	if !strings.Contains(found.detail, "gitups secrets generate") {
+		t.Fatalf("expected remediation hint, got %q", found.detail)
+	}
+}
+
+func TestPreflightSelfSignedCertDriftCheckPassesWhenMatching(t *testing.T) {
+	secretsDir := t.TempDir()
+	cert := v1alpha1.SelfSignedCertificateSpec{
+		CommonName:   "registry.lab.test",
+		ValidityDays: v1alpha1.DefaultCertificateDays,
+	}
+	if _, err := materializeSelfSignedCertificate(secretsDir, generatedSelfSignedRequest{name: "trust", certificate: cert}); err != nil {
+		t.Fatalf("seed cert: %v", err)
+	}
+	state := v1alpha1.State{
+		Environments: []v1alpha1.Environment{{
+			Metadata: v1alpha1.Metadata{Name: "env"},
+			Spec: v1alpha1.EnvironmentSpec{
+				Keys: map[string]v1alpha1.EnvironmentKeySpec{
+					"trust": {Generated: &v1alpha1.EnvironmentKeyGenerated{
+						SelfSignedCertificate: &cert,
+					}},
+				},
+			},
+		}},
+		OCPClusters: []v1alpha1.OCPCluster{{
+			Metadata: v1alpha1.Metadata{Name: "hub"},
+			Spec: v1alpha1.OCPClusterSpec{
+				Role: v1alpha1.OCPRoleHub,
+				Install: v1alpha1.OCPInstallSpec{
+					AdditionalTrustBundleRef: v1alpha1.SecretRef{Name: "trust"},
+				},
+			},
+		}},
+	}
+	checks := generatedSelfSignedDriftChecks(state, secretsDir)
+	for _, c := range checks {
+		if !c.ok {
+			t.Fatalf("unexpected failing check: %+v", c)
 		}
 	}
 }

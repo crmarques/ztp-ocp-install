@@ -75,10 +75,10 @@ ssh-keygen -t ed25519 -f ~/.ssh/gitups-qemu-3-hosts -N '' -C gitups-qemu-3-hosts
 install -m 0600 ~/.ssh/gitups-qemu-3-hosts     ~/.gitups/secrets/provider-host-admin-key
 install -m 0600 ~/.ssh/gitups-qemu-3-hosts.pub ~/.gitups/secrets/cluster-admin-key
 gitups secrets pull-secret set --name openshift-pull-secret --from-file ~/pull-secret.json
-gitups secrets bmc set --name qemu-3-hosts-hub-fleet-bmc-credentials --generate
 # Authenticated proxy only — drop credentialsRef from environment.yaml when
-# the proxy is open. The same `bmc set` writer enforces the username:password
-# single-line format that host_proxy expects.
+# the proxy is open. `gitups secrets bmc set` is still the writer for any
+# operator-provided `username:password` secret (e.g. when the proxy
+# credentials must come from a vault rather than be generated).
 gitups secrets bmc set --name proxy-credentials
 gitups secrets generate -f test/e2e/qemu-3-hosts-1-hub-2-ocp-fleet
 ```

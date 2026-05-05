@@ -17,11 +17,8 @@ spec:
           url: registry.disconnected.example.test:5000
           credentialsRef:
             name: disconnected-hub-registry
-          trustBundle:
-            generatedSelfSigned:
-              secretRef:
-                name: disconnected-hub-registry-ca
-              commonName: registry.disconnected.example.test
+          trustBundleRef:
+            name: disconnected-hub-registry-ca
         imageDigestSources:
           - source: quay.io/openshift-release-dev/ocp-release
             mirrors:
@@ -34,6 +31,15 @@ spec:
       name: openshift-pull-secret
     clusterSSHKeyRef:
       name: cluster-admin-key
+  keys:
+    disconnected-hub-registry-ca:
+      generated:
+        selfSignedCertificate:
+          commonName: registry.disconnected.example.test
+    disconnected-hub-registry:
+      generated:
+        credentials:
+          username: admin
   openshift:
     release:
       channel: stable-4.21

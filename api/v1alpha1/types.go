@@ -118,11 +118,29 @@ type EnvironmentSpec struct {
 
 // EnvironmentKeySpec declares the source for a named key whose name is
 // referenced by one or more SecretRefs in the desired state. Exactly one
-// source field is set; only `file` is supported today. `gitups secrets sync`
-// materializes each declared key into <secretsDir>/<name> (symlink for SSH
-// refs, copy for other ref kinds).
+// source sub-block is set: `file` points at operator-supplied material on
+// disk; `generated` declares material gitups will materialize itself.
+// `gitups secrets generate` walks every declared key and produces or links
+// `<secretsDir>/<name>` accordingly (symlink for SSH file refs, copy for
+// other file refs, fresh material for generated entries).
 type EnvironmentKeySpec struct {
-	File string `yaml:"file,omitempty" json:"file,omitempty"`
+	File      string                  `yaml:"file,omitempty" json:"file,omitempty"`
+	Generated *EnvironmentKeyGenerated `yaml:"generated,omitempty" json:"generated,omitempty"`
+}
+
+// EnvironmentKeyGenerated is a structural-discriminator union: exactly one
+// of Credentials or SelfSignedCertificate is set. Adding a new generated
+// kind means adding a new sub-block here, never a new top-level command.
+type EnvironmentKeyGenerated struct {
+	Credentials           *GeneratedCredentialsSpec  `yaml:"credentials,omitempty" json:"credentials,omitempty"`
+	SelfSignedCertificate *SelfSignedCertificateSpec `yaml:"selfSignedCertificate,omitempty" json:"selfSignedCertificate,omitempty"`
+}
+
+// GeneratedCredentialsSpec declares a `username:password\n` secret. The
+// password is generated on first materialization and is preserved on
+// subsequent runs to keep the BMC/registry/proxy/etc. callers stable.
+type GeneratedCredentialsSpec struct {
+	Username string `yaml:"username,omitempty" json:"username,omitempty"`
 }
 
 // EnvironmentOCPInstallSpec selects how the OpenShift install reaches its
@@ -170,22 +188,14 @@ type OCPInstallRegistries struct {
 }
 
 type OCPInstallRegistryMirror struct {
-	URL            string                     `yaml:"url" json:"url"`
-	CredentialsRef SecretRef                  `yaml:"credentialsRef,omitempty" json:"credentialsRef,omitempty"`
-	TrustBundle    *OCPInstallRegistryTrustCA `yaml:"trustBundle,omitempty" json:"trustBundle,omitempty"`
-}
-
-type OCPInstallRegistryTrustCA struct {
-	BundleRef           *SecretRef                 `yaml:"bundleRef,omitempty" json:"bundleRef,omitempty"`
-	GeneratedSelfSigned *GeneratedSelfSignedCASpec `yaml:"generatedSelfSigned,omitempty" json:"generatedSelfSigned,omitempty"`
-}
-
-type GeneratedSelfSignedCASpec struct {
-	SecretRef    SecretRef `yaml:"secretRef" json:"secretRef"`
-	CommonName   string    `yaml:"commonName,omitempty" json:"commonName,omitempty"`
-	DNSNames     []string  `yaml:"dnsNames,omitempty" json:"dnsNames,omitempty"`
-	IPAddresses  []string  `yaml:"ipAddresses,omitempty" json:"ipAddresses,omitempty"`
-	ValidityDays int       `yaml:"validityDays,omitempty" json:"validityDays,omitempty"`
+	URL            string    `yaml:"url" json:"url"`
+	CredentialsRef SecretRef `yaml:"credentialsRef,omitempty" json:"credentialsRef,omitempty"`
+	// TrustBundleRef names the secret that carries the registry's CA. The
+	// secret may be operator-supplied (declare it in Environment.spec.keys
+	// with a `file:` source) or gitups-generated (declare it with a
+	// `generated.selfSignedCertificate` source). Either way, this field
+	// just points at the name; how it is sourced lives in `keys`.
+	TrustBundleRef SecretRef `yaml:"trustBundleRef,omitempty" json:"trustBundleRef,omitempty"`
 }
 
 type EnvironmentSecretsSpec struct {
@@ -607,22 +617,15 @@ type OCPReleaseSpec struct {
 }
 
 type OCPInstallSpec struct {
-	Method                   string                `yaml:"method,omitempty" json:"method,omitempty"`
-	Release                  *OCPReleaseSpec       `yaml:"release,omitempty" json:"release,omitempty"`
-	BaseDomain               string                `yaml:"baseDomain,omitempty" json:"baseDomain,omitempty"`
-	PullSecretRef            SecretRef             `yaml:"pullSecretRef,omitempty" json:"pullSecretRef,omitempty"`
-	SSHKeyRef                SecretRef             `yaml:"sshKeyRef,omitempty" json:"sshKeyRef,omitempty"`
-	AdditionalTrustBundleRef SecretRef             `yaml:"additionalTrustBundleRef,omitempty" json:"additionalTrustBundleRef,omitempty"`
-	GeneratedSecrets         []GeneratedSecretSpec `yaml:"generatedSecrets,omitempty" json:"generatedSecrets,omitempty"`
-	ImageDigestSources       []ImageDigestSource   `yaml:"imageDigestSources,omitempty" json:"imageDigestSources,omitempty"`
-	InstallConfigOverrides   map[string]any        `yaml:"installConfigOverrides,omitempty" json:"installConfigOverrides,omitempty"`
-	AgentConfigOverrides     map[string]any        `yaml:"agentConfigOverrides,omitempty" json:"agentConfigOverrides,omitempty"`
-}
-
-type GeneratedSecretSpec struct {
-	Name                  string                     `yaml:"name" json:"name"`
-	Type                  string                     `yaml:"type,omitempty" json:"type,omitempty"`
-	SelfSignedCertificate *SelfSignedCertificateSpec `yaml:"selfSignedCertificate,omitempty" json:"selfSignedCertificate,omitempty"`
+	Method                   string              `yaml:"method,omitempty" json:"method,omitempty"`
+	Release                  *OCPReleaseSpec     `yaml:"release,omitempty" json:"release,omitempty"`
+	BaseDomain               string              `yaml:"baseDomain,omitempty" json:"baseDomain,omitempty"`
+	PullSecretRef            SecretRef           `yaml:"pullSecretRef,omitempty" json:"pullSecretRef,omitempty"`
+	SSHKeyRef                SecretRef           `yaml:"sshKeyRef,omitempty" json:"sshKeyRef,omitempty"`
+	AdditionalTrustBundleRef SecretRef           `yaml:"additionalTrustBundleRef,omitempty" json:"additionalTrustBundleRef,omitempty"`
+	ImageDigestSources       []ImageDigestSource `yaml:"imageDigestSources,omitempty" json:"imageDigestSources,omitempty"`
+	InstallConfigOverrides   map[string]any      `yaml:"installConfigOverrides,omitempty" json:"installConfigOverrides,omitempty"`
+	AgentConfigOverrides     map[string]any      `yaml:"agentConfigOverrides,omitempty" json:"agentConfigOverrides,omitempty"`
 }
 
 type SelfSignedCertificateSpec struct {
