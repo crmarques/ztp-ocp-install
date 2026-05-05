@@ -9,22 +9,24 @@ multi-node managed OCP clusters (compact control plane, three nodes each).
 
 | Cluster | Provider host | Role | Topology |
 | --- | --- | --- | --- |
-| `qemu-3-hosts-sno-hub` | `hub-host` (`192.168.140.10`) | hub | single-node |
-| `qemu-3-hosts-ocp-01` | `ocp-01-host` (`192.168.140.11`) | managed | multi-node (3 nodes) |
-| `qemu-3-hosts-ocp-02` | `ocp-02-host` (`192.168.140.12`) | managed | multi-node (3 nodes) |
+| `qemu-3-hosts-sno-hub` | `hub-host` | hub | single-node |
+| `qemu-3-hosts-ocp-01` | `ocp-01-host` | managed | multi-node (3 nodes) |
+| `qemu-3-hosts-ocp-02` | `ocp-02-host` | managed | multi-node (3 nodes) |
 
-Cluster networks are `192.168.150.0/24`, `192.168.151.0/24`, and
-`192.168.152.0/24`. Spokes use the `compact-control-plane` provider profile.
+Provider host addresses are defined in `provider.yaml: spec.hosts.<host>.ssh.address`.
+Cluster networks are configured per cluster in
+`cluster-infrastructure-<cluster>.yaml: spec.networks.primary.cidr`. Spokes use
+the `compact-control-plane` provider profile.
 
 ## Disconnected Inputs
 
 `environment.yaml` uses `ocpInstall.disconnected` with:
 
-- mirror registry `registry.mirror.local:5000`
-- mirror credentials `mirror-registry-credentials`
+- mirror registry hostname / port from `environment.yaml: spec.ocpInstall.disconnected.mirrorRegistry`
+- mirror credentials secret `mirror-registry-credentials`
 - generated trust bundle `mirror-registry-ca`
 - mirrored OpenShift release payload sources
-- local HAProxy image `registry.mirror.local:5000/library/haproxy:3.2.15`
+- local HAProxy image from `environment.yaml: spec.componentImages.load-balancer.haproxy.local`
 
 ## Secrets
 
@@ -73,7 +75,9 @@ gitups destroy all -f test/e2e/qemu-3-hosts-1-sno-hub-2-ocp-fleet --state-dir /t
 
 ## External Prerequisites
 
-Provide a local registry reachable as `registry.mirror.local:5000` from the
-control host and each provider host. It must contain the OpenShift `4.21.10`
-release payload and the local HAProxy image. Ensure routing from the control
-host to every cluster machine network through the matching provider host.
+Provide a local registry reachable at the URL configured in
+`environment.yaml: spec.ocpInstall.disconnected.mirrorRegistry` from the control
+host and each provider host. It must contain the OpenShift release payload at
+the version declared in `environment.yaml: spec.openshift.release.version` and
+every `componentImages[*].local` image. Ensure routing from the control host
+to every cluster machine network through the matching provider host.

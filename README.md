@@ -40,7 +40,7 @@ emulation to real bare metal edits only `InfrastructureProvider` and
 
 ```text
 gitups doctor
-gitups setup controller -f examples/qemu-redfish-fleet --minimal
+gitups setup controller -f examples/qemu-redfish-fleet
 gitups init --template qemu-redfish-hub --out desired-state
 gitups validate -f examples/qemu-redfish-fleet
 gitups preflight -f examples/qemu-redfish-fleet

@@ -7,11 +7,13 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/crmarques/ztp-ocp-install-lab/api/v1alpha1"
+	"github.com/crmarques/ztp-ocp-install-lab/internal/embedded"
 	"github.com/crmarques/ztp-ocp-install-lab/internal/infra"
 	"github.com/crmarques/ztp-ocp-install-lab/internal/render"
 )
@@ -44,48 +46,57 @@ func newSetupCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Com
 	cmd.AddCommand(
 		newSetupControllerCmd(stdin, stdout, stderr),
 	)
+	showSubcommandFlagsInHelp(cmd)
 	return cmd
 }
 
 func newSetupControllerCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Command {
 	var (
-		dryRun  bool
-		yes     bool
-		venv    bool
-		minimal bool
+		dryRun        bool
+		yes           bool
+		venv          bool
+		askBecomePass bool
+		cliInstallDir string
 	)
 	cmd := &cobra.Command{
 		Use:   "controller",
-		Short: "Install controller prerequisites with a minimal package footprint",
-		Long: "Installs the system packages required to run `gitups apply` on this host.\n" +
-			"With -f, the package set is widened to include dependencies the supplied\n" +
-			"state declares. Use --minimal to ignore state-driven extras. By default,\n" +
-			"ansible-core is installed into a gitups-managed venv under <gitups-home>\n" +
-			"instead of relying on a preinstalled system CLI.",
+		Short: "Install controller-only prerequisites",
+		Long: "Installs only the dependencies that gitups itself runs on the control\n" +
+			"host: a small package set, a gitups-managed ansible-core venv, and the\n" +
+			"OpenShift CLIs `oc`, `kubectl`, and `openshift-install`.\n\n" +
+			"Provider-side dependencies (libvirt, qemu-kvm, podman) are never\n" +
+			"installed on the controller — they belong to the provider host's own\n" +
+			"preparation. When -f is supplied the OCP release version is read from\n" +
+			"the state and an embedded ansible playbook downloads `oc`, `kubectl`,\n" +
+			"and `openshift-install` from mirror.openshift.com (no token required)\n" +
+			"into the chosen install directory.",
 		Args: cobra.NoArgs,
 	}
 	cf := addCommonFlags(cmd)
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print bootstrap commands without executing them")
 	cmd.Flags().BoolVar(&yes, "yes", false, "skip the bootstrap confirmation prompt")
 	cmd.Flags().BoolVar(&venv, "venv", true, "install ansible-core into a gitups-managed venv instead of via the system package manager")
-	cmd.Flags().BoolVar(&minimal, "minimal", false, "install only baseline controller packages even when -f is supplied")
+	cmd.Flags().BoolVar(&askBecomePass, "ask-become-pass", true, "prompt for the sudo password when the OCP CLI installer playbook escalates")
+	cmd.Flags().StringVar(&cliInstallDir, "cli-install-dir", "/usr/local/bin", "directory the OCP CLI installer playbook writes oc, kubectl, and openshift-install into")
 	cmd.RunE = func(c *cobra.Command, _ []string) error {
 		family, err := detectOSFamily(defaultOSReleasePath)
 		if err != nil {
 			return failErr(1, err)
 		}
 		var state v1alpha1.State
-		if len(cf.files) > 0 && !minimal {
+		if len(cf.files) > 0 {
 			loaded, err := infra.LoadNormalizeValidate(cf.files)
 			if err != nil {
 				return failErr(1, err)
 			}
 			state = loaded
 		}
-		plan, err := controllerBootstrapPlanForMode(family, state, bootstrapMode{venv: venv})
+		plan, err := controllerBootstrapPlanForMode(family, bootstrapMode{venv: venv})
 		if err != nil {
 			return failErr(1, err)
 		}
+		cliSpec := planControllerCLIInstall(state, cf.stateDir, cliInstallDir, askBecomePass, venv)
+
 		printTitle(stdout, "Controller setup")
 		fmt.Fprintf(stdout, "OS family: %s\n", family)
 		if venv {
@@ -97,13 +108,31 @@ func newSetupControllerCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) 
 		for _, step := range plan {
 			fmt.Fprintf(stdout, "- %s\n  $ %s\n", step.label, shellQuote(step.cmd))
 		}
+		switch {
+		case cliSpec != nil:
+			fmt.Fprintf(stdout, "- install OCP CLIs (oc, kubectl, openshift-install) %s into %s\n  $ %s\n",
+				cliSpec.OCPReleaseVersion, cliSpec.InstallDir, shellQuote(cliSpec.PlannedCommand()))
+		case len(cf.files) > 0:
+			fmt.Fprintln(stdout, "- skipping OCP CLIs: no openshift.release.version declared in state")
+		default:
+			fmt.Fprintln(stdout, "- skipping OCP CLIs: pass -f <state-dir> so the release version is known")
+		}
 		if dryRun {
 			return nil
 		}
 		if !yes && !confirm(stdin, stdout, "Continue with bootstrap? [y/N]: ") {
 			return failErr(1, errors.New("bootstrap aborted"))
 		}
-		return runBootstrapPlan(c.Context(), stdin, stdout, stderr, plan)
+		if err := runBootstrapPlan(c.Context(), stdin, stdout, stderr, plan); err != nil {
+			return err
+		}
+		if cliSpec != nil {
+			if err := runControllerCLIInstall(c.Context(), stdin, stdout, stderr, *cliSpec); err != nil {
+				return failErr(1, err)
+			}
+		}
+		printOK(stdout, "controller is ready", "")
+		return nil
 	}
 	return cmd
 }
@@ -123,7 +152,6 @@ func runBootstrapPlan(ctx context.Context, stdin io.Reader, stdout io.Writer, st
 			return failErr(1, fmt.Errorf("%s: %w", step.label, err))
 		}
 	}
-	printOK(stdout, "controller is ready", "")
 	return nil
 }
 
@@ -133,26 +161,20 @@ type bootstrapStep struct {
 }
 
 // controllerBootstrapPlanForMode composes the bootstrap steps for the detected
-// OS family and the chosen runtime mode. State-driven extras only appear
-// when the supplied state declares the matching capability — running
-// bootstrap with no -f keeps the install surface minimal so a stateless
-// controller can still run `gitups validate` and `gitups plan` without
-// paying for libvirt/podman.
+// OS family and the chosen runtime mode. The package set is intentionally
+// controller-only: ansible-core runtime, python3, sudo, git. Provider-side
+// packages (libvirt, qemu-kvm, podman, skopeo) are never installed by this
+// command — they belong to the provider host's own setup, even when the
+// controller and the provider happen to share a machine.
 //
 // In `--venv` mode, ansible-core is removed from the system package set
 // and instead pip-installed into a gitups-managed venv. python3 plus
 // python3-pip stay in the system set because the venv needs them to bootstrap.
-func controllerBootstrapPlanForMode(family string, state v1alpha1.State, mode bootstrapMode) ([]bootstrapStep, error) {
+func controllerBootstrapPlanForMode(family string, mode bootstrapMode) ([]bootstrapStep, error) {
 	packages := basePackages(family)
 	if mode.venv {
 		packages = filterOut(packages, "ansible-core")
 		packages = appendUnique(packages, basePackagesForVenv(family)...)
-	}
-	if stateNeedsQemuKvm(state) {
-		packages = append(packages, libvirtPackages(family)...)
-	}
-	if stateNeedsMirrorRegistry(state) {
-		packages = append(packages, mirrorRegistryPackages(family)...)
 	}
 	packages = dedupe(packages)
 
@@ -185,11 +207,112 @@ func controllerBootstrapPlanForMode(family string, state v1alpha1.State, mode bo
 }
 
 // controllerBootstrapPlan is the convenience entry the system-package mode uses;
-// callers that need the venv path use operatorBootstrapPlanForMode directly.
-func controllerBootstrapPlan(family string, state v1alpha1.State) []bootstrapStep {
-	steps, _ := controllerBootstrapPlanForMode(family, state, bootstrapMode{})
+// callers that need the venv path use controllerBootstrapPlanForMode directly.
+func controllerBootstrapPlan(family string) []bootstrapStep {
+	steps, _ := controllerBootstrapPlanForMode(family, bootstrapMode{})
 	return steps
 }
+
+// controllerCLIInstallSpec describes the ansible-driven step that installs
+// oc, kubectl, and openshift-install on the controller from
+// mirror.openshift.com. Created by planControllerCLIInstall when the supplied
+// state declares an openshift release version; otherwise the step is skipped.
+type controllerCLIInstallSpec struct {
+	OCPReleaseVersion string
+	InstallDir        string
+	StateDir          string
+	Executable        string
+	AskBecomePass     bool
+}
+
+func planControllerCLIInstall(state v1alpha1.State, stateDir string, installDir string, askBecomePass bool, venv bool) *controllerCLIInstallSpec {
+	version := strings.TrimSpace(stateOpenshiftReleaseVersion(state))
+	if version == "" {
+		return nil
+	}
+	exe := "ansible-playbook"
+	if venv {
+		exe = ansibleVenvBin("ansible-playbook")
+	}
+	return &controllerCLIInstallSpec{
+		OCPReleaseVersion: version,
+		InstallDir:        installDir,
+		StateDir:          stateDir,
+		Executable:        exe,
+		AskBecomePass:     askBecomePass,
+	}
+}
+
+// stateOpenshiftReleaseVersion returns the first non-empty
+// Environment.spec.openshift.release.version declared in the state. The CLI
+// installer needs a concrete x.y.z to fetch tarballs from mirror.openshift.com,
+// so a `channel`-only release is treated as "no version" and the step is
+// skipped.
+func stateOpenshiftReleaseVersion(state v1alpha1.State) string {
+	for _, env := range state.Environments {
+		if env.Spec.OpenShift.Release == nil {
+			continue
+		}
+		if v := strings.TrimSpace(env.Spec.OpenShift.Release.Version); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// PlannedCommand returns the ansible-playbook invocation displayed in the
+// dry-run plan. The bundle path is computed from the configured state-dir and
+// will exist by the time runControllerCLIInstall actually executes the
+// command (which extracts the embedded bundle first).
+func (s controllerCLIInstallSpec) PlannedCommand() []string {
+	bundleDir := filepath.Join(s.StateDir, ansibleBundleDirName)
+	args := []string{
+		s.Executable,
+		"-i", filepath.Join(bundleDir, controllerCLILocalInventory),
+		filepath.Join(bundleDir, "playbooks", "setup-controller-clis.yml"),
+		"-e", "gitups_openshift_release_version=" + s.OCPReleaseVersion,
+		"-e", "gitups_clis_install_dir=" + s.InstallDir,
+	}
+	if s.AskBecomePass {
+		args = append(args, "--ask-become-pass")
+	}
+	return args
+}
+
+// runControllerCLIInstall extracts the embedded ansible bundle, writes a
+// localhost inventory next to it, and runs the setup-controller-clis playbook
+// against the local host. The playbook is idempotent: it skips the download
+// + install when the binary at the requested version already exists at the
+// install directory.
+func runControllerCLIInstall(ctx context.Context, stdin io.Reader, stdout io.Writer, stderr io.Writer, spec controllerCLIInstallSpec) error {
+	bundleDir, err := extractBundle(spec.StateDir)
+	if err != nil {
+		return err
+	}
+	inventoryPath := filepath.Join(bundleDir, controllerCLILocalInventory)
+	inventory := "localhost ansible_connection=local ansible_python_interpreter=/usr/bin/python3\n"
+	if err := os.WriteFile(inventoryPath, []byte(inventory), 0o600); err != nil {
+		return fmt.Errorf("write controller-clis inventory: %w", err)
+	}
+	args := spec.PlannedCommand()
+	fmt.Fprintf(stdout, "\n>>> install OCP CLIs %s into %s\n", spec.OCPReleaseVersion, spec.InstallDir)
+	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	cmd.Stdin = stdin
+	cmd.Env = append(os.Environ(),
+		"ANSIBLE_CONFIG="+filepath.Join(bundleDir, embedded.AnsibleCfgRelPath),
+		"ANSIBLE_ROLES_PATH="+filepath.Join(bundleDir, embedded.RolesRelPath),
+		"ANSIBLE_COLLECTIONS_PATH="+filepath.Join(bundleDir, embedded.CollectionsRelPath),
+		"ANSIBLE_FILTER_PLUGINS="+filepath.Join(bundleDir, embedded.FilterPluginsRelPath),
+	)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("run controller-clis playbook: %w", err)
+	}
+	return nil
+}
+
+const controllerCLILocalInventory = "_setup-controller-localhost.ini"
 
 // basePackagesForVenv adds the venv-creation prerequisite that the system
 // package set otherwise omits. On Debian/Ubuntu, `python3 -m venv` requires
@@ -231,29 +354,9 @@ func appendUnique(in []string, extras ...string) []string {
 func basePackages(family string) []string {
 	switch family {
 	case "redhat":
-		return []string{"ansible-core", "python3", "python3-pip", "sudo", "git"}
+		return []string{"ansible-core", "python3", "python3-pip", "sudo", "git", "tar"}
 	case "debian":
-		return []string{"ansible-core", "python3", "python3-pip", "sudo", "git"}
-	}
-	return nil
-}
-
-func libvirtPackages(family string) []string {
-	switch family {
-	case "redhat":
-		return []string{"qemu-kvm", "libvirt", "virt-install", "python3-libvirt"}
-	case "debian":
-		return []string{"qemu-kvm", "libvirt-clients", "libvirt-daemon-system", "virtinst", "python3-libvirt"}
-	}
-	return nil
-}
-
-func mirrorRegistryPackages(family string) []string {
-	switch family {
-	case "redhat":
-		return []string{"podman", "skopeo", "httpd-tools", "ca-certificates", "openssl"}
-	case "debian":
-		return []string{"podman", "skopeo", "apache2-utils", "ca-certificates", "openssl"}
+		return []string{"ansible-core", "python3", "python3-pip", "sudo", "git", "tar"}
 	}
 	return nil
 }
@@ -267,19 +370,6 @@ func installCommand(family string, packages []string) []string {
 		args = append(args, "apt-get", "install", "-y")
 	}
 	return append(args, packages...)
-}
-
-// stateNeedsMirrorRegistry returns true when at least one Environment opts
-// in to a mirror registry, regardless of cluster role. Mirror tooling is
-// installed in the setup because the registry runs on the controller host
-// (or a co-located provider host) and pulls release images before any apply.
-func stateNeedsMirrorRegistry(state v1alpha1.State) bool {
-	for _, env := range state.Environments {
-		if registries := v1alpha1.OCPInstallRegistriesOf(env); registries != nil && registries.Mirror != nil {
-			return true
-		}
-	}
-	return false
 }
 
 func dedupe(in []string) []string {

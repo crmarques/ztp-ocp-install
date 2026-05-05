@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/crmarques/ztp-ocp-install-lab/api/v1alpha1"
+	"github.com/crmarques/ztp-ocp-install-lab/internal/infra"
 )
 
 func TestOperatorCheckUniversalChecksWithoutInputs(t *testing.T) {
@@ -62,9 +62,11 @@ func TestOperatorCheckWithStateRunsFullPreflight(t *testing.T) {
 
 // Bootstrap dry-run must enumerate the package manager invocation it would
 // make. The plan is OS-driven, so we exercise the planner directly with a
-// fixture instead of relying on the real /etc/os-release.
+// fixture instead of relying on the real /etc/os-release. Provider-side
+// packages (libvirt, qemu-kvm, podman) must never appear: they belong to the
+// provider host's own preparation, even when the state declares them.
 func TestOperatorBootstrapPlanRedhatBaseOnly(t *testing.T) {
-	plan := controllerBootstrapPlan("redhat", v1alpha1.State{})
+	plan := controllerBootstrapPlan("redhat")
 	if len(plan) != 1 {
 		t.Fatalf("expected exactly one bootstrap step, got %d: %+v", len(plan), plan)
 	}
@@ -73,60 +75,20 @@ func TestOperatorBootstrapPlanRedhatBaseOnly(t *testing.T) {
 		t.Fatalf("expected sudo dnf install -y prefix, got %v", cmd)
 	}
 	have := strings.Join(cmd, " ")
-	for _, pkg := range []string{"ansible-core", "python3", "git"} {
+	for _, pkg := range []string{"ansible-core", "python3", "git", "tar"} {
 		if !strings.Contains(have, " "+pkg) {
 			t.Fatalf("bootstrap base missing %q\n%s", pkg, have)
 		}
 	}
-	for _, leak := range []string{"qemu-kvm", "libvirt", "podman"} {
+	for _, leak := range []string{"qemu-kvm", "libvirt", "podman", "skopeo"} {
 		if strings.Contains(have, " "+leak) {
-			t.Fatalf("base bootstrap leaked state-driven package %q\n%s", leak, have)
-		}
-	}
-}
-
-func TestOperatorBootstrapPlanAddsLibvirtForQemuKvmState(t *testing.T) {
-	state := v1alpha1.State{
-		InfrastructureProviders: []v1alpha1.InfrastructureProvider{{
-			Spec: v1alpha1.InfrastructureProviderSpec{
-				Machine: &v1alpha1.MachineCapabilitySpec{Libvirt: &v1alpha1.MachineProviderLibvirtSpec{}},
-			},
-		}},
-	}
-	have := strings.Join(controllerBootstrapPlan("redhat", state)[0].cmd, " ")
-	for _, pkg := range []string{"qemu-kvm", "libvirt", "virt-install", "python3-libvirt"} {
-		if !strings.Contains(have, " "+pkg) {
-			t.Fatalf("libvirt-aware bootstrap missing %q\n%s", pkg, have)
-		}
-	}
-}
-
-func TestOperatorBootstrapPlanAddsMirrorPackagesForDisconnectedState(t *testing.T) {
-	state := v1alpha1.State{
-		Environments: []v1alpha1.Environment{{
-			Spec: v1alpha1.EnvironmentSpec{
-				OCPInstall: v1alpha1.EnvironmentOCPInstallSpec{
-					Disconnected: &v1alpha1.DisconnectedSpec{
-						Registries: &v1alpha1.OCPInstallRegistries{
-							Mirror: &v1alpha1.OCPInstallRegistryMirror{
-								URL: "registry.lab.test:5000",
-							},
-						},
-					},
-				},
-			},
-		}},
-	}
-	have := strings.Join(controllerBootstrapPlan("redhat", state)[0].cmd, " ")
-	for _, pkg := range []string{"podman", "skopeo", "httpd-tools", "openssl"} {
-		if !strings.Contains(have, " "+pkg) {
-			t.Fatalf("mirror-aware bootstrap missing %q\n%s", pkg, have)
+			t.Fatalf("controller bootstrap leaked provider-side package %q\n%s", leak, have)
 		}
 	}
 }
 
 func TestOperatorBootstrapPlanDebianFamily(t *testing.T) {
-	plan := controllerBootstrapPlan("debian", v1alpha1.State{})
+	plan := controllerBootstrapPlan("debian")
 	cmd := plan[0].cmd
 	if cmd[0] != "sudo" || cmd[1] != "apt-get" {
 		t.Fatalf("expected debian to use apt-get, got %v", cmd)
@@ -137,7 +99,7 @@ func TestOperatorBootstrapPlanDebianFamily(t *testing.T) {
 // into a pip install inside the gitups-managed venv. The system step still
 // runs to install python3 / python3-pip; the venv steps come after.
 func TestOperatorBootstrapPlanVenvModeMovesAnsibleToVenv(t *testing.T) {
-	plan, err := controllerBootstrapPlanForMode("redhat", v1alpha1.State{}, bootstrapMode{venv: true})
+	plan, err := controllerBootstrapPlanForMode("redhat", bootstrapMode{venv: true})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -162,7 +124,7 @@ func TestOperatorBootstrapPlanVenvModeMovesAnsibleToVenv(t *testing.T) {
 }
 
 func TestOperatorBootstrapPlanVenvModeAddsPythonVenvOnDebian(t *testing.T) {
-	plan, err := controllerBootstrapPlanForMode("debian", v1alpha1.State{}, bootstrapMode{venv: true})
+	plan, err := controllerBootstrapPlanForMode("debian", bootstrapMode{venv: true})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -223,6 +185,75 @@ func TestOperatorBootstrapDryRunPrintsPlanAndDoesNotExecute(t *testing.T) {
 		if !strings.Contains(out, expected) {
 			t.Fatalf("stdout missing %q\n%s", expected, out)
 		}
+	}
+}
+
+// Without -f the dry-run notes that the OCP CLI installer is skipped because
+// no release version is known. This is the path users on a fresh controller
+// hit when they run `setup controller` before authoring any state.
+func TestOperatorBootstrapDryRunSkipsCLIsWithoutState(t *testing.T) {
+	if _, err := os.Stat(defaultOSReleasePath); err != nil {
+		t.Skipf("/etc/os-release missing on this host: %v", err)
+	}
+	t.Setenv("HOME", t.TempDir())
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Run(context.Background(), []string{"setup", "controller", "--dry-run"}, nil, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected ok, got %d, stderr=%s", code, stderr.String())
+	}
+	out := stdout.String()
+	if !strings.Contains(out, "skipping OCP CLIs") {
+		t.Fatalf("dry run without -f should announce skipping OCP CLIs\n%s", out)
+	}
+}
+
+// With -f pointing at a fixture that declares an openshift release version,
+// the dry-run output must include the planned ansible-playbook invocation
+// for setup-controller-clis.yml so the user can preview the install.
+func TestOperatorBootstrapDryRunPlansCLIsFromState(t *testing.T) {
+	if _, err := os.Stat(defaultOSReleasePath); err != nil {
+		t.Skipf("/etc/os-release missing on this host: %v", err)
+	}
+	t.Setenv("HOME", t.TempDir())
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	stateDir := t.TempDir()
+	code := Run(context.Background(), []string{
+		"setup", "controller",
+		"-f", "../../test/e2e/qemu-1-host-1-sno-hub",
+		"--state-dir", stateDir,
+		"--dry-run",
+	}, nil, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected ok, got %d, stderr=%s", code, stderr.String())
+	}
+	out := stdout.String()
+	for _, expected := range []string{
+		"install OCP CLIs",
+		"setup-controller-clis.yml",
+		"gitups_openshift_release_version=4.21.10",
+		"gitups_clis_install_dir=/usr/local/bin",
+		"--ask-become-pass",
+	} {
+		if !strings.Contains(out, expected) {
+			t.Fatalf("CLI dry-run missing %q\n%s", expected, out)
+		}
+	}
+	for _, leak := range []string{"qemu-kvm", "libvirt", "podman"} {
+		if strings.Contains(out, " "+leak) {
+			t.Fatalf("controller dry-run leaked provider package %q\n%s", leak, out)
+		}
+	}
+}
+
+func TestStateOpenshiftReleaseVersionPicksFirstNonEmpty(t *testing.T) {
+	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/qemu-1-host-1-sno-hub"})
+	if err != nil {
+		t.Fatalf("load fixture: %v", err)
+	}
+	if got := stateOpenshiftReleaseVersion(state); got != "4.21.10" {
+		t.Fatalf("got %q want 4.21.10", got)
 	}
 }
 

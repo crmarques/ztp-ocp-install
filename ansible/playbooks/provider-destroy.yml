@@ -110,6 +110,31 @@
       changed_when: gitups_sushy_stop.changed | default(false)
       when: gitups_current_provider.bmcRole == 'emulated'
 
+    # The Redfish port-open lives in provider_bmc_emulated; mirror its scope
+    # here so a destroy leaves the host firewall in the same shape as before
+    # apply. firewalld is probed first so the close no-ops on hosts where
+    # the role originally did too.
+    - name: Check firewalld state on provider host
+      ansible.builtin.command:
+        argv:
+          - firewall-cmd
+          - --state
+      register: gitups_bmc_firewalld_state
+      changed_when: false
+      failed_when: false
+      when: gitups_current_provider.bmcRole == 'emulated'
+
+    - name: Close Redfish port on provider host firewall
+      ansible.posix.firewalld:
+        port: "{{ gitups_current_provider.bmc.port | int }}/tcp"
+        state: disabled
+        permanent: true
+        immediate: true
+      become: true
+      when:
+        - gitups_current_provider.bmcRole == 'emulated'
+        - gitups_bmc_firewalld_state.rc | default(1) == 0
+
     - name: Stop vmedia HTTP server for current provider
       ansible.builtin.systemd_service:
         name: "gitups-vmedia-{{ gitups_current_provider.name }}.service"

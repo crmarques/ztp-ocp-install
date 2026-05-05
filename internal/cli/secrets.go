@@ -359,6 +359,7 @@ func newSecretsPullSecretCmd(stdout io.Writer, stderr io.Writer) *cobra.Command 
 		Args:  cobra.NoArgs,
 	}
 	cmd.AddCommand(newSecretsPullSecretSetCmd(stdout, stderr))
+	showSubcommandFlagsInHelp(cmd)
 	return cmd
 }
 
@@ -426,6 +427,7 @@ func newSecretsCredentialsCmd(stdout io.Writer) *cobra.Command {
 		Args:  cobra.NoArgs,
 	}
 	cmd.AddCommand(newSecretsCredentialsSetCmd(stdout))
+	showSubcommandFlagsInHelp(cmd)
 	return cmd
 }
 

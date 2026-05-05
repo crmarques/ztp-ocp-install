@@ -1,9 +1,11 @@
 package cli
 
 import (
+	"fmt"
 	"io"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 // newRootCmd assembles the gitups command tree. SilenceUsage/SilenceErrors
@@ -52,4 +54,41 @@ func addCommonFlags(cmd *cobra.Command) *commonFlags {
 	cmd.Flags().StringArrayVarP(&cf.files, "file", "f", nil, "Gitups YAML file or directory; may be repeated")
 	cmd.Flags().StringVar(&cf.stateDir, "state-dir", stateDir, "generated state directory")
 	return cf
+}
+
+// showSubcommandFlagsInHelp augments cmd's help so `<cmd> --help` lists the
+// union of local flags from its subcommands. Cobra's default help on a
+// command group only shows the parent's own flags, so a user running
+// `gitups destroy --help` sees just `--help` and has to drill into a scope
+// to discover `-f`, `--state-dir`, `--yes`, etc. Apply this only to groups
+// whose subcommands share a coherent flag set; on heterogeneous groups
+// (e.g. `secrets`) the union would be misleading.
+func showSubcommandFlagsInHelp(cmd *cobra.Command) {
+	defaultHelp := cmd.HelpFunc()
+	cmd.SetHelpFunc(func(c *cobra.Command, args []string) {
+		defaultHelp(c, args)
+		// HelpFunc walks up the parent chain, so this closure also fires
+		// for descendants. Only augment when help is requested on the
+		// command we configured.
+		if c != cmd {
+			return
+		}
+		merged := pflag.NewFlagSet("subcommand", pflag.ContinueOnError)
+		for _, sub := range c.Commands() {
+			if !sub.IsAvailableCommand() {
+				continue
+			}
+			sub.LocalFlags().VisitAll(func(f *pflag.Flag) {
+				if f.Name == "help" || merged.Lookup(f.Name) != nil {
+					return
+				}
+				merged.AddFlag(f)
+			})
+		}
+		usages := merged.FlagUsages()
+		if usages == "" {
+			return
+		}
+		fmt.Fprintf(c.OutOrStdout(), "\nSubcommand Flags:\n%s", usages)
+	})
 }

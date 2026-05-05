@@ -1,0 +1,100 @@
+---
+- name: Validate gitups_openshift_release_version is set
+  ansible.builtin.assert:
+    that:
+      - gitups_openshift_release_version is defined
+      - (gitups_openshift_release_version | string | length) > 0
+    fail_msg: >-
+      gitups_openshift_release_version is required (e.g. 4.21.10);
+      pass it via -e or set it in the playbook vars.
+
+- name: Compute release URL base
+  ansible.builtin.set_fact:
+    gitups_clis_release_url: "{{ gitups_clis_mirror_base }}/{{ gitups_openshift_release_version }}"
+    gitups_clis_workdir: "{{ gitups_clis_tmp_dir }}/{{ gitups_openshift_release_version }}"
+
+- name: Ensure tmp working directory exists
+  ansible.builtin.file:
+    path: "{{ gitups_clis_workdir }}"
+    state: directory
+    mode: "0755"
+
+- name: Probe installed openshift-install version
+  ansible.builtin.command:
+    cmd: "{{ gitups_clis_install_dir }}/openshift-install version"
+  register: gitups_clis_oi_probe
+  changed_when: false
+  failed_when: false
+
+- name: Probe installed oc version
+  ansible.builtin.command:
+    cmd: "{{ gitups_clis_install_dir }}/oc version --client"
+  register: gitups_clis_oc_probe
+  changed_when: false
+  failed_when: false
+
+- name: Decide whether each CLI needs install
+  ansible.builtin.set_fact:
+    gitups_clis_install_oi: >-
+      {{ gitups_openshift_release_version not in (gitups_clis_oi_probe.stdout | default('')) }}
+    gitups_clis_install_oc: >-
+      {{ gitups_openshift_release_version not in (gitups_clis_oc_probe.stdout | default('')) }}
+
+- name: Download openshift-client tarball
+  ansible.builtin.get_url:
+    url: "{{ gitups_clis_release_url }}/openshift-client-linux-{{ gitups_openshift_release_version }}.tar.gz"
+    dest: "{{ gitups_clis_workdir }}/openshift-client.tar.gz"
+    mode: "0644"
+  when: gitups_clis_install_oc | bool
+
+- name: Download openshift-install tarball
+  ansible.builtin.get_url:
+    url: "{{ gitups_clis_release_url }}/openshift-install-linux-{{ gitups_openshift_release_version }}.tar.gz"
+    dest: "{{ gitups_clis_workdir }}/openshift-install.tar.gz"
+    mode: "0644"
+  when: gitups_clis_install_oi | bool
+
+- name: Extract oc and kubectl into install dir
+  ansible.builtin.unarchive:
+    src: "{{ gitups_clis_workdir }}/openshift-client.tar.gz"
+    dest: "{{ gitups_clis_install_dir }}"
+    remote_src: true
+    include:
+      - oc
+      - kubectl
+    mode: "0755"
+  become: true
+  when: gitups_clis_install_oc | bool
+
+- name: Extract openshift-install into install dir
+  ansible.builtin.unarchive:
+    src: "{{ gitups_clis_workdir }}/openshift-install.tar.gz"
+    dest: "{{ gitups_clis_install_dir }}"
+    remote_src: true
+    include:
+      - openshift-install
+    mode: "0755"
+  become: true
+  when: gitups_clis_install_oi | bool
+
+- name: Remove tarball working directory
+  ansible.builtin.file:
+    path: "{{ gitups_clis_workdir }}"
+    state: absent
+
+- name: Report installed CLI versions
+  ansible.builtin.command:
+    cmd: "{{ gitups_clis_install_dir }}/{{ item }} version --client"
+  loop:
+    - oc
+    - openshift-install
+  register: gitups_clis_final
+  changed_when: false
+  failed_when: false
+
+- name: Show final CLI versions
+  ansible.builtin.debug:
+    msg: "{{ item.stdout_lines | default([item.stderr | default('unavailable')]) }}"
+  loop: "{{ gitups_clis_final.results }}"
+  loop_control:
+    label: "{{ item.cmd | default([]) | last | default('cli') }}"

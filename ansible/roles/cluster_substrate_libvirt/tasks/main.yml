@@ -86,12 +86,38 @@
       }}
   changed_when: false
 
+# Build an opaque fingerprint over every desired-state input that affects
+# the network XML. Embed it in <description> so the running network
+# carries the fingerprint of the rendered XML it was defined from. When a
+# subsequent run renders different inputs (DNS hostnames, MAC->IP
+# bindings, dnsmasq options), the fingerprint shifts and the drift check
+# below tears down the live network even if the on-disk XML was already
+# up-to-date from a prior partial run.
+- name: Compute libvirt network desired-state fingerprint
+  ansible.builtin.set_fact:
+    gitups_libvirt_net_fingerprint: >-
+      {{
+        ([
+          gitups_libvirt_machine_network.gateway,
+          gitups_libvirt_machine_network.cidr,
+          gitups_current_cluster.provider.virtualization.libvirt.bridge,
+          (gitups_current_cluster.provider.virtualization.libvirt.dnsHosts | default([])),
+          (gitups_current_cluster.provider.nodes | default([])
+            | map(attribute='macAddress') | list),
+          (gitups_current_cluster.provider.nodes | default([])
+            | map(attribute='ipAddress') | list),
+          'no-hosts',
+        ] | to_json) | hash('sha1')
+      }}
+  changed_when: false
+
 - name: Render libvirt network XML
   ansible.builtin.set_fact:
     gitups_libvirt_net_xml_content: |
-      <network>
+      <network xmlns:dnsmasq='http://libvirt.org/schemas/network/dnsmasq/1.0'>
         <name>{{ gitups_current_cluster.provider.virtualization.libvirt.network }}</name>
         <uuid>{{ gitups_libvirt_net_uuid }}</uuid>
+        <description>gitups-net-fingerprint:{{ gitups_libvirt_net_fingerprint }}</description>
         <forward mode='nat'>
           <nat>
             <port start='1024' end='65535'/>
@@ -118,6 +144,9 @@
           {% endfor %}
           </dhcp>
         </ip>
+        <dnsmasq:options>
+          <dnsmasq:option value='no-hosts'/>
+        </dnsmasq:options>
       </network>
 
 - name: Persist libvirt network XML to disk for inspection
@@ -128,6 +157,19 @@
     mode: "0644"
     content: "{{ gitups_libvirt_net_xml_content }}"
   register: gitups_libvirt_net_xml_file
+
+# Drift = the running network was defined from a different fingerprint
+# (or pre-dates fingerprinting entirely). Use simple substring containment
+# so the check is decoupled from libvirt's XML reformatting on dumpxml.
+- name: Detect libvirt network drift between rendered and live XML
+  ansible.builtin.set_fact:
+    gitups_libvirt_net_drifted: >-
+      {{
+        gitups_libvirt_net_exists
+        and ('gitups-net-fingerprint:' ~ gitups_libvirt_net_fingerprint)
+            not in (gitups_libvirt_net_existing_xml.get_xml | default(''))
+      }}
+  changed_when: false
 
 # When our named network does not yet exist, libvirt's net-define
 # rejects the XML if any other (often stale) network already claims this
@@ -167,14 +209,14 @@
 
 # net-define updates the persistent definition but the running network
 # keeps the old XML until destroyed; tear down before redefining when
-# XML changed.
+# the rendered XML changed on disk OR the live network drifted from it.
 - name: Stop libvirt network before applying XML changes
   community.libvirt.virt_net:
     name: "{{ gitups_current_cluster.provider.virtualization.libvirt.network }}"
     state: inactive
   when:
     - gitups_libvirt_net_exists
-    - gitups_libvirt_net_xml_file.changed
+    - gitups_libvirt_net_xml_file.changed or gitups_libvirt_net_drifted | bool
 
 - name: Define libvirt network
   community.libvirt.virt_net:

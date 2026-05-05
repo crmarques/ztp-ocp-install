@@ -119,3 +119,39 @@
       Logs:    {{ gitups_mirror_registry_root }}/last-run.log
       Inspect: {{ gitups_mirror_registry_root }}/last-inspect.json
   when: gitups_mirror_registry_wait.rc != 124
+
+# The registry binds 0.0.0.0:<port> via host networking, but firewalld's
+# libvirt zone (where guest bridges land) defaults to a reject rule that
+# denies anything outside dhcp/dns/ssh. Without an explicit allow, VMs on
+# the libvirt bridge get connection-refused dialing the registry through
+# the gateway IP. Open the port permanently and live so the rule survives
+# both runtime restarts and firewalld reloads.
+- name: Check firewalld state on mirror registry host
+  ansible.builtin.command:
+    argv:
+      - firewall-cmd
+      - --state
+  register: gitups_mirror_registry_firewalld_state
+  changed_when: false
+  failed_when: false
+
+- name: Resolve firewalld zones present on mirror registry host
+  ansible.builtin.command:
+    argv:
+      - firewall-cmd
+      - --get-zones
+  register: gitups_mirror_registry_firewalld_zones
+  changed_when: false
+  failed_when: false
+  when: gitups_mirror_registry_firewalld_state.rc == 0
+
+- name: Open mirror registry firewall port in the libvirt zone
+  ansible.posix.firewalld:
+    zone: libvirt
+    port: "{{ gitups_current_mirror_registry.port | int }}/tcp"
+    state: enabled
+    permanent: true
+    immediate: true
+  when:
+    - gitups_mirror_registry_firewalld_state.rc == 0
+    - "'libvirt' in (gitups_mirror_registry_firewalld_zones.stdout | default('') | split())"

@@ -233,6 +233,30 @@
   until: gitups_bmc_sushy_ready.status == 200
   no_log: "{{ gitups_current_provider.bmc.auth is defined and gitups_current_provider.bmc.auth.credentialRef | default('') | length > 0 }}"
 
+# Without this, the Redfish port is reachable on 127.0.0.1 from the provider
+# host itself but blocked when the controller is on a different machine —
+# openshift-install talks Redfish across the network. Opens on the default
+# zone (the one bound to the provider host's primary NIC); the libvirt zone
+# already used by cluster_substrate_libvirt is for traffic from VMs and is
+# the wrong scope here. firewalld is probed first so the role no-ops on
+# hosts that don't run it (Debian, hardened images, lab CI).
+- name: Check firewalld state on provider host
+  ansible.builtin.command:
+    argv:
+      - firewall-cmd
+      - --state
+  register: gitups_bmc_firewalld_state
+  changed_when: false
+  failed_when: false
+
+- name: Open Redfish port on provider host firewall
+  ansible.posix.firewalld:
+    port: "{{ gitups_current_provider.bmc.port | int }}/tcp"
+    state: enabled
+    permanent: true
+    immediate: true
+  when: gitups_bmc_firewalld_state.rc == 0
+
 # sushy-tools 2.2.0 vmedia.StaticDriver fetches the InsertMedia Image via
 # requests.get(); it has no scheme dispatch for file:// or bare paths. Serve
 # the staged ISOs over loopback HTTP so InsertMedia can pull them. The agent

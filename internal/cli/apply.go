@@ -33,6 +33,7 @@ func newApplyCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Com
 		newApplyScopeCmd("hub", stdin, stdout, stderr),
 		newApplyScopeCmd("clusters", stdin, stdout, stderr),
 	)
+	showSubcommandFlagsInHelp(cmd)
 	return cmd
 }
 
@@ -167,6 +168,7 @@ func newDestroyCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 		newDestroyScopeCmd("clusters", stdout, stderr),
 		newDestroyScopeCmd("all", stdout, stderr),
 	)
+	showSubcommandFlagsInHelp(cmd)
 	return cmd
 }
 

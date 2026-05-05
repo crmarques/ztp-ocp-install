@@ -12,20 +12,23 @@ trust.
 
 | Cluster | Role | Topology | Network |
 | --- | --- | --- | --- |
-| `local-qemu-1-host-hub` | hub | single-node | `192.168.130.0/24` |
+| `local-qemu-1-host-hub` | hub | single-node | `cluster-infrastructure-hub.yaml: spec.networks.primary.cidr` |
 
-The provider host is `local-qemu-host` at `localhost`.
+The provider host is `local-qemu-host` at the address from
+`provider.yaml: spec.hosts.local-qemu-host.ssh.address` (defaults to `localhost`).
 
 ## Disconnected Inputs
 
 `environment.yaml` uses `ocpInstall.disconnected` with:
 
-- mirror registry `registry.mirror.local:5000` (alias for the libvirt
-  bridge gateway `192.168.130.1`)
-- mirror credentials `mirror-registry-credentials`
+- mirror registry hostname / port from
+  `environment.yaml: spec.ocpInstall.disconnected.mirrorRegistry` (resolved on
+  the cluster network to the libvirt bridge gateway,
+  `cluster-infrastructure-hub.yaml: spec.networks.primary.gateway`)
+- mirror credentials secret `mirror-registry-credentials`
 - generated trust bundle `mirror-registry-ca`
 - mirrored OpenShift release payload sources
-- local HAProxy image `registry.mirror.local:5000/library/haproxy:3.2.15`
+- local HAProxy image from `environment.yaml: spec.componentImages.load-balancer.haproxy.local`
 
 ## Secrets
 
@@ -86,11 +89,12 @@ to reach `docker.io/library/registry:2`, `quay.io/openshift-release-dev/*`, and
 each `componentImages[*].public` ref. After the role completes once, the
 local mirror serves them.
 
-The cluster nodes resolve `registry.mirror.local` via the libvirt
+The cluster nodes resolve the mirror registry hostname via the libvirt
 network's dnsmasq (auto-plumbed from `Environment.spec.ocpInstall.disconnected`).
 On the control host itself, add an `/etc/hosts` entry so the registry's
-generated CA matches the URL during pre-flight checks:
+generated CA matches the URL during pre-flight checks. Use the network gateway
+and registry hostname from your config:
 
 ```text
-192.168.130.1 registry.mirror.local
+<cluster-infrastructure-hub.yaml: spec.networks.primary.gateway> <mirror registry host from environment.yaml>
 ```

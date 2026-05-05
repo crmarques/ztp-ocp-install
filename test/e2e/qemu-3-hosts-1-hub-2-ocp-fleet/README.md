@@ -10,18 +10,19 @@ hub plus two multi-node managed OCP clusters (compact control plane).
 
 | Cluster | Provider | Provider host | Role | Topology |
 | --- | --- | --- | --- | --- |
-| `qemu-3-hosts-hub` | `qemu-3-hosts-hub-provider` | `hub-host` (`192.168.140.10`) | hub | multi-node (3 nodes) |
-| `qemu-3-hosts-ocp-01` | `qemu-3-hosts-ocp-01-provider` | `ocp-01-host` (`192.168.140.11`) | managed | multi-node (3 nodes) |
-| `qemu-3-hosts-ocp-02` | `qemu-3-hosts-ocp-02-provider` | `ocp-02-host` (`192.168.140.12`) | managed | multi-node (3 nodes) |
+| `qemu-3-hosts-hub` | `qemu-3-hosts-hub-provider` | `hub-host` | hub | multi-node (3 nodes) |
+| `qemu-3-hosts-ocp-01` | `qemu-3-hosts-ocp-01-provider` | `ocp-01-host` | managed | multi-node (3 nodes) |
+| `qemu-3-hosts-ocp-02` | `qemu-3-hosts-ocp-02-provider` | `ocp-02-host` | managed | multi-node (3 nodes) |
 
 Each cluster has its own `InfrastructureProvider` so the rendered Ansible
 inventory binds one provider host to one cluster — without that split, every
 provider host ends up in every cluster's group and every host tries to bring
 up every cluster.
 
-Cluster networks are `192.168.150.0/24`, `192.168.151.0/24`, and
-`192.168.152.0/24`. All three clusters use the `compact-control-plane`
-provider profile.
+Provider host addresses are defined in
+`provider.yaml: spec.hosts.<host>.ssh.address`. Cluster networks are configured
+per cluster in `cluster-infrastructure-<cluster>.yaml: spec.networks.primary.cidr`.
+All three clusters use the `compact-control-plane` provider profile.
 
 ## Connected + Proxy Inputs
 
@@ -46,8 +47,9 @@ forward proxy. Gitups projects this in two places:
    networks, baseDomain, BMC loopback, cluster/service CIDRs) is reached
    directly.
 
-The defaults shipped here use `http://proxy.example.test:3128` — replace
-with the URL of your environment's proxy before applying.
+The defaults shipped here use a placeholder URL
+(`environment.yaml: spec.ocpInstall.restricted.proxy.{httpProxy,httpsProxy}`) —
+replace with the URL of your environment's proxy before applying.
 
 When the upstream proxy needs authentication, set
 `ocpInstall.restricted.proxy.credentialsRef.name` to a secret containing one
@@ -84,7 +86,7 @@ gitups secrets generate -f test/e2e/qemu-3-hosts-1-hub-2-ocp-fleet
 ```
 
 Install the matching public key in `/root/.ssh/authorized_keys` on each of
-the three provider hosts (`192.168.140.10/11/12`).
+the three provider hosts (the addresses listed under `provider.yaml: spec.hosts.*.ssh.address`).
 
 ## Bastion Prerequisites
 
@@ -92,14 +94,16 @@ the three provider hosts (`192.168.140.10/11/12`).
 bastion needs:
 
 - `ansible-playbook` on `PATH` and the embedded bundle (handled by `make build`).
-- Reachability to `192.168.140.10/11/12:22` (SSH) and to the proxy itself.
+- Reachability to each `provider.yaml: spec.hosts.*.ssh.address:22` and to the
+  proxy itself.
 - Proxy env exported in the shell that runs `gitups apply` (the runner
-  forwards `os.Environ()` to ansible-playbook):
+  forwards `os.Environ()` to ansible-playbook). Use the values from
+  `environment.yaml: spec.ocpInstall.restricted.proxy`:
 
   ```sh
-  export HTTP_PROXY=http://proxy.example.test:3128
-  export HTTPS_PROXY=http://proxy.example.test:3128
-  export NO_PROXY=localhost,127.0.0.0/8,.svc,.cluster.local,.gitups.test,192.168.140.0/24,192.168.150.0/24,192.168.151.0/24,192.168.152.0/24,10.128.0.0/14,172.30.0.0/16
+  export HTTP_PROXY=<httpProxy from environment.yaml>
+  export HTTPS_PROXY=<httpsProxy from environment.yaml>
+  export NO_PROXY=<comma-joined noProxy entries from environment.yaml>
   ```
 
 The provider hosts only need a working base OS and `python3`; `host_proxy`

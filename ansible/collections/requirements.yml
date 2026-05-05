@@ -10,13 +10,8 @@ collections:
     version: ">=1.3.0,<2.0.0"
   - name: containers.podman
     version: ">=1.16.0,<2.0.0"
-  # ansible.posix 2.1.0 ships ansible_collections.ansible.posix.plugins.module_utils.firewall_lib
-  # importing `_respawn` from a path that does not exist in the collection,
-  # which fails the firewalld module at import time. Pin below 2.1.x until
-  # the upstream fix lands; the firewalld tasks in cluster_substrate_libvirt
-  # depend on this.
   - name: ansible.posix
-    version: ">=2.0.0,<2.1.0"
+    version: ">=2.0.0,<3.0.0"
   - name: community.crypto
     version: ">=2.22.0,<3.0.0"
   - name: ansible.utils

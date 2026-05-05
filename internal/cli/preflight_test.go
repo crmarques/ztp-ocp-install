@@ -33,6 +33,10 @@ func fakeDepsWithStat(present map[string]string, kvmExists bool, paths map[strin
 }
 
 func fakeDepsWithListen(present map[string]string, kvmExists bool, paths map[string]bool, busyAddrs map[string]bool) preflightDeps {
+	return fakeDepsWithUnits(present, kvmExists, paths, busyAddrs, nil)
+}
+
+func fakeDepsWithUnits(present map[string]string, kvmExists bool, paths map[string]bool, busyAddrs map[string]bool, activeUnits map[string]bool) preflightDeps {
 	return preflightDeps{
 		lookPath: func(name string, extraDirs []string) (string, error) {
 			if path, ok := present[name]; ok {
@@ -55,6 +59,7 @@ func fakeDepsWithListen(present map[string]string, kvmExists bool, paths map[str
 			}
 			return nil
 		},
+		unitActive: func(unit string) bool { return activeUnits[unit] },
 	}
 }
 
@@ -571,6 +576,100 @@ func TestPreflightProviderPhaseFailsWhenBMCPortInUse(t *testing.T) {
 	}
 	if !strings.Contains(found.detail, "stale gitups-sushy") {
 		t.Fatalf("expected hint about stale unit, got: %s", found.detail)
+	}
+}
+
+// Idempotent re-apply: ports held by *this provider's* own gitups units are
+// not a conflict. Apply will reconfigure/restart the unit, so the preflight
+// must pass instead of demanding the user manually stop a service we own.
+func TestPreflightProviderPhaseAllowsPortHeldByMatchingGitupsUnit(t *testing.T) {
+	state := v1alpha1.State{
+		InfrastructureProviders: []v1alpha1.InfrastructureProvider{{
+			Metadata: v1alpha1.Metadata{Name: "qemu-1-host-provider"},
+			Spec: v1alpha1.InfrastructureProviderSpec{Machine: &v1alpha1.MachineCapabilitySpec{Libvirt: &v1alpha1.MachineProviderLibvirtSpec{
+				BMCEmulation: &v1alpha1.BMCEmulationSpec{
+					Enabled:     v1alpha1.BoolPtr(true),
+					BindAddress: "0.0.0.0",
+					Port:        8000,
+				},
+			}}},
+		}},
+	}
+	deps := fakeDepsWithUnits(map[string]string{
+		"ansible-playbook": "/usr/bin/ansible-playbook",
+		"python3":          "/usr/bin/python3",
+		"sudo":             "/usr/bin/sudo",
+	}, true, nil, map[string]bool{
+		"0.0.0.0:8000":   true,
+		"127.0.0.1:8001": true,
+		"0.0.0.0:8002":   true,
+	}, map[string]bool{
+		"gitups-sushy-qemu-1-host-provider.service":          true,
+		"gitups-vmedia-qemu-1-host-provider.service":         true,
+		"gitups-boot-artifacts-qemu-1-host-provider.service": true,
+	})
+	checks := collectPreflightChecks(state, nil, true, defaultSecretsDir(), defaultHostStateDir, deps)
+	want := map[string]string{
+		"provider qemu-1-host-provider redfish port 0.0.0.0:8000 free":             "gitups-sushy-qemu-1-host-provider.service",
+		"provider qemu-1-host-provider vmedia HTTP port 127.0.0.1:8001 free":       "gitups-vmedia-qemu-1-host-provider.service",
+		"provider qemu-1-host-provider boot-artifacts HTTP port 0.0.0.0:8002 free": "gitups-boot-artifacts-qemu-1-host-provider.service",
+	}
+	seen := map[string]bool{}
+	for _, c := range checks {
+		expected, tracked := want[c.name]
+		if !tracked {
+			continue
+		}
+		seen[c.name] = true
+		if !c.ok {
+			t.Fatalf("expected %q to pass when held by matching gitups unit, got fail (%s)", c.name, c.detail)
+		}
+		if !strings.Contains(c.detail, expected) {
+			t.Fatalf("expected detail to mention %s, got %q", expected, c.detail)
+		}
+	}
+	for name := range want {
+		if !seen[name] {
+			t.Fatalf("missing expected check %q in %+v", name, checks)
+		}
+	}
+}
+
+// Port held by something *other* than this provider's gitups unit is a real
+// conflict — preflight must still fail.
+func TestPreflightProviderPhaseFailsWhenPortHeldByForeignUnit(t *testing.T) {
+	state := v1alpha1.State{
+		InfrastructureProviders: []v1alpha1.InfrastructureProvider{{
+			Metadata: v1alpha1.Metadata{Name: "qemu-1-host-provider"},
+			Spec: v1alpha1.InfrastructureProviderSpec{Machine: &v1alpha1.MachineCapabilitySpec{Libvirt: &v1alpha1.MachineProviderLibvirtSpec{
+				BMCEmulation: &v1alpha1.BMCEmulationSpec{
+					Enabled:     v1alpha1.BoolPtr(true),
+					BindAddress: "0.0.0.0",
+					Port:        8000,
+				},
+			}}},
+		}},
+	}
+	deps := fakeDepsWithUnits(map[string]string{
+		"ansible-playbook": "/usr/bin/ansible-playbook",
+		"python3":          "/usr/bin/python3",
+		"sudo":             "/usr/bin/sudo",
+	}, true, nil, map[string]bool{
+		"127.0.0.1:8001": true,
+	}, map[string]bool{
+		"gitups-vmedia-some-other-provider.service": true,
+	})
+	checks := collectPreflightChecks(state, nil, true, defaultSecretsDir(), defaultHostStateDir, deps)
+	const want = "provider qemu-1-host-provider vmedia HTTP port 127.0.0.1:8001 free"
+	var found *preflightCheck
+	for i := range checks {
+		if checks[i].name == want {
+			found = &checks[i]
+			break
+		}
+	}
+	if found == nil || found.ok {
+		t.Fatalf("expected %q to fail when held by unrelated unit, got %+v", want, found)
 	}
 }
 

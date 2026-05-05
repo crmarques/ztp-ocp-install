@@ -11,7 +11,11 @@ import (
 	"path/filepath"
 )
 
-//go:embed bundle
+// `all:` keeps files whose names start with `_` or `.` — collections such as
+// ansible.posix ship `_respawn.py`, `__init__.py`, and other underscore-
+// prefixed module_utils that the default embed pattern silently drops.
+//
+//go:embed all:bundle
 var bundleFS embed.FS
 
 const bundleRoot = "bundle"

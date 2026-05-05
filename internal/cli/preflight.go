@@ -20,15 +20,17 @@ type preflightCheck struct {
 }
 
 type preflightDeps struct {
-	lookPath  func(name string, extraDirs []string) (string, error)
-	statPath  func(path string) (os.FileInfo, error)
-	tryListen func(network, address string) error
+	lookPath   func(name string, extraDirs []string) (string, error)
+	statPath   func(path string) (os.FileInfo, error)
+	tryListen  func(network, address string) error
+	unitActive func(unit string) bool
 }
 
 var defaultPreflightDeps = preflightDeps{
-	lookPath:  defaultLookPath,
-	statPath:  os.Stat,
-	tryListen: defaultTryListen,
+	lookPath:   defaultLookPath,
+	statPath:   os.Stat,
+	tryListen:  defaultTryListen,
+	unitActive: defaultUnitActive,
 }
 
 func collectPreflightChecks(state v1alpha1.State, selected []Phase, hasState bool, secretsDir string, hostStateDir string, deps preflightDeps) []preflightCheck {
@@ -142,25 +144,36 @@ func bmcPortChecks(state v1alpha1.State, deps preflightDeps) []preflightCheck {
 			bind = v1alpha1.DefaultBMCBindAddress
 		}
 		probes := []struct {
-			label string
-			addr  string
-			port  int
+			label    string
+			addr     string
+			port     int
+			unitKind string
 		}{
-			{"redfish", bind, bmc.Port},
-			{"vmedia HTTP", "127.0.0.1", bmc.Port + 1},
-			{"boot-artifacts HTTP", "0.0.0.0", bmc.Port + 2},
+			{"redfish", bind, bmc.Port, "sushy"},
+			{"vmedia HTTP", "127.0.0.1", bmc.Port + 1, "vmedia"},
+			{"boot-artifacts HTTP", "0.0.0.0", bmc.Port + 2, "boot-artifacts"},
 		}
 		for _, item := range probes {
-			checks = append(checks, bmcPortCheck(p.Metadata.Name, item.label, item.addr, item.port, deps))
+			checks = append(checks, bmcPortCheck(p.Metadata.Name, item.label, item.addr, item.port, item.unitKind, deps))
 		}
 	}
 	return checks
 }
 
-func bmcPortCheck(providerName, label, bindAddr string, port int, deps preflightDeps) preflightCheck {
+func bmcPortCheck(providerName, label, bindAddr string, port int, unitKind string, deps preflightDeps) preflightCheck {
 	addr := net.JoinHostPort(bindAddr, strconv.Itoa(port))
 	name := fmt.Sprintf("provider %s %s port %s free", providerName, label, addr)
 	if err := deps.tryListen("tcp", addr); err != nil {
+		// Idempotent path: if the port is held by the gitups unit that owns it
+		// for *this* provider, apply will reconfigure/restart it — pass.
+		expectedUnit := fmt.Sprintf("gitups-%s-%s.service", unitKind, providerName)
+		if deps.unitActive != nil && deps.unitActive(expectedUnit) {
+			return preflightCheck{
+				name:   name,
+				ok:     true,
+				detail: fmt.Sprintf("held by %s (will be reconfigured)", expectedUnit),
+			}
+		}
 		return preflightCheck{
 			name:   name,
 			ok:     false,
@@ -176,6 +189,18 @@ func defaultTryListen(network, address string) error {
 		return err
 	}
 	return l.Close()
+}
+
+// defaultUnitActive reports whether a systemd unit is currently active on the
+// local host. Used by the BMC port preflight to recognise when a port is held
+// by *this provider's* expected gitups unit (idempotent re-apply) versus an
+// unrelated process (real conflict).
+func defaultUnitActive(unit string) bool {
+	if _, err := exec.LookPath("systemctl"); err != nil {
+		return false
+	}
+	cmd := exec.Command("systemctl", "is-active", "--quiet", unit)
+	return cmd.Run() == nil
 }
 
 func secretsDirCheck(secretsDir string, deps preflightDeps) preflightCheck {
