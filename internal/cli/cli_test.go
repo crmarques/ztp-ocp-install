@@ -180,8 +180,11 @@ spec:
 	if code == 0 {
 		t.Fatal("expected unsupported provider failure")
 	}
-	if !strings.Contains(stderr.String(), "apply currently supports only provider kind \"libvirt\"") {
+	if !strings.Contains(stderr.String(), `apply does not yet support provider kind "vsphere"`) {
 		t.Fatalf("unexpected stderr: %s", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "supported: libvirt") {
+		t.Fatalf("error must list the supported flavors, got: %s", stderr.String())
 	}
 }
 
@@ -901,8 +904,10 @@ func TestApplyDryRunRendersAndPrintsAnsibleCommandsForAllPhases(t *testing.T) {
 	for _, expected := range []string{
 		"rendered:",
 		filepath.Join(stateDir, "ansible", "inventory.yaml"),
-		"dry-run ansible command [phase=infra]: ansible-playbook",
-		"playbooks/infra-prepare.yml",
+		"dry-run ansible command [phase=provider]: ansible-playbook",
+		"playbooks/provider-prepare.yml",
+		"dry-run ansible command [phase=cluster]: ansible-playbook",
+		"playbooks/cluster-prepare.yml",
 		"dry-run ansible command [phase=hub]: ansible-playbook",
 		"playbooks/hub-install.yml",
 		"dry-run ansible command [phase=gitops-publish]: ansible-playbook",
@@ -927,7 +932,7 @@ func TestApplyDryRunPassesStateSecretsAndHostStateDirs(t *testing.T) {
 		"--state-dir", stateDir,
 		"--secrets-dir", secretsDir,
 		"--host-state-dir", hostStateDir,
-		"--phase", "infra",
+		"--phase", "provider",
 		"--dry-run",
 	}, nil, &stdout, &stderr)
 	if code != 0 {
@@ -979,17 +984,19 @@ func TestApplyDryRunSinglePhase(t *testing.T) {
 		"-f", "../../examples/infra",
 		"--state-dir", stateDir,
 		"--dry-run",
-		"--phase", "infra",
+		"--phase", "cluster",
 	}, nil, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
 	}
 	output := stdout.String()
-	if !strings.Contains(output, "playbooks/infra-prepare.yml") {
-		t.Fatalf("stdout missing infra-prepare.yml: %s", output)
+	if !strings.Contains(output, "playbooks/cluster-prepare.yml") {
+		t.Fatalf("stdout missing cluster-prepare.yml: %s", output)
 	}
-	if strings.Contains(output, "hub-install.yml") || strings.Contains(output, "gitops-publish.yml") {
-		t.Fatalf("single-phase apply leaked other phases:\n%s", output)
+	for _, leaked := range []string{"provider-prepare.yml", "hub-install.yml", "gitops-publish.yml"} {
+		if strings.Contains(output, leaked) {
+			t.Fatalf("single-phase apply leaked %s:\n%s", leaked, output)
+		}
 	}
 }
 
@@ -1045,12 +1052,13 @@ func TestDestroyDryRunPrintsPhasesInReverse(t *testing.T) {
 	output := stdout.String()
 	gitopsIdx := strings.Index(output, "gitops-unpublish.yml")
 	hubIdx := strings.Index(output, "hub-destroy.yml")
-	infraIdx := strings.Index(output, "infra-destroy.yml")
-	if gitopsIdx < 0 || hubIdx < 0 || infraIdx < 0 {
+	clusterIdx := strings.Index(output, "cluster-destroy.yml")
+	providerIdx := strings.Index(output, "provider-destroy.yml")
+	if gitopsIdx < 0 || hubIdx < 0 || clusterIdx < 0 || providerIdx < 0 {
 		t.Fatalf("missing destroy phase entries:\n%s", output)
 	}
-	if !(gitopsIdx < hubIdx && hubIdx < infraIdx) {
-		t.Fatalf("destroy phases not in reverse order (gitops=%d hub=%d infra=%d)\n%s", gitopsIdx, hubIdx, infraIdx, output)
+	if !(gitopsIdx < hubIdx && hubIdx < clusterIdx && clusterIdx < providerIdx) {
+		t.Fatalf("destroy phases not in reverse order (gitops=%d hub=%d cluster=%d provider=%d)\n%s", gitopsIdx, hubIdx, clusterIdx, providerIdx, output)
 	}
 	if !strings.Contains(output, "dry-run: would remove state-dir: "+stateDir) {
 		t.Fatalf("dry-run destroy must announce state-dir removal:\n%s", output)
@@ -1160,7 +1168,8 @@ func TestStatusReportsRenderedPresence(t *testing.T) {
 	for _, expected := range []string{
 		"desired:",
 		"phases:",
-		"- infra: apply=playbooks/infra-prepare.yml destroy=playbooks/infra-destroy.yml",
+		"- provider: apply=playbooks/provider-prepare.yml destroy=playbooks/provider-destroy.yml",
+		"- cluster: apply=playbooks/cluster-prepare.yml destroy=playbooks/cluster-destroy.yml",
 		"0 missing",
 	} {
 		if !strings.Contains(output, expected) {
@@ -1277,7 +1286,8 @@ func TestApplyDryRunPrintsEscalationSummary(t *testing.T) {
 	output := stdout.String()
 	for _, expected := range []string{
 		"apply plan:",
-		"- infra [root]",
+		"- provider [root]",
+		"- cluster [root]",
 		"- hub [root]",
 		"- gitops-publish",
 		"[root] phases require sudo escalation",

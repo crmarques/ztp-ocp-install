@@ -22,7 +22,8 @@ func TestExtractAnsibleBundleEitherSucceedsOrReportsEmpty(t *testing.T) {
 	}
 	for _, rel := range []string{
 		AnsibleCfgRelPath,
-		filepath.Join("playbooks", "infra-prepare.yml"),
+		filepath.Join("playbooks", "provider-prepare.yml"),
+		filepath.Join("playbooks", "cluster-prepare.yml"),
 	} {
 		if _, statErr := os.Stat(filepath.Join(dest, rel)); statErr != nil {
 			t.Fatalf("expected %s in extracted bundle: %v", rel, statErr)

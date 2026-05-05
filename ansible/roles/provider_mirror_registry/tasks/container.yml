@@ -1,0 +1,121 @@
+---
+- name: Compute mirror registry spec fingerprint
+  ansible.builtin.set_fact:
+    gitups_mirror_registry_spec_hash: >-
+      {{ (gitups_mirror_registry_requirements.checksum
+          ~ '|htpasswd=' ~ (gitups_mirror_registry_htpasswd_stat.stat.checksum | default(''))
+          ~ '|cert=' ~ (gitups_mirror_registry_cert_write.checksum | default(''))
+          ~ '|run-image=' ~ gitups_mirror_registry_run_image
+          ~ '|port=' ~ gitups_current_mirror_registry.port | string
+          ~ '|run-args=v1:user=0:0,net=host,restart=unless-stopped'
+         ) | hash('sha1') }}
+  changed_when: false
+
+- name: Inspect existing mirror registry container
+  containers.podman.podman_container_info:
+    name: "{{ gitups_mirror_registry_container_name }}"
+  register: gitups_mirror_registry_existing
+  failed_when: false
+
+- name: Resolve mirror registry recreate decision
+  ansible.builtin.set_fact:
+    gitups_mirror_registry_recreate: >-
+      {{
+        (gitups_mirror_registry_existing.containers | default([]) | length) == 0
+        or (((gitups_mirror_registry_existing.containers | first).Config.Labels | default({}))['gitups.spec-hash'] | default('')) != gitups_mirror_registry_spec_hash
+        or not ((gitups_mirror_registry_existing.containers | first).State.Running | default(false))
+      }}
+  changed_when: false
+
+- name: Run mirror registry container
+  containers.podman.podman_container:
+    name: "{{ gitups_mirror_registry_container_name }}"
+    image: "{{ gitups_mirror_registry_run_image }}"
+    state: started
+    recreate: "{{ gitups_mirror_registry_recreate | bool }}"
+    network: host
+    user: "0:0"
+    restart_policy: unless-stopped
+    pull: never
+    labels:
+      gitups.spec-hash: "{{ gitups_mirror_registry_spec_hash }}"
+      gitups.mirror-registry: "{{ gitups_current_mirror_registry.name }}"
+    env:
+      REGISTRY_AUTH: htpasswd
+      REGISTRY_AUTH_HTPASSWD_REALM: Registry
+      REGISTRY_AUTH_HTPASSWD_PATH: /auth/htpasswd
+      REGISTRY_HTTP_TLS_CERTIFICATE: /certs/registry.crt
+      REGISTRY_HTTP_TLS_KEY: /certs/registry.key
+      REGISTRY_HTTP_ADDR: "0.0.0.0:{{ gitups_current_mirror_registry.port }}"
+    volumes:
+      - "{{ gitups_mirror_registry_auth_dir }}:/auth:ro,Z"
+      - "{{ gitups_mirror_registry_certs_dir }}:/certs:ro,Z"
+      - "{{ gitups_mirror_registry_data_dir }}:/var/lib/registry:Z"
+  when: gitups_mirror_registry_recreate | bool
+
+- name: Probe mirror registry container stability
+  ansible.builtin.command:
+    argv:
+      - timeout
+      - "3"
+      - podman
+      - wait
+      - --condition=stopped
+      - "{{ gitups_mirror_registry_container_name }}"
+  register: gitups_mirror_registry_wait
+  failed_when: false
+  changed_when: false
+
+- name: Capture mirror registry container inspect for diagnostics
+  containers.podman.podman_container_info:
+    name: "{{ gitups_mirror_registry_container_name }}"
+  register: gitups_mirror_registry_post_inspect
+  failed_when: false
+
+- name: Capture mirror registry container logs for diagnostics
+  ansible.builtin.command:
+    argv:
+      - podman
+      - logs
+      - --tail=500
+      - --timestamps
+      - "{{ gitups_mirror_registry_container_name }}"
+  register: gitups_mirror_registry_logs
+  failed_when: false
+  changed_when: false
+
+- name: Persist mirror registry container inspect snapshot
+  ansible.builtin.copy:
+    dest: "{{ gitups_mirror_registry_root }}/last-inspect.json"
+    owner: root
+    group: root
+    mode: "0644"
+    content: "{{ (gitups_mirror_registry_post_inspect.containers | default([])) | to_nice_json }}"
+
+- name: Persist mirror registry container log snapshot
+  ansible.builtin.copy:
+    dest: "{{ gitups_mirror_registry_root }}/last-run.log"
+    owner: root
+    group: root
+    mode: "0644"
+    content: "{{ gitups_mirror_registry_logs.stdout | default('') }}\n===== stderr =====\n{{ gitups_mirror_registry_logs.stderr | default('') }}\n"
+
+- name: Resolve final mirror registry container state
+  ansible.builtin.set_fact:
+    gitups_mirror_registry_final_state: "{{ ((gitups_mirror_registry_post_inspect.containers | first).State | default({})) if (gitups_mirror_registry_post_inspect.containers | default([]) | length) > 0 else {} }}"
+  changed_when: false
+
+# timeout(1) returns 124 when the wait kept blocking; that means no stop
+# event occurred during the probe window, so the container is stably
+# running. Any other rc means the registry hit a stop state at least once.
+- name: Fail when mirror registry container is not healthy
+  ansible.builtin.fail:
+    msg: |
+      Mirror registry container {{ gitups_mirror_registry_container_name }} is not running cleanly.
+      Status:        {{ gitups_mirror_registry_final_state.Status | default('unknown') }}
+      Running:       {{ gitups_mirror_registry_final_state.Running | default(false) }}
+      ExitCode:      {{ gitups_mirror_registry_final_state.ExitCode | default('n/a') }}
+      Probe rc:      {{ gitups_mirror_registry_wait.rc }}
+      Logs:    {{ gitups_mirror_registry_root }}/last-run.log
+      Inspect: {{ gitups_mirror_registry_root }}/last-inspect.json
+  when: gitups_mirror_registry_wait.rc != 124

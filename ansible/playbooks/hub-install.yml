@@ -1,7 +1,14 @@
 ---
 - name: Install hub OpenShift cluster
   hosts: gitups_hub_hosts
-  gather_facts: true
+  # `env` is required: hub_install_agent prepends ansible_facts.env.PATH to
+  # PATH for the openshift-install lookup so a user-installed binary on the
+  # invoking shell's PATH wins. `min` keeps os_family for any package
+  # module a hub_boot_* role might invoke. Hardware/interfaces are unused.
+  gather_subset:
+    - "!all"
+    - min
+    - env
   become: true
   environment: "{{ gitups_proxy_env | default({}) }}"
 

@@ -27,7 +27,7 @@
                 ((gitups_mirror_registry_pull_secret_raw.content | b64decode | from_json).auths | default({}))
                 | combine({
                     gitups_current_mirror_registry.url: {
-                      'auth': (gitups_mirror_registry_credentials | b64encode),
+                      'auth': ((gitups_mirror_registry_credentials.username ~ ':' ~ gitups_mirror_registry_credentials.password) | b64encode),
                       'email': 'gitups@' ~ gitups_current_mirror_registry.host,
                     }
                   })

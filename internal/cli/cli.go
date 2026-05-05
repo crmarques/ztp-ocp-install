@@ -280,6 +280,20 @@ func loadAndRender(files []string, stateDir string) (render.Result, error) {
 	return render.All(stateDir, state)
 }
 
+// applySupportedMachineFlavors lists the InfrastructureProvider machine
+// flavors that the apply path currently supports end-to-end (preflight →
+// render → ansible bundle → e2e fixture). Adding a new flavor here is the
+// single switch every other provider integration flips on once its e2e
+// case lands; specs/architecture.md "Provider Adapters" documents what
+// "supported" means.
+var applySupportedMachineFlavors = map[string]bool{
+	v1alpha1.MachineFlavorLibvirt: true,
+	// baremetal: roles exist (cluster_substrate_baremetal, provider_bmc_redfish);
+	// e2e fixture not in tree yet.
+	// vsphere, kubevirt: substrate roles are placeholders until vCenter / KubeVirt
+	// adapters are wired through render and have a fixture.
+}
+
 func ensureApplySupported(state v1alpha1.State) error {
 	providers := map[string]v1alpha1.InfrastructureProvider{}
 	for _, provider := range state.InfrastructureProviders {
@@ -288,11 +302,22 @@ func ensureApplySupported(state v1alpha1.State) error {
 	for _, item := range state.ClusterInfrastructures {
 		provider := providers[v1alpha1.FirstProviderRefName(item)]
 		kind := v1alpha1.MachineFlavor(provider)
-		if kind != v1alpha1.MachineFlavorLibvirt {
-			return fmt.Errorf("%s: apply currently supports only provider kind %q, got %q", item.Metadata.Name, v1alpha1.MachineFlavorLibvirt, kind)
+		if !applySupportedMachineFlavors[kind] {
+			return fmt.Errorf("%s: apply does not yet support provider kind %q (supported: %s)", item.Metadata.Name, kind, supportedMachineFlavorList())
 		}
 	}
 	return nil
+}
+
+func supportedMachineFlavorList() string {
+	names := make([]string, 0, len(applySupportedMachineFlavors))
+	for k, ok := range applySupportedMachineFlavors {
+		if ok {
+			names = append(names, k)
+		}
+	}
+	sort.Strings(names)
+	return strings.Join(names, ", ")
 }
 
 func printRenderResult(stdout io.Writer, result render.Result) {

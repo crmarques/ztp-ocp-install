@@ -1,0 +1,61 @@
+---
+- name: Locate generated agent ISO
+  ansible.builtin.find:
+    paths: "{{ gitups_hub_installer_dir }}/work"
+    patterns: "agent.*.iso"
+    file_type: file
+  register: gitups_agent_iso_find
+
+- name: Fail when agent ISO is missing
+  ansible.builtin.fail:
+    msg: "openshift-install did not produce an agent ISO under {{ gitups_hub_installer_dir }}/work"
+  when: gitups_agent_iso_find.matched == 0
+
+- name: Resolve agent ISO path
+  ansible.builtin.set_fact:
+    gitups_agent_iso_path: "{{ gitups_agent_iso_find.files | sort(attribute='mtime', reverse=true) | map(attribute='path') | first }}"
+  changed_when: false
+
+- name: Stage agent ISO into the BMC vmedia pool
+  ansible.builtin.copy:
+    src: "{{ gitups_agent_iso_path }}"
+    remote_src: true
+    dest: "{{ gitups_host_state_dir }}/providers/{{ gitups_provider_name }}/bmc/vmedia/{{ gitups_current_cluster.name }}-agent.iso"
+    owner: root
+    group: root
+    mode: "0644"
+  register: gitups_agent_iso_stage
+
+- name: Refresh libvirt vmedia pool after staging ISO
+  community.libvirt.virt_pool:
+    name: "gitups-{{ gitups_provider_name }}-vmedia"
+    command: refresh
+  when:
+    - gitups_agent_iso_stage.changed
+    - gitups_current_provider.bmcRole == 'emulated'
+
+# Hand off to the BMC-specific boot role. provider_bmc_emulated and
+# provider_bmc_redfish both expose Redfish, so the same role serves both;
+# real bare-metal will set bmcRole to 'redfish' and read per-host endpoints
+# from the same `bmc.yml` shape that emulated writes.
+- name: Boot hub VM via BMC
+  ansible.builtin.include_role:
+    name: "hub_boot_{{ gitups_current_provider.bmcRole }}"
+
+- name: Wait for openshift-install agent install-complete
+  ansible.builtin.command:
+    cmd: "{{ gitups_openshift_install_path }} agent wait-for install-complete --dir {{ gitups_hub_installer_dir }}/work --log-level info"
+  environment: "{{ gitups_hub_install_env }}"
+  async: "{{ gitups_hub_install_timeout_seconds }}"
+  poll: 30
+  register: gitups_hub_install_wait
+  changed_when: gitups_hub_install_wait.rc == 0
+
+- name: Persist kubeconfig path
+  ansible.builtin.copy:
+    dest: "{{ gitups_hub_installer_dir }}/work/kubeconfig.path"
+    owner: root
+    group: root
+    mode: "0644"
+    content: "{{ gitups_hub_installer_dir }}/work/auth/kubeconfig\n"
+  when: gitups_hub_install_wait.rc == 0

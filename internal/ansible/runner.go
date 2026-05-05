@@ -15,17 +15,18 @@ import (
 const OutputLogName = "ansible-output.log"
 
 type RunSpec struct {
-	Executable      string
-	AnsibleCfg      string
-	RolesPath       string
-	CollectionsPath string
-	Inventory       string
-	Playbook        string
-	ExtraVars       string
-	ExtraVarPairs   []string
-	ArtifactsDir    string
-	Check           bool
-	AskBecomePass   bool
+	Executable        string
+	AnsibleCfg        string
+	RolesPath         string
+	CollectionsPath   string
+	FilterPluginsPath string
+	Inventory         string
+	Playbook          string
+	ExtraVars         string
+	ExtraVarPairs     []string
+	ArtifactsDir      string
+	Check             bool
+	AskBecomePass     bool
 }
 
 type Runner interface {
@@ -87,6 +88,9 @@ func (r CommandRunner) Run(ctx context.Context, spec RunSpec) error {
 	}
 	if spec.CollectionsPath != "" {
 		cmd.Env = append(cmd.Env, "ANSIBLE_COLLECTIONS_PATH="+filepath.Clean(spec.CollectionsPath))
+	}
+	if spec.FilterPluginsPath != "" {
+		cmd.Env = append(cmd.Env, "ANSIBLE_FILTER_PLUGINS="+filepath.Clean(spec.FilterPluginsPath))
 	}
 	if spec.ArtifactsDir != "" {
 		cmd.Env = append(cmd.Env, "GITUPS_ANSIBLE_ARTIFACTS="+filepath.Clean(spec.ArtifactsDir))

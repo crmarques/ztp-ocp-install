@@ -65,26 +65,15 @@
 
 - name: Parse BMC credentials
   ansible.builtin.set_fact:
-    gitups_bmc_credentials_line: "{{ gitups_bmc_credentials_slurp.content | b64decode | trim }}"
+    gitups_bmc_credentials: "{{ gitups_bmc_credentials_slurp | gitups_parse_credential('provider BMC credentialRef ' ~ gitups_current_provider.bmc.auth.credentialRef) }}"
   no_log: true
   changed_when: false
   when: gitups_current_provider.bmc.auth is defined and gitups_current_provider.bmc.auth.credentialRef | default('') | length > 0
 
-- name: Validate BMC credentials format
-  ansible.builtin.assert:
-    that:
-      - gitups_bmc_credentials_line is search(':')
-      - gitups_bmc_credentials_line.split(':', 1) | length == 2
-      - (gitups_bmc_credentials_line.split(':', 1))[0] | length > 0
-      - (gitups_bmc_credentials_line.split(':', 1))[1] | length > 0
-    fail_msg: "BMC credentials at {{ gitups_secrets_dir }}/{{ gitups_current_provider.bmc.auth.credentialRef }} must be a single username:password line"
-  no_log: true
-  when: gitups_current_provider.bmc.auth is defined and gitups_current_provider.bmc.auth.credentialRef | default('') | length > 0
-
-- name: Resolve BMC username
+- name: Expose BMC username and password as facts
   ansible.builtin.set_fact:
-    gitups_bmc_username: "{{ (gitups_bmc_credentials_line.split(':', 1))[0] }}"
-    gitups_bmc_password: "{{ (gitups_bmc_credentials_line.split(':', 1))[1] }}"
+    gitups_bmc_username: "{{ gitups_bmc_credentials.username }}"
+    gitups_bmc_password: "{{ gitups_bmc_credentials.password }}"
   no_log: true
   changed_when: false
   when: gitups_current_provider.bmc.auth is defined and gitups_current_provider.bmc.auth.credentialRef | default('') | length > 0

@@ -192,6 +192,9 @@
     name: "{{ gitups_current_cluster.provider.virtualization.libvirt.network }}"
     state: active
 
+# Probe firewalld with a single command shell-out so the rest of the
+# firewall logic can no-op cleanly on hosts where firewalld isn't running
+# (Debian, hardened images, lab CI).
 - name: Check firewalld state
   ansible.builtin.command:
     argv:
@@ -201,146 +204,30 @@
   changed_when: false
   failed_when: false
 
-- name: Resolve firewalld zone for libvirt bridge
-  ansible.builtin.command:
-    argv:
-      - firewall-cmd
-      - "--get-zone-of-interface={{ gitups_current_cluster.provider.virtualization.libvirt.bridge }}"
-  register: gitups_libvirt_firewalld_zone
-  changed_when: false
-  failed_when: false
-  when:
-    - gitups_firewalld_state.rc == 0
-    - gitups_current_cluster.provider.bootArtifactsHttp.enabled | default(false) | bool
-
 # A freshly-defined libvirt bridge is not bound to any firewalld zone
 # until something (libvirtd hook, NetworkManager, an admin) places it
-# there. When no zone is reported, attach the bridge to the libvirt
-# zone (always present on RHEL/Fedora hosts that ship libvirt) so the
-# port-open task below has a target.
-#
-# Driven by firewall-cmd directly rather than ansible.posix.firewalld:
-# the 2.1.0 release of ansible.posix ships the firewalld module_util
-# with an import of `_respawn` that is absent from the collection,
-# which fails task execution at import time.
-- name: Attach libvirt bridge to libvirt firewalld zone when unzoned (runtime)
-  ansible.builtin.command:
-    argv:
-      - firewall-cmd
-      - "--zone=libvirt"
-      - "--change-interface={{ gitups_current_cluster.provider.virtualization.libvirt.bridge }}"
-  changed_when: true
-  when:
-    - gitups_firewalld_state.rc == 0
-    - gitups_current_cluster.provider.bootArtifactsHttp.enabled | default(false) | bool
-    - (gitups_libvirt_firewalld_zone.rc != 0) or ((gitups_libvirt_firewalld_zone.stdout | default('') | trim | length) == 0)
-
-- name: Attach libvirt bridge to libvirt firewalld zone when unzoned (permanent)
-  ansible.builtin.command:
-    argv:
-      - firewall-cmd
-      - --permanent
-      - "--zone=libvirt"
-      - "--change-interface={{ gitups_current_cluster.provider.virtualization.libvirt.bridge }}"
-  changed_when: true
-  when:
-    - gitups_firewalld_state.rc == 0
-    - gitups_current_cluster.provider.bootArtifactsHttp.enabled | default(false) | bool
-    - (gitups_libvirt_firewalld_zone.rc != 0) or ((gitups_libvirt_firewalld_zone.stdout | default('') | trim | length) == 0)
-
-- name: Re-resolve firewalld zone for libvirt bridge
-  ansible.builtin.command:
-    argv:
-      - firewall-cmd
-      - "--get-zone-of-interface={{ gitups_current_cluster.provider.virtualization.libvirt.bridge }}"
-  register: gitups_libvirt_firewalld_zone
-  changed_when: false
-  failed_when: gitups_libvirt_firewalld_zone.rc != 0
+# there. Bind to the libvirt zone (always present on RHEL/Fedora hosts
+# that ship libvirt) so the port-open task below has a target. The
+# firewalld module is idempotent: re-applying with the bridge already in
+# the libvirt zone reports `changed=false`.
+- name: Attach libvirt bridge to libvirt firewalld zone
+  ansible.posix.firewalld:
+    zone: libvirt
+    interface: "{{ gitups_current_cluster.provider.virtualization.libvirt.bridge }}"
+    state: enabled
+    permanent: true
+    immediate: true
   when:
     - gitups_firewalld_state.rc == 0
     - gitups_current_cluster.provider.bootArtifactsHttp.enabled | default(false) | bool
 
-- name: Open boot artifacts HTTP firewall port (runtime)
-  ansible.builtin.command:
-    argv:
-      - firewall-cmd
-      - "--zone={{ gitups_libvirt_firewalld_zone.stdout | trim }}"
-      - "--add-port={{ gitups_current_cluster.provider.bootArtifactsHttp.port | int }}/tcp"
-  register: gitups_boot_port_runtime_open
-  changed_when: "'ALREADY_ENABLED' not in (gitups_boot_port_runtime_open.stdout | default('') ~ gitups_boot_port_runtime_open.stderr | default(''))"
-  when:
-    - gitups_firewalld_state.rc == 0
-    - gitups_current_cluster.provider.bootArtifactsHttp.enabled | default(false) | bool
-
-# Plumb managed load balancer VIPs onto the cluster's libvirt bridge so the
-# addresses answer ARP. ip_nonlocal_bind lets HAProxy listen on a non-local
-# IP, but without an interface owning it neither the cluster nodes nor the
-# host can reach the listener — the installer then loops on
-# "Bootstrap Kube API never initialized" while bootkube actually runs fine
-# on the SNO node, because traffic to the API VIP never arrives.
-#
-# Sourced from the cluster's machineNetworks (libvirt sub-block) and the
-# cluster's load balancer bindings — the substrate role owns this because
-# the bridge identity is a libvirt-only fact.
-- name: Resolve cluster managed load balancer VIPs against libvirt bridges
-  ansible.builtin.set_fact:
-    gitups_libvirt_lb_vips: >-
-      {{
-        (gitups_load_balancers | default([]))
-        | selectattr('clusterName', 'equalto', gitups_current_cluster.name)
-        | map(attribute='frontends') | flatten
-        | map(attribute='bindings') | flatten
-        | selectattr('clusterName', 'equalto', gitups_current_cluster.name)
-        | list
-      }}
-  changed_when: false
-
-- name: Compute libvirt VIP attachments matching cluster bridges
-  ansible.builtin.set_fact:
-    gitups_libvirt_vip_targets: >-
-      {{
-        gitups_libvirt_vip_targets | default([]) +
-        (
-          gitups_libvirt_lb_vips
-          | selectattr('bindAddress', 'defined')
-          | rejectattr('bindAddress', 'equalto', '')
-          | selectattr('bindAddress', 'ansible.utils.in_any_network', [item.cidr])
-          | map('combine', {'bridge': item.libvirt.bridge, 'cidr': item.cidr})
-          | list
-        )
-      }}
-  changed_when: false
-  loop: "{{ gitups_current_cluster.network.machineNetworks | selectattr('libvirt', 'defined') | list }}"
-  loop_control:
-    label: "{{ item.libvirt.bridge | default('?') }} {{ item.cidr }}"
-
-- name: Plumb cluster load balancer VIPs onto libvirt bridges
-  ansible.builtin.command:
-    argv:
-      - ip
-      - address
-      - add
-      - "{{ item.bindAddress }}/{{ (item.cidr | ansible.utils.ipaddr('prefix')) }}"
-      - dev
-      - "{{ item.bridge }}"
-  register: gitups_libvirt_vip_plumb
-  changed_when: gitups_libvirt_vip_plumb.rc == 0
-  failed_when:
-    - gitups_libvirt_vip_plumb.rc != 0
-    - "'File exists' not in (gitups_libvirt_vip_plumb.stderr | default(''))"
-  loop: "{{ gitups_libvirt_vip_targets | default([]) }}"
-  loop_control:
-    label: "{{ item.bindAddress }} dev {{ item.bridge }}"
-
-- name: Open boot artifacts HTTP firewall port (permanent)
-  ansible.builtin.command:
-    argv:
-      - firewall-cmd
-      - --permanent
-      - "--zone={{ gitups_libvirt_firewalld_zone.stdout | trim }}"
-      - "--add-port={{ gitups_current_cluster.provider.bootArtifactsHttp.port | int }}/tcp"
-  register: gitups_boot_port_permanent_open
-  changed_when: "'ALREADY_ENABLED' not in (gitups_boot_port_permanent_open.stdout | default('') ~ gitups_boot_port_permanent_open.stderr | default(''))"
+- name: Open boot artifacts HTTP firewall port in the libvirt zone
+  ansible.posix.firewalld:
+    zone: libvirt
+    port: "{{ gitups_current_cluster.provider.bootArtifactsHttp.port | int }}/tcp"
+    state: enabled
+    permanent: true
+    immediate: true
   when:
     - gitups_firewalld_state.rc == 0
     - gitups_current_cluster.provider.bootArtifactsHttp.enabled | default(false) | bool

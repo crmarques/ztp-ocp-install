@@ -152,8 +152,8 @@ type ProviderVars struct {
 }
 
 // ProviderComponentVars is the provider-scoped twin of ProviderVars consumed
-// by the provider play in infra-prepare.yml. Same dispatch fields, different
-// scope (one entry per InfrastructureProvider, not per cluster).
+// by provider-prepare.yml. Same dispatch fields, different scope (one entry
+// per InfrastructureProvider, not per cluster).
 type ProviderComponentVars struct {
 	Name                string                        `yaml:"name" json:"name"`
 	Kind                string                        `yaml:"kind" json:"kind"`

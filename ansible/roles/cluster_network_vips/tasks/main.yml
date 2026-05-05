@@ -1,0 +1,63 @@
+---
+# Plumb managed load balancer VIPs onto the cluster's libvirt bridge so the
+# addresses answer ARP. ip_nonlocal_bind lets HAProxy listen on a non-local
+# IP, but without an interface owning it neither the cluster nodes nor the
+# host can reach the listener — the installer then loops on
+# "Bootstrap Kube API never initialized" while bootkube actually runs fine
+# on the SNO node, because traffic to the API VIP never arrives.
+#
+# Sourced from the cluster's machineNetworks (libvirt sub-block) and the
+# cluster's load balancer bindings — this role owns the cross-layer concern
+# (provider-scoped LB intent + cluster-scoped substrate bridge) so neither
+# cluster_substrate_* nor network_lb_managed has to reach into the other.
+
+- name: Resolve cluster managed load balancer VIPs against libvirt bridges
+  ansible.builtin.set_fact:
+    gitups_cluster_vips_lb_bindings: >-
+      {{
+        (gitups_load_balancers | default([]))
+        | selectattr('clusterName', 'equalto', gitups_current_cluster.name)
+        | map(attribute='frontends') | flatten
+        | map(attribute='bindings') | flatten
+        | selectattr('clusterName', 'equalto', gitups_current_cluster.name)
+        | list
+      }}
+  changed_when: false
+
+- name: Compute libvirt VIP attachments matching cluster bridges
+  ansible.builtin.set_fact:
+    gitups_cluster_vips_targets: >-
+      {{
+        gitups_cluster_vips_targets | default([]) +
+        (
+          gitups_cluster_vips_lb_bindings
+          | selectattr('bindAddress', 'defined')
+          | rejectattr('bindAddress', 'equalto', '')
+          | selectattr('bindAddress', 'gitups_in_cidr', item.cidr)
+          | map('combine', {'bridge': item.libvirt.bridge, 'cidr': item.cidr})
+          | list
+        )
+      }}
+  changed_when: false
+  loop: "{{ gitups_current_cluster.network.machineNetworks | selectattr('libvirt', 'defined') | list }}"
+  loop_control:
+    label: "{{ item.libvirt.bridge | default('?') }} {{ item.cidr }}"
+
+- name: Plumb cluster load balancer VIPs onto libvirt bridges
+  ansible.builtin.command:
+    argv:
+      - ip
+      - address
+      - add
+      - "{{ item.bindAddress }}/{{ item.cidr.split('/') | last }}"
+      - dev
+      - "{{ item.bridge }}"
+  register: gitups_cluster_vips_plumb
+  changed_when: gitups_cluster_vips_plumb.rc == 0
+  failed_when:
+    - gitups_cluster_vips_plumb.rc != 0
+    - "'File exists' not in (gitups_cluster_vips_plumb.stderr | default(''))"
+    - "'Address already assigned' not in (gitups_cluster_vips_plumb.stderr | default(''))"
+  loop: "{{ gitups_cluster_vips_targets | default([]) }}"
+  loop_control:
+    label: "{{ item.bindAddress }} dev {{ item.bridge }}"

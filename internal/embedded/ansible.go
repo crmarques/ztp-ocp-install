@@ -26,6 +26,11 @@ const RolesRelPath = "roles"
 // extracted bundle.
 const CollectionsRelPath = "collections"
 
+// FilterPluginsRelPath is the path of the Jinja filter-plugins directory
+// inside the extracted bundle. The runner exports this as
+// ANSIBLE_FILTER_PLUGINS so plugins ship with the binary.
+const FilterPluginsRelPath = "filter_plugins"
+
 // ExtractAnsibleBundle writes the embedded Ansible tree to dest, replacing any
 // previous contents at that location. The destination is left in a clean state
 // containing only the embedded files so a stale extraction cannot leak old

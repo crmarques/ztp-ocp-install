@@ -24,24 +24,11 @@
     - gitups_proxy_enabled
     - (gitups_proxy_credentials_ref | length) > 0
 
-- name: Resolve proxy credentials
+- name: Parse proxy credentials
   ansible.builtin.set_fact:
-    gitups_proxy_credentials_line: "{{ gitups_proxy_credentials_slurp.content | b64decode | trim }}"
+    gitups_proxy_credentials: "{{ gitups_proxy_credentials_slurp | gitups_parse_credential('ocpInstall proxy credentialsRef ' ~ gitups_proxy_credentials_ref) }}"
   no_log: true
   changed_when: false
-  when:
-    - gitups_proxy_enabled
-    - (gitups_proxy_credentials_ref | length) > 0
-
-- name: Validate proxy credentials format
-  ansible.builtin.assert:
-    that:
-      - gitups_proxy_credentials_line is search(':')
-      - gitups_proxy_credentials_line.split(':', 1) | length == 2
-      - (gitups_proxy_credentials_line.split(':', 1))[0] | length > 0
-      - (gitups_proxy_credentials_line.split(':', 1))[1] | length > 0
-    fail_msg: "proxy credentials at {{ gitups_secrets_dir }}/{{ gitups_proxy_credentials_ref }} must be a single username:password line"
-  no_log: true
   when:
     - gitups_proxy_enabled
     - (gitups_proxy_credentials_ref | length) > 0
@@ -54,8 +41,8 @@
   ansible.builtin.set_fact:
     gitups_proxy_authority: >-
       {{
-        ((gitups_proxy_credentials_line.split(':', 1))[0] | urlencode) ~ ':' ~
-        ((gitups_proxy_credentials_line.split(':', 1))[1] | urlencode) ~ '@'
+        (gitups_proxy_credentials.username | urlencode) ~ ':' ~
+        (gitups_proxy_credentials.password | urlencode) ~ '@'
         if (gitups_proxy_credentials_ref | length) > 0
         else ''
       }}

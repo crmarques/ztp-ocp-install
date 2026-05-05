@@ -1,0 +1,56 @@
+---
+- name: Install Podman, skopeo, httpd-tools for mirror registry
+  ansible.builtin.package:
+    name:
+      - podman
+      - skopeo
+      - httpd-tools
+      - ca-certificates
+    state: present
+
+- name: Create mirror registry state directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ gitups_mirror_registry_root }}", mode: "0755" }
+    - { path: "{{ gitups_mirror_registry_auth_dir }}", mode: "0700" }
+    - { path: "{{ gitups_mirror_registry_certs_dir }}", mode: "0700" }
+    - { path: "{{ gitups_mirror_registry_data_dir }}", mode: "0755" }
+    - { path: "{{ gitups_mirror_registry_tools_dir }}", mode: "0755" }
+
+- name: Persist mirror registry requirements snapshot
+  ansible.builtin.copy:
+    dest: "{{ gitups_mirror_registry_root }}/requirements.yml"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      name: {{ gitups_current_mirror_registry.name }}
+      providerRef: {{ gitups_current_mirror_registry.providerRef }}
+      providerHostRef: {{ gitups_current_mirror_registry.providerHostRef }}
+      url: {{ gitups_current_mirror_registry.url }}
+      host: {{ gitups_current_mirror_registry.host }}
+      port: {{ gitups_current_mirror_registry.port }}
+      runtime: {{ gitups_current_mirror_registry.runtime }}
+      image:
+        local: {{ gitups_current_mirror_registry.image.local | default('') }}
+        public: {{ gitups_current_mirror_registry.image.public | default('') }}
+  register: gitups_mirror_registry_requirements
+
+- name: Persist mirror set snapshot
+  ansible.builtin.copy:
+    dest: "{{ gitups_mirror_registry_root }}/mirror-set.yml"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      mirrorSet:
+      {% for entry in gitups_current_mirror_registry.mirrorSet %}
+        - kind: {{ entry.kind }}
+          public: {{ entry.public }}
+          local: {{ entry.local }}
+      {% endfor %}

@@ -106,7 +106,7 @@ func TestPreflightHubPhaseDemandsOpenShiftCLIs(t *testing.T) {
 	}
 }
 
-func TestPreflightInfraPhaseChecksKvmWhenQemuKvmProvider(t *testing.T) {
+func TestPreflightClusterPhaseChecksKvmWhenQemuKvmProvider(t *testing.T) {
 	state := v1alpha1.State{
 		InfrastructureProviders: []v1alpha1.InfrastructureProvider{
 			{Spec: v1alpha1.InfrastructureProviderSpec{Machine: &v1alpha1.MachineCapabilitySpec{Libvirt: &v1alpha1.MachineProviderLibvirtSpec{}}}},
@@ -117,7 +117,11 @@ func TestPreflightInfraPhaseChecksKvmWhenQemuKvmProvider(t *testing.T) {
 		"python3":          "/usr/bin/python3",
 		"sudo":             "/usr/bin/sudo",
 	}, false)
-	checks := collectPreflightChecks(state, nil, true, defaultSecretsDir(), defaultHostStateDir, deps)
+	cluster, err := selectPhases("cluster")
+	if err != nil {
+		t.Fatalf("selectPhases cluster: %v", err)
+	}
+	checks := collectPreflightChecks(state, cluster, true, defaultSecretsDir(), defaultHostStateDir, deps)
 	var found bool
 	for _, c := range checks {
 		if c.name == "/dev/kvm available" {
@@ -128,11 +132,11 @@ func TestPreflightInfraPhaseChecksKvmWhenQemuKvmProvider(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Fatalf("expected /dev/kvm check for qemu-kvm provider, got: %+v", checks)
+		t.Fatalf("expected /dev/kvm check for qemu-kvm provider in cluster phase, got: %+v", checks)
 	}
 }
 
-func TestPreflightInfraPhaseSkipsKvmWithoutQemuKvm(t *testing.T) {
+func TestPreflightClusterPhaseSkipsKvmWithoutQemuKvm(t *testing.T) {
 	state := v1alpha1.State{
 		InfrastructureProviders: []v1alpha1.InfrastructureProvider{
 			{Spec: v1alpha1.InfrastructureProviderSpec{Machine: &v1alpha1.MachineCapabilitySpec{Baremetal: &v1alpha1.MachineProviderBaremetalSpec{}}}},
@@ -147,6 +151,32 @@ func TestPreflightInfraPhaseSkipsKvmWithoutQemuKvm(t *testing.T) {
 	for _, c := range checks {
 		if c.name == "/dev/kvm available" {
 			t.Fatalf("did not expect /dev/kvm check for non-qemu-kvm state")
+		}
+	}
+}
+
+// /dev/kvm is a cluster-phase concern (libvirt domain creation); the provider
+// phase only needs the BMC TCP ports free. Running provider in isolation
+// must not demand KVM.
+func TestPreflightProviderOnlyPhaseSkipsKvm(t *testing.T) {
+	state := v1alpha1.State{
+		InfrastructureProviders: []v1alpha1.InfrastructureProvider{
+			{Spec: v1alpha1.InfrastructureProviderSpec{Machine: &v1alpha1.MachineCapabilitySpec{Libvirt: &v1alpha1.MachineProviderLibvirtSpec{}}}},
+		},
+	}
+	deps := fakeDeps(map[string]string{
+		"ansible-playbook": "/usr/bin/ansible-playbook",
+		"python3":          "/usr/bin/python3",
+		"sudo":             "/usr/bin/sudo",
+	}, false)
+	provider, err := selectPhases("provider")
+	if err != nil {
+		t.Fatalf("selectPhases provider: %v", err)
+	}
+	checks := collectPreflightChecks(state, provider, true, defaultSecretsDir(), defaultHostStateDir, deps)
+	for _, c := range checks {
+		if c.name == "/dev/kvm available" {
+			t.Fatalf("provider-only phase must not demand /dev/kvm: %+v", c)
 		}
 	}
 }
@@ -464,7 +494,7 @@ func TestPreflightSelfSignedCertDriftCheckPassesWhenMatching(t *testing.T) {
 	}
 }
 
-func TestPreflightInfraPhaseChecksBMCPortsAvailable(t *testing.T) {
+func TestPreflightProviderPhaseChecksBMCPortsAvailable(t *testing.T) {
 	state := v1alpha1.State{
 		InfrastructureProviders: []v1alpha1.InfrastructureProvider{{
 			Metadata: v1alpha1.Metadata{Name: "qemu-1-host-provider"},
@@ -504,7 +534,7 @@ func TestPreflightInfraPhaseChecksBMCPortsAvailable(t *testing.T) {
 	}
 }
 
-func TestPreflightInfraPhaseFailsWhenBMCPortInUse(t *testing.T) {
+func TestPreflightProviderPhaseFailsWhenBMCPortInUse(t *testing.T) {
 	state := v1alpha1.State{
 		InfrastructureProviders: []v1alpha1.InfrastructureProvider{{
 			Metadata: v1alpha1.Metadata{Name: "qemu-1-host-provider"},
@@ -544,7 +574,7 @@ func TestPreflightInfraPhaseFailsWhenBMCPortInUse(t *testing.T) {
 	}
 }
 
-func TestPreflightInfraPhaseSkipsBMCPortsWhenEmulationDisabled(t *testing.T) {
+func TestPreflightProviderPhaseSkipsBMCPortsWhenEmulationDisabled(t *testing.T) {
 	state := v1alpha1.State{
 		InfrastructureProviders: []v1alpha1.InfrastructureProvider{{
 			Metadata: v1alpha1.Metadata{Name: "qemu-no-bmc"},
@@ -583,16 +613,16 @@ func TestPreflightSecretsDirSkippedWithoutHubPhase(t *testing.T) {
 			},
 		},
 	}
-	infra, err := selectPhases("infra")
+	provider, err := selectPhases("provider")
 	if err != nil {
-		t.Fatalf("selectPhases infra: %v", err)
+		t.Fatalf("selectPhases provider: %v", err)
 	}
 	deps := fakeDeps(map[string]string{
 		"ansible-playbook": "/usr/bin/ansible-playbook",
 		"python3":          "/usr/bin/python3",
 		"sudo":             "/usr/bin/sudo",
 	}, false)
-	checks := collectPreflightChecks(state, infra, true, "/secrets", defaultHostStateDir, deps)
+	checks := collectPreflightChecks(state, provider, true, "/secrets", defaultHostStateDir, deps)
 	for _, c := range checks {
 		if strings.HasPrefix(c.name, "secrets directory") || strings.Contains(c.name, "pullSecretRef") {
 			t.Fatalf("secrets check should be scoped to hub phase, got %+v", c)
@@ -641,7 +671,10 @@ func TestPreflightChecksProxyCredentialsRef(t *testing.T) {
 	}
 }
 
-func TestPreflightProxyCredentialsScopedToInfraPhase(t *testing.T) {
+// host_proxy is the first task of both provider and cluster plays, so
+// proxy credentials are needed for either of those phases — but never for
+// a hub-only run, which goes straight to openshift-install on the hub host.
+func TestPreflightProxyCredentialsScopedAwayFromHubOnlyRun(t *testing.T) {
 	state := v1alpha1.State{
 		Environments: []v1alpha1.Environment{{
 			Metadata: v1alpha1.Metadata{Name: "lab"},
@@ -672,8 +705,24 @@ func TestPreflightProxyCredentialsScopedToInfraPhase(t *testing.T) {
 	checks := collectPreflightChecks(state, hub, true, "/secrets", defaultHostStateDir, deps)
 	for _, c := range checks {
 		if strings.Contains(c.name, "ocpInstall proxy credentialsRef") {
-			t.Fatalf("proxy credentialsRef should be scoped to infra phase, leaked into hub-only run: %+v", c)
+			t.Fatalf("proxy credentialsRef must not surface in hub-only run: %+v", c)
 		}
+	}
+
+	cluster, err := selectPhases("cluster")
+	if err != nil {
+		t.Fatalf("selectPhases cluster: %v", err)
+	}
+	checks = collectPreflightChecks(state, cluster, true, "/secrets", defaultHostStateDir, deps)
+	var found bool
+	for _, c := range checks {
+		if strings.Contains(c.name, "ocpInstall proxy credentialsRef") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("proxy credentialsRef must surface in cluster-only run; host_proxy runs there")
 	}
 }
 

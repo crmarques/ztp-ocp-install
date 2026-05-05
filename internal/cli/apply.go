@@ -42,7 +42,7 @@ func newApplyCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Com
 	cmd.Flags().BoolVar(&check, "check", false, "pass --check to ansible-playbook")
 	cmd.Flags().BoolVar(&askBecomePass, "ask-become-pass", true, "prompt once per phase for the sudo (BECOME) password (default true; pass --ask-become-pass=false on hosts with passwordless sudo or when wrapping gitups in sudo)")
 	cmd.Flags().BoolVar(&yes, "yes", false, "skip the apply confirmation prompt")
-	cmd.Flags().StringVar(&executable, "ansible-playbook", "ansible-playbook", "ansible-playbook executable to run")
+	cmd.Flags().StringVar(&executable, "ansible-playbook", resolveAnsiblePlaybook(), "ansible-playbook executable to run (defaults to the gitups-managed venv when present)")
 	cmd.Flags().StringVar(&phaseName, "phase", "", "run only the named phase ("+phaseNames()+"); default runs all phases in order")
 	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material")
 	cmd.Flags().StringVar(&hostStateDir, "host-state-dir", hostStateDir, "root-managed host runtime state directory")
@@ -109,17 +109,18 @@ func newApplyCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Com
 		ctx := c.Context()
 		for _, phase := range selected {
 			spec := ansible.RunSpec{
-				Executable:      executable,
-				AnsibleCfg:      filepath.Join(bundleDir, embedded.AnsibleCfgRelPath),
-				RolesPath:       filepath.Join(bundleDir, embedded.RolesRelPath),
-				CollectionsPath: filepath.Join(bundleDir, embedded.CollectionsRelPath),
-				Inventory:       result.InventoryPath,
-				Playbook:        filepath.Join(bundleDir, phase.ApplyPlaybook),
-				ExtraVars:       result.VarsPath,
-				ExtraVarPairs:   pairs,
-				ArtifactsDir:    filepath.Join(result.ArtifactsDir, phase.Name),
-				Check:           check,
-				AskBecomePass:   askBecomePass,
+				Executable:        executable,
+				AnsibleCfg:        filepath.Join(bundleDir, embedded.AnsibleCfgRelPath),
+				RolesPath:         filepath.Join(bundleDir, embedded.RolesRelPath),
+				CollectionsPath:   filepath.Join(bundleDir, embedded.CollectionsRelPath),
+				FilterPluginsPath: filepath.Join(bundleDir, embedded.FilterPluginsRelPath),
+				Inventory:         result.InventoryPath,
+				Playbook:          filepath.Join(bundleDir, phase.ApplyPlaybook),
+				ExtraVars:         result.VarsPath,
+				ExtraVarPairs:     pairs,
+				ArtifactsDir:      filepath.Join(result.ArtifactsDir, phase.Name),
+				Check:             check,
+				AskBecomePass:     askBecomePass,
 			}
 			command := runner.Command(spec)
 			if dryRun {
@@ -158,7 +159,7 @@ func newDestroyCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the Ansible commands without executing them")
 	cmd.Flags().BoolVar(&askBecomePass, "ask-become-pass", false, "ask for the Ansible become password")
 	cmd.Flags().BoolVar(&yes, "yes", false, "skip the destroy confirmation prompt")
-	cmd.Flags().StringVar(&executable, "ansible-playbook", "ansible-playbook", "ansible-playbook executable to run")
+	cmd.Flags().StringVar(&executable, "ansible-playbook", resolveAnsiblePlaybook(), "ansible-playbook executable to run (defaults to the gitups-managed venv when present)")
 	cmd.Flags().StringVar(&phaseName, "phase", "", "destroy only the named phase ("+phaseNames()+"); default destroys all phases in reverse order")
 	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material")
 	cmd.Flags().StringVar(&hostStateDir, "host-state-dir", hostStateDir, "root-managed host runtime state directory")
@@ -224,16 +225,17 @@ func newDestroyCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 		ctx := c.Context()
 		for _, phase := range selected {
 			spec := ansible.RunSpec{
-				Executable:      executable,
-				AnsibleCfg:      filepath.Join(bundleDir, embedded.AnsibleCfgRelPath),
-				RolesPath:       filepath.Join(bundleDir, embedded.RolesRelPath),
-				CollectionsPath: filepath.Join(bundleDir, embedded.CollectionsRelPath),
-				Inventory:       result.InventoryPath,
-				Playbook:        filepath.Join(bundleDir, phase.DestroyPlaybook),
-				ExtraVars:       result.VarsPath,
-				ExtraVarPairs:   pairs,
-				ArtifactsDir:    filepath.Join(result.ArtifactsDir, phase.Name+"-destroy"),
-				AskBecomePass:   askBecomePass,
+				Executable:        executable,
+				AnsibleCfg:        filepath.Join(bundleDir, embedded.AnsibleCfgRelPath),
+				RolesPath:         filepath.Join(bundleDir, embedded.RolesRelPath),
+				CollectionsPath:   filepath.Join(bundleDir, embedded.CollectionsRelPath),
+				FilterPluginsPath: filepath.Join(bundleDir, embedded.FilterPluginsRelPath),
+				Inventory:         result.InventoryPath,
+				Playbook:          filepath.Join(bundleDir, phase.DestroyPlaybook),
+				ExtraVars:         result.VarsPath,
+				ExtraVarPairs:     pairs,
+				ArtifactsDir:      filepath.Join(result.ArtifactsDir, phase.Name+"-destroy"),
+				AskBecomePass:     askBecomePass,
 			}
 			command := runner.Command(spec)
 			if dryRun {

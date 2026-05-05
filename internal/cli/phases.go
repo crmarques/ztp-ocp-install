@@ -16,13 +16,25 @@ type Phase struct {
 // Playbook paths are relative to the extracted ansible bundle root (see
 // internal/embedded). The CLI joins them with the per-run bundle directory
 // before handing the spec to the runner.
+//
+// Apply order is provider → cluster → hub → gitops-publish: provider-scoped
+// services (mirror, BMC emulator, HAProxy) come up first so per-cluster
+// substrate convergence has somewhere to plumb VIPs, and the hub installer
+// has a reachable mirror in disconnected mode. Destroy reverses the order.
 var phases = []Phase{
 	{
-		Name:            "infra",
-		ApplyPlaybook:   "playbooks/infra-prepare.yml",
-		DestroyPlaybook: "playbooks/infra-destroy.yml",
+		Name:            "provider",
+		ApplyPlaybook:   "playbooks/provider-prepare.yml",
+		DestroyPlaybook: "playbooks/provider-destroy.yml",
 		NeedsRoot:       true,
-		Description:     "provision libvirt domains, sushy-tools BMC emulator, HAProxy containers, /etc/hosts records, and host runtime state",
+		Description:     "provision provider-scoped services (BMC emulator, boot-artifacts HTTP, mirror registry, managed HAProxy) and host runtime state",
+	},
+	{
+		Name:            "cluster",
+		ApplyPlaybook:   "playbooks/cluster-prepare.yml",
+		DestroyPlaybook: "playbooks/cluster-destroy.yml",
+		NeedsRoot:       true,
+		Description:     "provision per-cluster substrate (libvirt domains and networks, managed name resolution, /etc/hosts records, VIP plumbing)",
 	},
 	{
 		Name:            "hub",

@@ -414,16 +414,23 @@ func TestRenderVarsExposeOCPInstallMetadata(t *testing.T) {
 }
 
 func TestHubInstallRoleDoesNotBlockPublicRegistries(t *testing.T) {
-	tasks := readFile(t, "../../ansible/roles/hub_install_agent/tasks/main.yml")
-	for _, unexpected := range []string{
-		"127.0.0.1:1",
-		"HTTPS_PROXY",
-		"HTTP_PROXY",
-		"ALL_PROXY",
-		"sinkhole",
-	} {
-		if strings.Contains(tasks, unexpected) {
-			t.Fatalf("hub install role contains public-registry blocking behavior %q\n%s", unexpected, tasks)
+	// The role is split into multiple include_tasks files; walk all of them
+	// so a future split cannot smuggle a sinkhole/proxy block back in.
+	tasksDir := "../../ansible/roles/hub_install_agent/tasks"
+	entries, err := os.ReadDir(tasksDir)
+	if err != nil {
+		t.Fatalf("read tasks dir: %v", err)
+	}
+	blockers := []string{"127.0.0.1:1", "HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "sinkhole"}
+	for _, e := range entries {
+		if e.IsDir() || filepath.Ext(e.Name()) != ".yml" {
+			continue
+		}
+		body := readFile(t, filepath.Join(tasksDir, e.Name()))
+		for _, unexpected := range blockers {
+			if strings.Contains(body, unexpected) {
+				t.Fatalf("hub_install_agent/%s contains public-registry blocking behavior %q\n%s", e.Name(), unexpected, body)
+			}
 		}
 	}
 }
@@ -435,21 +442,58 @@ func TestLibvirtSubstrateOpensBootArtifactsHTTPPort(t *testing.T) {
 		"<host mac='{{ node.macAddress }}'",
 		"name='{{ gitups_current_cluster.name }}-{{ node.name }}'",
 		"ip='{{ node.ipAddress }}'",
-		"--get-zone-of-interface={{ gitups_current_cluster.provider.virtualization.libvirt.bridge }}",
-		"--add-port={{ gitups_current_cluster.provider.bootArtifactsHttp.port | int }}/tcp",
-		"Plumb cluster load balancer VIPs onto libvirt bridges",
+		// Firewall mutations go through ansible.posix.firewalld — this also
+		// pins that the role uses zone=libvirt for both the interface bind
+		// and the boot-artifacts port-open.
+		"ansible.posix.firewalld",
+		"zone: libvirt",
+		"interface: \"{{ gitups_current_cluster.provider.virtualization.libvirt.bridge }}\"",
+		"port: \"{{ gitups_current_cluster.provider.bootArtifactsHttp.port | int }}/tcp\"",
 	} {
 		if !strings.Contains(tasks, expected) {
 			t.Fatalf("cluster_substrate_libvirt is missing %q\n%s", expected, tasks)
 		}
 	}
+	// VIP plumbing was extracted into cluster_network_vips; substrate must no
+	// longer reach into LB-scoped state, and BMC fields were never substrate
+	// concerns. The shell-out workarounds for the firewalld module are also
+	// gone now that ansible.posix is pinned below 2.1.x.
 	for _, leak := range []string{
 		"provider.bmc.port",
 		"provider.bmc.enabled",
+		"gitups_load_balancers",
+		"Plumb cluster load balancer VIPs",
+		"--get-zone-of-interface",
+		"--add-port=",
+		"--change-interface=",
 	} {
 		if strings.Contains(tasks, leak) {
-			t.Fatalf("cluster_substrate_libvirt still references BMC field %q (extraction incomplete)", leak)
+			t.Fatalf("cluster_substrate_libvirt still references %q — extraction is incomplete", leak)
 		}
+	}
+}
+
+// VIP plumbing belongs to cluster_network_vips, not the substrate role.
+// This test pins both the apply and destroy tasks of the new role and the
+// custom test plugin it relies on, so a future refactor cannot silently
+// drop the cross-layer logic that pairs LB bindings to the cluster bridge.
+func TestClusterNetworkVipsOwnsVIPPlumbing(t *testing.T) {
+	apply := readFile(t, "../../ansible/roles/cluster_network_vips/tasks/main.yml")
+	for _, expected := range []string{
+		"Plumb cluster load balancer VIPs onto libvirt bridges",
+		"gitups_in_cidr",
+		"gitups_load_balancers",
+	} {
+		if !strings.Contains(apply, expected) {
+			t.Fatalf("cluster_network_vips/tasks/main.yml missing %q\n%s", expected, apply)
+		}
+	}
+	destroy := readFile(t, "../../ansible/roles/cluster_network_vips/tasks/destroy.yml")
+	if !strings.Contains(destroy, "Unplumb managed load balancer VIPs from the cluster bridge") {
+		t.Fatalf("cluster_network_vips/tasks/destroy.yml missing unplumb task\n%s", destroy)
+	}
+	if _, err := os.Stat("../../ansible/roles/cluster_network_vips/test_plugins/cidr.py"); err != nil {
+		t.Fatalf("cluster_network_vips/test_plugins/cidr.py must own the gitups_in_cidr plugin: %v", err)
 	}
 }
 
@@ -648,14 +692,17 @@ func TestRenderMultiProviderClosure(t *testing.T) {
 }
 
 func TestProviderDispatchCoversAllKinds(t *testing.T) {
-	tasks := readFile(t, "../../ansible/playbooks/infra-prepare.yml")
+	clusterTasks := readFile(t, "../../ansible/playbooks/cluster-prepare.yml")
+	if !strings.Contains(clusterTasks, "cluster_substrate_{{ gitups_current_cluster.provider.substrateRole }}") {
+		t.Fatalf("cluster-prepare.yml missing substrate dispatch fragment\n%s", clusterTasks)
+	}
+	providerTasks := readFile(t, "../../ansible/playbooks/provider-prepare.yml")
 	for _, expected := range []string{
-		"cluster_substrate_{{ gitups_current_cluster.provider.substrateRole }}",
 		"provider_bmc_{{ gitups_current_provider.bmcRole }}",
 		"gitups_current_provider.bootArtifactsHttp.enabled",
 	} {
-		if !strings.Contains(tasks, expected) {
-			t.Fatalf("infra-prepare.yml missing dispatch fragment %q\n%s", expected, tasks)
+		if !strings.Contains(providerTasks, expected) {
+			t.Fatalf("provider-prepare.yml missing dispatch fragment %q\n%s", expected, providerTasks)
 		}
 	}
 	// Dynamic dispatch implies every kind resolves to a real role.

@@ -1,0 +1,119 @@
+---
+- name: Create installer working directory
+  ansible.builtin.file:
+    path: "{{ gitups_hub_installer_dir }}/work"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Write effective install-config.yaml to working directory
+  ansible.builtin.copy:
+    dest: "{{ gitups_hub_installer_dir }}/work/install-config.yaml"
+    owner: root
+    group: root
+    mode: "0600"
+    content: "{{ gitups_effective_install_config | to_nice_yaml(indent=2) }}"
+  no_log: true
+  register: gitups_effective_install_config_file
+
+- name: Write effective agent-config.yaml to working directory
+  ansible.builtin.copy:
+    dest: "{{ gitups_hub_installer_dir }}/work/agent-config.yaml"
+    owner: root
+    group: root
+    mode: "0600"
+    content: "{{ gitups_effective_agent_config | to_nice_yaml(indent=2) }}"
+  register: gitups_effective_agent_config_file
+
+- name: Stat existing agent ISO
+  ansible.builtin.stat:
+    path: "{{ gitups_hub_installer_dir }}/work/agent.x86_64.iso"
+  register: gitups_agent_iso_stat
+
+- name: Refresh installer working files when configs change
+  ansible.builtin.copy:
+    dest: "{{ gitups_hub_installer_dir }}/work/{{ item.name }}"
+    owner: root
+    group: root
+    mode: "0600"
+    content: "{{ item.content }}"
+  no_log: true
+  loop:
+    - { name: install-config.yaml, content: "{{ gitups_effective_install_config | to_nice_yaml(indent=2) }}" }
+    - { name: agent-config.yaml, content: "{{ gitups_effective_agent_config | to_nice_yaml(indent=2) }}" }
+  when: not gitups_agent_iso_stat.stat.exists or gitups_effective_install_config_file.changed or gitups_effective_agent_config_file.changed
+
+# openshift-install caches asset state in .openshift_install_state.json after a
+# successful run; on a re-run with re-written install-config.yaml/agent-config.yaml,
+# the cached Agent Installer ISO asset is replayed and fails with "cannot generate
+# ISO image due to configuration errors". Drop the cached state and outputs first.
+- name: Purge stale openshift-install state before regenerating agent ISO
+  ansible.builtin.file:
+    path: "{{ gitups_hub_installer_dir }}/work/{{ item }}"
+    state: absent
+  loop:
+    - .openshift_install_state.json
+    - .openshift_install.log
+    - agent.x86_64.iso
+    - boot-artifacts
+    - rendezvousIP
+    - auth
+  when: not gitups_agent_iso_stat.stat.exists or gitups_effective_install_config_file.changed or gitups_effective_agent_config_file.changed
+
+- name: Create agent ISO
+  ansible.builtin.command:
+    cmd: "{{ gitups_openshift_install_path }} agent create image --dir {{ gitups_hub_installer_dir }}/work"
+    chdir: "{{ gitups_hub_installer_dir }}/work"
+  environment: "{{ gitups_hub_install_env }}"
+  changed_when: true
+  when: not gitups_agent_iso_stat.stat.exists or gitups_effective_install_config_file.changed or gitups_effective_agent_config_file.changed
+
+- name: Locate generated rootfs boot artifacts
+  ansible.builtin.find:
+    paths: "{{ gitups_hub_installer_dir }}/work/boot-artifacts"
+    patterns: "agent.*-rootfs.img"
+    file_type: file
+  register: gitups_agent_rootfs_find
+  when: gitups_hub_minimal_iso | bool
+
+- name: Fail when minimal ISO rootfs artifact is missing
+  ansible.builtin.fail:
+    msg: "openshift-install did not produce an agent rootfs artifact under {{ gitups_hub_installer_dir }}/work/boot-artifacts"
+  when:
+    - gitups_hub_minimal_iso | bool
+    - gitups_agent_rootfs_find.matched == 0
+
+- name: Create provider boot artifacts directory
+  ansible.builtin.file:
+    path: "{{ gitups_host_state_dir }}/providers/{{ gitups_provider_name }}/boot-artifacts"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: gitups_hub_minimal_iso | bool
+
+- name: Stage rootfs boot artifacts for node access
+  ansible.builtin.copy:
+    src: "{{ item.path }}"
+    remote_src: true
+    dest: "{{ gitups_host_state_dir }}/providers/{{ gitups_provider_name }}/boot-artifacts/{{ item.path | basename }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ gitups_agent_rootfs_find.files | default([]) }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  when: gitups_hub_minimal_iso | bool
+
+- name: Validate staged rootfs is reachable from provider HTTP server
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ gitups_hub_boot_artifacts_http_port }}/{{ (gitups_agent_rootfs_find.files | first).path | basename }}"
+    method: GET
+    status_code: 200
+    return_content: false
+  register: gitups_agent_rootfs_http
+  retries: 30
+  delay: 1
+  until: gitups_agent_rootfs_http.status == 200
+  when: gitups_hub_minimal_iso | bool

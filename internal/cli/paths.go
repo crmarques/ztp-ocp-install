@@ -9,6 +9,12 @@ import (
 const (
 	gitupsHomeEnv       = "GITUPS_HOME"
 	defaultHostStateDir = "/var/lib/gitups"
+	// ansibleVenvDirName is the directory name (under <gitups-home>) that
+	// `gitups operator bootstrap --venv` materialises with a pinned
+	// ansible-core inside it. The runner prefers this path over the system
+	// ansible-playbook so a stateless operator host can run apply with only
+	// the gitups binary plus a one-shot bootstrap.
+	ansibleVenvDirName = "ansible-venv"
 )
 
 func defaultGitupsHome() string {
@@ -32,4 +38,32 @@ func defaultSecretsDir() string {
 
 func openshiftInstallSearchDirs(hostStateDir string) []string {
 	return []string{"/usr/local/bin", filepath.Join(hostStateDir, "tools")}
+}
+
+func ansibleVenvDir() string {
+	return filepath.Join(defaultGitupsHome(), ansibleVenvDirName)
+}
+
+func ansibleVenvBin(name string) string {
+	return filepath.Join(ansibleVenvDir(), "bin", name)
+}
+
+// resolveAnsiblePlaybook returns the path the runner should hand to exec.
+// Prefers a venv-managed ansible-core when present; falls back to the
+// literal "ansible-playbook" so PATH resolution still applies on hosts that
+// installed ansible system-wide.
+func resolveAnsiblePlaybook() string {
+	bin := ansibleVenvBin("ansible-playbook")
+	if isExecutable(bin) {
+		return bin
+	}
+	return "ansible-playbook"
+}
+
+func isExecutable(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() {
+		return false
+	}
+	return info.Mode()&0o111 != 0
 }

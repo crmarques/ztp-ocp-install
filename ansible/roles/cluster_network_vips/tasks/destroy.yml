@@ -1,0 +1,38 @@
+---
+# Drop the VIPs plumbed by the apply path before the cluster bridge is torn
+# down. virsh net-destroy would also delete them with the bridge, but doing
+# it explicitly keeps cleanup symmetric for partial runs and for hosts where
+# the libvirt teardown is skipped.
+
+- name: Resolve managed load balancer VIPs to remove
+  ansible.builtin.set_fact:
+    gitups_cluster_vips_unplumb_targets: >-
+      {{
+        (gitups_load_balancers | default([]))
+        | selectattr('clusterName', 'equalto', gitups_current_cluster.name)
+        | map(attribute='frontends') | flatten
+        | map(attribute='bindings') | flatten
+        | selectattr('bridgeAttachment', 'defined')
+        | rejectattr('bridgeAttachment', 'equalto', None)
+        | map('to_json') | unique | map('from_json') | list
+      }}
+  changed_when: false
+
+- name: Unplumb managed load balancer VIPs from the cluster bridge
+  ansible.builtin.command:
+    argv:
+      - ip
+      - address
+      - del
+      - "{{ item.bindAddress }}/{{ item.bridgeAttachment.prefixLength }}"
+      - dev
+      - "{{ item.bridgeAttachment.bridge }}"
+  register: gitups_cluster_vips_unplumb
+  changed_when: gitups_cluster_vips_unplumb.rc == 0
+  failed_when:
+    - gitups_cluster_vips_unplumb.rc != 0
+    - "'Cannot assign requested address' not in (gitups_cluster_vips_unplumb.stderr | default(''))"
+    - "'Cannot find device' not in (gitups_cluster_vips_unplumb.stderr | default(''))"
+  loop: "{{ gitups_cluster_vips_unplumb_targets }}"
+  loop_control:
+    label: "{{ item.bindAddress }}/{{ item.bridgeAttachment.prefixLength }} dev {{ item.bridgeAttachment.bridge }}"

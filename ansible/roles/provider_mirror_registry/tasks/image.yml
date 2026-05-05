@@ -1,0 +1,71 @@
+---
+# Pull strategy: try `local` first when the user declared one; fall back to
+# `public` only when local is unset or its pull fails. On bootstrap the
+# local registry does not exist yet, so the fallback to `public` is the
+# expected first-apply path. After mirror-images.yml runs once the registry
+# server image has been mirrored locally and subsequent applies stay
+# air-gapped from the cluster network.
+- name: Pull mirror registry server image from local registry
+  containers.podman.podman_image:
+    name: "{{ gitups_current_mirror_registry.image.local }}"
+    state: present
+    pull: true
+  register: gitups_mirror_registry_pull_local
+  failed_when: false
+  when: (gitups_current_mirror_registry.image.local | default('')) | length > 0
+
+- name: Check whether mirror registry local image is in podman storage
+  ansible.builtin.command:
+    argv:
+      - podman
+      - image
+      - exists
+      - "{{ gitups_current_mirror_registry.image.local }}"
+  register: gitups_mirror_registry_local_present
+  changed_when: false
+  failed_when: false
+  when: (gitups_current_mirror_registry.image.local | default('')) | length > 0
+
+- name: Pull mirror registry server image from public registry
+  containers.podman.podman_image:
+    name: "{{ gitups_current_mirror_registry.image.public }}"
+    state: present
+    pull: true
+  register: gitups_mirror_registry_pull_public
+  failed_when: false
+  when:
+    - (gitups_current_mirror_registry.image.public | default('')) | length > 0
+    - >-
+      (gitups_current_mirror_registry.image.local | default('')) | length == 0
+      or (gitups_mirror_registry_local_present.rc | default(1) != 0)
+
+- name: Check whether mirror registry public image is in podman storage
+  ansible.builtin.command:
+    argv:
+      - podman
+      - image
+      - exists
+      - "{{ gitups_current_mirror_registry.image.public }}"
+  register: gitups_mirror_registry_public_present
+  changed_when: false
+  failed_when: false
+  when: (gitups_current_mirror_registry.image.public | default('')) | length > 0
+
+- name: Resolve mirror registry server image ref for run
+  ansible.builtin.set_fact:
+    gitups_mirror_registry_run_image: >-
+      {{ gitups_current_mirror_registry.image.local
+         if (gitups_mirror_registry_local_present.rc | default(1) == 0)
+         else gitups_current_mirror_registry.image.public }}
+
+- name: Fail when mirror registry server image cannot be pulled
+  ansible.builtin.fail:
+    msg: >-
+      Mirror registry server image pull failed.
+      local={{ gitups_current_mirror_registry.image.local | default('<unset>') }},
+      public={{ gitups_current_mirror_registry.image.public | default('<unset>') }}.
+      First apply requires outbound reachability to the public ref;
+      subsequent applies pull from the local mirror.
+  when:
+    - (gitups_mirror_registry_local_present.rc | default(1) != 0)
+    - (gitups_mirror_registry_public_present.rc | default(1) != 0)

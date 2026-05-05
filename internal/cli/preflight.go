@@ -32,14 +32,23 @@ var defaultPreflightDeps = preflightDeps{
 }
 
 func collectPreflightChecks(state v1alpha1.State, selected []Phase, hasState bool, secretsDir string, hostStateDir string, deps preflightDeps) []preflightCheck {
+	// ansible-playbook is searched in the gitups-managed venv as a fallback
+	// so the universal "ansible-playbook on PATH" check still passes after
+	// `gitups operator bootstrap --venv` even on a host that has no system
+	// ansible-core installed.
 	checks := []preflightCheck{
-		binaryCheck("ansible-playbook", nil, deps),
+		binaryCheck("ansible-playbook", []string{filepath.Join(ansibleVenvDir(), "bin")}, deps),
 		binaryCheck("python3", nil, deps),
 		binaryCheck("sudo", nil, deps),
 	}
-	if phaseInScope("infra", selected, hasState) && stateNeedsQemuKvm(state) {
-		checks = append(checks, kvmCheck(deps))
+	if phaseInScope("provider", selected, hasState) && stateNeedsQemuKvm(state) {
+		// BMC emulator, vmedia HTTP, and boot-artifacts HTTP all bind during
+		// the provider phase (sushy-tools, vmedia, boot-artifacts services).
 		checks = append(checks, bmcPortChecks(state, deps)...)
+	}
+	if phaseInScope("cluster", selected, hasState) && stateNeedsQemuKvm(state) {
+		// Substrate creates libvirt domains; KVM acceleration is mandatory.
+		checks = append(checks, kvmCheck(deps))
 	}
 	if phaseInScope("hub", selected, hasState) {
 		checks = append(checks,
@@ -70,6 +79,20 @@ func phaseInScope(name string, selected []Phase, hasState bool) bool {
 	}
 	for _, p := range selected {
 		if p.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// anyPhaseInScope reports true when at least one of the named phases is in
+// scope under the current `--phase` selection. Used by secret-ref checks
+// where a single ref may be read by multiple phases (host_proxy runs in
+// both provider and cluster; mirror credentials are read in provider and
+// hub).
+func anyPhaseInScope(names []string, selected []Phase) bool {
+	for _, name := range names {
+		if phaseInScope(name, selected, true) {
 			return true
 		}
 	}
@@ -199,12 +222,14 @@ func generatedSecretCheck(refName, secretsDir, label string) preflightCheck {
 }
 
 // secretRefRequirement describes a single SecretRef declared somewhere in the
-// desired state, the phase that needs the file present on the host, and
-// whether `gitups secrets generate` will materialize it during apply.
+// desired state, the phases that need the file present on the host, and
+// whether `gitups secrets generate` will materialize it during apply. A
+// single ref may be read by multiple phases (e.g. host_proxy runs in both
+// the provider and cluster phases) so phases is a list.
 type secretRefRequirement struct {
 	refName   string
 	label     string
-	phase     string
+	phases    []string
 	generated bool
 }
 
@@ -217,7 +242,7 @@ func secretRefChecks(state v1alpha1.State, secretsDir string, selected []Phase, 
 	requirements := collectSecretRefRequirements(state)
 	var inScope []secretRefRequirement
 	for _, req := range requirements {
-		if !phaseInScope(req.phase, selected, true) {
+		if !anyPhaseInScope(req.phases, selected) {
 			continue
 		}
 		inScope = append(inScope, req)
@@ -237,12 +262,23 @@ func secretRefChecks(state v1alpha1.State, secretsDir string, selected []Phase, 
 }
 
 // collectSecretRefRequirements enumerates every SecretRef across all four
-// kinds. Each requirement is tagged with the apply phase that first reads
-// the file: provider-host SSH keys and BMC/proxy credentials are needed
-// during infra-prepare; install-config material (pull secret, cluster SSH
-// key, additional trust bundle, mirror credentials) is needed during the
-// hub install. Managed-cluster install refs are intentionally excluded —
-// hub-side gitops manifests carry them, not local apply.
+// kinds. Each requirement is tagged with the apply phases that read the
+// file:
+//
+//   - proxy credentialsRef: host_proxy runs in both provider and cluster
+//   - registry mirror credentialsRef: provider_mirror_registry (provider) and
+//     hub_install_agent merges it into install-config (hub)
+//   - provider host sshKeyRef: ansible connection for any phase that targets
+//     gitups_provider_hosts or gitups_infra_hosts (provider, cluster)
+//   - libvirt BMC emulation credentialRef: provider_bmc_emulated (provider)
+//     and hub_install_agent Redfish auth (hub)
+//   - vsphere/kubevirt provider refs: provider only (substrate roles)
+//   - per-machine baremetal BMC credentialRef: provider_bmc_redfish (provider)
+//     and hub_install_agent Redfish auth (hub)
+//   - hub install pullSecretRef / sshKeyRef / additionalTrustBundleRef: hub
+//
+// Managed-cluster install refs are intentionally excluded — hub-side gitops
+// manifests carry them, not local apply.
 func collectSecretRefRequirements(state v1alpha1.State) []secretRefRequirement {
 	generated := allGeneratedSecretNames(state)
 	var out []secretRefRequirement
@@ -252,14 +288,14 @@ func collectSecretRefRequirements(state v1alpha1.State) []secretRefRequirement {
 			out = append(out, secretRefRequirement{
 				refName: proxy.CredentialsRef.Name,
 				label:   "ocpInstall proxy credentialsRef",
-				phase:   "infra",
+				phases:  []string{"provider", "cluster"},
 			})
 		}
 		if registries := v1alpha1.OCPInstallRegistriesOf(*env); registries != nil && registries.Mirror != nil && registries.Mirror.CredentialsRef.Name != "" {
 			out = append(out, secretRefRequirement{
 				refName: registries.Mirror.CredentialsRef.Name,
 				label:   "registry mirror credentialsRef",
-				phase:   "hub",
+				phases:  []string{"provider", "hub"},
 			})
 		}
 	}
@@ -273,7 +309,7 @@ func collectSecretRefRequirements(state v1alpha1.State) []secretRefRequirement {
 			out = append(out, secretRefRequirement{
 				refName: host.SSH.KeyRef.Name,
 				label:   fmt.Sprintf("provider %s host %s sshKeyRef", p.Metadata.Name, hostName),
-				phase:   "infra",
+				phases:  []string{"provider", "cluster"},
 			})
 		}
 		if libvirt := v1alpha1.ProviderMachineLibvirt(p); libvirt != nil {
@@ -281,7 +317,7 @@ func collectSecretRefRequirements(state v1alpha1.State) []secretRefRequirement {
 				out = append(out, secretRefRequirement{
 					refName: bmc.Auth.CredentialRef.Name,
 					label:   fmt.Sprintf("provider %s bmcEmulation credentialRef", p.Metadata.Name),
-					phase:   "infra",
+					phases:  []string{"provider", "hub"},
 				})
 			}
 		}
@@ -289,14 +325,14 @@ func collectSecretRefRequirements(state v1alpha1.State) []secretRefRequirement {
 			out = append(out, secretRefRequirement{
 				refName: p.Spec.Machine.Vsphere.VCenterRef.Name,
 				label:   fmt.Sprintf("provider %s vsphere vCenterRef", p.Metadata.Name),
-				phase:   "infra",
+				phases:  []string{"provider"},
 			})
 		}
 		if p.Spec.Machine != nil && p.Spec.Machine.Kubevirt != nil && p.Spec.Machine.Kubevirt.ClusterRef.Name != "" {
 			out = append(out, secretRefRequirement{
 				refName: p.Spec.Machine.Kubevirt.ClusterRef.Name,
 				label:   fmt.Sprintf("provider %s kubevirt clusterRef", p.Metadata.Name),
-				phase:   "infra",
+				phases:  []string{"provider"},
 			})
 		}
 	}
@@ -310,7 +346,7 @@ func collectSecretRefRequirements(state v1alpha1.State) []secretRefRequirement {
 			out = append(out, secretRefRequirement{
 				refName: m.Baremetal.BMC.CredentialRef.Name,
 				label:   fmt.Sprintf("infra %s machine %s baremetal bmc credentialRef", ci.Metadata.Name, mname),
-				phase:   "infra",
+				phases:  []string{"provider", "hub"},
 			})
 		}
 	}
@@ -324,21 +360,21 @@ func collectSecretRefRequirements(state v1alpha1.State) []secretRefRequirement {
 			out = append(out, secretRefRequirement{
 				refName: install.PullSecretRef.Name,
 				label:   cluster.Metadata.Name + " pullSecretRef",
-				phase:   "hub",
+				phases:  []string{"hub"},
 			})
 		}
 		if install.SSHKeyRef.Name != "" {
 			out = append(out, secretRefRequirement{
 				refName: install.SSHKeyRef.Name,
 				label:   cluster.Metadata.Name + " sshKeyRef",
-				phase:   "hub",
+				phases:  []string{"hub"},
 			})
 		}
 		if install.AdditionalTrustBundleRef.Name != "" {
 			out = append(out, secretRefRequirement{
 				refName:   install.AdditionalTrustBundleRef.Name,
 				label:     cluster.Metadata.Name + " additionalTrustBundleRef",
-				phase:     "hub",
+				phases:    []string{"hub"},
 				generated: generated[install.AdditionalTrustBundleRef.Name],
 			})
 		}

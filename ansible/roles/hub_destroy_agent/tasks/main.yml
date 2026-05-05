@@ -73,8 +73,17 @@
 
 - name: Resolve BMC credentials
   ansible.builtin.set_fact:
-    gitups_hub_bmc_username: "{{ ((gitups_hub_bmc_credentials_slurp.content | b64decode | trim).split(':', 1))[0] }}"
-    gitups_hub_bmc_password: "{{ ((gitups_hub_bmc_credentials_slurp.content | b64decode | trim).split(':', 1))[1] }}"
+    gitups_hub_bmc_credentials: "{{ gitups_hub_bmc_credentials_slurp | gitups_parse_credential('hub BMC credentialRef ' ~ gitups_hub_provider_bmc.auth.credentialRef) }}"
+  no_log: true
+  changed_when: false
+  when:
+    - gitups_hub_bmc_auth_enabled
+    - gitups_hub_bmc_credentials_slurp.content is defined
+
+- name: Expose BMC username and password as facts
+  ansible.builtin.set_fact:
+    gitups_hub_bmc_username: "{{ gitups_hub_bmc_credentials.username }}"
+    gitups_hub_bmc_password: "{{ gitups_hub_bmc_credentials.password }}"
   no_log: true
   changed_when: false
   when:

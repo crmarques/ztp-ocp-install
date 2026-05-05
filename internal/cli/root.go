@@ -35,6 +35,7 @@ func newRootCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Comm
 		newDiffCmd(stdout),
 		newRegistryCmd(stdout, stderr),
 		newSecretsCmd(stdout, stderr),
+		newOperatorCmd(stdin, stdout, stderr),
 	)
 	return root
 }

@@ -1,0 +1,105 @@
+---
+- name: Read rendered install-config.yaml
+  ansible.builtin.slurp:
+    src: "{{ gitups_hub_install_config_path }}"
+  register: gitups_install_config_slurp
+
+- name: Read rendered agent-config.yaml
+  ansible.builtin.slurp:
+    src: "{{ gitups_hub_agent_config_path }}"
+  register: gitups_agent_config_slurp
+
+- name: Build effective install-config
+  ansible.builtin.set_fact:
+    gitups_effective_install_config: >-
+      {{
+        (gitups_install_config_slurp.content | b64decode | from_yaml)
+        | combine({
+            'pullSecret': gitups_resolved_pull_secret,
+            'sshKey': gitups_resolved_ssh_key,
+          })
+        | combine(
+            {'additionalTrustBundle': gitups_resolved_trust_bundle}
+            if (gitups_resolved_trust_bundle | length) > 0 else {},
+            recursive=true
+          )
+        | combine(
+            {
+              'proxy': {
+                'httpProxy': gitups_proxy_http_effective,
+                'httpsProxy': gitups_proxy_https_effective,
+                'noProxy': gitups_proxy_no,
+              }
+            }
+            if (gitups_proxy_enabled | default(false) | bool)
+               and ((gitups_proxy_credentials_ref | default('') | length) > 0)
+            else {},
+            recursive=true
+          )
+      }}
+  no_log: true
+  changed_when: false
+
+- name: Build effective agent-config
+  ansible.builtin.set_fact:
+    gitups_effective_agent_config: "{{ gitups_agent_config_slurp.content | b64decode | from_yaml }}"
+  changed_when: false
+
+- name: Resolve agent boot artifact settings
+  ansible.builtin.set_fact:
+    gitups_hub_minimal_iso: "{{ gitups_effective_agent_config.minimalISO | default(false) | bool }}"
+    gitups_hub_boot_artifacts_http_port: "{{ gitups_current_provider.bootArtifactsHttp.port | int }}"
+  changed_when: false
+
+# Probe each configured imageDigestSources mirror endpoint to fail fast on
+# obvious local registry mistakes. This only validates the configured local
+# registry path; disconnected mode is enforced by rendering imageDigestSources
+# with NeverContactSource and by overriding the installer release image below.
+- name: Collect imageDigestSources mirror endpoints
+  ansible.builtin.set_fact:
+    gitups_hub_mirror_endpoints: >-
+      {{
+        (gitups_effective_install_config.imageDigestSources | default([]))
+        | map(attribute='mirrors') | flatten
+        | map('regex_replace', '^([^/]+)/.*$', '\1')
+        | unique | list
+      }}
+  changed_when: false
+
+- name: Probe imageDigestSources mirror reachability
+  block:
+    - name: Probe each mirror endpoint over TCP
+      ansible.builtin.wait_for:
+        host: "{{ item.split(':')[0] }}"
+        port: "{{ ((item.split(':') | length > 1) | ternary(item.split(':') | last, '443')) | int }}"
+        timeout: 5
+        state: started
+      become: false
+      loop: "{{ gitups_hub_mirror_endpoints }}"
+  rescue:
+    - name: Fail with local-registry guidance when a mirror is unreachable
+      ansible.builtin.fail:
+        msg: |
+          imageDigestSources mirror is not reachable from this host
+          ({{ ansible_failed_result.msg | default('connection failed') }}).
+          Bring up the mirror at the address listed in install-config.yaml
+          imageDigestSources[].mirrors and re-run, or disable the local registry
+          in the Environment for a connected install.
+  when: gitups_hub_mirror_endpoints | length > 0
+
+- name: Fail when disconnected install has no local release image override
+  ansible.builtin.fail:
+    msg: "disconnected installs require a local release image override from ocpInstall.registries.imageDigestSources"
+  when:
+    - gitups_ocp_install.disconnected | default(false) | bool
+    - gitups_hub_release_image_override | length == 0
+
+- name: Resolve OpenShift install command environment
+  ansible.builtin.set_fact:
+    gitups_hub_install_env: >-
+      {{
+        {'OPENSHIFT_INSTALL_RELEASE_IMAGE_OVERRIDE': gitups_hub_release_image_override}
+        if (gitups_hub_release_image_override | length) > 0
+        else {}
+      }}
+  changed_when: false
