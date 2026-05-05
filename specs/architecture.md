@@ -137,6 +137,12 @@ suffix is the provider kind: `libvirt`, `baremetal`, `vsphere`,
 `kubevirt` for substrates; `emulated`, `redfish`, `ipmi`, `none` for
 BMCs.
 
+`provider_mirror_registry` runs a docker/distribution server on the
+provider host that supplies `spec.registry.mirrorRegistry`. It executes in
+the provider play of `infra-prepare.yml` **before** `network_lb_managed`
+so any local-mirrored image (HAProxy, future workloads) is reachable when
+its consumer pulls it on subsequent applies.
+
 ### Provider dispatch
 
 The render layer projects three discriminator fields onto the per-cluster

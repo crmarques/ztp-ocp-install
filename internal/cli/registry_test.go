@@ -172,10 +172,15 @@ spec:
           name: k
       capabilities:
         - libvirt
+        - mirror-registry
   machine:
     libvirt:
       hostRefs:
         - name: h
+  registry:
+    mirrorRegistry:
+      hostRef:
+        name: h
 ---
 apiVersion: gitups.io/v1alpha1
 kind: ClusterInfrastructure

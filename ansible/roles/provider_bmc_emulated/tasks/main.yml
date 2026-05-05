@@ -126,39 +126,20 @@
     cmd: "python3 -m venv --system-site-packages {{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/venv"
     creates: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/venv/bin/python"
 
-- name: Check whether pinned sushy-emulator binary is already present
-  ansible.builtin.stat:
-    path: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/venv/bin/sushy-emulator"
-  register: gitups_bmc_sushy_emulator_stat
-
-# Disconnected installs must not contact PyPI. When the venv binary is already
-# present (a fresh install pre-populated by the operator, or a previous run),
-# we trust it and skip pip. Otherwise fail loudly with a clear remediation.
-- name: Fail when sushy-tools virtualenv is empty and disconnected
-  ansible.builtin.fail:
-    msg: >-
-      sushy-tools is not installed under
-      {{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/venv
-      and ocpInstall.disconnected is set; pre-populate the venv with the
-      pinned `sushy-tools=={{ gitups_sushy_tools_version }}` wheel before
-      running apply
-  when:
-    - gitups_ocp_install.disconnected | default(false) | bool
-    - not (gitups_bmc_sushy_emulator_stat.stat.exists | default(false))
-
+# sushy-tools is a lab BMC emulator unrelated to the OpenShift content
+# plane, so ocpInstall.disconnected does not gate its install -- pip always
+# fetches it from PyPI.
 - name: Upgrade pip inside sushy-tools virtualenv
   ansible.builtin.pip:
     name: pip
     state: latest
     virtualenv: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/venv"
-  when: not (gitups_ocp_install.disconnected | default(false) | bool)
 
 - name: Install pinned sushy-tools into virtualenv
   ansible.builtin.pip:
     name: "sushy-tools=={{ gitups_sushy_tools_version }}"
     virtualenv: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/venv"
     extra_args: --ignore-installed --no-deps
-  when: not (gitups_ocp_install.disconnected | default(false) | bool)
 
 - name: Verify sushy-emulator can import libvirt
   ansible.builtin.command:

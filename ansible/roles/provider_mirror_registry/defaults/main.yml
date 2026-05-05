@@ -1,0 +1,12 @@
+---
+# State directory layout under the provider host's gitups state dir. Auth
+# and certificate material live alongside the registry data so a single
+# `chown root:root, chmod 0700` cap suffices.
+gitups_mirror_registry_root: "{{ gitups_host_state_dir }}/mirror-registry/{{ gitups_current_mirror_registry.name }}"
+gitups_mirror_registry_data_dir: "{{ gitups_current_mirror_registry.dataDir | default(gitups_mirror_registry_root ~ '/data') }}"
+gitups_mirror_registry_auth_dir: "{{ gitups_mirror_registry_root }}/auth"
+gitups_mirror_registry_certs_dir: "{{ gitups_mirror_registry_root }}/certs"
+gitups_mirror_registry_tools_dir: "{{ gitups_mirror_registry_root }}/tools"
+gitups_mirror_registry_container_name: "gitups-mirror-registry-{{ gitups_current_mirror_registry.name }}"
+gitups_mirror_registry_skopeo_retries: 5
+gitups_mirror_registry_trust_anchor: "/etc/pki/ca-trust/source/anchors/gitups-mirror-{{ gitups_current_mirror_registry.host }}.crt"

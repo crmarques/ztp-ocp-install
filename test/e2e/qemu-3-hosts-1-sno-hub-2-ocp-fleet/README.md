@@ -20,11 +20,11 @@ Cluster networks are `192.168.150.0/24`, `192.168.151.0/24`, and
 
 `environment.yaml` uses `ocpInstall.disconnected` with:
 
-- mirror registry `registry.mirror.test:5000`
+- mirror registry `registry.mirror.local:5000`
 - mirror credentials `mirror-registry-credentials`
 - generated trust bundle `mirror-registry-ca`
 - mirrored OpenShift release payload sources
-- local HAProxy image `registry.mirror.test:5000/library/haproxy:3.2.15`
+- local HAProxy image `registry.mirror.local:5000/library/haproxy:3.2.15`
 
 ## Secrets
 
@@ -73,7 +73,7 @@ gitups destroy  -f test/e2e/qemu-3-hosts-1-sno-hub-2-ocp-fleet --state-dir /tmp/
 
 ## External Prerequisites
 
-Provide a local registry reachable as `registry.mirror.test:5000` from the
+Provide a local registry reachable as `registry.mirror.local:5000` from the
 control host and each provider host. It must contain the OpenShift `4.21.10`
 release payload and the local HAProxy image. Ensure routing from the control
 host to every cluster machine network through the matching provider host.

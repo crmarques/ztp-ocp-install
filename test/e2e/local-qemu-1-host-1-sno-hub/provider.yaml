@@ -1,0 +1,42 @@
+apiVersion: gitups.io/v1alpha1
+kind: InfrastructureProvider
+metadata:
+  name: local-qemu-1-host-provider
+spec:
+  hosts:
+    local-qemu-host:
+      ssh:
+        address: localhost
+        keyRef:
+          name: local-qemu-host-admin-key
+      libvirtURI: qemu:///system
+      capabilities:
+        - libvirt
+        - container-runtime
+        - hosts-file
+        - mirror-registry
+  machine:
+    libvirt:
+      hostRefs:
+        - name: local-qemu-host
+      bmcEmulation:
+        port: 8000
+        auth:
+          credentialRef:
+            name: local-qemu-1-host-bmc-credentials
+  loadBalancer:
+    haProxy:
+      hostRef:
+        name: local-qemu-host
+  nameResolution:
+    hostsFile:
+      hostRefs:
+        - name: local-qemu-host
+      additionalIngressHosts:
+        - console-openshift-console.apps.local-qemu-1-host-hub.gitups.test
+        - oauth-openshift.apps.local-qemu-1-host-hub.gitups.test
+  registry:
+    mirrorRegistry:
+      hostRef:
+        name: local-qemu-host
+      port: 5000

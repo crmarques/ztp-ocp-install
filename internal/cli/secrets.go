@@ -612,6 +612,9 @@ func materializeSelfSignedCertificate(secretsDir string, request generatedSelfSi
 		return "", fmt.Errorf("generated self-signed certificate %q is partially present; expected both %s and %s", request.name, certPath, keyPath)
 	}
 	if certExists {
+		if err := verifySelfSignedCertificateMatchesRequest(certPath, request.certificate); err != nil {
+			return "", fmt.Errorf("existing self-signed certificate %q at %s no longer matches the desired spec: %w; remove %s and %s to regenerate", request.name, certPath, err, certPath, keyPath)
+		}
 		return "reused existing certificate and key", nil
 	}
 	certPEM, keyPEM, err := selfSignedCertificatePEM(request.certificate)
@@ -680,6 +683,57 @@ func selfSignedCertificatePEM(source v1alpha1.SelfSignedCertificateSpec) ([]byte
 		return nil, nil, fmt.Errorf("encode private key: %w", err)
 	}
 	return certPEM.Bytes(), keyPEM.Bytes(), nil
+}
+
+func verifySelfSignedCertificateMatchesRequest(certPath string, source v1alpha1.SelfSignedCertificateSpec) error {
+	data, err := os.ReadFile(certPath)
+	if err != nil {
+		return fmt.Errorf("read certificate: %w", err)
+	}
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return fmt.Errorf("certificate is not PEM-encoded")
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return fmt.Errorf("parse certificate: %w", err)
+	}
+	if cert.Subject.CommonName != source.CommonName {
+		return fmt.Errorf("commonName drift: got %q, want %q", cert.Subject.CommonName, source.CommonName)
+	}
+	wantDNS, wantIP := certificateSANs(source)
+	gotDNS := normalizeStringSet(cert.DNSNames)
+	expectedDNS := normalizeStringSet(wantDNS)
+	if !reflect.DeepEqual(gotDNS, expectedDNS) {
+		return fmt.Errorf("dnsNames drift: got %v, want %v", gotDNS, expectedDNS)
+	}
+	gotIP := normalizeIPSet(cert.IPAddresses)
+	expectedIP := normalizeIPSet(wantIP)
+	if !reflect.DeepEqual(gotIP, expectedIP) {
+		return fmt.Errorf("ipAddresses drift: got %v, want %v", gotIP, expectedIP)
+	}
+	return nil
+}
+
+func normalizeStringSet(in []string) []string {
+	out := append([]string(nil), in...)
+	sort.Strings(out)
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func normalizeIPSet(in []net.IP) []string {
+	out := make([]string, 0, len(in))
+	for _, ip := range in {
+		out = append(out, ip.String())
+	}
+	sort.Strings(out)
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func certificateSANs(source v1alpha1.SelfSignedCertificateSpec) ([]string, []net.IP) {

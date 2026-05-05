@@ -60,6 +60,12 @@
       become: false
       changed_when: false
 
+    - name: Select mirror registry for current host
+      ansible.builtin.set_fact:
+        gitups_current_mirror_registry: "{{ (gitups_mirror_registries | default([]) | selectattr('providerRef', 'equalto', gitups_provider_name) | selectattr('providerHostRef', 'equalto', gitups_host_name) | list | first) | default(None) }}"
+      become: false
+      changed_when: false
+
   tasks:
     - name: Apply host proxy role
       ansible.builtin.import_role:
@@ -76,6 +82,14 @@
       ansible.builtin.import_role:
         name: provider_boot_artifacts_http
       when: gitups_current_provider.bootArtifactsHttp.enabled | default(false) | bool
+
+    # Mirror registry must run before the load balancer role: HAProxy is
+    # pulled from the local mirror on subsequent applies, so the registry
+    # has to be reachable first.
+    - name: Apply mirror registry role
+      ansible.builtin.import_role:
+        name: provider_mirror_registry
+      when: gitups_current_mirror_registry is not none
 
     - name: Apply managed load balancer role
       ansible.builtin.import_role:

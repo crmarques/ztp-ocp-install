@@ -24,7 +24,9 @@ name; it is documented in each case's `README.md`.
 
 Current cases:
 
-- `qemu-1-host-1-sno-hub` — 1 QEMU host, 1 SNO hub, no managed clusters.
+- `local-qemu-1-host-1-sno-hub` — control host is itself the QEMU/KVM provider
+  host (SSH back to `localhost`), 1 SNO hub, no managed clusters.
+- `qemu-1-host-1-sno-hub` — 1 remote QEMU host, 1 SNO hub, no managed clusters.
 - `qemu-3-hosts-1-sno-hub-2-ocp-fleet` — 3 QEMU hosts, 1 SNO hub plus 2
   multi-node managed OCP clusters (one cluster per host).
 - `qemu-3-hosts-1-hub-2-ocp-fleet` — 3 QEMU hosts, 1 multi-node hub plus 2

@@ -262,9 +262,9 @@ func validateProviders(providers []v1alpha1.InfrastructureProvider) []string {
 		errs = append(errs, validateProviderHosts(p)...)
 		// At least one capability sub-block must be set; each is independently
 		// optional so a provider may supply machines, load balancing, name
-		// resolution, or any combination.
-		if p.Spec.Machine == nil && p.Spec.LoadBalancer == nil && p.Spec.NameResolution == nil {
-			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec must set at least one capability sub-block (machine, loadBalancer, nameResolution)", p.Metadata.Name))
+		// resolution, registry mirror, or any combination.
+		if p.Spec.Machine == nil && p.Spec.LoadBalancer == nil && p.Spec.NameResolution == nil && p.Spec.Registry == nil {
+			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec must set at least one capability sub-block (machine, loadBalancer, nameResolution, registry)", p.Metadata.Name))
 		}
 		if p.Spec.Machine != nil {
 			set := 0
@@ -295,6 +295,38 @@ func validateProviders(providers []v1alpha1.InfrastructureProvider) []string {
 		}
 		errs = append(errs, validateProviderLoadBalancer(p)...)
 		errs = append(errs, validateProviderNameResolution(p)...)
+		errs = append(errs, validateProviderRegistry(p)...)
+	}
+	return errs
+}
+
+func validateProviderRegistry(p v1alpha1.InfrastructureProvider) []string {
+	if p.Spec.Registry == nil {
+		return nil
+	}
+	var errs []string
+	if p.Spec.Registry.MirrorRegistry == nil {
+		errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec.registry must set exactly one of {mirrorRegistry}", p.Metadata.Name))
+		return errs
+	}
+	mr := p.Spec.Registry.MirrorRegistry
+	if mr.HostRef.Name == "" {
+		errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec.registry.mirrorRegistry.hostRef.name is required", p.Metadata.Name))
+		return errs
+	}
+	host, ok := p.Spec.Hosts[mr.HostRef.Name]
+	if !ok {
+		errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec.registry.mirrorRegistry.hostRef %q not defined under spec.hosts", p.Metadata.Name, mr.HostRef.Name))
+		return errs
+	}
+	if host.SSH == nil {
+		errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec.registry.mirrorRegistry.hostRef %q must have ssh connection set", p.Metadata.Name, mr.HostRef.Name))
+	}
+	if !hasCapability(host.Capabilities, v1alpha1.CapabilityMirrorRegistry) {
+		errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec.registry.mirrorRegistry.hostRef %q lacks capability %q", p.Metadata.Name, mr.HostRef.Name, v1alpha1.CapabilityMirrorRegistry))
+	}
+	if mr.Port != 0 && (mr.Port < 1 || mr.Port > 65535) {
+		errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec.registry.mirrorRegistry.port %d out of range", p.Metadata.Name, mr.Port))
 	}
 	return errs
 }
@@ -433,6 +465,7 @@ func synthesizeClosureProvider(ci v1alpha1.ClusterInfrastructure, closure v1alph
 			Machine:        closure.Machine,
 			LoadBalancer:   closure.LoadBalancer,
 			NameResolution: closure.NameResolution,
+			Registry:       closure.Registry,
 		},
 	}
 }
@@ -829,7 +862,75 @@ func validateCrossLayer(state v1alpha1.State) []string {
 		}
 	}
 	errs = append(errs, validateDisconnectedOpenShiftSources(state)...)
+	errs = append(errs, validateMirrorRegistryPlacement(state)...)
 	return errs
+}
+
+// validateMirrorRegistryPlacement enforces the cross-layer rule that a
+// disconnected install requires exactly one provider in the loaded set to
+// supply spec.registry.mirrorRegistry. Omission means external — but for
+// disconnected we reject that and guide the operator to add the capability or
+// switch to restricted. Also cross-checks the mirror URL's port against the
+// supplying provider's declared port.
+func validateMirrorRegistryPlacement(state v1alpha1.State) []string {
+	env := primaryEnvironment(&state)
+	if env == nil {
+		return nil
+	}
+	if v1alpha1.OCPInstallKind(*env) != v1alpha1.OCPInstallKindDisconnected {
+		return nil
+	}
+	registries := v1alpha1.OCPInstallRegistriesOf(*env)
+	if registries == nil || registries.Mirror == nil {
+		return nil
+	}
+	var errs []string
+	suppliers := []string{}
+	for _, p := range state.InfrastructureProviders {
+		if v1alpha1.ProviderMirrorRegistry(p) != nil {
+			suppliers = append(suppliers, p.Metadata.Name)
+		}
+	}
+	if len(suppliers) == 0 {
+		errs = append(errs, fmt.Sprintf("Environment/%s ocpInstall.disconnected requires at least one InfrastructureProvider with spec.registry.mirrorRegistry set; declare the capability or switch to restricted", env.Metadata.Name))
+		return errs
+	}
+	if len(suppliers) > 1 {
+		sort.Strings(suppliers)
+		errs = append(errs, fmt.Sprintf("Environment/%s ocpInstall.disconnected requires exactly one provider supplying spec.registry.mirrorRegistry, found %d: %s", env.Metadata.Name, len(suppliers), strings.Join(suppliers, ", ")))
+	}
+	urlPort := mirrorURLPort(registries.Mirror.URL)
+	for _, p := range state.InfrastructureProviders {
+		mr := v1alpha1.ProviderMirrorRegistry(p)
+		if mr == nil || mr.Port == 0 || urlPort == 0 {
+			continue
+		}
+		if mr.Port != urlPort {
+			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec.registry.mirrorRegistry.port %d does not match Environment ocpInstall.registries.mirror.url port %d", p.Metadata.Name, mr.Port, urlPort))
+		}
+	}
+	return errs
+}
+
+// mirrorURLPort extracts the trailing :port from a registry URL of the form
+// host[:port][/path]. Returns 0 when no explicit port is present.
+func mirrorURLPort(u string) int {
+	host := u
+	if idx := strings.Index(host, "/"); idx >= 0 {
+		host = host[:idx]
+	}
+	idx := strings.LastIndex(host, ":")
+	if idx < 0 {
+		return 0
+	}
+	port := 0
+	for _, ch := range host[idx+1:] {
+		if ch < '0' || ch > '9' {
+			return 0
+		}
+		port = port*10 + int(ch-'0')
+	}
+	return port
 }
 
 func validateImageDigestSource(owner string, src v1alpha1.ImageDigestSource) []string {

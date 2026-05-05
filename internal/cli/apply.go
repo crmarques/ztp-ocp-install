@@ -165,6 +165,8 @@ func newDestroyCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 	cmd.Flags().StringArrayVar(&extraVars, "extra-var", nil, "extra ansible variable in key=value form; may be repeated (passed via -e)")
 	var keepStateDir bool
 	cmd.Flags().BoolVar(&keepStateDir, "keep-state-dir", false, "keep --state-dir after a full destroy (default: remove it once all phases succeed)")
+	var keepMirroredImages bool
+	cmd.Flags().BoolVar(&keepMirroredImages, "keep-mirrored-images", false, "keep the mirror-registry data volume on the provider host so the next apply does not have to re-pull from public registries")
 	cmd.RunE = func(c *cobra.Command, _ []string) error {
 		for _, v := range extraVars {
 			if !strings.Contains(v, "=") {
@@ -213,6 +215,9 @@ func newDestroyCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 			"gitups_state_dir=" + stateDirAbs,
 			"gitups_secrets_dir=" + secretsDirAbs,
 			"gitups_host_state_dir=" + hostStateDirAbs,
+		}
+		if keepMirroredImages {
+			pairs = append(pairs, "gitups_keep_mirrored_images=true")
 		}
 		pairs = append(pairs, extraVars...)
 		runner := ansible.CommandRunner{Stdout: stdout, Stderr: stderr}

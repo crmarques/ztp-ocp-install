@@ -41,6 +41,15 @@ rejects proxy, mirror, or trust material declared under `connected` so no
 mirror credentials, trust bundles, or `imageDigestSources` ever reach the
 rendered install-config or host runtime.
 
+When the operator declares `InfrastructureProvider.spec.registry.mirrorRegistry`,
+the `provider_mirror_registry` role installs the registry CA into the host
+trust store at `/etc/pki/ca-trust/source/anchors/gitups-mirror-<host>.crt`
+and runs `update-ca-trust`. This trust write is host-local: cluster-node
+trust still flows through the install-config `additionalTrustBundle` path.
+The mirror htpasswd file is derived at apply time from a single-line
+`username:password` secret named by `registries.mirror.credentialsRef` and
+never inlined into committed YAML or rendered manifests.
+
 ## Host Runtime State
 
 Keep root-managed runtime state separate. The default host runtime

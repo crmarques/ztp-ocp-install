@@ -42,6 +42,14 @@ func ComponentPins(state v1alpha1.State) []ComponentPin {
 			LookupDate: versionLookupDate,
 		})
 	}
+	if usesManagedMirrorRegistry(state) {
+		pins = append(pins, ComponentPin{
+			Name:       v1alpha1.ComponentTypeMirrorRegistry,
+			Version:    "2",
+			Source:     "https://hub.docker.com/_/registry",
+			LookupDate: versionLookupDate,
+		})
+	}
 	for _, version := range openshiftInstallVersions(state) {
 		pins = append(pins, ComponentPin{
 			Name:       "openshift-install",
@@ -85,6 +93,15 @@ func usesSushyTools(state v1alpha1.State) bool {
 func usesManagedHAProxy(state v1alpha1.State) bool {
 	for _, infra := range state.ClusterInfrastructures {
 		if len(infra.Spec.LoadBalancers) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func usesManagedMirrorRegistry(state v1alpha1.State) bool {
+	for _, provider := range state.InfrastructureProviders {
+		if v1alpha1.ProviderMirrorRegistry(provider) != nil {
 			return true
 		}
 	}

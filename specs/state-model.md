@@ -111,6 +111,11 @@ spec:
     hostsFile:
       hostRefs:
         - name: qemu-host
+  registry:
+    mirrorRegistry:
+      hostRef:
+        name: qemu-host
+      port: 5000
 ```
 
 Rules:
@@ -118,22 +123,31 @@ Rules:
 - `spec` is capability-oriented. Each top-level sub-block is independently
   optional: `machine` (substrate flavors `libvirt | baremetal | vsphere |
   kubevirt`), `loadBalancer` (flavors `haProxy`, …), `nameResolution`
-  (flavors `hostsFile`, …). At least one capability must be set.
+  (flavors `hostsFile`, …), `registry` (flavors `mirrorRegistry`, …). At
+  least one capability must be set.
 - `spec.hosts` is the shared host pool. Each entry carries a structural
   connection sub-block — v1 ships only `ssh`. Capabilities reference hosts
   by name (`hostRef` / `hostRefs`); appliance-style capabilities embed the
   endpoint inline and need no host pool.
-- Each capability sub-block (`machine`, `loadBalancer`, `nameResolution`)
-  is itself a structural-discriminator union: exactly one flavor sub-block
-  is set. There is no `type` / `mode` / `kind` discriminator string.
-- Omitting `loadBalancer` or `nameResolution` means **external** — the
-  operator owns that concern for clusters bound to this provider.
+- Each capability sub-block (`machine`, `loadBalancer`, `nameResolution`,
+  `registry`) is itself a structural-discriminator union: exactly one
+  flavor sub-block is set. There is no `type` / `mode` / `kind`
+  discriminator string.
+- Omitting `loadBalancer`, `nameResolution`, or `registry` means
+  **external** — the operator owns that concern for clusters bound to
+  this provider.
+- `registry.mirrorRegistry` requires its `hostRef` host to list the
+  `mirror-registry` capability. The URL, credentials, and trust material
+  remain on `Environment.spec.ocpInstall.{disconnected,restricted}.registries.mirror`;
+  the provider only contributes placement.
 - Owns: provider host pool with capabilities, machine substrate (with
   BMC service settings and reusable machine profiles for libvirt), load
-  balancer placement, name resolution placement.
+  balancer placement, name resolution placement, mirror registry
+  placement.
 - Must not own per-cluster network instances (bridge names, portgroups,
   CIDRs), per-machine placement, OpenShift role, release, install config,
-  OCP node roles, cluster VIPs, or cluster endpoint definitions.
+  OCP node roles, cluster VIPs, or cluster endpoint definitions, or the
+  registry URL/credentials/trust material.
 
 ## `ClusterInfrastructure`
 
@@ -282,6 +296,10 @@ The validator enforces:
   provider kind disagrees with the referenced `InfrastructureProvider`.
 - Reject `Environment.spec.ocpInstall.disconnected` without registry
   mirror and trust material.
+- Reject `Environment.spec.ocpInstall.disconnected` when no
+  `InfrastructureProvider` in the loaded set supplies
+  `spec.registry.mirrorRegistry`. Omission means external; for
+  disconnected, an external mirror is not assumed.
 - Reject duplicated facts across layers when a referenced lower layer
   owns the fact.
 - Resolve every upper-layer reference to the correct lower-layer object

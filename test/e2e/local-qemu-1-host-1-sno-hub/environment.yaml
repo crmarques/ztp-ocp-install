@@ -1,7 +1,7 @@
 apiVersion: gitups.io/v1alpha1
 kind: Environment
 metadata:
-  name: qemu-3-hosts-sno-hub-fleet
+  name: local-qemu-1-host
 spec:
   baseDomain: gitups.test
   ocpInstall:
@@ -37,3 +37,7 @@ spec:
       haproxy:
         local: registry.mirror.local:5000/library/haproxy:3.2.15
         public: docker.io/library/haproxy:3.2.15
+    registry:
+      mirror-registry:
+        local: registry.mirror.local:5000/library/registry:2
+        public: docker.io/library/registry:2

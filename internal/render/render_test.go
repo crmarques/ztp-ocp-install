@@ -282,8 +282,45 @@ func TestRenderedArtifactsStayUnderStateDir(t *testing.T) {
 	}
 }
 
+func TestRenderMirrorRegistryRunVars(t *testing.T) {
+	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/local-qemu-1-host-1-sno-hub"})
+	if err != nil {
+		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
+	}
+	stateDir := t.TempDir()
+	result, err := All(stateDir, state)
+	if err != nil {
+		t.Fatalf("render All returned error: %v", err)
+	}
+	varsFile := readFile(t, result.VarsPath)
+	for _, expected := range []string{
+		"gitups_mirror_registries:",
+		"name: local-qemu-1-host-provider",
+		"providerRef: local-qemu-1-host-provider",
+		"providerHostRef: local-qemu-host",
+		"port: 5000",
+		"credentialsSecretName: mirror-registry-credentials",
+		"trustBundleCertSecretName: mirror-registry-ca",
+		"trustBundleKeySecretName: mirror-registry-ca.key",
+		"local: registry.mirror.local:5000/library/registry:2",
+		"public: docker.io/library/registry:2",
+		"mirrorSet:",
+		"kind: releasePayload",
+		"public: quay.io/openshift-release-dev/ocp-release:4.21.10-x86_64",
+		"local: registry.mirror.local:5000/openshift/release-images:4.21.10-x86_64",
+		"kind: componentImage",
+		"public: docker.io/library/haproxy:3.2.15",
+		"local: registry.mirror.local:5000/library/haproxy:3.2.15",
+		"kind: registryServer",
+	} {
+		if !strings.Contains(varsFile, expected) {
+			t.Fatalf("vars missing %q\n%s", expected, varsFile)
+		}
+	}
+}
+
 func TestRenderOneHostUsesLocalConnection(t *testing.T) {
-	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/qemu-1-host-1-sno-hub"})
+	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/local-qemu-1-host-1-sno-hub"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
@@ -296,7 +333,7 @@ func TestRenderOneHostUsesLocalConnection(t *testing.T) {
 	for _, expected := range []string{
 		"ansible_host: localhost",
 		"ansible_connection: local",
-		"gitups_cluster_name: qemu-1-host-hub",
+		"gitups_cluster_name: local-qemu-1-host-hub",
 	} {
 		if !strings.Contains(inventory, expected) {
 			t.Fatalf("inventory missing %q\n%s", expected, inventory)
@@ -305,7 +342,7 @@ func TestRenderOneHostUsesLocalConnection(t *testing.T) {
 }
 
 func TestRenderVarsExposeOCPInstallMetadata(t *testing.T) {
-	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/qemu-1-host-1-sno-hub"})
+	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/local-qemu-1-host-1-sno-hub"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
@@ -322,23 +359,23 @@ func TestRenderVarsExposeOCPInstallMetadata(t *testing.T) {
 		"method: agent",
 		"pullSecretRef: openshift-pull-secret",
 		"sshKeyRef: cluster-admin-key",
-		"releaseImageOverride: registry.mirror.test:5000/openshift/release-images:4.21.10-x86_64",
+		"releaseImageOverride: registry.mirror.local:5000/openshift/release-images:4.21.10-x86_64",
 		"additionalTrustBundleRef: mirror-registry-ca",
 		"version: 4.21.10",
 		"channel: stable-4.21",
-		"relativeDir: clusters/qemu-1-host-hub/installer",
-		"relativeInstallConfigPath: clusters/qemu-1-host-hub/installer/install-config.yaml",
-		"relativeAgentConfigPath: clusters/qemu-1-host-hub/installer/agent-config.yaml",
+		"relativeDir: clusters/local-qemu-1-host-hub/installer",
+		"relativeInstallConfigPath: clusters/local-qemu-1-host-hub/installer/install-config.yaml",
+		"relativeAgentConfigPath: clusters/local-qemu-1-host-hub/installer/agent-config.yaml",
 		"name: openshift-install",
 		"machineRef: master-0",
 		"localRegistry:",
-		"url: registry.mirror.test:5000",
-		"host: registry.mirror.test",
+		"url: registry.mirror.local:5000",
+		"host: registry.mirror.local",
 		"credentialsRef: mirror-registry-credentials",
 		"trustBundleRef: mirror-registry-ca",
 		"dnsHosts:",
 		"ip: 192.168.130.1",
-		"- registry.mirror.test",
+		"- registry.mirror.local",
 	} {
 		if !strings.Contains(varsFile, expected) {
 			t.Fatalf("vars missing %q\n%s", expected, varsFile)
@@ -351,12 +388,12 @@ func TestRenderVarsExposeOCPInstallMetadata(t *testing.T) {
 	if !strings.Contains(lock, "name: openshift-install") || !strings.Contains(lock, "version: 4.21.10") {
 		t.Fatalf("lock missing openshift-install pin\n%s", lock)
 	}
-	asset := installerAssetFor(result.InstallerAssets, "qemu-1-host-hub")
+	asset := installerAssetFor(result.InstallerAssets, "local-qemu-1-host-hub")
 	installConfig := readFile(t, asset.InstallConfigPath)
 	for _, expected := range []string{
 		"imageDigestSources:",
-		"registry.mirror.test:5000/openshift/release-images",
-		"registry.mirror.test:5000/openshift/release",
+		"registry.mirror.local:5000/openshift/release-images",
+		"registry.mirror.local:5000/openshift/release",
 		"sourcePolicy: NeverContactSource",
 	} {
 		if !strings.Contains(installConfig, expected) {
@@ -416,7 +453,7 @@ func TestLibvirtSubstrateOpensBootArtifactsHTTPPort(t *testing.T) {
 
 func TestRenderVarsExposeGeneratedSecrets(t *testing.T) {
 	dir := t.TempDir()
-	for _, name := range []string{"provider.yaml", "hub.yaml"} {
+	for _, name := range []string{"hub.yaml"} {
 		data, err := os.ReadFile(filepath.Join("../../examples/infra", name))
 		if err != nil {
 			t.Fatalf("read %s: %v", name, err)
@@ -424,6 +461,22 @@ func TestRenderVarsExposeGeneratedSecrets(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, name), data, 0o644); err != nil {
 			t.Fatalf("write %s: %v", name, err)
 		}
+	}
+	// Reuse the example provider but trim the spoke entry and add the
+	// mirror-registry capability the disconnected env requires below.
+	providerData, err := os.ReadFile(filepath.Join("../../examples/infra", "provider.yaml"))
+	if err != nil {
+		t.Fatalf("read provider.yaml: %v", err)
+	}
+	hubProvider := strings.SplitN(string(providerData), "\n---\n", 2)[0]
+	hubProvider = strings.Replace(
+		hubProvider,
+		"      capabilities:\n        - libvirt\n        - hosts-file",
+		"      capabilities:\n        - libvirt\n        - hosts-file\n        - mirror-registry",
+		1,
+	) + "\n  registry:\n    mirrorRegistry:\n      hostRef:\n        name: hub-sno-host\n      port: 5000\n"
+	if err := os.WriteFile(filepath.Join(dir, "provider.yaml"), []byte(hubProvider), 0o644); err != nil {
+		t.Fatalf("write provider.yaml: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "environment.yaml"), []byte(`apiVersion: gitups.io/v1alpha1
 kind: Environment
@@ -504,7 +557,7 @@ func TestRenderManagedNetworkDetails(t *testing.T) {
 	}
 	varsFile := readFile(t, result.VarsPath)
 	for _, expected := range []string{
-		"local: registry.mirror.test:5000/library/haproxy:3.2.15",
+		"local: registry.mirror.local:5000/library/haproxy:3.2.15",
 		"public: docker.io/library/haproxy:3.2.15",
 		"runtime: podman",
 		"bindAddress: 192.168.130.10",

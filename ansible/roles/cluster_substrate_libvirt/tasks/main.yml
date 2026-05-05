@@ -304,8 +304,9 @@
           gitups_libvirt_lb_vips
           | selectattr('bindAddress', 'defined')
           | rejectattr('bindAddress', 'equalto', '')
+          | selectattr('bindAddress', 'ansible.utils.in_any_network', [item.cidr])
           | map('combine', {'bridge': item.libvirt.bridge, 'cidr': item.cidr})
-          | selectattr('bindAddress', 'in_cidr', item.cidr) | list
+          | list
         )
       }}
   changed_when: false

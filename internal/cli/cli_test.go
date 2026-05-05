@@ -313,6 +313,32 @@ spec:
 	if !strings.Contains(stdout.String(), "reused existing certificate and key") {
 		t.Fatalf("expected reuse output, got %s", stdout.String())
 	}
+
+	driftPath := filepath.Join(dir, "state-drift.yaml")
+	if err := os.WriteFile(driftPath, bytes.ReplaceAll(mustReadFile(t, path), []byte("registry.lab.test"), []byte("registry.other.test")), 0o644); err != nil {
+		t.Fatalf("write drift fixture: %v", err)
+	}
+	stdout.Reset()
+	stderr.Reset()
+	code = Run(context.Background(), []string{"secrets", "generate", "-f", driftPath, "--secrets-dir", secretsDir}, nil, &stdout, &stderr)
+	if code == 0 {
+		t.Fatalf("expected drift to fail, stdout: %s", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "no longer matches the desired spec") {
+		t.Fatalf("expected drift error, stderr: %s", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "remove") {
+		t.Fatalf("expected remediation hint, stderr: %s", stderr.String())
+	}
+}
+
+func mustReadFile(t *testing.T, path string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	return data
 }
 
 func TestSecretsPullSecretSetWritesAndOverwrites(t *testing.T) {

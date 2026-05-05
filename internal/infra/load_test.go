@@ -61,7 +61,7 @@ func TestLoadNormalizeValidateExamples(t *testing.T) {
 }
 
 func TestLoadNormalizeValidateOneHostSample(t *testing.T) {
-	state, err := LoadNormalizeValidate([]string{"../../test/e2e/qemu-1-host-1-sno-hub"})
+	state, err := LoadNormalizeValidate([]string{"../../test/e2e/local-qemu-1-host-1-sno-hub"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
@@ -89,8 +89,8 @@ func TestLoadNormalizeValidateOneHostSample(t *testing.T) {
 		if got, want := machine.Libvirt.HostRef.Name, "local-qemu-host"; got != want {
 			t.Fatalf("%s machine hostRef got %q, want %q", item.Metadata.Name, got, want)
 		}
-		if machine.Resources == nil || machine.Resources.CPU != 8 || machine.Resources.MemoryMiB != 20480 {
-			t.Fatalf("%s machine resources got %+v, want 8 CPU, 20480 MiB", item.Metadata.Name, machine.Resources)
+		if machine.Resources == nil || machine.Resources.CPU != 9 || machine.Resources.MemoryMiB != 19456 {
+			t.Fatalf("%s machine resources got %+v, want 9 CPU, 19456 MiB", item.Metadata.Name, machine.Resources)
 		}
 	}
 }
@@ -294,7 +294,7 @@ func TestValidationRejectsAgentConfigMinimalISOOverride(t *testing.T) {
 }
 
 func TestDisconnectedDefaultsImageSourcesToNeverContactSource(t *testing.T) {
-	state, err := LoadNormalizeValidate([]string{"../../test/e2e/qemu-1-host-1-sno-hub"})
+	state, err := LoadNormalizeValidate([]string{"../../test/e2e/local-qemu-1-host-1-sno-hub"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
@@ -592,5 +592,111 @@ func writeFile(t *testing.T, path string, content string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(strings.TrimLeft(content, "\n")), 0o644); err != nil {
 		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+const disconnectedRegistriesBlock = `  ocpInstall:
+    disconnected:
+      registries:
+        mirror:
+          url: registry.lab.test:5000
+          credentialsRef:
+            name: registry-lab-credentials
+          trustBundle:
+            generatedSelfSigned:
+              secretRef:
+                name: registry-lab-ca
+              commonName: registry.lab.test
+        imageDigestSources:
+          - source: quay.io/openshift-release-dev/ocp-release
+            mirrors:
+              - registry.lab.test:5000/openshift/release-images
+          - source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
+            mirrors:
+              - registry.lab.test:5000/openshift/release
+`
+
+func disconnectedYAML(name, providerName, cidr, apiVIP, ingressVIP, nodeIP string, withMirrorRegistry bool, mirrorRegistryPort int) string {
+	body := strings.Replace(
+		validStateYAML(name, providerName, cidr, apiVIP, ingressVIP, nodeIP),
+		"  ocpInstall:\n    connected: {}\n",
+		disconnectedRegistriesBlock,
+		1,
+	)
+	if withMirrorRegistry {
+		hostCaps := "      capabilities:\n        - libvirt"
+		hostCapsWithRegistry := hostCaps + "\n        - mirror-registry"
+		body = strings.Replace(body, hostCaps, hostCapsWithRegistry, 1)
+		registryBlock := "  registry:\n    mirrorRegistry:\n      hostRef:\n        name: host-01"
+		if mirrorRegistryPort > 0 {
+			registryBlock += fmt.Sprintf("\n      port: %d", mirrorRegistryPort)
+		}
+		registryBlock += "\n"
+		body = strings.Replace(
+			body,
+			"  machine:\n    libvirt:\n      hostRefs:\n        - name: host-01",
+			"  machine:\n    libvirt:\n      hostRefs:\n        - name: host-01",
+			1,
+		)
+		body = strings.Replace(
+			body,
+			"---\napiVersion: gitups.io/v1alpha1\nkind: ClusterInfrastructure",
+			registryBlock+"---\napiVersion: gitups.io/v1alpha1\nkind: ClusterInfrastructure",
+			1,
+		)
+	}
+	return body
+}
+
+func TestValidationRejectsDisconnectedWithoutMirrorRegistry(t *testing.T) {
+	dir := t.TempDir()
+	body := disconnectedYAML("disco-no-reg", "disco-no-reg-provider", "192.168.158.0/24", "192.168.158.10", "192.168.158.11", "192.168.158.20", false, 0)
+	writeFile(t, filepath.Join(dir, "case.yaml"), body)
+	_, err := LoadNormalizeValidate([]string{dir})
+	if err == nil {
+		t.Fatal("expected disconnected-without-mirrorRegistry validation error")
+	}
+	if !strings.Contains(err.Error(), "spec.registry.mirrorRegistry") {
+		t.Fatalf("expected mirrorRegistry guidance, got %v", err)
+	}
+}
+
+func TestValidationAcceptsDisconnectedWithMirrorRegistry(t *testing.T) {
+	dir := t.TempDir()
+	body := disconnectedYAML("disco-ok", "disco-ok-provider", "192.168.159.0/24", "192.168.159.10", "192.168.159.11", "192.168.159.20", true, 5000)
+	writeFile(t, filepath.Join(dir, "case.yaml"), body)
+	state, err := LoadNormalizeValidate([]string{dir})
+	if err != nil {
+		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
+	}
+	if got := v1alpha1.ProviderMirrorRegistry(state.InfrastructureProviders[0]); got == nil {
+		t.Fatalf("expected mirrorRegistry on provider, got nil")
+	}
+}
+
+func TestValidationRejectsMirrorRegistryWithoutHostCapability(t *testing.T) {
+	dir := t.TempDir()
+	body := disconnectedYAML("disco-cap", "disco-cap-provider", "192.168.160.0/24", "192.168.160.10", "192.168.160.11", "192.168.160.20", true, 5000)
+	body = strings.Replace(body, "        - mirror-registry\n", "", 1)
+	writeFile(t, filepath.Join(dir, "case.yaml"), body)
+	_, err := LoadNormalizeValidate([]string{dir})
+	if err == nil {
+		t.Fatal("expected mirror-registry capability missing error")
+	}
+	if !strings.Contains(err.Error(), "lacks capability \"mirror-registry\"") {
+		t.Fatalf("expected mirror-registry capability error, got %v", err)
+	}
+}
+
+func TestValidationRejectsMirrorRegistryPortMismatch(t *testing.T) {
+	dir := t.TempDir()
+	body := disconnectedYAML("disco-port", "disco-port-provider", "192.168.161.0/24", "192.168.161.10", "192.168.161.11", "192.168.161.20", true, 6000)
+	writeFile(t, filepath.Join(dir, "case.yaml"), body)
+	_, err := LoadNormalizeValidate([]string{dir})
+	if err == nil {
+		t.Fatal("expected port mismatch error")
+	}
+	if !strings.Contains(err.Error(), "does not match Environment ocpInstall.registries.mirror.url port") {
+		t.Fatalf("expected port mismatch error, got %v", err)
 	}
 }

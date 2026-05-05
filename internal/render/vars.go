@@ -9,11 +9,12 @@ import (
 )
 
 type VarsFile struct {
-	GitupsOCPInstall    EnvironmentOCPInstallVars `yaml:"gitups_ocp_install" json:"gitups_ocp_install"`
-	GitupsProviders     []ProviderComponentVars   `yaml:"gitups_providers" json:"gitups_providers"`
-	GitupsLoadBalancers []SharedLoadBalancerVars  `yaml:"gitups_load_balancers" json:"gitups_load_balancers"`
-	GitupsClusters      []ClusterVars             `yaml:"gitups_clusters" json:"gitups_clusters"`
-	GitupsComponentPins []ComponentPin            `yaml:"gitups_component_pins" json:"gitups_component_pins"`
+	GitupsOCPInstall      EnvironmentOCPInstallVars `yaml:"gitups_ocp_install" json:"gitups_ocp_install"`
+	GitupsProviders       []ProviderComponentVars   `yaml:"gitups_providers" json:"gitups_providers"`
+	GitupsLoadBalancers   []SharedLoadBalancerVars  `yaml:"gitups_load_balancers" json:"gitups_load_balancers"`
+	GitupsMirrorRegistries []MirrorRegistryRunVars  `yaml:"gitups_mirror_registries" json:"gitups_mirror_registries"`
+	GitupsClusters        []ClusterVars             `yaml:"gitups_clusters" json:"gitups_clusters"`
+	GitupsComponentPins   []ComponentPin            `yaml:"gitups_component_pins" json:"gitups_component_pins"`
 }
 
 // EnvironmentOCPInstallVars projects Environment.spec.ocpInstall to Ansible
@@ -298,6 +299,43 @@ type SharedLoadBalancerVars struct {
 	Frontends   []SharedLoadBalancerFrontendVars `yaml:"frontends" json:"frontends"`
 }
 
+// MirrorRegistryRunVars carries one provider's mirror-registry instance to
+// the provider_mirror_registry role: server placement, the URL the cluster
+// network reaches the mirror at, the secret refs that materialize htpasswd
+// auth and the TLS material, the registry server image (local-then-public
+// fallback like SharedLoadBalancerVars.Image), and the full mirror set the
+// role pushes to make the cluster install fully air-gappable.
+type MirrorRegistryRunVars struct {
+	Name                      string             `yaml:"name" json:"name"`
+	ProviderRef               string             `yaml:"providerRef" json:"providerRef"`
+	ProviderHostRef           string             `yaml:"providerHostRef" json:"providerHostRef"`
+	URL                       string             `yaml:"url" json:"url"`
+	Host                      string             `yaml:"host" json:"host"`
+	Port                      int                `yaml:"port" json:"port"`
+	DataDir                   string             `yaml:"dataDir,omitempty" json:"dataDir,omitempty"`
+	Runtime                   string             `yaml:"runtime" json:"runtime"`
+	CredentialsSecretName     string             `yaml:"credentialsSecretName,omitempty" json:"credentialsSecretName,omitempty"`
+	TrustBundleCertSecretName string             `yaml:"trustBundleCertSecretName,omitempty" json:"trustBundleCertSecretName,omitempty"`
+	TrustBundleKeySecretName  string             `yaml:"trustBundleKeySecretName,omitempty" json:"trustBundleKeySecretName,omitempty"`
+	Image                     ComponentImageURLs `yaml:"image" json:"image"`
+	MirrorSet                 []MirrorImageRef   `yaml:"mirrorSet" json:"mirrorSet"`
+}
+
+// MirrorImageRef is one upstream→mirror image pair the registry role pushes.
+// Kind drives the strategy: releasePayload uses `oc adm release mirror`,
+// componentImage and registryServer use `skopeo copy`.
+type MirrorImageRef struct {
+	Kind   string `yaml:"kind" json:"kind"`
+	Public string `yaml:"public" json:"public"`
+	Local  string `yaml:"local" json:"local"`
+}
+
+const (
+	MirrorImageKindReleasePayload = "releasePayload"
+	MirrorImageKindComponent      = "componentImage"
+	MirrorImageKindRegistryServer = "registryServer"
+)
+
 // ComponentImageURLs exposes both image refs to Ansible. The role tries
 // `local` first when set and falls back to `public` on pull failure.
 type ComponentImageURLs struct {
@@ -375,11 +413,12 @@ func Vars(state v1alpha1.State) VarsFile {
 		clusters = append(clusters, clusterVars(item, provider, ocp, env))
 	}
 	return VarsFile{
-		GitupsOCPInstall:    ocpInstallEnvVars(env),
-		GitupsProviders:     providerComponentVars(state),
-		GitupsLoadBalancers: sharedLoadBalancerVars(state, env),
-		GitupsClusters:      clusters,
-		GitupsComponentPins: ComponentPins(state),
+		GitupsOCPInstall:       ocpInstallEnvVars(env),
+		GitupsProviders:        providerComponentVars(state),
+		GitupsLoadBalancers:    sharedLoadBalancerVars(state, env),
+		GitupsMirrorRegistries: mirrorRegistryRunVars(state, env),
+		GitupsClusters:         clusters,
+		GitupsComponentPins:    ComponentPins(state),
 	}
 }
 
@@ -1136,8 +1175,165 @@ func closureProvider(ci v1alpha1.ClusterInfrastructure, providers map[string]v1a
 			Machine:        closure.Machine,
 			LoadBalancer:   closure.LoadBalancer,
 			NameResolution: closure.NameResolution,
+			Registry:       closure.Registry,
 		},
 	}
+}
+
+// mirrorRegistryRunVars projects each InfrastructureProvider that supplies
+// spec.registry.mirrorRegistry into a per-provider runner var consumed by
+// the provider_mirror_registry role. Returns nil when the env's ocpInstall
+// is connected, when no provider supplies the capability, or when the env
+// does not declare a registries.mirror block.
+func mirrorRegistryRunVars(state v1alpha1.State, env *v1alpha1.Environment) []MirrorRegistryRunVars {
+	if env == nil {
+		return nil
+	}
+	kind := v1alpha1.OCPInstallKind(*env)
+	if kind == "" || kind == v1alpha1.OCPInstallKindConnected {
+		return nil
+	}
+	registries := v1alpha1.OCPInstallRegistriesOf(*env)
+	if registries == nil || registries.Mirror == nil {
+		return nil
+	}
+	mirror := registries.Mirror
+	host := mirrorRegistryHostname(mirror.URL)
+	urlPort := mirrorURLPortRender(mirror.URL)
+	credName := mirror.CredentialsRef.Name
+	var caCertName, caKeyName string
+	if mirror.TrustBundle != nil {
+		if mirror.TrustBundle.GeneratedSelfSigned != nil {
+			caCertName = mirror.TrustBundle.GeneratedSelfSigned.SecretRef.Name
+			if caCertName != "" {
+				caKeyName = caCertName + ".key"
+			}
+		} else if mirror.TrustBundle.BundleRef != nil {
+			caCertName = mirror.TrustBundle.BundleRef.Name
+		}
+	}
+	regImage := componentImageURLs(env, v1alpha1.ComponentCategoryRegistry, v1alpha1.ComponentTypeMirrorRegistry)
+	mirrorSet := buildMirrorSet(state, env, mirror.URL, regImage)
+	var result []MirrorRegistryRunVars
+	providers := append([]v1alpha1.InfrastructureProvider(nil), state.InfrastructureProviders...)
+	sort.Slice(providers, func(i, j int) bool {
+		return providers[i].Metadata.Name < providers[j].Metadata.Name
+	})
+	for _, p := range providers {
+		mr := v1alpha1.ProviderMirrorRegistry(p)
+		if mr == nil {
+			continue
+		}
+		port := mr.Port
+		if port == 0 {
+			if urlPort > 0 {
+				port = urlPort
+			} else {
+				port = v1alpha1.DefaultMirrorRegistryPort
+			}
+		}
+		runtime := mr.Runtime
+		if runtime == "" {
+			runtime = v1alpha1.ContainerRuntimePodman
+		}
+		result = append(result, MirrorRegistryRunVars{
+			Name:                      p.Metadata.Name,
+			ProviderRef:               p.Metadata.Name,
+			ProviderHostRef:           mr.HostRef.Name,
+			URL:                       mirror.URL,
+			Host:                      host,
+			Port:                      port,
+			DataDir:                   mr.DataDir,
+			Runtime:                   runtime,
+			CredentialsSecretName:     credName,
+			TrustBundleCertSecretName: caCertName,
+			TrustBundleKeySecretName:  caKeyName,
+			Image:                     regImage,
+			MirrorSet:                 mirrorSet,
+		})
+	}
+	return result
+}
+
+// buildMirrorSet enumerates every public→local image pair the registry must
+// hold for cluster nodes to install without internet access:
+//   - the OCP release payload for each distinct cluster release version
+//     (handled at apply time by `oc adm release mirror`),
+//   - every Environment.spec.componentImages.<cat>.<name> with both refs set,
+//   - the registry-server image itself (so subsequent applies can pull from
+//     the local mirror once the bootstrap pull from public has completed).
+func buildMirrorSet(state v1alpha1.State, env *v1alpha1.Environment, mirrorURL string, regImage ComponentImageURLs) []MirrorImageRef {
+	var out []MirrorImageRef
+	mirrorURL = strings.TrimRight(mirrorURL, "/")
+	seenVersions := map[string]bool{}
+	for _, ocp := range state.OCPClusters {
+		if ocp.Spec.Install.Release == nil || ocp.Spec.Install.Release.Version == "" {
+			continue
+		}
+		v := ocp.Spec.Install.Release.Version
+		if seenVersions[v] {
+			continue
+		}
+		seenVersions[v] = true
+		out = append(out, MirrorImageRef{
+			Kind:   MirrorImageKindReleasePayload,
+			Public: v1alpha1.OCPReleaseSourceQuayOCPRelease + ":" + v + "-x86_64",
+			Local:  mirrorURL + "/" + v1alpha1.DefaultMirroredReleasePath + ":" + v + "-x86_64",
+		})
+	}
+	if env != nil {
+		categories := sortedKeys(env.Spec.ComponentImages)
+		for _, cat := range categories {
+			types := env.Spec.ComponentImages[cat]
+			for _, typ := range sortedKeys(types) {
+				img := types[typ]
+				if img.Public == "" || img.Local == "" {
+					continue
+				}
+				if cat == v1alpha1.ComponentCategoryRegistry && typ == v1alpha1.ComponentTypeMirrorRegistry {
+					continue
+				}
+				out = append(out, MirrorImageRef{
+					Kind:   MirrorImageKindComponent,
+					Public: img.Public,
+					Local:  img.Local,
+				})
+			}
+		}
+	}
+	if regImage.Local != "" {
+		public := regImage.Public
+		if public == "" {
+			public = v1alpha1.DefaultMirrorRegistryImageRef
+		}
+		out = append(out, MirrorImageRef{
+			Kind:   MirrorImageKindRegistryServer,
+			Public: public,
+			Local:  regImage.Local,
+		})
+	}
+	return out
+}
+
+// mirrorURLPortRender extracts an explicit :port from a registry URL of the
+// form host[:port][/path]. Returns 0 when no explicit port is present.
+func mirrorURLPortRender(u string) int {
+	host := u
+	if idx := strings.Index(host, "/"); idx >= 0 {
+		host = host[:idx]
+	}
+	idx := strings.LastIndex(host, ":")
+	if idx < 0 {
+		return 0
+	}
+	port := 0
+	for _, ch := range host[idx+1:] {
+		if ch < '0' || ch > '9' {
+			return 0
+		}
+		port = port*10 + int(ch-'0')
+	}
+	return port
 }
 
 func providerIndex(items []v1alpha1.InfrastructureProvider) map[string]v1alpha1.InfrastructureProvider {
@@ -1179,6 +1375,9 @@ func componentImageURLs(env *v1alpha1.Environment, category, typ string) Compone
 	}
 	if category == v1alpha1.ComponentCategoryLoadBalancer && typ == v1alpha1.ComponentTypeHAProxy {
 		return ComponentImageURLs{Public: v1alpha1.DefaultHAProxyImageRef}
+	}
+	if category == v1alpha1.ComponentCategoryRegistry && typ == v1alpha1.ComponentTypeMirrorRegistry {
+		return ComponentImageURLs{Public: v1alpha1.DefaultMirrorRegistryImageRef}
 	}
 	return ComponentImageURLs{}
 }

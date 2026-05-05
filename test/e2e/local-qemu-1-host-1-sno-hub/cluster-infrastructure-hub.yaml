@@ -1,10 +1,10 @@
 apiVersion: gitups.io/v1alpha1
 kind: ClusterInfrastructure
 metadata:
-  name: qemu-1-host-hub
+  name: local-qemu-1-host-hub
 spec:
   providerRefs:
-    - name: qemu-1-host-provider
+    - name: local-qemu-1-host-provider
   networks:
     primary:
       cidr: 192.168.130.0/24
@@ -12,7 +12,7 @@ spec:
       dnsServers:
         - 192.168.130.1
       libvirt:
-        bridge: vbr-1-host-hub
+        bridge: vbr-l-1-hub
   machines:
     master-0:
       resources:
@@ -29,7 +29,7 @@ spec:
           macAddress: 52:54:00:21:11:10
       libvirt:
         hostRef:
-          name: remote-qemu-host
+          name: local-qemu-host
   endpoints:
     api:
       address: 192.168.130.10
@@ -38,7 +38,7 @@ spec:
     ingress:
       address: 192.168.130.11
   loadBalancers:
-    lb-qemu-1-host-hub:
+    lb-local-qemu-1-host-hub:
       endpoints:
         - api
         - apiInt

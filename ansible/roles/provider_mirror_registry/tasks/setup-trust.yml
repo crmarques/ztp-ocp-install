@@ -1,0 +1,20 @@
+---
+# Install the mirror registry's CA cert into the host trust store so
+# podman/skopeo/oc on this host can verify TLS to the local registry. The
+# cluster-node trust path is separate and flows through the install-config
+# additionalTrustBundle (handled by hub_install_agent).
+- name: Install mirror registry CA into host trust anchors
+  ansible.builtin.copy:
+    dest: "{{ gitups_mirror_registry_trust_anchor }}"
+    owner: root
+    group: root
+    mode: "0644"
+    content: "{{ gitups_mirror_registry_cert_raw.content | b64decode }}"
+  register: gitups_mirror_registry_trust_anchor_write
+
+- name: Refresh host CA trust store
+  ansible.builtin.command:
+    argv:
+      - update-ca-trust
+  when: gitups_mirror_registry_trust_anchor_write.changed
+  changed_when: gitups_mirror_registry_trust_anchor_write.changed

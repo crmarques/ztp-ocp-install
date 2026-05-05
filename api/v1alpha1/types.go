@@ -55,10 +55,15 @@ const (
 	CapabilityLibvirt             = "libvirt"
 	CapabilityContainerRuntime    = "container-runtime"
 	CapabilityHostsFile           = "hosts-file"
+	CapabilityMirrorRegistry      = "mirror-registry"
 	ComponentCategoryLoadBalancer = "load-balancer"
+	ComponentCategoryRegistry     = "registry"
 	ComponentTypeHAProxy          = "haproxy"
+	ComponentTypeMirrorRegistry   = "mirror-registry"
 	ContainerRuntimePodman        = "podman"
 	DefaultHAProxyImageRef        = "docker.io/library/haproxy:3.2.15"
+	DefaultMirrorRegistryImageRef = "docker.io/library/registry:2"
+	DefaultMirrorRegistryPort     = 5000
 
 	EndpointAPI     = "api"
 	EndpointAPIInt  = "apiInt"
@@ -223,10 +228,32 @@ type InfrastructureProvider struct {
 // API embed their endpoint in the capability block — the host pool stays
 // optional so appliance-style providers need not declare it.
 type InfrastructureProviderSpec struct {
-	Hosts          map[string]ProviderHostSpec    `yaml:"hosts,omitempty" json:"hosts,omitempty"`
-	Machine        *MachineCapabilitySpec         `yaml:"machine,omitempty" json:"machine,omitempty"`
-	LoadBalancer   *LoadBalancerCapabilitySpec    `yaml:"loadBalancer,omitempty" json:"loadBalancer,omitempty"`
-	NameResolution *NameResolutionCapabilitySpec  `yaml:"nameResolution,omitempty" json:"nameResolution,omitempty"`
+	Hosts          map[string]ProviderHostSpec   `yaml:"hosts,omitempty" json:"hosts,omitempty"`
+	Machine        *MachineCapabilitySpec        `yaml:"machine,omitempty" json:"machine,omitempty"`
+	LoadBalancer   *LoadBalancerCapabilitySpec   `yaml:"loadBalancer,omitempty" json:"loadBalancer,omitempty"`
+	NameResolution *NameResolutionCapabilitySpec `yaml:"nameResolution,omitempty" json:"nameResolution,omitempty"`
+	Registry       *RegistryCapabilitySpec       `yaml:"registry,omitempty" json:"registry,omitempty"`
+}
+
+// RegistryCapabilitySpec is the structural-discriminator union for the
+// container-image registry capability. v1 ships only mirrorRegistry — a
+// docker/distribution server colocated with a provider host. Omission of the
+// capability block on a provider means external — the operator runs the
+// mirror themselves and disconnected installs only consume it.
+type RegistryCapabilitySpec struct {
+	MirrorRegistry *RegistryMirrorSpec `yaml:"mirrorRegistry,omitempty" json:"mirrorRegistry,omitempty"`
+}
+
+// RegistryMirrorSpec describes a docker/distribution mirror server colocated
+// on a provider host. The server's URL, credentials, and trust material are
+// owned by Environment.spec.ocpInstall.{disconnected,restricted}.registries.mirror;
+// this block contributes only the placement (which provider host runs it)
+// and tunables (port, runtime, data path).
+type RegistryMirrorSpec struct {
+	HostRef LocalObjectReference `yaml:"hostRef" json:"hostRef"`
+	Port    int                  `yaml:"port,omitempty" json:"port,omitempty"`
+	DataDir string               `yaml:"dataDir,omitempty" json:"dataDir,omitempty"`
+	Runtime string               `yaml:"runtime,omitempty" json:"runtime,omitempty"`
 }
 
 // NameResolutionCapabilitySpec is the structural-discriminator union for the
@@ -349,17 +376,19 @@ type ClusterInfrastructureSpec struct {
 // record which provider supplied that capability — used for renderer
 // dispatch and error messages.
 type ProviderClosure struct {
-	Hosts                       map[string]ProviderHostSpec
-	Machine                     *MachineCapabilitySpec
-	LoadBalancer                *LoadBalancerCapabilitySpec
-	NameResolution              *NameResolutionCapabilitySpec
-	MachineProviderName         string
-	LoadBalancerProviderName    string
-	NameResolutionProviderName  string
+	Hosts                      map[string]ProviderHostSpec
+	Machine                    *MachineCapabilitySpec
+	LoadBalancer               *LoadBalancerCapabilitySpec
+	NameResolution             *NameResolutionCapabilitySpec
+	Registry                   *RegistryCapabilitySpec
+	MachineProviderName        string
+	LoadBalancerProviderName   string
+	NameResolutionProviderName string
+	RegistryProviderName       string
 	// ProviderRefNames lists the provider names in the order declared on the
 	// ClusterInfrastructure; renderer entry points use this to keep deterministic
 	// output across multi-provider closures.
-	ProviderRefNames            []string
+	ProviderRefNames []string
 }
 
 // FirstProviderRefName returns the first declared provider name on a
@@ -436,6 +465,14 @@ func BuildProviderClosure(ci ClusterInfrastructure, providers map[string]Infrast
 			} else {
 				closure.NameResolution = p.Spec.NameResolution
 				closure.NameResolutionProviderName = ref.Name
+			}
+		}
+		if p.Spec.Registry != nil {
+			if closure.Registry != nil {
+				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s providerRefs union has multiple suppliers for registry capability (%s, %s)", ci.Metadata.Name, closure.RegistryProviderName, ref.Name))
+			} else {
+				closure.Registry = p.Spec.Registry
+				closure.RegistryProviderName = ref.Name
 			}
 		}
 	}
@@ -657,6 +694,15 @@ func ProviderMachineLibvirt(provider InfrastructureProvider) *MachineProviderLib
 		return nil
 	}
 	return provider.Spec.Machine.Libvirt
+}
+
+// ProviderMirrorRegistry returns the mirror-registry capability spec on
+// provider, or nil. Convenience for the common consumer pattern.
+func ProviderMirrorRegistry(provider InfrastructureProvider) *RegistryMirrorSpec {
+	if provider.Spec.Registry == nil {
+		return nil
+	}
+	return provider.Spec.Registry.MirrorRegistry
 }
 
 // OCPInstallKind reports the structural discriminator of an Environment's
