@@ -8,7 +8,7 @@
   gather_subset:
     - "!all"
     - min
-  become: true
+  become: false
   environment: "{{ gitups_proxy_env | default({}) }}"
 
   pre_tasks:
@@ -34,6 +34,7 @@
     - name: Apply host proxy role
       ansible.builtin.import_role:
         name: host_proxy
+      become: true
 
     # BMC dispatch by structural discriminator. provider_bmc_none is the
     # explicit empty case (vSphere, KubeVirt) so the dynamic role-name
@@ -41,10 +42,13 @@
     - name: Apply BMC role for current provider kind
       ansible.builtin.include_role:
         name: "provider_bmc_{{ gitups_current_provider.bmcRole }}"
+        apply:
+          become: true
 
     - name: Apply boot-artifacts HTTP role
       ansible.builtin.import_role:
         name: provider_boot_artifacts_http
+      become: true
       when: gitups_current_provider.bootArtifactsHttp.enabled | default(false) | bool
 
     # Mirror registry must run before the load balancer role: HAProxy is
@@ -53,9 +57,11 @@
     - name: Apply mirror registry role
       ansible.builtin.import_role:
         name: provider_mirror_registry
+      become: true
       when: gitups_current_mirror_registry is not none
 
     - name: Apply managed load balancer role
       ansible.builtin.import_role:
         name: network_lb_managed
+      become: true
       when: gitups_current_load_balancers | length > 0

@@ -32,13 +32,19 @@ func All(stateDir string, state v1alpha1.State) (Result, error) {
 		filepath.Dir(result.InventoryPath),
 		result.ArtifactsDir,
 	} {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return result, fmt.Errorf("create %s: %w", dir, err)
+		}
+		if err := os.Chmod(dir, 0o700); err != nil {
+			return result, fmt.Errorf("chmod %s: %w", dir, err)
 		}
 	}
 	for _, asset := range result.InstallerAssets {
-		if err := os.MkdirAll(asset.Dir, 0o755); err != nil {
+		if err := os.MkdirAll(asset.Dir, 0o700); err != nil {
 			return result, fmt.Errorf("create %s: %w", asset.Dir, err)
+		}
+		if err := os.Chmod(asset.Dir, 0o700); err != nil {
+			return result, fmt.Errorf("chmod %s: %w", asset.Dir, err)
 		}
 	}
 	writes := []struct {
@@ -89,8 +95,11 @@ func writeYAML(path string, value any) error {
 	if err != nil {
 		return fmt.Errorf("marshal %s: %w", path, err)
 	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	if err := os.WriteFile(path, data, 0o600); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
+	}
+	if err := os.Chmod(path, 0o600); err != nil {
+		return fmt.Errorf("chmod %s: %w", path, err)
 	}
 	return nil
 }

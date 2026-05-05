@@ -4,6 +4,8 @@ metadata:
   name: qemu-1-host
 spec:
   baseDomain: gitups.test
+  ocpInstall:
+    connected: {}
   # ocpInstall:
   #   disconnected:
   #     registries:

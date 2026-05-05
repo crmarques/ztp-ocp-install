@@ -24,12 +24,14 @@
     owner: root
     group: root
     mode: "0644"
+  become: true
   register: gitups_agent_iso_stage
 
 - name: Refresh libvirt vmedia pool after staging ISO
   community.libvirt.virt_pool:
     name: "gitups-{{ gitups_provider_name }}-vmedia"
     command: refresh
+  become: true
   when:
     - gitups_agent_iso_stage.changed
     - gitups_current_provider.bmcRole == 'emulated'
@@ -54,8 +56,6 @@
 - name: Persist kubeconfig path
   ansible.builtin.copy:
     dest: "{{ gitups_hub_installer_dir }}/work/kubeconfig.path"
-    owner: root
-    group: root
-    mode: "0644"
+    mode: "0600"
     content: "{{ gitups_hub_installer_dir }}/work/auth/kubeconfig\n"
   when: gitups_hub_install_wait.rc == 0

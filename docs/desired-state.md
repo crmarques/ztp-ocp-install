@@ -45,16 +45,17 @@ kind: InfrastructureProvider
 metadata:
   name: baremetal-redfish-provider
 spec:
-  bareMetal:
-    bmcProtocol: redfish
+  machine:
+    baremetal:
+      bmcProtocol: redfish
 ---
 apiVersion: gitups.io/v1alpha1
 kind: ClusterInfrastructure
 metadata:
   name: hub
 spec:
-  providerRef:
-    name: baremetal-redfish-provider
+  providerRefs:
+    - name: baremetal-redfish-provider
   networks:
     primary:
       cidr: 192.168.130.0/24
@@ -71,7 +72,7 @@ spec:
           macAddress: 52:54:00:21:11:10
       rootDeviceHints:
         deviceName: /dev/sda
-      bareMetal:
+      baremetal:
         bmc:
           address: redfish-virtualmedia+https://bmc-hub-0.example.test/redfish/v1/Systems/1
           credentialRef:
@@ -120,34 +121,39 @@ kind: InfrastructureProvider
 metadata:
   name: qemu-redfish-provider
 spec:
-  qemuKVM:
-    hosts:
-      qemu-host:
+  hosts:
+    qemu-host:
+      ssh:
         address: 192.168.10.11
-        sshKeyRef:
+        user: gitups
+        keyRef:
           name: qemu-host-ssh
-        capabilities:
-          - libvirt
-          - hosts-file
-    bmcEmulation:
-      auth:
-        credentialRef:
-          name: qemu-redfish-bmc
+      capabilities:
+        - libvirt
+        - hosts-file
+  machine:
+    libvirt:
+      hostRefs:
+        - name: qemu-host
+      bmcEmulation:
+        auth:
+          credentialRef:
+            name: qemu-redfish-bmc
 ---
 apiVersion: gitups.io/v1alpha1
 kind: ClusterInfrastructure
 metadata:
   name: hub
 spec:
-  providerRef:
-    name: qemu-redfish-provider
+  providerRefs:
+    - name: qemu-redfish-provider
   networks:
     primary:
       cidr: 192.168.130.0/24
       gateway: 192.168.130.1
       dnsServers:
         - 192.168.130.1
-      qemuKVM:
+      libvirt:
         bridge: vbr-hub
   machines:
     master-0:
@@ -159,7 +165,7 @@ spec:
           macAddress: 52:54:00:21:11:10
       rootDeviceHints:
         deviceName: /dev/vda
-      qemuKVM:
+      libvirt:
         hostRef:
           name: qemu-host
   endpoints:
@@ -184,7 +190,7 @@ Gitups home is `GITUPS_HOME` or `~/.gitups`.
 
 ```text
 gitups secrets pull-secret set --name openshift-pull-secret --from-file ~/pull-secret.json
-gitups secrets bmc set --name baremetal-redfish-bmc --username admin --password-stdin
+gitups secrets credentials set --name baremetal-redfish-bmc --username admin --password-stdin
 gitups secrets generate -f examples/qemu-redfish-hub
 ```
 

@@ -45,23 +45,29 @@ func TestPlanCommandShowsInstallerAssets(t *testing.T) {
 	}
 }
 
-func TestRenderCommandShowsInstallerAssets(t *testing.T) {
-	stateDir := t.TempDir()
+func TestInitCommandGeneratesCurrentTemplate(t *testing.T) {
+	outDir := filepath.Join(t.TempDir(), "desired-state")
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	code := Run(context.Background(), []string{"render", "-f", "../../examples/infra", "--state-dir", stateDir}, nil, &stdout, &stderr)
+	code := Run(context.Background(), []string{"init", "--template", "qemu-redfish-hub", "--out", outDir}, nil, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
 	}
 	output := stdout.String()
 	for _, expected := range []string{
-		"rendered:",
-		filepath.Join(stateDir, "clusters", "hub", "installer", "install-config.yaml"),
-		filepath.Join(stateDir, "clusters", "hub", "installer", "agent-config.yaml"),
+		filepath.Join(outDir, "environment.yaml"),
+		filepath.Join(outDir, "provider.yaml"),
+		filepath.Join(outDir, "cluster-infrastructure-hub.yaml"),
+		filepath.Join(outDir, "ocp-cluster-hub.yaml"),
 	} {
 		if !strings.Contains(output, expected) {
 			t.Fatalf("stdout missing %q\n%s", expected, output)
 		}
+	}
+	var validateStdout bytes.Buffer
+	code = Run(context.Background(), []string{"validate", "-f", outDir}, nil, &validateStdout, &stderr)
+	if code != 0 {
+		t.Fatalf("generated template should validate, code=%d stderr=%s", code, stderr.String())
 	}
 }
 
@@ -176,7 +182,7 @@ spec:
 	}
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	code := Run(context.Background(), []string{"apply", "-f", path, "--dry-run"}, nil, &stdout, &stderr)
+	code := Run(context.Background(), []string{"apply", "infra", "-f", path, "--dry-run"}, nil, &stdout, &stderr)
 	if code == 0 {
 		t.Fatal("expected unsupported provider failure")
 	}
@@ -753,7 +759,7 @@ func TestSecretsBMCSetGeneratesAndOverwrites(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"secrets", "bmc", "set",
+		"secrets", "credentials", "set",
 		"--name", "lab-bmc",
 		"--generate",
 		"--secrets-dir", secretsDir,
@@ -789,7 +795,7 @@ func TestSecretsBMCSetGeneratesAndOverwrites(t *testing.T) {
 	stdout.Reset()
 	stderr.Reset()
 	code = Run(context.Background(), []string{
-		"secrets", "bmc", "set",
+		"secrets", "credentials", "set",
 		"--name", "lab-bmc",
 		"--username", "operator",
 		"--password", "hunter2",
@@ -805,7 +811,7 @@ func TestSecretsBMCSetGeneratesAndOverwrites(t *testing.T) {
 	if got := strings.TrimRight(string(data), "\n"); got != "operator:hunter2" {
 		t.Fatalf("overwritten credentials got %q, want %q", got, "operator:hunter2")
 	}
-	if !strings.Contains(stdout.String(), "updated BMC credentials") {
+	if !strings.Contains(stdout.String(), "updated credentials") {
 		t.Fatalf("stdout missing update message: %s", stdout.String())
 	}
 	if strings.Contains(stdout.String(), "hunter2") || strings.Contains(stderr.String(), "hunter2") {
@@ -822,7 +828,7 @@ func TestSecretsBMCSetFromFile(t *testing.T) {
 	secretsDir := filepath.Join(dir, "secrets")
 	var stdout, stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"secrets", "bmc", "set",
+		"secrets", "credentials", "set",
 		"--name", "lab-bmc",
 		"--from-file", source,
 		"--secrets-dir", secretsDir,
@@ -850,25 +856,25 @@ func TestSecretsBMCSetRejectsInvalidInputs(t *testing.T) {
 	}{
 		{
 			name:     "missing-input-mode",
-			args:     []string{"secrets", "bmc", "set", "--name", "lab-bmc", "--secrets-dir", secretsDir},
+			args:     []string{"secrets", "credentials", "set", "--name", "lab-bmc", "--secrets-dir", secretsDir},
 			wantCode: 2,
 			want:     "one of --from-file, --password, --password-stdin, or --generate is required",
 		},
 		{
 			name:     "conflicting-input-mode",
-			args:     []string{"secrets", "bmc", "set", "--name", "lab-bmc", "--password", "x", "--generate", "--secrets-dir", secretsDir},
+			args:     []string{"secrets", "credentials", "set", "--name", "lab-bmc", "--password", "x", "--generate", "--secrets-dir", secretsDir},
 			wantCode: 2,
 			want:     "mutually exclusive",
 		},
 		{
 			name:     "password-without-username",
-			args:     []string{"secrets", "bmc", "set", "--name", "lab-bmc", "--password", "x", "--secrets-dir", secretsDir},
+			args:     []string{"secrets", "credentials", "set", "--name", "lab-bmc", "--password", "x", "--secrets-dir", secretsDir},
 			wantCode: 2,
 			want:     "--username is required with --password",
 		},
 		{
 			name:     "invalid-name",
-			args:     []string{"secrets", "bmc", "set", "--name", "../bmc", "--generate", "--secrets-dir", secretsDir},
+			args:     []string{"secrets", "credentials", "set", "--name", "../bmc", "--generate", "--secrets-dir", secretsDir},
 			wantCode: 2,
 			want:     "--name must be a lowercase DNS label",
 		},
@@ -892,7 +898,7 @@ func TestApplyDryRunRendersAndPrintsAnsibleCommandsForAllPhases(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"apply",
+		"apply", "infra",
 		"-f", "../../examples/infra",
 		"--state-dir", stateDir,
 		"--dry-run",
@@ -908,13 +914,14 @@ func TestApplyDryRunRendersAndPrintsAnsibleCommandsForAllPhases(t *testing.T) {
 		"playbooks/provider-prepare.yml",
 		"dry-run ansible command [phase=cluster]: ansible-playbook",
 		"playbooks/cluster-prepare.yml",
-		"dry-run ansible command [phase=hub]: ansible-playbook",
-		"playbooks/hub-install.yml",
-		"dry-run ansible command [phase=gitops-publish]: ansible-playbook",
-		"playbooks/gitops-publish.yml",
 	} {
 		if !strings.Contains(output, expected) {
 			t.Fatalf("stdout missing %q\n%s", expected, output)
+		}
+	}
+	for _, unexpected := range []string{"hub-install.yml", "gitops-publish.yml"} {
+		if strings.Contains(output, unexpected) {
+			t.Fatalf("infra apply leaked %q\n%s", unexpected, output)
 		}
 	}
 }
@@ -927,12 +934,11 @@ func TestApplyDryRunPassesStateSecretsAndHostStateDirs(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"apply",
+		"apply", "infra",
 		"-f", "../../examples/infra",
 		"--state-dir", stateDir,
 		"--secrets-dir", secretsDir,
 		"--host-state-dir", hostStateDir,
-		"--phase", "provider",
 		"--dry-run",
 	}, nil, &stdout, &stderr)
 	if code != 0 {
@@ -975,46 +981,44 @@ func TestAnsibleUsesHostStateDirVariable(t *testing.T) {
 	}
 }
 
-func TestApplyDryRunSinglePhase(t *testing.T) {
+func TestApplyHubDryRunOnlyRunsHubScope(t *testing.T) {
 	stateDir := t.TempDir()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"apply",
+		"apply", "hub",
 		"-f", "../../examples/infra",
 		"--state-dir", stateDir,
 		"--dry-run",
-		"--phase", "cluster",
 	}, nil, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
 	}
 	output := stdout.String()
-	if !strings.Contains(output, "playbooks/cluster-prepare.yml") {
-		t.Fatalf("stdout missing cluster-prepare.yml: %s", output)
+	if !strings.Contains(output, "playbooks/hub-install.yml") {
+		t.Fatalf("stdout missing hub-install.yml: %s", output)
 	}
-	for _, leaked := range []string{"provider-prepare.yml", "hub-install.yml", "gitops-publish.yml"} {
+	for _, leaked := range []string{"provider-prepare.yml", "cluster-prepare.yml", "gitops-publish.yml"} {
 		if strings.Contains(output, leaked) {
-			t.Fatalf("single-phase apply leaked %s:\n%s", leaked, output)
+			t.Fatalf("hub-scope apply leaked %s:\n%s", leaked, output)
 		}
 	}
 }
 
-func TestApplyRejectsUnknownPhase(t *testing.T) {
+func TestApplyClustersReportsNotImplemented(t *testing.T) {
 	stateDir := t.TempDir()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"apply",
+		"apply", "clusters",
 		"-f", "../../examples/infra",
 		"--state-dir", stateDir,
 		"--dry-run",
-		"--phase", "nope",
 	}, nil, &stdout, &stderr)
 	if code == 0 {
-		t.Fatal("expected unknown phase to fail")
+		t.Fatal("expected managed-cluster scope to fail while publication is unimplemented")
 	}
-	if !strings.Contains(stderr.String(), `unknown phase "nope"`) {
+	if !strings.Contains(stderr.String(), "managed-cluster GitOps publication") {
 		t.Fatalf("unexpected stderr: %s", stderr.String())
 	}
 }
@@ -1024,7 +1028,7 @@ func TestDestroyRequiresYesOrDryRun(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"destroy",
+		"destroy", "all",
 		"-f", "../../examples/infra",
 		"--state-dir", stateDir,
 	}, nil, &stdout, &stderr)
@@ -1041,7 +1045,7 @@ func TestDestroyDryRunPrintsPhasesInReverse(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"destroy",
+		"destroy", "all",
 		"-f", "../../examples/infra",
 		"--state-dir", stateDir,
 		"--dry-run",
@@ -1050,15 +1054,17 @@ func TestDestroyDryRunPrintsPhasesInReverse(t *testing.T) {
 		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
 	}
 	output := stdout.String()
-	gitopsIdx := strings.Index(output, "gitops-unpublish.yml")
 	hubIdx := strings.Index(output, "hub-destroy.yml")
 	clusterIdx := strings.Index(output, "cluster-destroy.yml")
 	providerIdx := strings.Index(output, "provider-destroy.yml")
-	if gitopsIdx < 0 || hubIdx < 0 || clusterIdx < 0 || providerIdx < 0 {
+	if hubIdx < 0 || clusterIdx < 0 || providerIdx < 0 {
 		t.Fatalf("missing destroy phase entries:\n%s", output)
 	}
-	if !(gitopsIdx < hubIdx && hubIdx < clusterIdx && clusterIdx < providerIdx) {
-		t.Fatalf("destroy phases not in reverse order (gitops=%d hub=%d cluster=%d provider=%d)\n%s", gitopsIdx, hubIdx, clusterIdx, providerIdx, output)
+	if !(hubIdx < clusterIdx && clusterIdx < providerIdx) {
+		t.Fatalf("destroy phases not in reverse order (hub=%d cluster=%d provider=%d)\n%s", hubIdx, clusterIdx, providerIdx, output)
+	}
+	if strings.Contains(output, "gitops-unpublish.yml") {
+		t.Fatalf("destroy all must not include unfinished gitops publication teardown:\n%s", output)
 	}
 	if !strings.Contains(output, "dry-run: would remove state-dir: "+stateDir) {
 		t.Fatalf("dry-run destroy must announce state-dir removal:\n%s", output)
@@ -1076,7 +1082,7 @@ func TestDestroyRemovesStateDirOnSuccess(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"destroy",
+		"destroy", "all",
 		"-f", "../../examples/infra",
 		"--state-dir", stateDir,
 		"--yes",
@@ -1093,7 +1099,7 @@ func TestDestroyRemovesStateDirOnSuccess(t *testing.T) {
 	}
 }
 
-func TestDestroySinglePhaseKeepsStateDir(t *testing.T) {
+func TestDestroyScopedHubKeepsStateDir(t *testing.T) {
 	if _, err := os.Stat("/bin/true"); err != nil {
 		t.Skip("/bin/true not available")
 	}
@@ -1101,10 +1107,9 @@ func TestDestroySinglePhaseKeepsStateDir(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"destroy",
+		"destroy", "hub",
 		"-f", "../../examples/infra",
 		"--state-dir", stateDir,
-		"--phase", "gitops-publish",
 		"--yes",
 		"--ansible-playbook", "/bin/true",
 	}, nil, &stdout, &stderr)
@@ -1112,7 +1117,7 @@ func TestDestroySinglePhaseKeepsStateDir(t *testing.T) {
 		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
 	}
 	if strings.Contains(stdout.String(), "removed state-dir") {
-		t.Fatalf("partial-phase destroy must not remove state-dir:\n%s", stdout.String())
+		t.Fatalf("scoped destroy must not remove state-dir:\n%s", stdout.String())
 	}
 	if _, err := os.Stat(stateDir); err != nil {
 		t.Fatalf("state-dir should remain, stat err=%v", err)
@@ -1127,7 +1132,7 @@ func TestDestroyKeepStateDirFlagPreservesStateDir(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"destroy",
+		"destroy", "all",
 		"-f", "../../examples/infra",
 		"--state-dir", stateDir,
 		"--yes",
@@ -1148,9 +1153,10 @@ func TestDestroyKeepStateDirFlagPreservesStateDir(t *testing.T) {
 func TestStatusReportsRenderedPresence(t *testing.T) {
 	stateDir := t.TempDir()
 	if code := Run(context.Background(), []string{
-		"render",
+		"apply", "infra",
 		"-f", "../../examples/infra",
 		"--state-dir", stateDir,
+		"--dry-run",
 	}, nil, io.Discard, io.Discard); code != 0 {
 		t.Fatalf("render setup failed")
 	}
@@ -1181,9 +1187,10 @@ func TestStatusReportsRenderedPresence(t *testing.T) {
 func TestDiffReportsDriftWhenStateIsStale(t *testing.T) {
 	stateDir := t.TempDir()
 	if code := Run(context.Background(), []string{
-		"render",
+		"apply", "infra",
 		"-f", "../../examples/infra",
 		"--state-dir", stateDir,
+		"--dry-run",
 	}, nil, io.Discard, io.Discard); code != 0 {
 		t.Fatalf("render setup failed")
 	}
@@ -1194,9 +1201,10 @@ func TestDiffReportsDriftWhenStateIsStale(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"diff",
+		"status",
 		"-f", "../../examples/infra",
 		"--state-dir", stateDir,
+		"--diff",
 	}, nil, &stdout, &stderr)
 	if code != 1 {
 		t.Fatalf("expected drift exit=1, got %d, stdout: %s", code, stdout.String())
@@ -1212,18 +1220,20 @@ func TestDiffReportsDriftWhenStateIsStale(t *testing.T) {
 func TestDiffReportsNoDriftAfterFreshRender(t *testing.T) {
 	stateDir := t.TempDir()
 	if code := Run(context.Background(), []string{
-		"render",
+		"apply", "infra",
 		"-f", "../../examples/infra",
 		"--state-dir", stateDir,
+		"--dry-run",
 	}, nil, io.Discard, io.Discard); code != 0 {
 		t.Fatalf("render setup failed")
 	}
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"diff",
+		"status",
 		"-f", "../../examples/infra",
 		"--state-dir", stateDir,
+		"--diff",
 	}, nil, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("expected no drift, got code=%d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
@@ -1238,7 +1248,7 @@ func TestApplyDryRunDefaultsToAskBecomePass(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"apply",
+		"apply", "hub",
 		"-f", "../../test/e2e/qemu-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 		"--dry-run",
@@ -1256,7 +1266,7 @@ func TestApplyDryRunOptOutAskBecomePass(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"apply",
+		"apply", "hub",
 		"-f", "../../test/e2e/qemu-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 		"--dry-run",
@@ -1275,7 +1285,7 @@ func TestApplyDryRunPrintsEscalationSummary(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"apply",
+		"apply", "hub",
 		"-f", "../../test/e2e/qemu-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 		"--dry-run",
@@ -1286,10 +1296,7 @@ func TestApplyDryRunPrintsEscalationSummary(t *testing.T) {
 	output := stdout.String()
 	for _, expected := range []string{
 		"apply plan:",
-		"- provider [root]",
-		"- cluster [root]",
 		"- hub [root]",
-		"- gitops-publish",
 		"[root] phases require sudo escalation",
 	} {
 		if !strings.Contains(output, expected) {
@@ -1337,7 +1344,7 @@ func TestApplyConfirmationDecline(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"apply",
+		"apply", "hub",
 		"-f", "../../test/e2e/qemu-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 	}, strings.NewReader("n\n"), &stdout, &stderr)
@@ -1358,7 +1365,7 @@ func TestApplyYesSkipsConfirmationAndStopsBeforeAnsible(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"apply",
+		"apply", "hub",
 		"-f", "../../test/e2e/qemu-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 		"--yes",

@@ -25,6 +25,7 @@ the matching files under
 
 ```text
 gitups validate -f examples/qemu-redfish-fleet
-gitups render   -f examples/qemu-redfish-fleet --state-dir .state
-gitups apply    -f examples/qemu-redfish-fleet --state-dir .state --dry-run
+gitups plan -f examples/qemu-redfish-fleet --state-dir .state
+gitups apply infra -f examples/qemu-redfish-fleet --state-dir .state --dry-run
+gitups apply hub -f examples/qemu-redfish-fleet --state-dir .state --dry-run
 ```

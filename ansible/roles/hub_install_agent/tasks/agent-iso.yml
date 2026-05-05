@@ -3,15 +3,11 @@
   ansible.builtin.file:
     path: "{{ gitups_hub_installer_dir }}/work"
     state: directory
-    owner: root
-    group: root
     mode: "0700"
 
 - name: Write effective install-config.yaml to working directory
   ansible.builtin.copy:
     dest: "{{ gitups_hub_installer_dir }}/work/install-config.yaml"
-    owner: root
-    group: root
     mode: "0600"
     content: "{{ gitups_effective_install_config | to_nice_yaml(indent=2) }}"
   no_log: true
@@ -20,8 +16,6 @@
 - name: Write effective agent-config.yaml to working directory
   ansible.builtin.copy:
     dest: "{{ gitups_hub_installer_dir }}/work/agent-config.yaml"
-    owner: root
-    group: root
     mode: "0600"
     content: "{{ gitups_effective_agent_config | to_nice_yaml(indent=2) }}"
   register: gitups_effective_agent_config_file
@@ -34,8 +28,6 @@
 - name: Refresh installer working files when configs change
   ansible.builtin.copy:
     dest: "{{ gitups_hub_installer_dir }}/work/{{ item.name }}"
-    owner: root
-    group: root
     mode: "0600"
     content: "{{ item.content }}"
   no_log: true
@@ -91,6 +83,7 @@
     owner: root
     group: root
     mode: "0755"
+  become: true
   when: gitups_hub_minimal_iso | bool
 
 - name: Stage rootfs boot artifacts for node access
@@ -101,6 +94,7 @@
     owner: root
     group: root
     mode: "0644"
+  become: true
   loop: "{{ gitups_agent_rootfs_find.files | default([]) }}"
   loop_control:
     label: "{{ item.path | basename }}"

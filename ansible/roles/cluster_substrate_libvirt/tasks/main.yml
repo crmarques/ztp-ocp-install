@@ -69,7 +69,7 @@
       }}
   changed_when: false
 
-# Pick the cluster machineNetwork whose qemuKVM sub-block names this
+# Pick the cluster machineNetwork whose libvirt sub-block names this
 # bridge so the bridge IP/prefix come from the same desired-state object
 # that drives node NMState; fall back to the first network when only one
 # is present.
@@ -78,8 +78,8 @@
     gitups_libvirt_machine_network: >-
       {{
         (gitups_current_cluster.network.machineNetworks
-          | selectattr('qemuKVM', 'defined')
-          | selectattr('qemuKVM.bridge', 'equalto', gitups_current_cluster.provider.virtualization.libvirt.bridge)
+          | selectattr('libvirt', 'defined')
+          | selectattr('libvirt.bridge', 'equalto', gitups_current_cluster.provider.virtualization.libvirt.bridge)
           | list
           | first)
         | default(gitups_current_cluster.network.machineNetworks | first)

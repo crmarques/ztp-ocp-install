@@ -40,6 +40,24 @@ func TestRenderAllProducesGeneratedAnsibleArtifacts(t *testing.T) {
 			}
 		}
 	}
+	for _, path := range []string{result.EffectiveStatePath, result.LockPath, result.InventoryPath, result.VarsPath} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("stat rendered file %s: %v", path, err)
+		}
+		if got := info.Mode().Perm(); got != 0o600 {
+			t.Fatalf("rendered file %s mode got %03o, want 600", path, got)
+		}
+	}
+	for _, path := range []string{stateDir, result.ArtifactsDir} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("stat rendered dir %s: %v", path, err)
+		}
+		if got := info.Mode().Perm(); got != 0o700 {
+			t.Fatalf("rendered dir %s mode got %03o, want 700", path, got)
+		}
+	}
 	inventory := readFile(t, result.InventoryPath)
 	for _, expected := range []string{
 		"hub-hub-sno-host:",

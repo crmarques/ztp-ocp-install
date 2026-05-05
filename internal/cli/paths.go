@@ -10,9 +10,9 @@ const (
 	gitupsHomeEnv       = "GITUPS_HOME"
 	defaultHostStateDir = "/var/lib/gitups"
 	// ansibleVenvDirName is the directory name (under <gitups-home>) that
-	// `gitups operator bootstrap --venv` materialises with a pinned
+	// `gitups setup controller --venv` materialises with a pinned
 	// ansible-core inside it. The runner prefers this path over the system
-	// ansible-playbook so a stateless operator host can run apply with only
+	// ansible-playbook so a stateless controller host can run apply with only
 	// the gitups binary plus a one-shot bootstrap.
 	ansibleVenvDirName = "ansible-venv"
 )

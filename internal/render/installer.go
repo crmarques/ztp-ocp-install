@@ -184,12 +184,14 @@ func clusterInfrastructureForOCP(state v1alpha1.State, ocp v1alpha1.OCPCluster) 
 }
 
 func providerForInfrastructure(state v1alpha1.State, infra v1alpha1.ClusterInfrastructure) (v1alpha1.InfrastructureProvider, error) {
-	for _, provider := range state.InfrastructureProviders {
-		if provider.Metadata.Name == v1alpha1.FirstProviderRefName(infra) {
-			return provider, nil
-		}
+	closure, errs := v1alpha1.BuildProviderClosure(infra, providerIndex(state.InfrastructureProviders))
+	if len(errs) > 0 {
+		return v1alpha1.InfrastructureProvider{}, fmt.Errorf("%s: %s", infra.Metadata.Name, strings.Join(errs, "; "))
 	}
-	return v1alpha1.InfrastructureProvider{}, fmt.Errorf("%s: providerRef %q not found", infra.Metadata.Name, v1alpha1.FirstProviderRefName(infra))
+	if closure.Machine == nil {
+		return v1alpha1.InfrastructureProvider{}, fmt.Errorf("%s: providerRefs closure does not supply machine capability", infra.Metadata.Name)
+	}
+	return closureProvider(infra, providerIndex(state.InfrastructureProviders)), nil
 }
 
 func networkingConfig(infra v1alpha1.ClusterInfrastructure, ocp v1alpha1.OCPCluster) map[string]any {

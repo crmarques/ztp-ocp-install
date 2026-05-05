@@ -62,11 +62,13 @@ Equivalent CLI flow:
 
 ```text
 gitups validate -f test/e2e/qemu-3-hosts-1-sno-hub-2-ocp-fleet --check-host
-gitups render   -f test/e2e/qemu-3-hosts-1-sno-hub-2-ocp-fleet --state-dir /tmp/gitups-qemu-3-hosts-1-sno-hub-2-ocp-fleet
-gitups apply    -f test/e2e/qemu-3-hosts-1-sno-hub-2-ocp-fleet --state-dir /tmp/gitups-qemu-3-hosts-1-sno-hub-2-ocp-fleet --dry-run
-gitups apply    -f test/e2e/qemu-3-hosts-1-sno-hub-2-ocp-fleet --state-dir /tmp/gitups-qemu-3-hosts-1-sno-hub-2-ocp-fleet --yes
+gitups plan     -f test/e2e/qemu-3-hosts-1-sno-hub-2-ocp-fleet --state-dir /tmp/gitups-qemu-3-hosts-1-sno-hub-2-ocp-fleet
+gitups apply infra -f test/e2e/qemu-3-hosts-1-sno-hub-2-ocp-fleet --state-dir /tmp/gitups-qemu-3-hosts-1-sno-hub-2-ocp-fleet --dry-run
+gitups apply hub   -f test/e2e/qemu-3-hosts-1-sno-hub-2-ocp-fleet --state-dir /tmp/gitups-qemu-3-hosts-1-sno-hub-2-ocp-fleet --dry-run
+gitups apply infra -f test/e2e/qemu-3-hosts-1-sno-hub-2-ocp-fleet --state-dir /tmp/gitups-qemu-3-hosts-1-sno-hub-2-ocp-fleet --yes
+gitups apply hub   -f test/e2e/qemu-3-hosts-1-sno-hub-2-ocp-fleet --state-dir /tmp/gitups-qemu-3-hosts-1-sno-hub-2-ocp-fleet --yes
 gitups status   -f test/e2e/qemu-3-hosts-1-sno-hub-2-ocp-fleet --state-dir /tmp/gitups-qemu-3-hosts-1-sno-hub-2-ocp-fleet --diff
-gitups destroy  -f test/e2e/qemu-3-hosts-1-sno-hub-2-ocp-fleet --state-dir /tmp/gitups-qemu-3-hosts-1-sno-hub-2-ocp-fleet --yes
+gitups destroy all -f test/e2e/qemu-3-hosts-1-sno-hub-2-ocp-fleet --state-dir /tmp/gitups-qemu-3-hosts-1-sno-hub-2-ocp-fleet --yes
 ```
 
 ## External Prerequisites

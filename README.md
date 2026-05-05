@@ -39,13 +39,20 @@ emulation to real bare metal edits only `InfrastructureProvider` and
 ## CLI
 
 ```text
+gitups doctor
+gitups setup controller -f examples/qemu-redfish-fleet --minimal
+gitups init --template qemu-redfish-hub --out desired-state
 gitups validate -f examples/qemu-redfish-fleet
-gitups render   -f examples/qemu-redfish-fleet --state-dir .state
-gitups apply    -f examples/qemu-redfish-fleet --state-dir .state --dry-run
-gitups status   -f examples/qemu-redfish-fleet --state-dir .state
+gitups preflight -f examples/qemu-redfish-fleet
+gitups plan -f examples/qemu-redfish-fleet --out text
+gitups apply infra -f examples/qemu-redfish-fleet --dry-run
+gitups apply hub -f examples/qemu-redfish-fleet --dry-run
+gitups status -f examples/qemu-redfish-fleet --diff
 ```
 
-Public verbs: `validate`, `render`, `apply`, `destroy`, `status`, `secrets`.
+Public verbs: `doctor`, `setup controller`, `init`, `validate`, `preflight`,
+`plan`, `apply <infra|hub|clusters>`, `destroy <infra|hub|clusters|all>`,
+`status`, and `secrets`.
 The formal CLI contract lives in
 [specs/state-model.md](specs/state-model.md#cli-contract).
 

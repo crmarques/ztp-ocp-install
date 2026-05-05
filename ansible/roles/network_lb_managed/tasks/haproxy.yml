@@ -187,7 +187,7 @@
       local={{ gitups_current_load_balancer.image.local | default('<unset>') }},
       public={{ gitups_current_load_balancer.image.public | default('<unset>') }}.
       Pre-pull the image into local container storage or run
-      `gitups registry verify` to inspect mirror contents.
+      `gitups preflight` to inspect mirror reachability and prerequisites.
   when:
     - gitups_haproxy_recreate | bool
     - (gitups_haproxy_local_present.rc | default(1) != 0)

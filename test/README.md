@@ -46,11 +46,13 @@ The user-facing equivalent is plain `gitups`:
 
 ```text
 gitups validate -f test/e2e/<case> --check-host
-gitups render   -f test/e2e/<case> --state-dir /tmp/gitups-<case>
-gitups apply    -f test/e2e/<case> --state-dir /tmp/gitups-<case> --dry-run
-gitups apply    -f test/e2e/<case> --state-dir /tmp/gitups-<case> --yes
+gitups plan     -f test/e2e/<case> --state-dir /tmp/gitups-<case>
+gitups apply infra -f test/e2e/<case> --state-dir /tmp/gitups-<case> --dry-run
+gitups apply hub   -f test/e2e/<case> --state-dir /tmp/gitups-<case> --dry-run
+gitups apply infra -f test/e2e/<case> --state-dir /tmp/gitups-<case> --yes
+gitups apply hub   -f test/e2e/<case> --state-dir /tmp/gitups-<case> --yes
 gitups status   -f test/e2e/<case> --state-dir /tmp/gitups-<case> --diff
-gitups destroy  -f test/e2e/<case> --state-dir /tmp/gitups-<case> --yes
+gitups destroy all -f test/e2e/<case> --state-dir /tmp/gitups-<case> --yes
 ```
 
 ## Common Prerequisites

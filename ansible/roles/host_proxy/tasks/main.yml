@@ -115,6 +115,7 @@
           https_proxy={{ gitups_proxy_https_effective }}
           no_proxy={{ gitups_proxy_no }}
       no_log: "{{ (gitups_proxy_credentials_ref | length) > 0 }}"
+      when: (gitups_proxy_credentials_ref | length) == 0
 
     # Login shells (sshed-in admins, ansible's `become` shells) source
     # /etc/profile.d/*.sh; /etc/environment alone does not propagate to all of
@@ -135,6 +136,7 @@
           export https_proxy="{{ gitups_proxy_https_effective }}"
           export no_proxy="{{ gitups_proxy_no }}"
       no_log: "{{ (gitups_proxy_credentials_ref | length) > 0 }}"
+      when: (gitups_proxy_credentials_ref | length) == 0
 
     # dnf does not honor HTTP(S)_PROXY from /etc/environment in every release;
     # set the proxy explicitly so package installs in host_prepare / host_kvm
@@ -152,7 +154,7 @@
         insertafter: '^\[main\]'
         owner: root
         group: root
-        mode: "0644"
+        mode: "{{ '0600' if (gitups_proxy_credentials_ref | length) > 0 else '0644' }}"
       no_log: "{{ (gitups_proxy_credentials_ref | length) > 0 }}"
       when: gitups_proxy_dnf_stat.stat.exists
 
@@ -169,7 +171,7 @@
         insertafter: '^\[main\]'
         owner: root
         group: root
-        mode: "0644"
+        mode: "{{ '0600' if (gitups_proxy_credentials_ref | length) > 0 else '0644' }}"
       no_log: "{{ (gitups_proxy_credentials_ref | length) > 0 }}"
       when: gitups_proxy_yum_stat.stat.exists
 
@@ -215,7 +217,7 @@
         create: true
         owner: root
         group: root
-        mode: "0644"
+        mode: "{{ '0600' if (gitups_proxy_credentials_ref | length) > 0 else '0644' }}"
         marker: "# {mark} ANSIBLE MANAGED BLOCK gitups-proxy"
         block: |
           [engine]
@@ -242,7 +244,7 @@
         dest: /etc/systemd/system.conf.d/10-gitups-proxy.conf
         owner: root
         group: root
-        mode: "0644"
+        mode: "{{ '0600' if (gitups_proxy_credentials_ref | length) > 0 else '0644' }}"
         content: |
           # Managed by gitups host_proxy role.
           [Manager]

@@ -31,8 +31,6 @@
         path: "{{ gitups_generated_private_key_path }}"
         type: RSA
         size: 4096
-        owner: root
-        group: root
         mode: "0600"
 
     - name: Generate self-signed certificate signing request
@@ -41,8 +39,6 @@
         privatekey_path: "{{ gitups_generated_private_key_path }}"
         common_name: "{{ gitups_generated_secret.selfSignedCertificate.commonName }}"
         subject_alt_name: "{{ gitups_generated_secret.selfSignedCertificate.subjectAltName.split(',') | map('trim') | list }}"
-        owner: root
-        group: root
         mode: "0600"
 
     - name: Issue self-signed certificate
@@ -53,8 +49,6 @@
         provider: selfsigned
         selfsigned_digest: sha256
         selfsigned_not_after: "+{{ gitups_generated_secret.selfSignedCertificate.validityDays }}d"
-        owner: root
-        group: root
         mode: "0600"
 
     - name: Remove transient certificate signing request
@@ -65,8 +59,6 @@
 - name: Protect generated certificate material
   ansible.builtin.file:
     path: "{{ item.path }}"
-    owner: root
-    group: root
     mode: "{{ item.mode }}"
   loop:
     - path: "{{ gitups_generated_certificate_path }}"

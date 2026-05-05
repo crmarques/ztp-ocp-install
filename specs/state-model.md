@@ -318,27 +318,30 @@ The validator enforces:
 
 ## CLI Contract
 
-The user-facing CLI is six verbs:
+The user-facing CLI is:
 
 | Command | Reads input? | Mutates? | Purpose |
 | --- | --- | --- | --- |
-| `validate` | yes | no | Schema, defaults, cross-reference validation. `--check-host` adds local tooling discovery. |
-| `render` | yes | local only | Writes deterministic artifacts under `--state-dir`. |
-| `apply` | yes | yes | Converges the host toward desired state, phase by phase. |
-| `destroy` | yes | yes | Reverses `apply` in reverse phase order. Requires `--yes` (or `--dry-run`). |
+| `doctor` | no | no | Controller baseline prerequisite checks. |
+| `setup controller` | optional | yes | Installs minimal pinned controller dependencies, preferring managed packages and the Gitups-managed Ansible venv. |
+| `init --template <name> --out <dir>` | no | local only | Writes current validating desired-state templates. |
+| `validate` | yes | no | Strict schema, defaulting, and cross-reference validation. |
+| `preflight` | yes | no | Local checks plus read-only Ansible checks against provider and cluster hosts. |
+| `plan` | yes | no | Objective preview of generated files, phases, root-required work, and prerequisite risks. |
+| `apply <infra|hub|clusters>` | yes | yes | Converges one explicit workflow scope. |
+| `destroy <infra|hub|clusters|all>` | yes | yes | Reverses one explicit workflow scope. Requires `--yes` (or `--dry-run`). |
 | `status` | yes | no | Reports desired counts, rendered artifact presence, phase table, and drift against `--state-dir` (`--diff` for full drift output). |
-| `secrets` | optional | yes (writes secrets) | `pull-secret set`, `bmc set`, `generate` — the only writers into `<gitups-home>/secrets`. |
+| `secrets` | optional | yes (writes secrets) | `sync`, `generate`, `pull-secret set`, and credential writers — the only writers into `<gitups-home>/secrets`. |
 
-`apply` runs an automatic `validate --check-host` pass before mutating
-anything. Users do not need a separate top-level host-check command.
+Rendering has no public command; it is an internal step for `plan`, `preflight`,
+`apply`, and `status --diff`.
 
-Phases (apply order):
+Workflow scopes:
 
 1. `infra` — provider infrastructure (hosts, VMs, BMC, LB, DNS).
-2. `hub` — hub OCP install plus ACM and OpenShift GitOps operators.
-3. `gitops-publish` — publish managed cluster intent to the hub-watched
-   Git repo.
+2. `hub` — hub OCP install plus hub-side operators.
+3. `clusters` — publish managed cluster intent through the hub once implemented.
 
-Spoke OCP installs are reconciled by the hub via ACM/GitOps after
-`gitops-publish`; they are out of scope for `gitups apply`. New phases
-extend the ordered list in code; they do not become new top-level verbs.
+Spoke OCP installs are reconciled by the hub via ACM/GitOps after managed
+cluster publication exists; direct controller-side `openshift-install` for
+every spoke is out of scope.

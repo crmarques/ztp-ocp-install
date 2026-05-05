@@ -26,16 +26,16 @@ func newRootCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Comm
 	root.SetErr(stderr)
 
 	root.AddCommand(
+		newDoctorCmd(stdout, stderr),
+		newSetupCmd(stdin, stdout, stderr),
+		newInitCmd(stdout),
 		newValidateCmd(stdout, stderr),
+		newPreflightCmd(stdout, stderr),
 		newPlanCmd(stdout),
-		newRenderCmd(stdout),
 		newApplyCmd(stdin, stdout, stderr),
 		newDestroyCmd(stdout, stderr),
 		newStatusCmd(stdout),
-		newDiffCmd(stdout),
-		newRegistryCmd(stdout, stderr),
 		newSecretsCmd(stdout, stderr),
-		newOperatorCmd(stdin, stdout, stderr),
 	)
 	return root
 }

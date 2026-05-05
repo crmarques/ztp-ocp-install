@@ -76,10 +76,10 @@ install -m 0600 ~/.ssh/gitups-qemu-3-hosts     ~/.gitups/secrets/provider-host-a
 install -m 0600 ~/.ssh/gitups-qemu-3-hosts.pub ~/.gitups/secrets/cluster-admin-key
 gitups secrets pull-secret set --name openshift-pull-secret --from-file ~/pull-secret.json
 # Authenticated proxy only — drop credentialsRef from environment.yaml when
-# the proxy is open. `gitups secrets bmc set` is still the writer for any
+# the proxy is open. `gitups secrets credentials set` is still the writer for any
 # operator-provided `username:password` secret (e.g. when the proxy
 # credentials must come from a vault rather than be generated).
-gitups secrets bmc set --name proxy-credentials
+gitups secrets credentials set --name proxy-credentials
 gitups secrets generate -f test/e2e/qemu-3-hosts-1-hub-2-ocp-fleet
 ```
 
@@ -117,9 +117,11 @@ Equivalent CLI flow:
 
 ```text
 gitups validate -f test/e2e/qemu-3-hosts-1-hub-2-ocp-fleet --check-host
-gitups render   -f test/e2e/qemu-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-qemu-3-hosts-1-hub-2-ocp-fleet
-gitups apply    -f test/e2e/qemu-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-qemu-3-hosts-1-hub-2-ocp-fleet --dry-run
-gitups apply    -f test/e2e/qemu-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-qemu-3-hosts-1-hub-2-ocp-fleet --yes
+gitups plan     -f test/e2e/qemu-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-qemu-3-hosts-1-hub-2-ocp-fleet
+gitups apply infra -f test/e2e/qemu-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-qemu-3-hosts-1-hub-2-ocp-fleet --dry-run
+gitups apply hub   -f test/e2e/qemu-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-qemu-3-hosts-1-hub-2-ocp-fleet --dry-run
+gitups apply infra -f test/e2e/qemu-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-qemu-3-hosts-1-hub-2-ocp-fleet --yes
+gitups apply hub   -f test/e2e/qemu-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-qemu-3-hosts-1-hub-2-ocp-fleet --yes
 gitups status   -f test/e2e/qemu-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-qemu-3-hosts-1-hub-2-ocp-fleet --diff
-gitups destroy  -f test/e2e/qemu-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-qemu-3-hosts-1-hub-2-ocp-fleet --yes
+gitups destroy all -f test/e2e/qemu-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-qemu-3-hosts-1-hub-2-ocp-fleet --yes
 ```

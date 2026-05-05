@@ -7,11 +7,13 @@ spec:
     qemu-host:
       ssh:
         address: 192.168.10.11
+        user: gitups
         keyRef:
           name: qemu-host-ssh
       capabilities:
         - libvirt
         - hosts-file
+        - mirror-registry
   machine:
     libvirt:
       hostRefs:
@@ -35,3 +37,8 @@ spec:
     hostsFile:
       hostRefs:
         - name: qemu-host
+  registry:
+    mirrorRegistry:
+      hostRef:
+        name: qemu-host
+      port: 5000

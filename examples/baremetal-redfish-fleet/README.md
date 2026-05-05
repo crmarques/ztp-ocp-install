@@ -29,5 +29,5 @@ balancers.
 
 ```text
 gitups validate -f examples/baremetal-redfish-fleet
-gitups render   -f examples/baremetal-redfish-fleet --state-dir .state
+gitups plan -f examples/baremetal-redfish-fleet --state-dir .state
 ```

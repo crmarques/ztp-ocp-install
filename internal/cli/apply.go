@@ -19,13 +19,30 @@ import (
 )
 
 func newApplyCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "apply",
+		Short: "Converge desired state by workflow scope",
+		Long: "Converges one explicit workflow scope.\n" +
+			"Use `apply infra` for provider and substrate preparation, `apply hub`\n" +
+			"for hub installation, and `apply clusters` once managed-cluster\n" +
+			"GitOps publication is implemented.",
+		Args: cobra.NoArgs,
+	}
+	cmd.AddCommand(
+		newApplyScopeCmd("infra", stdin, stdout, stderr),
+		newApplyScopeCmd("hub", stdin, stdout, stderr),
+		newApplyScopeCmd("clusters", stdin, stdout, stderr),
+	)
+	return cmd
+}
+
+func newApplyScopeCmd(scope string, stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Command {
 	var (
 		dryRun        bool
 		check         bool
 		askBecomePass bool
 		yes           bool
 		executable    string
-		phaseName     string
 		extraVars     []string
 		secretsDir    string
 		hostStateDir  string
@@ -33,8 +50,8 @@ func newApplyCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Com
 	secretsDir = defaultSecretsDir()
 	hostStateDir = defaultHostStateDir
 	cmd := &cobra.Command{
-		Use:   "apply",
-		Short: "Converge desired state phase by phase",
+		Use:   scope,
+		Short: applyScopeShort(scope),
 		Args:  cobra.NoArgs,
 	}
 	cf := addCommonFlags(cmd)
@@ -43,7 +60,6 @@ func newApplyCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Com
 	cmd.Flags().BoolVar(&askBecomePass, "ask-become-pass", true, "prompt once per phase for the sudo (BECOME) password (default true; pass --ask-become-pass=false on hosts with passwordless sudo or when wrapping gitups in sudo)")
 	cmd.Flags().BoolVar(&yes, "yes", false, "skip the apply confirmation prompt")
 	cmd.Flags().StringVar(&executable, "ansible-playbook", resolveAnsiblePlaybook(), "ansible-playbook executable to run (defaults to the gitups-managed venv when present)")
-	cmd.Flags().StringVar(&phaseName, "phase", "", "run only the named phase ("+phaseNames()+"); default runs all phases in order")
 	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material")
 	cmd.Flags().StringVar(&hostStateDir, "host-state-dir", hostStateDir, "root-managed host runtime state directory")
 	cmd.Flags().StringArrayVar(&extraVars, "extra-var", nil, "extra ansible variable in key=value form; may be repeated (passed via -e)")
@@ -53,9 +69,9 @@ func newApplyCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Com
 				return failf(2, "--extra-var %q must be key=value", v)
 			}
 		}
-		selected, err := selectPhases(phaseName)
+		selected, err := phasesForApplyScope(scope)
 		if err != nil {
-			return failErr(2, err)
+			return failErr(1, err)
 		}
 		state, err := infra.LoadNormalizeValidate(cf.files)
 		if err != nil {
@@ -138,12 +154,28 @@ func newApplyCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Com
 }
 
 func newDestroyCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "destroy",
+		Short: "Reverse apply by workflow scope",
+		Long: "Destroys one explicit workflow scope. `destroy all` runs hub,\n" +
+			"cluster substrate, and provider teardown in reverse order.",
+		Args: cobra.NoArgs,
+	}
+	cmd.AddCommand(
+		newDestroyScopeCmd("infra", stdout, stderr),
+		newDestroyScopeCmd("hub", stdout, stderr),
+		newDestroyScopeCmd("clusters", stdout, stderr),
+		newDestroyScopeCmd("all", stdout, stderr),
+	)
+	return cmd
+}
+
+func newDestroyScopeCmd(scope string, stdout io.Writer, stderr io.Writer) *cobra.Command {
 	var (
 		dryRun        bool
 		askBecomePass bool
 		yes           bool
 		executable    string
-		phaseName     string
 		extraVars     []string
 		secretsDir    string
 		hostStateDir  string
@@ -151,8 +183,8 @@ func newDestroyCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 	secretsDir = defaultSecretsDir()
 	hostStateDir = defaultHostStateDir
 	cmd := &cobra.Command{
-		Use:   "destroy",
-		Short: "Reverse apply (runs phases in reverse order)",
+		Use:   scope,
+		Short: destroyScopeShort(scope),
 		Args:  cobra.NoArgs,
 	}
 	cf := addCommonFlags(cmd)
@@ -160,12 +192,11 @@ func newDestroyCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 	cmd.Flags().BoolVar(&askBecomePass, "ask-become-pass", false, "ask for the Ansible become password")
 	cmd.Flags().BoolVar(&yes, "yes", false, "skip the destroy confirmation prompt")
 	cmd.Flags().StringVar(&executable, "ansible-playbook", resolveAnsiblePlaybook(), "ansible-playbook executable to run (defaults to the gitups-managed venv when present)")
-	cmd.Flags().StringVar(&phaseName, "phase", "", "destroy only the named phase ("+phaseNames()+"); default destroys all phases in reverse order")
 	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material")
 	cmd.Flags().StringVar(&hostStateDir, "host-state-dir", hostStateDir, "root-managed host runtime state directory")
 	cmd.Flags().StringArrayVar(&extraVars, "extra-var", nil, "extra ansible variable in key=value form; may be repeated (passed via -e)")
 	var keepStateDir bool
-	cmd.Flags().BoolVar(&keepStateDir, "keep-state-dir", false, "keep --state-dir after a full destroy (default: remove it once all phases succeed)")
+	cmd.Flags().BoolVar(&keepStateDir, "keep-state-dir", false, "keep --state-dir after `destroy all` succeeds")
 	var keepMirroredImages bool
 	cmd.Flags().BoolVar(&keepMirroredImages, "keep-mirrored-images", false, "keep the mirror-registry data volume on the provider host so the next apply does not have to re-pull from public registries")
 	cmd.RunE = func(c *cobra.Command, _ []string) error {
@@ -174,11 +205,10 @@ func newDestroyCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 				return failf(2, "--extra-var %q must be key=value", v)
 			}
 		}
-		selected, err := selectPhases(phaseName)
+		selected, err := phasesForDestroyScope(scope)
 		if err != nil {
-			return failErr(2, err)
+			return failErr(1, err)
 		}
-		selected = reversed(selected)
 		state, err := infra.LoadNormalizeValidate(cf.files)
 		if err != nil {
 			return failErr(1, err)
@@ -246,18 +276,17 @@ func newDestroyCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 				return failErr(1, err)
 			}
 		}
-		// Full destroy owns the entire state-dir teardown: rendered artifacts,
-		// extracted ansible bundle (often root-owned from a sudo apply), and
-		// per-phase ansible logs all live under stateDirAbs and refer to
-		// infrastructure that no longer exists. A partial --phase run leaves
-		// state in place because the remaining phases still need it.
+		// `destroy all` owns the entire state-dir teardown: rendered artifacts,
+		// extracted ansible bundle, and per-phase ansible logs all live under
+		// stateDirAbs and refer to infrastructure that no longer exists. Scoped
+		// destroys leave state in place because the remaining scopes still need it.
 		if dryRun {
-			if phaseName == "" && !keepStateDir {
+			if scope == "all" && !keepStateDir {
 				fmt.Fprintf(stdout, "dry-run: would remove state-dir: %s\n", stateDirAbs)
 			}
 			return nil
 		}
-		if phaseName != "" || keepStateDir {
+		if scope != "all" || keepStateDir {
 			return nil
 		}
 		if err := os.RemoveAll(stateDirAbs); err != nil {
@@ -267,6 +296,34 @@ func newDestroyCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 		return nil
 	}
 	return cmd
+}
+
+func applyScopeShort(scope string) string {
+	switch scope {
+	case "infra":
+		return "Prepare provider services and per-cluster infrastructure substrate"
+	case "hub":
+		return "Install the hub OpenShift cluster"
+	case "clusters":
+		return "Publish managed-cluster desired state through the hub"
+	default:
+		return "Converge desired state"
+	}
+}
+
+func destroyScopeShort(scope string) string {
+	switch scope {
+	case "infra":
+		return "Destroy provider services and per-cluster infrastructure substrate"
+	case "hub":
+		return "Destroy the hub OpenShift cluster"
+	case "clusters":
+		return "Unpublish managed-cluster desired state through the hub"
+	case "all":
+		return "Destroy hub, infrastructure substrate, and provider services"
+	default:
+		return "Destroy desired state"
+	}
 }
 
 // runApplyHostCheck enforces the spec rule that apply must run a

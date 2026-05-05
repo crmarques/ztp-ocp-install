@@ -1,0 +1,60 @@
+---
+- name: Gitups read-only controller and provider preflight
+  hosts: gitups_provider_hosts:gitups_infra_hosts:gitups_hub_hosts
+  gather_subset:
+    - "!all"
+    - min
+    - env
+  become: false
+
+  pre_tasks:
+    - name: Select provider for current host when available
+      ansible.builtin.set_fact:
+        gitups_current_provider: "{{ gitups_providers | selectattr('name', 'equalto', gitups_provider_name) | first }}"
+      changed_when: false
+      when: gitups_provider_name is defined
+
+  tasks:
+    - name: Verify host is reachable over configured transport
+      ansible.builtin.ping:
+      changed_when: false
+
+    - name: Check sudo availability without escalating
+      ansible.builtin.command:
+        argv:
+          - sudo
+          - -n
+          - "true"
+      register: gitups_preflight_sudo
+      changed_when: false
+      failed_when: false
+
+    - name: Report sudo availability
+      ansible.builtin.debug:
+        msg: >-
+          sudo={{ 'passwordless' if gitups_preflight_sudo.rc == 0 else 'password-required-or-unavailable' }}
+
+    - name: Check provider package manager commands
+      ansible.builtin.command:
+        argv:
+          - sh
+          - -c
+          - "command -v dnf || command -v yum || command -v apt-get"
+      register: gitups_preflight_package_manager
+      changed_when: false
+      failed_when: false
+
+    - name: Report provider package manager
+      ansible.builtin.debug:
+        msg: "packageManager={{ gitups_preflight_package_manager.stdout | default('missing') }}"
+
+    - name: Check KVM device when libvirt is declared
+      ansible.builtin.stat:
+        path: /dev/kvm
+      register: gitups_preflight_kvm
+      when: gitups_current_provider is defined and gitups_current_provider.kind == 'qemu-kvm'
+
+    - name: Report KVM device
+      ansible.builtin.debug:
+        msg: "/dev/kvm={{ gitups_preflight_kvm.stat.exists | default(false) }}"
+      when: gitups_current_provider is defined and gitups_current_provider.kind == 'qemu-kvm'

@@ -126,6 +126,18 @@ func loadFile(path string, state *v1alpha1.State) error {
 		if err := node.Decode(&typeMeta); err != nil {
 			return fmt.Errorf("decode %s document %d metadata: %w", path, index, err)
 		}
+		if typeMeta.APIVersion == "" {
+			return fmt.Errorf("decode %s document %d: apiVersion is required", path, index)
+		}
+		if typeMeta.APIVersion != v1alpha1.APIVersion {
+			return fmt.Errorf("decode %s document %d: unsupported apiVersion %q", path, index, typeMeta.APIVersion)
+		}
+		if !mappingHasKey(node, "metadata") {
+			return fmt.Errorf("decode %s document %d: metadata is required", path, index)
+		}
+		if !mappingHasKey(node, "spec") {
+			return fmt.Errorf("decode %s document %d: spec is required", path, index)
+		}
 		switch typeMeta.Kind {
 		case v1alpha1.KindEnvironment:
 			var item v1alpha1.Environment
@@ -162,6 +174,21 @@ func loadFile(path string, state *v1alpha1.State) error {
 		}
 	}
 	return nil
+}
+
+func mappingHasKey(node yaml.Node, key string) bool {
+	if node.Kind == yaml.DocumentNode && len(node.Content) > 0 {
+		node = *node.Content[0]
+	}
+	if node.Kind != yaml.MappingNode {
+		return false
+	}
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		if node.Content[i].Value == key {
+			return true
+		}
+	}
+	return false
 }
 
 func decodeKnown(node yaml.Node, value any) error {

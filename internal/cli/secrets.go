@@ -43,7 +43,7 @@ func newSecretsCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 	cmd.AddCommand(
 		newSecretsGenerateCmd(stdout, stderr),
 		newSecretsPullSecretCmd(stdout, stderr),
-		newSecretsBMCCmd(stdout, stderr),
+		newSecretsCredentialsCmd(stdout),
 		newSecretsSyncCmd(stdout, stderr),
 	)
 	return cmd
@@ -419,17 +419,17 @@ func newSecretsPullSecretSetCmd(stdout io.Writer, _ io.Writer) *cobra.Command {
 	return cmd
 }
 
-func newSecretsBMCCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
+func newSecretsCredentialsCmd(stdout io.Writer) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "bmc",
-		Short: "Manage local BMC credentials",
+		Use:   "credentials",
+		Short: "Manage local username:password credentials",
 		Args:  cobra.NoArgs,
 	}
-	cmd.AddCommand(newSecretsBMCSetCmd(stdout))
+	cmd.AddCommand(newSecretsCredentialsSetCmd(stdout))
 	return cmd
 }
 
-func newSecretsBMCSetCmd(stdout io.Writer) *cobra.Command {
+func newSecretsCredentialsSetCmd(stdout io.Writer) *cobra.Command {
 	var (
 		name          string
 		fromFile      string
@@ -442,8 +442,8 @@ func newSecretsBMCSetCmd(stdout io.Writer) *cobra.Command {
 	secretsDir = defaultSecretsDir()
 	cmd := &cobra.Command{
 		Use:   "set",
-		Short: "Store BMC credentials (username:password) for a SecretRef",
-		Long: `Store BMC credentials at <secrets-dir>/<name> as a single line "username:password",
+		Short: "Store username:password credentials for a SecretRef",
+		Long: `Store credentials at <secrets-dir>/<name> as a single line "username:password",
 mode 0600. Three input modes are supported:
 
   --from-file <path>           read an existing "username:password" file
@@ -452,13 +452,13 @@ mode 0600. Three input modes are supported:
   --generate                   generate a random password (default username "admin")
 
 Inputs are mutually exclusive. Use --generate for test fixtures; use --from-file
-or --username/--password for real BMC credentials provided by the operator.`,
+or --username/--password for real credentials provided by the operator.`,
 		Args: cobra.NoArgs,
 	}
 	cmd.Flags().StringVar(&name, "name", "", "SecretRef name to write")
 	cmd.Flags().StringVar(&fromFile, "from-file", "", "path to a file containing one line: username:password")
-	cmd.Flags().StringVar(&username, "username", "", "BMC username (required with --password, --password-stdin, or --generate)")
-	cmd.Flags().StringVar(&password, "password", "", "BMC password (mutually exclusive with --password-stdin and --generate)")
+	cmd.Flags().StringVar(&username, "username", "", "username (required with --password, --password-stdin, or --generate)")
+	cmd.Flags().StringVar(&password, "password", "", "password (mutually exclusive with --password-stdin and --generate)")
 	cmd.Flags().BoolVar(&passwordStdin, "password-stdin", false, "read password from stdin instead of --password")
 	cmd.Flags().BoolVar(&generate, "generate", false, "generate a strong random password (intended for test fixtures)")
 	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory for local install secret material")
@@ -493,7 +493,7 @@ or --username/--password for real BMC credentials provided by the operator.`,
 		case fromFile != "":
 			data, err := os.ReadFile(fromFile)
 			if err != nil {
-				return failErr(1, fmt.Errorf("read BMC credentials file %s: %w", fromFile, err))
+				return failErr(1, fmt.Errorf("read credentials file %s: %w", fromFile, err))
 			}
 			u, p, err := parseBMCCredentials(data)
 			if err != nil {
@@ -533,7 +533,7 @@ or --username/--password for real BMC credentials provided by the operator.`,
 			return failErr(1, err)
 		}
 		if resolvedPass == "" {
-			return failErr(1, errors.New("BMC password must not be empty"))
+			return failErr(1, errors.New("password must not be empty"))
 		}
 		if err := os.MkdirAll(secretsDir, 0o700); err != nil {
 			return failErr(1, fmt.Errorf("create secrets directory %s: %w", secretsDir, err))
@@ -555,7 +555,7 @@ or --username/--password for real BMC credentials provided by the operator.`,
 			action = "updated"
 		}
 		printTitle(stdout, "Secrets")
-		message := fmt.Sprintf("%s BMC credentials at %s (user %q)", action, target, resolvedUser)
+		message := fmt.Sprintf("%s credentials at %s (user %q)", action, target, resolvedUser)
 		if generate {
 			message += " — password generated; copy it from the file above before sharing"
 		}
@@ -568,24 +568,24 @@ or --username/--password for real BMC credentials provided by the operator.`,
 func parseBMCCredentials(data []byte) (string, string, error) {
 	text := strings.TrimRight(string(data), "\r\n")
 	if text == "" {
-		return "", "", errors.New("BMC credentials file is empty; expected one line in the form username:password")
+		return "", "", errors.New("credentials file is empty; expected one line in the form username:password")
 	}
 	if strings.Contains(text, "\n") {
-		return "", "", errors.New("BMC credentials file must contain a single username:password line")
+		return "", "", errors.New("credentials file must contain a single username:password line")
 	}
 	idx := strings.IndexByte(text, ':')
 	if idx <= 0 || idx == len(text)-1 {
-		return "", "", errors.New("BMC credentials file must contain a single username:password line")
+		return "", "", errors.New("credentials file must contain a single username:password line")
 	}
 	return text[:idx], text[idx+1:], nil
 }
 
 func validateBMCUsername(username string) error {
 	if username == "" {
-		return errors.New("BMC username must not be empty")
+		return errors.New("username must not be empty")
 	}
 	if strings.ContainsAny(username, ":\r\n\t ") {
-		return errors.New("BMC username must not contain whitespace or ':'")
+		return errors.New("username must not contain whitespace or ':'")
 	}
 	return nil
 }

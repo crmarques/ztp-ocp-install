@@ -34,7 +34,7 @@ var defaultPreflightDeps = preflightDeps{
 func collectPreflightChecks(state v1alpha1.State, selected []Phase, hasState bool, secretsDir string, hostStateDir string, deps preflightDeps) []preflightCheck {
 	// ansible-playbook is searched in the gitups-managed venv as a fallback
 	// so the universal "ansible-playbook on PATH" check still passes after
-	// `gitups operator bootstrap --venv` even on a host that has no system
+	// `gitups setup controller --venv` even on a host that has no system
 	// ansible-core installed.
 	checks := []preflightCheck{
 		binaryCheck("ansible-playbook", []string{filepath.Join(ansibleVenvDir(), "bin")}, deps),
@@ -60,9 +60,6 @@ func collectPreflightChecks(state v1alpha1.State, selected []Phase, hasState boo
 			checks = append(checks, binaryCheck("openssl", nil, deps))
 		}
 	}
-	if phaseInScope("gitops-publish", selected, hasState) {
-		checks = append(checks, binaryCheck("git", nil, deps))
-	}
 	if hasState {
 		checks = append(checks, secretRefChecks(state, secretsDir, selected, deps)...)
 		checks = append(checks, generatedSelfSignedDriftChecks(state, secretsDir)...)
@@ -70,9 +67,9 @@ func collectPreflightChecks(state v1alpha1.State, selected []Phase, hasState boo
 	return checks
 }
 
-// phaseInScope: with --phase, only that phase counts; without --phase, every
-// phase is in scope iff the user supplied desired-state input. With neither,
-// only universal checks run.
+// phaseInScope returns true when the current workflow selection includes the
+// named phase. With no selection, every implemented phase is in scope iff the
+// user supplied desired-state input. With neither, only universal checks run.
 func phaseInScope(name string, selected []Phase, hasState bool) bool {
 	if len(selected) == 0 {
 		return hasState
@@ -86,7 +83,7 @@ func phaseInScope(name string, selected []Phase, hasState bool) bool {
 }
 
 // anyPhaseInScope reports true when at least one of the named phases is in
-// scope under the current `--phase` selection. Used by secret-ref checks
+// scope under the current workflow selection. Used by secret-ref checks
 // where a single ref may be read by multiple phases (host_proxy runs in
 // both provider and cluster; mirror credentials are read in provider and
 // hub).
@@ -204,9 +201,9 @@ func secretFileCheck(refName, secretsDir, label string, deps preflightDeps) pref
 			detail = "missing — run `gitups secrets pull-secret set --name " + refName + " --from-file <path>`"
 		case strings.Contains(label, "credentialRef") || strings.Contains(label, "credentialsRef"):
 			// credentialRef and credentialsRef both store a single
-			// `username:password` line; `gitups secrets bmc set` is the only
+			// `username:password` line; `gitups secrets credentials set` is the only
 			// supported writer for that shape (proxy, mirror, BMC all share it).
-			detail = "missing — run `gitups secrets bmc set --name " + refName + " --from-file <path>` (or `--generate` for test fixtures)"
+			detail = "missing — run `gitups secrets credentials set --name " + refName + " --from-file <path>` (or `--generate` for test fixtures)"
 		}
 		return preflightCheck{name: name, ok: false, detail: detail}
 	}
@@ -216,14 +213,22 @@ func secretFileCheck(refName, secretsDir, label string, deps preflightDeps) pref
 	return preflightCheck{name: name, ok: true}
 }
 
-func generatedSecretCheck(refName, secretsDir, label string) preflightCheck {
+func generatedSecretCheck(refName, secretsDir, label string, deps preflightDeps) preflightCheck {
 	path := filepath.Join(secretsDir, refName)
-	return preflightCheck{name: label + " at " + path, ok: true, detail: "will be generated during hub apply"}
+	name := label + " at " + path
+	info, err := deps.statPath(path)
+	if err != nil {
+		return preflightCheck{name: name, ok: false, detail: "missing — run `gitups secrets generate` before apply"}
+	}
+	if info.IsDir() {
+		return preflightCheck{name: name, ok: false, detail: "is a directory; expected a generated file"}
+	}
+	return preflightCheck{name: name, ok: true}
 }
 
 // secretRefRequirement describes a single SecretRef declared somewhere in the
 // desired state, the phases that need the file present on the host, and
-// whether `gitups secrets generate` will materialize it during apply. A
+// whether `gitups secrets generate` can materialize it before apply. A
 // single ref may be read by multiple phases (e.g. host_proxy runs in both
 // the provider and cluster phases) so phases is a list.
 type secretRefRequirement struct {
@@ -253,7 +258,7 @@ func secretRefChecks(state v1alpha1.State, secretsDir string, selected []Phase, 
 	checks := []preflightCheck{secretsDirCheck(secretsDir, deps)}
 	for _, req := range inScope {
 		if req.generated {
-			checks = append(checks, generatedSecretCheck(req.refName, secretsDir, req.label))
+			checks = append(checks, generatedSecretCheck(req.refName, secretsDir, req.label, deps))
 			continue
 		}
 		checks = append(checks, secretFileCheck(req.refName, secretsDir, req.label, deps))

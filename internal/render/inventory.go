@@ -47,9 +47,6 @@ func Inventory(state v1alpha1.State) InventoryFile {
 	}
 	providers := providerIndex(state.InfrastructureProviders)
 	for _, provider := range state.InfrastructureProviders {
-		if v1alpha1.ProviderMachineLibvirt(provider) == nil {
-			continue
-		}
 		hostNames := sortedKeys(provider.Spec.Hosts)
 		for _, hostName := range hostNames {
 			host := provider.Spec.Hosts[hostName]
@@ -69,8 +66,8 @@ func Inventory(state v1alpha1.State) InventoryFile {
 	}
 	ocpByInfra := ocpByInfrastructure(state.OCPClusters)
 	for _, item := range state.ClusterInfrastructures {
-		provider := providers[v1alpha1.FirstProviderRefName(item)]
-		if v1alpha1.ProviderMachineLibvirt(provider) == nil {
+		closure, _ := v1alpha1.BuildProviderClosure(item, providers)
+		if closure.Machine == nil || closure.Machine.Libvirt == nil {
 			continue
 		}
 		ocp := ocpByInfra[item.Metadata.Name]
@@ -78,9 +75,12 @@ func Inventory(state v1alpha1.State) InventoryFile {
 		if ocp.Spec.Role == v1alpha1.OCPRoleHub {
 			roleGroup = "gitups_hub_hosts"
 		}
-		hostNames := sortedKeys(provider.Spec.Hosts)
-		for _, hostName := range hostNames {
-			host := provider.Spec.Hosts[hostName]
+		for _, ref := range closure.Machine.Libvirt.HostRefs {
+			hostName := ref.Name
+			host, ok := closure.Hosts[hostName]
+			if !ok {
+				continue
+			}
 			if host.SSH == nil {
 				continue
 			}
@@ -89,7 +89,7 @@ func Inventory(state v1alpha1.State) InventoryFile {
 				AnsibleHost:        host.SSH.Address,
 				AnsibleConnection:  ansibleConnection(host.SSH.Address),
 				AnsibleUser:        host.SSH.User,
-				GitupsProviderName: provider.Metadata.Name,
+				GitupsProviderName: closure.MachineProviderName,
 				GitupsClusterName:  item.Metadata.Name,
 				GitupsClusterRole:  ocp.Spec.Role,
 				GitupsHostName:     hostName,

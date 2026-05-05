@@ -63,15 +63,21 @@ func (r CommandRunner) Command(spec RunSpec) []string {
 }
 
 func (r CommandRunner) Run(ctx context.Context, spec RunSpec) error {
-	if err := os.MkdirAll(spec.ArtifactsDir, 0o755); err != nil {
+	if err := os.MkdirAll(spec.ArtifactsDir, 0o700); err != nil {
 		return fmt.Errorf("create Ansible artifacts directory: %w", err)
 	}
+	if err := os.Chmod(spec.ArtifactsDir, 0o700); err != nil {
+		return fmt.Errorf("chmod Ansible artifacts directory: %w", err)
+	}
 	outputLogPath := filepath.Join(spec.ArtifactsDir, OutputLogName)
-	outputLog, err := os.OpenFile(outputLogPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	outputLog, err := os.OpenFile(outputLogPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return fmt.Errorf("create Ansible output log: %w", err)
 	}
 	defer outputLog.Close()
+	if err := os.Chmod(outputLogPath, 0o600); err != nil {
+		return fmt.Errorf("chmod Ansible output log: %w", err)
+	}
 	lockedOutputLog := &lockedWriter{w: outputLog}
 
 	command := r.Command(spec)

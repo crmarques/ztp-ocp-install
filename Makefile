@@ -8,9 +8,10 @@ E2E_FIXTURE = $(E2E_DIR)/$(CASE)
 E2E_STATE_DIR ?= /tmp/gitups-$(CASE)
 ANSIBLE_PLAYBOOK ?= $(shell command -v ansible-playbook 2>/dev/null)
 E2E_ANSIBLE_FLAGS = $(if $(ANSIBLE_PLAYBOOK),--ansible-playbook $(ANSIBLE_PLAYBOOK),)
-E2E_APPLY ?= $(BIN_DIR)/$(BINARY) apply --yes
+E2E_APPLY_INFRA ?= $(BIN_DIR)/$(BINARY) apply infra --yes
+E2E_APPLY_HUB ?= $(BIN_DIR)/$(BINARY) apply hub --yes
 E2E_APPLY_FLAGS ?=
-E2E_DESTROY ?= $(BIN_DIR)/$(BINARY) destroy
+E2E_DESTROY ?= $(BIN_DIR)/$(BINARY) destroy all
 E2E_DESTROY_FLAGS ?=
 E2E_CLEAN ?= sudo rm -rf
 
@@ -22,7 +23,7 @@ EMBED_COLLECTIONS_DIR = $(EMBED_BUNDLE_DIR)/collections
 
 E2E_CASES = $(notdir $(patsubst %/,%,$(wildcard $(E2E_DIR)/*/)))
 
-.PHONY: all build sync-bundle test validate render check-e2e-deps check-e2e-case list-e2e-cases e2e-dry-run e2e e2e-destroy-dry-run e2e-destroy clean clean-e2e-state help
+.PHONY: all build sync-bundle test validate plan check-e2e-deps check-e2e-case list-e2e-cases e2e-dry-run e2e e2e-destroy-dry-run e2e-destroy clean clean-e2e-state help
 
 all: build
 
@@ -56,8 +57,8 @@ test:
 validate: build
 	$(BIN_DIR)/$(BINARY) validate -f examples/qemu-redfish-fleet
 
-render: build
-	$(BIN_DIR)/$(BINARY) render -f examples/qemu-redfish-fleet --state-dir $(STATE_DIR)
+plan: build
+	$(BIN_DIR)/$(BINARY) plan -f examples/qemu-redfish-fleet --state-dir $(STATE_DIR)
 
 check-e2e-deps:
 	@test -n "$(ANSIBLE_PLAYBOOK)" || { printf '%s\n' 'ansible-playbook not found in PATH; install Ansible or set ANSIBLE_PLAYBOOK=/path/to/ansible-playbook'; exit 1; }
@@ -70,13 +71,15 @@ list-e2e-cases:
 	@printf '%s\n' 'Available e2e cases:' $(addprefix '  ',$(E2E_CASES))
 
 e2e-dry-run: check-e2e-case check-e2e-deps build
-	$(BIN_DIR)/$(BINARY) apply -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) --dry-run $(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
+	$(BIN_DIR)/$(BINARY) apply infra -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) --dry-run $(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
+	$(BIN_DIR)/$(BINARY) apply hub -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) --dry-run $(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
 
 e2e: check-e2e-case check-e2e-deps build
-	$(E2E_APPLY) -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) $(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
+	$(E2E_APPLY_INFRA) -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) $(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
+	$(E2E_APPLY_HUB) -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) $(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
 
 e2e-destroy-dry-run: check-e2e-case check-e2e-deps build
-	$(BIN_DIR)/$(BINARY) destroy -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) --dry-run $(E2E_ANSIBLE_FLAGS) $(E2E_DESTROY_FLAGS)
+	$(BIN_DIR)/$(BINARY) destroy all -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) --dry-run $(E2E_ANSIBLE_FLAGS) $(E2E_DESTROY_FLAGS)
 
 e2e-destroy: check-e2e-case check-e2e-deps build
 	$(E2E_DESTROY) -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) --yes $(E2E_ANSIBLE_FLAGS) $(E2E_DESTROY_FLAGS)
@@ -97,7 +100,7 @@ help:
 		'  sync-bundle      Refresh internal/embedded/bundle from /ansible without building' \
 		'  test             Run Go tests' \
 		'  validate         Validate examples/qemu-redfish-fleet' \
-		'  render           Render examples/qemu-redfish-fleet into .state' \
+		'  plan             Preview examples/qemu-redfish-fleet into .state' \
 		'  list-e2e-cases   List available e2e cases under test/e2e' \
 		'  check-e2e-deps   Check local e2e dependencies' \
 		'  e2e-dry-run         Render an e2e fixture and print Ansible command (requires CASE=<name>)' \

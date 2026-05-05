@@ -29,96 +29,64 @@ func ansibleCorePinnedVersion() (string, error) {
 	return "", fmt.Errorf("ansible-core pin missing from render.ComponentPins")
 }
 
-// `operator` groups commands that probe and prepare the host running gitups.
-// The intent is that a fresh machine starts with only the gitups binary plus
-// user-authored desired-state YAML; `operator bootstrap` brings it to a state
-// where `validate`, `render`, and `apply` all work.
-func newOperatorCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Command {
+// `setup` groups commands that prepare the controller running gitups. The
+// intent is that a fresh machine starts with only the gitups binary plus
+// user-authored desired-state YAML; `setup controller` installs the minimal
+// pinned dependencies needed for the selected workflow.
+func newSetupCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "operator",
-		Short: "Probe and prepare the host running gitups",
-		Long: "Subcommands inspect and provision the operator host (the machine running gitups).\n" +
-			"`operator check` reports what is installed and what is missing; `operator bootstrap`\n" +
-			"installs the system packages and ansible-core needed for `gitups apply` to run.",
+		Use:   "setup",
+		Short: "Prepare the controller machine running gitups",
+		Long: "Subcommands provision the controller machine running gitups.\n" +
+			"`setup controller` installs the minimal packages and managed ansible-core runtime\n" +
+			"needed for `gitups preflight`, `gitups plan`, and `gitups apply`.",
 	}
 	cmd.AddCommand(
-		newOperatorCheckCmd(stdout, stderr),
-		newOperatorBootstrapCmd(stdin, stdout, stderr),
+		newSetupControllerCmd(stdin, stdout, stderr),
 	)
 	return cmd
 }
 
-func newOperatorCheckCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
+func newSetupControllerCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Command {
 	var (
-		secretsDir   string
-		hostStateDir string
-	)
-	secretsDir = defaultSecretsDir()
-	hostStateDir = defaultHostStateDir
-	cmd := &cobra.Command{
-		Use:   "check",
-		Short: "Probe the operator host for tools and secret material",
-		Long: "Runs the same preflight checks as `validate --check-host`.\n" +
-			"Without -f, only the universal binary checks (ansible-playbook, python3, sudo) run;\n" +
-			"with -f, the full state-driven preflight runs across every phase.",
-		Args: cobra.NoArgs,
-	}
-	cf := addCommonFlags(cmd)
-	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material")
-	cmd.Flags().StringVar(&hostStateDir, "host-state-dir", hostStateDir, "root-managed host runtime state directory")
-	cmd.RunE = func(_ *cobra.Command, _ []string) error {
-		var state v1alpha1.State
-		if len(cf.files) > 0 {
-			loaded, err := infra.LoadNormalizeValidate(cf.files)
-			if err != nil {
-				return failErr(1, err)
-			}
-			state = loaded
-		}
-		printTitle(stdout, "Operator host check")
-		return runHostCheck(stdout, stderr, state, secretsDir, hostStateDir)
-	}
-	return cmd
-}
-
-func newOperatorBootstrapCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Command {
-	var (
-		dryRun bool
-		yes    bool
-		venv   bool
+		dryRun  bool
+		yes     bool
+		venv    bool
+		minimal bool
 	)
 	cmd := &cobra.Command{
-		Use:   "bootstrap",
-		Short: "Install operator host prerequisites (ansible-core, system packages)",
+		Use:   "controller",
+		Short: "Install controller prerequisites with a minimal package footprint",
 		Long: "Installs the system packages required to run `gitups apply` on this host.\n" +
-			"With -f, the package set is widened to include every dependency the supplied\n" +
-			"state declares (libvirt for qemu-kvm providers, podman/skopeo for mirror registry, etc.).\n" +
-			"With --venv, ansible-core is installed into a gitups-managed venv under <gitups-home>\n" +
-			"instead of the system package manager; subsequent gitups commands prefer this venv.",
+			"With -f, the package set is widened to include dependencies the supplied\n" +
+			"state declares. Use --minimal to ignore state-driven extras. By default,\n" +
+			"ansible-core is installed into a gitups-managed venv under <gitups-home>\n" +
+			"instead of relying on a preinstalled system CLI.",
 		Args: cobra.NoArgs,
 	}
 	cf := addCommonFlags(cmd)
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print bootstrap commands without executing them")
 	cmd.Flags().BoolVar(&yes, "yes", false, "skip the bootstrap confirmation prompt")
-	cmd.Flags().BoolVar(&venv, "venv", false, "install ansible-core into a gitups-managed venv instead of via the system package manager")
+	cmd.Flags().BoolVar(&venv, "venv", true, "install ansible-core into a gitups-managed venv instead of via the system package manager")
+	cmd.Flags().BoolVar(&minimal, "minimal", false, "install only baseline controller packages even when -f is supplied")
 	cmd.RunE = func(c *cobra.Command, _ []string) error {
 		family, err := detectOSFamily(defaultOSReleasePath)
 		if err != nil {
 			return failErr(1, err)
 		}
 		var state v1alpha1.State
-		if len(cf.files) > 0 {
+		if len(cf.files) > 0 && !minimal {
 			loaded, err := infra.LoadNormalizeValidate(cf.files)
 			if err != nil {
 				return failErr(1, err)
 			}
 			state = loaded
 		}
-		plan, err := operatorBootstrapPlanForMode(family, state, bootstrapMode{venv: venv})
+		plan, err := controllerBootstrapPlanForMode(family, state, bootstrapMode{venv: venv})
 		if err != nil {
 			return failErr(1, err)
 		}
-		printTitle(stdout, "Operator bootstrap")
+		printTitle(stdout, "Controller setup")
 		fmt.Fprintf(stdout, "OS family: %s\n", family)
 		if venv {
 			fmt.Fprintf(stdout, "ansible-core target: managed venv at %s\n", ansibleVenvDir())
@@ -155,7 +123,7 @@ func runBootstrapPlan(ctx context.Context, stdin io.Reader, stdout io.Writer, st
 			return failErr(1, fmt.Errorf("%s: %w", step.label, err))
 		}
 	}
-	printOK(stdout, "operator host is ready", "")
+	printOK(stdout, "controller is ready", "")
 	return nil
 }
 
@@ -164,17 +132,17 @@ type bootstrapStep struct {
 	cmd   []string
 }
 
-// operatorBootstrapPlanForMode composes the bootstrap steps for the detected
+// controllerBootstrapPlanForMode composes the bootstrap steps for the detected
 // OS family and the chosen runtime mode. State-driven extras only appear
 // when the supplied state declares the matching capability — running
 // bootstrap with no -f keeps the install surface minimal so a stateless
-// operator host can still run `gitups validate` and `gitups render` without
+// controller can still run `gitups validate` and `gitups plan` without
 // paying for libvirt/podman.
 //
 // In `--venv` mode, ansible-core is removed from the system package set
 // and instead pip-installed into a gitups-managed venv. python3 plus
 // python3-pip stay in the system set because the venv needs them to bootstrap.
-func operatorBootstrapPlanForMode(family string, state v1alpha1.State, mode bootstrapMode) ([]bootstrapStep, error) {
+func controllerBootstrapPlanForMode(family string, state v1alpha1.State, mode bootstrapMode) ([]bootstrapStep, error) {
 	packages := basePackages(family)
 	if mode.venv {
 		packages = filterOut(packages, "ansible-core")
@@ -189,7 +157,7 @@ func operatorBootstrapPlanForMode(family string, state v1alpha1.State, mode boot
 	packages = dedupe(packages)
 
 	steps := []bootstrapStep{{
-		label: "install operator host packages",
+		label: "install controller packages",
 		cmd:   installCommand(family, packages),
 	}}
 	if !mode.venv {
@@ -216,10 +184,10 @@ func operatorBootstrapPlanForMode(family string, state v1alpha1.State, mode boot
 	return steps, nil
 }
 
-// operatorBootstrapPlan is the convenience entry the system-package mode uses;
+// controllerBootstrapPlan is the convenience entry the system-package mode uses;
 // callers that need the venv path use operatorBootstrapPlanForMode directly.
-func operatorBootstrapPlan(family string, state v1alpha1.State) []bootstrapStep {
-	steps, _ := operatorBootstrapPlanForMode(family, state, bootstrapMode{})
+func controllerBootstrapPlan(family string, state v1alpha1.State) []bootstrapStep {
+	steps, _ := controllerBootstrapPlanForMode(family, state, bootstrapMode{})
 	return steps
 }
 
@@ -303,7 +271,7 @@ func installCommand(family string, packages []string) []string {
 
 // stateNeedsMirrorRegistry returns true when at least one Environment opts
 // in to a mirror registry, regardless of cluster role. Mirror tooling is
-// installed in the bootstrap because the registry runs on the operator host
+// installed in the setup because the registry runs on the controller host
 // (or a co-located provider host) and pulls release images before any apply.
 func stateNeedsMirrorRegistry(state v1alpha1.State) bool {
 	for _, env := range state.Environments {

@@ -406,6 +406,9 @@ func validateProviderHosts(p v1alpha1.InfrastructureProvider) []string {
 		if host.SSH.Address == "" {
 			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s hosts[%s].ssh.address is required", p.Metadata.Name, hostName))
 		}
+		if host.SSH.User == "" {
+			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s hosts[%s].ssh.user is required for remote hosts; localhost defaults to the invoking user", p.Metadata.Name, hostName))
+		}
 		if host.SSH.KeyRef.Name == "" {
 			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s hosts[%s].ssh.keyRef.name is required", p.Metadata.Name, hostName))
 		}
@@ -509,7 +512,7 @@ func validateNetworks(ci v1alpha1.ClusterInfrastructure, provider v1alpha1.Infra
 				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s networks[%s].libvirt.bridge is required for qemu-kvm provider", ci.Metadata.Name, name))
 			}
 			if network.Vsphere != nil {
-				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s networks[%s].vmware does not match InfrastructureProvider/%s kind %q", ci.Metadata.Name, name, provider.Metadata.Name, providerKind))
+				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s networks[%s].vsphere does not match InfrastructureProvider/%s kind %q", ci.Metadata.Name, name, provider.Metadata.Name, providerKind))
 			}
 		case v1alpha1.MachineFlavorVsphere:
 			if network.Libvirt != nil {
@@ -520,7 +523,7 @@ func validateNetworks(ci v1alpha1.ClusterInfrastructure, provider v1alpha1.Infra
 				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s networks[%s].libvirt does not match InfrastructureProvider/%s kind %q", ci.Metadata.Name, name, provider.Metadata.Name, providerKind))
 			}
 			if network.Vsphere != nil {
-				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s networks[%s].vmware does not match InfrastructureProvider/%s kind %q", ci.Metadata.Name, name, provider.Metadata.Name, providerKind))
+				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s networks[%s].vsphere does not match InfrastructureProvider/%s kind %q", ci.Metadata.Name, name, provider.Metadata.Name, providerKind))
 			}
 		}
 	}
@@ -542,7 +545,7 @@ func validateMachines(ci v1alpha1.ClusterInfrastructure, provider v1alpha1.Infra
 			set++
 		}
 		if set != 1 {
-			errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s machines[%s] must set exactly one of {libvirt, baremetal, vmware}", ci.Metadata.Name, name))
+			errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s machines[%s] must set exactly one of {libvirt, baremetal, vsphere}", ci.Metadata.Name, name))
 		}
 		if machineKind := v1alpha1.MachineKind(machine); machineKind != "" && machineKind != providerKind {
 			errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s machines[%s] kind %q does not match InfrastructureProvider/%s kind %q", ci.Metadata.Name, name, machineKind, provider.Metadata.Name, providerKind))

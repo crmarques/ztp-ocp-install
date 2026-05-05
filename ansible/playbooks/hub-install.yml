@@ -9,7 +9,7 @@
     - "!all"
     - min
     - env
-  become: true
+  become: false
   environment: "{{ gitups_proxy_env | default({}) }}"
 
   pre_tasks:
@@ -27,6 +27,7 @@
 
   roles:
     - role: host_proxy
+      become: true
     - role: hub_install_agent
       when:
         - gitups_current_cluster.role == 'hub'

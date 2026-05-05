@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/crmarques/ztp-ocp-install-lab/api/v1alpha1"
+	"github.com/crmarques/ztp-ocp-install-lab/internal/ansible"
 	"github.com/crmarques/ztp-ocp-install-lab/internal/embedded"
 	"github.com/crmarques/ztp-ocp-install-lab/internal/infra"
 	"github.com/crmarques/ztp-ocp-install-lab/internal/render"
@@ -124,17 +126,145 @@ func runHostCheck(stdout io.Writer, stderr io.Writer, state v1alpha1.State, secr
 	return nil
 }
 
-func newPlanCmd(stdout io.Writer) *cobra.Command {
+func newDoctorCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
+	var (
+		secretsDir   string
+		hostStateDir string
+	)
+	secretsDir = defaultSecretsDir()
+	hostStateDir = defaultHostStateDir
 	cmd := &cobra.Command{
-		Use:   "plan",
-		Short: "Print object counts, installer assets, and component pins",
+		Use:   "doctor",
+		Short: "Check the controller machine for baseline Gitups prerequisites",
+		Args:  cobra.NoArgs,
+	}
+	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material")
+	cmd.Flags().StringVar(&hostStateDir, "host-state-dir", hostStateDir, "root-managed host runtime state directory")
+	cmd.RunE = func(_ *cobra.Command, _ []string) error {
+		printTitle(stdout, "Doctor")
+		return runHostCheck(stdout, stderr, v1alpha1.State{}, secretsDir, hostStateDir)
+	}
+	return cmd
+}
+
+func newPreflightCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
+	var (
+		secretsDir   string
+		hostStateDir string
+		executable   string
+		dryRun       bool
+	)
+	secretsDir = defaultSecretsDir()
+	hostStateDir = defaultHostStateDir
+	cmd := &cobra.Command{
+		Use:   "preflight",
+		Short: "Run controller and provider readiness checks for desired state",
 		Args:  cobra.NoArgs,
 	}
 	cf := addCommonFlags(cmd)
+	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material")
+	cmd.Flags().StringVar(&hostStateDir, "host-state-dir", hostStateDir, "root-managed host runtime state directory")
+	cmd.Flags().StringVar(&executable, "ansible-playbook", resolveAnsiblePlaybook(), "ansible-playbook executable to run (defaults to the gitups-managed venv when present)")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "render artifacts and print the Ansible preflight command without executing it")
+	cmd.RunE = func(c *cobra.Command, _ []string) error {
+		state, err := infra.LoadNormalizeValidate(cf.files)
+		if err != nil {
+			return failErr(1, err)
+		}
+		printTitle(stdout, "Preflight")
+		if err := runHostCheck(stdout, stderr, state, secretsDir, hostStateDir); err != nil {
+			return err
+		}
+		result, err := render.All(cf.stateDir, state)
+		if err != nil {
+			return failErr(1, err)
+		}
+		bundleDir, err := extractBundle(cf.stateDir)
+		if err != nil {
+			return failErr(1, err)
+		}
+		stateDirAbs, err := filepath.Abs(cf.stateDir)
+		if err != nil {
+			return failErr(1, err)
+		}
+		secretsDirAbs, err := filepath.Abs(secretsDir)
+		if err != nil {
+			return failErr(1, err)
+		}
+		hostStateDirAbs, err := filepath.Abs(hostStateDir)
+		if err != nil {
+			return failErr(1, err)
+		}
+		spec := ansible.RunSpec{
+			Executable:        executable,
+			AnsibleCfg:        filepath.Join(bundleDir, embedded.AnsibleCfgRelPath),
+			RolesPath:         filepath.Join(bundleDir, embedded.RolesRelPath),
+			CollectionsPath:   filepath.Join(bundleDir, embedded.CollectionsRelPath),
+			FilterPluginsPath: filepath.Join(bundleDir, embedded.FilterPluginsRelPath),
+			Inventory:         result.InventoryPath,
+			Playbook:          filepath.Join(bundleDir, "playbooks/preflight.yml"),
+			ExtraVars:         result.VarsPath,
+			ExtraVarPairs: []string{
+				"gitups_state_dir=" + stateDirAbs,
+				"gitups_secrets_dir=" + secretsDirAbs,
+				"gitups_host_state_dir=" + hostStateDirAbs,
+			},
+			ArtifactsDir: filepath.Join(result.ArtifactsDir, "preflight"),
+		}
+		runner := ansible.CommandRunner{Stdout: stdout, Stderr: stderr}
+		command := runner.Command(spec)
+		if dryRun {
+			fmt.Fprintf(stdout, "dry-run ansible command [preflight]: %s\n", shellQuote(command))
+			return nil
+		}
+		return runner.Run(c.Context(), spec)
+	}
+	return cmd
+}
+
+type planReport struct {
+	Objects       map[string]int        `json:"objects"`
+	StateDir      string                `json:"stateDir"`
+	Generated     []string              `json:"generated"`
+	Phases        []phaseReport         `json:"phases"`
+	ComponentPins []render.ComponentPin `json:"componentPins"`
+	Checks        []checkReport         `json:"checks,omitempty"`
+}
+
+type phaseReport struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	NeedsRoot   bool   `json:"needsRoot"`
+}
+
+type checkReport struct {
+	Name   string `json:"name"`
+	OK     bool   `json:"ok"`
+	Detail string `json:"detail,omitempty"`
+}
+
+func newPlanCmd(stdout io.Writer) *cobra.Command {
+	var out string
+	cmd := &cobra.Command{
+		Use:   "plan",
+		Short: "Preview generated artifacts, phases, prerequisites, and external commands",
+		Args:  cobra.NoArgs,
+	}
+	cf := addCommonFlags(cmd)
+	cmd.Flags().StringVar(&out, "out", "text", "output format: text or json")
 	cmd.RunE = func(_ *cobra.Command, _ []string) error {
 		state, err := infra.LoadNormalizeValidate(cf.files)
 		if err != nil {
 			return failErr(1, err)
+		}
+		if out != "text" && out != "json" {
+			return failf(2, "--out must be text or json")
+		}
+		report := buildPlanReport(state, cf.stateDir)
+		if out == "json" {
+			enc := json.NewEncoder(stdout)
+			enc.SetIndent("", "  ")
+			return enc.Encode(report)
 		}
 		pins := render.ComponentPins(state)
 		installerAssets := render.InstallerAssets(cf.stateDir, state)
@@ -161,48 +291,71 @@ func newPlanCmd(stdout io.Writer) *cobra.Command {
 		for _, pin := range pins {
 			fmt.Fprintf(stdout, "- %s=%s (%s)\n", pin.Name, pin.Version, pin.Source)
 		}
+		printSubtitle(stdout, "phases:")
+		for _, phase := range workflowPhases("all") {
+			marker := ""
+			if phase.NeedsRoot {
+				marker = " [root]"
+			}
+			fmt.Fprintf(stdout, "- %s%s: %s\n", phase.Name, marker, phase.Description)
+		}
+		printSubtitle(stdout, "preflight checks:")
+		for _, check := range report.Checks {
+			if check.OK {
+				printOK(stdout, check.Name, check.Detail)
+			} else {
+				printFail(stdout, check.Name, check.Detail)
+			}
+		}
 		return nil
 	}
 	return cmd
 }
 
-func newRenderCmd(stdout io.Writer) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "render",
-		Short: "Write deterministic artifacts under --state-dir",
-		Args:  cobra.NoArgs,
+func buildPlanReport(state v1alpha1.State, stateDir string) planReport {
+	expected := expectedRenderedPaths(stateDir, state)
+	report := planReport{
+		Objects: map[string]int{
+			"environments":            len(state.Environments),
+			"infrastructureProviders": len(state.InfrastructureProviders),
+			"clusterInfrastructures":  len(state.ClusterInfrastructures),
+			"ocpClusters":             len(state.OCPClusters),
+		},
+		StateDir:      stateDir,
+		Generated:     expected,
+		ComponentPins: render.ComponentPins(state),
 	}
-	cf := addCommonFlags(cmd)
-	cmd.RunE = func(_ *cobra.Command, _ []string) error {
-		result, err := loadAndRender(cf.files, cf.stateDir)
-		if err != nil {
-			return failErr(1, err)
-		}
-		bundleDir, err := extractBundle(cf.stateDir)
-		if err != nil {
-			return failErr(1, err)
-		}
-		printTitle(stdout, "Render")
-		printRenderResult(stdout, result)
-		fmt.Fprintf(stdout, "ansible bundle: %s\n", bundleDir)
-		return nil
+	for _, phase := range workflowPhases("all") {
+		report.Phases = append(report.Phases, phaseReport{Name: phase.Name, Description: phase.Description, NeedsRoot: phase.NeedsRoot})
 	}
-	return cmd
+	for _, check := range collectPreflightChecks(state, workflowPhases("all"), true, defaultSecretsDir(), defaultHostStateDir, defaultPreflightDeps) {
+		report.Checks = append(report.Checks, checkReport{Name: check.name, OK: check.ok, Detail: check.detail})
+	}
+	return report
 }
 
 func newStatusCmd(stdout io.Writer) *cobra.Command {
+	var (
+		diff  bool
+		watch bool
+	)
 	cmd := &cobra.Command{
 		Use:   "status",
-		Short: "Read-only view of desired counts, rendered artifacts, and phases",
+		Short: "Read-only view of desired counts, rendered artifacts, phases, and drift",
 		Args:  cobra.NoArgs,
 	}
 	cf := addCommonFlags(cmd)
+	cmd.Flags().BoolVar(&diff, "diff", false, "compare rendered desired output with --state-dir")
+	cmd.Flags().BoolVar(&watch, "watch", false, "reserved for a future watch loop; currently performs one status read")
 	cmd.RunE = func(_ *cobra.Command, _ []string) error {
 		state, err := infra.LoadNormalizeValidate(cf.files)
 		if err != nil {
 			return failErr(1, err)
 		}
 		printTitle(stdout, "Status")
+		if watch {
+			fmt.Fprintln(stdout, "watch: one-shot status; continuous watch is not implemented yet")
+		}
 		fmt.Fprintf(stdout, "desired: %d Environment, %d InfrastructureProvider, %d ClusterInfrastructure, %d OCPCluster object(s)\n",
 			len(state.Environments), len(state.InfrastructureProviders), len(state.ClusterInfrastructures), len(state.OCPClusters))
 		fmt.Fprintf(stdout, "stateDir: %s\n", cf.stateDir)
@@ -213,25 +366,11 @@ func newStatusCmd(stdout io.Writer) *cobra.Command {
 			fmt.Fprintf(stdout, "- missing: %s\n", path)
 		}
 		printSubtitle(stdout, "phases:")
-		for _, phase := range phases {
+		for _, phase := range workflowPhases("all") {
 			fmt.Fprintf(stdout, "- %s: apply=%s destroy=%s\n", phase.Name, phase.ApplyPlaybook, phase.DestroyPlaybook)
 		}
-		return nil
-	}
-	return cmd
-}
-
-func newDiffCmd(stdout io.Writer) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "diff",
-		Short: "Render to a temp dir and exit non-zero on drift",
-		Args:  cobra.NoArgs,
-	}
-	cf := addCommonFlags(cmd)
-	cmd.RunE = func(_ *cobra.Command, _ []string) error {
-		state, err := infra.LoadNormalizeValidate(cf.files)
-		if err != nil {
-			return failErr(1, err)
+		if !diff {
+			return nil
 		}
 		tempDir, err := os.MkdirTemp("", "gitups-diff-")
 		if err != nil {
@@ -245,7 +384,7 @@ func newDiffCmd(stdout io.Writer) *cobra.Command {
 		if err != nil {
 			return failErr(1, err)
 		}
-		printTitle(stdout, "Diff")
+		printSubtitle(stdout, "diff:")
 		if len(diffs) == 0 {
 			printOK(stdout, "no drift: rendered output matches state-dir", "")
 			return nil
@@ -300,8 +439,11 @@ func ensureApplySupported(state v1alpha1.State) error {
 		providers[provider.Metadata.Name] = provider
 	}
 	for _, item := range state.ClusterInfrastructures {
-		provider := providers[v1alpha1.FirstProviderRefName(item)]
-		kind := v1alpha1.MachineFlavor(provider)
+		closure, errs := v1alpha1.BuildProviderClosure(item, providers)
+		if len(errs) > 0 {
+			return fmt.Errorf("%s: %s", item.Metadata.Name, strings.Join(errs, "; "))
+		}
+		kind := closure.MachineFlavor()
 		if !applySupportedMachineFlavors[kind] {
 			return fmt.Errorf("%s: apply does not yet support provider kind %q (supported: %s)", item.Metadata.Name, kind, supportedMachineFlavorList())
 		}

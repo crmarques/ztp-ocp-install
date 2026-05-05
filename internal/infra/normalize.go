@@ -3,6 +3,8 @@ package infra
 import (
 	"crypto/sha256"
 	"fmt"
+	"net"
+	"os"
 	"strings"
 
 	"github.com/crmarques/ztp-ocp-install-lab/api/v1alpha1"
@@ -19,7 +21,9 @@ func Normalize(state *v1alpha1.State) {
 	}
 	for i := range state.ClusterInfrastructures {
 		ci := &state.ClusterInfrastructures[i]
-		normalizeClusterInfrastructure(ci, providerByName(state, v1alpha1.FirstProviderRefName(*ci)))
+		closure, _ := v1alpha1.BuildProviderClosure(*ci, providerIndex(state.InfrastructureProviders))
+		provider := synthesizeClosureProvider(*ci, closure)
+		normalizeClusterInfrastructure(ci, &provider)
 	}
 	env := primaryEnvironment(state)
 	for i := range state.OCPClusters {
@@ -30,31 +34,13 @@ func Normalize(state *v1alpha1.State) {
 }
 
 func normalizeEnvironment(env *v1alpha1.Environment) {
-	if env.APIVersion == "" {
-		env.APIVersion = v1alpha1.APIVersion
-	}
-	if env.Kind == "" {
-		env.Kind = v1alpha1.KindEnvironment
-	}
-	// Default to connected when the user supplied nothing under ocpInstall.
-	// Validation rejects the empty case after this defaulting if any other
-	// sub-block was attempted but malformed.
-	if v1alpha1.OCPInstallKind(*env) == "" {
-		env.Spec.OCPInstall.Connected = &v1alpha1.ConnectedSpec{}
-	}
 	defaultEnvironmentKeys(env)
 }
 
 func normalizeProvider(p *v1alpha1.InfrastructureProvider) {
-	if p.APIVersion == "" {
-		p.APIVersion = v1alpha1.APIVersion
-	}
-	if p.Kind == "" {
-		p.Kind = v1alpha1.KindInfrastructureProvider
-	}
 	for name, host := range p.Spec.Hosts {
-		if host.SSH != nil && host.SSH.User == "" {
-			host.SSH.User = v1alpha1.DefaultHostUser
+		if host.SSH != nil && host.SSH.User == "" && isLocalSSHAddress(host.SSH.Address) {
+			host.SSH.User = currentUsername()
 		}
 		p.Spec.Hosts[name] = host
 	}
@@ -82,12 +68,6 @@ func normalizeBMCEmulation(b *v1alpha1.BMCEmulationSpec) {
 }
 
 func normalizeClusterInfrastructure(ci *v1alpha1.ClusterInfrastructure, provider *v1alpha1.InfrastructureProvider) {
-	if ci.APIVersion == "" {
-		ci.APIVersion = v1alpha1.APIVersion
-	}
-	if ci.Kind == "" {
-		ci.Kind = v1alpha1.KindClusterInfrastructure
-	}
 	for name, m := range ci.Spec.Machines {
 		applyMachineProfile(&m, provider)
 		applyMachineDefaultResources(&m, provider)
@@ -162,12 +142,6 @@ func generateMAC(parts ...string) string {
 }
 
 func normalizeOCPCluster(ocp *v1alpha1.OCPCluster, env *v1alpha1.Environment, ci *v1alpha1.ClusterInfrastructure) {
-	if ocp.APIVersion == "" {
-		ocp.APIVersion = v1alpha1.APIVersion
-	}
-	if ocp.Kind == "" {
-		ocp.Kind = v1alpha1.KindOCPCluster
-	}
 	if ocp.Spec.Topology == "" {
 		if len(ocp.Spec.Nodes) <= 1 {
 			ocp.Spec.Topology = v1alpha1.OCPTopologySingleNode
@@ -355,22 +329,6 @@ func primaryEnvironment(state *v1alpha1.State) *v1alpha1.Environment {
 	return &state.Environments[0]
 }
 
-func providerByName(state *v1alpha1.State, name string) *v1alpha1.InfrastructureProvider {
-	for i := range state.InfrastructureProviders {
-		if state.InfrastructureProviders[i].Metadata.Name == name {
-			return &state.InfrastructureProviders[i]
-		}
-	}
-	return nil
-}
-
-func providerForInfra(state *v1alpha1.State, ci *v1alpha1.ClusterInfrastructure) *v1alpha1.InfrastructureProvider {
-	if ci == nil {
-		return nil
-	}
-	return providerByName(state, v1alpha1.FirstProviderRefName(*ci))
-}
-
 func clusterInfraByName(state *v1alpha1.State, name string) *v1alpha1.ClusterInfrastructure {
 	for i := range state.ClusterInfrastructures {
 		if state.ClusterInfrastructures[i].Metadata.Name == name {
@@ -378,4 +336,27 @@ func clusterInfraByName(state *v1alpha1.State, name string) *v1alpha1.ClusterInf
 		}
 	}
 	return nil
+}
+
+func isLocalSSHAddress(address string) bool {
+	host := strings.TrimSpace(address)
+	if parsedHost, _, err := net.SplitHostPort(host); err == nil {
+		host = parsedHost
+	}
+	host = strings.Trim(host, "[]")
+	switch strings.ToLower(host) {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	default:
+		return false
+	}
+}
+
+func currentUsername() string {
+	for _, key := range []string{"USER", "LOGNAME"} {
+		if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+			return value
+		}
+	}
+	return ""
 }

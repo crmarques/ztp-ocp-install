@@ -20,6 +20,8 @@ generated self-signed registry trust referenced through `SecretRef`.
 
 ```text
 gitups validate -f examples/qemu-redfish-hub
-gitups render   -f examples/qemu-redfish-hub --state-dir .state
+gitups plan -f examples/qemu-redfish-hub --state-dir .state
+gitups apply infra -f examples/qemu-redfish-hub --state-dir .state --dry-run
+gitups apply hub -f examples/qemu-redfish-hub --state-dir .state --dry-run
 gitups secrets generate -f examples/qemu-redfish-hub
 ```

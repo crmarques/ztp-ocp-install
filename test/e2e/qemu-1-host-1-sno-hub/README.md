@@ -65,11 +65,13 @@ Equivalent CLI flow:
 
 ```text
 gitups validate -f test/e2e/qemu-1-host-1-sno-hub --check-host
-gitups render   -f test/e2e/qemu-1-host-1-sno-hub --state-dir /tmp/gitups-qemu-1-host-1-sno-hub
-gitups apply    -f test/e2e/qemu-1-host-1-sno-hub --state-dir /tmp/gitups-qemu-1-host-1-sno-hub --dry-run
-gitups apply    -f test/e2e/qemu-1-host-1-sno-hub --state-dir /tmp/gitups-qemu-1-host-1-sno-hub --yes
+gitups plan     -f test/e2e/qemu-1-host-1-sno-hub --state-dir /tmp/gitups-qemu-1-host-1-sno-hub
+gitups apply infra -f test/e2e/qemu-1-host-1-sno-hub --state-dir /tmp/gitups-qemu-1-host-1-sno-hub --dry-run
+gitups apply hub   -f test/e2e/qemu-1-host-1-sno-hub --state-dir /tmp/gitups-qemu-1-host-1-sno-hub --dry-run
+gitups apply infra -f test/e2e/qemu-1-host-1-sno-hub --state-dir /tmp/gitups-qemu-1-host-1-sno-hub --yes
+gitups apply hub   -f test/e2e/qemu-1-host-1-sno-hub --state-dir /tmp/gitups-qemu-1-host-1-sno-hub --yes
 gitups status   -f test/e2e/qemu-1-host-1-sno-hub --state-dir /tmp/gitups-qemu-1-host-1-sno-hub --diff
-gitups destroy  -f test/e2e/qemu-1-host-1-sno-hub --state-dir /tmp/gitups-qemu-1-host-1-sno-hub --yes
+gitups destroy all -f test/e2e/qemu-1-host-1-sno-hub --state-dir /tmp/gitups-qemu-1-host-1-sno-hub --yes
 ```
 
 ## External Prerequisites

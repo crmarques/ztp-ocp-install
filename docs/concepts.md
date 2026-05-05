@@ -56,19 +56,21 @@ whose intent is published to the hub-watched Git repository.
 
 ## Phases
 
-`gitups apply` runs idempotent phases:
+`gitups apply <scope>` runs idempotent phases through explicit workflow scopes:
 
 1. `infra`: provider infrastructure, BMC emulation, load balancing, DNS or host
    name resolution.
 2. `hub`: hub OpenShift install plus hub-side operators.
-3. `gitops-publish`: generated managed-cluster intent published for hub
-   reconciliation.
+3. `clusters`: reserved for managed-cluster GitOps/ACM publication through the
+   hub; the command exists but returns a not-implemented status until that
+   workflow is real.
 
 ## Rendered Output
 
-`gitups render` writes deterministic output under `--state-dir`, including
-effective state, installer assets, Ansible inventory and variables, GitOps
-manifests, and an embedded Ansible bundle.
+Rendering is internal to `plan`, `preflight`, `apply`, and `status --diff`.
+Gitups writes deterministic output under `--state-dir`, including effective
+state, installer assets, Ansible inventory and variables, and the embedded
+Ansible bundle.
 
 ## Secrets
 

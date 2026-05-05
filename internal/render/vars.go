@@ -9,12 +9,12 @@ import (
 )
 
 type VarsFile struct {
-	GitupsOCPInstall      EnvironmentOCPInstallVars `yaml:"gitups_ocp_install" json:"gitups_ocp_install"`
-	GitupsProviders       []ProviderComponentVars   `yaml:"gitups_providers" json:"gitups_providers"`
-	GitupsLoadBalancers   []SharedLoadBalancerVars  `yaml:"gitups_load_balancers" json:"gitups_load_balancers"`
-	GitupsMirrorRegistries []MirrorRegistryRunVars  `yaml:"gitups_mirror_registries" json:"gitups_mirror_registries"`
-	GitupsClusters        []ClusterVars             `yaml:"gitups_clusters" json:"gitups_clusters"`
-	GitupsComponentPins   []ComponentPin            `yaml:"gitups_component_pins" json:"gitups_component_pins"`
+	GitupsOCPInstall       EnvironmentOCPInstallVars `yaml:"gitups_ocp_install" json:"gitups_ocp_install"`
+	GitupsProviders        []ProviderComponentVars   `yaml:"gitups_providers" json:"gitups_providers"`
+	GitupsLoadBalancers    []SharedLoadBalancerVars  `yaml:"gitups_load_balancers" json:"gitups_load_balancers"`
+	GitupsMirrorRegistries []MirrorRegistryRunVars   `yaml:"gitups_mirror_registries" json:"gitups_mirror_registries"`
+	GitupsClusters         []ClusterVars             `yaml:"gitups_clusters" json:"gitups_clusters"`
+	GitupsComponentPins    []ComponentPin            `yaml:"gitups_component_pins" json:"gitups_component_pins"`
 }
 
 // EnvironmentOCPInstallVars projects Environment.spec.ocpInstall to Ansible
@@ -110,13 +110,13 @@ type OCPInstallerVars struct {
 }
 
 type OCPClusterNodeVars struct {
-	Name       string             `yaml:"name" json:"name"`
-	MachineRef string             `yaml:"machineRef" json:"machineRef"`
-	Role       string             `yaml:"role" json:"role"`
-	HostRef    string             `yaml:"hostRef,omitempty" json:"hostRef,omitempty"`
-	IPAddress  string             `yaml:"ipAddress,omitempty" json:"ipAddress,omitempty"`
-	MACAddress string             `yaml:"macAddress,omitempty" json:"macAddress,omitempty"`
-	BareMetal  *MachineBMCVars    `yaml:"bareMetal,omitempty" json:"bareMetal,omitempty"`
+	Name       string          `yaml:"name" json:"name"`
+	MachineRef string          `yaml:"machineRef" json:"machineRef"`
+	Role       string          `yaml:"role" json:"role"`
+	HostRef    string          `yaml:"hostRef,omitempty" json:"hostRef,omitempty"`
+	IPAddress  string          `yaml:"ipAddress,omitempty" json:"ipAddress,omitempty"`
+	MACAddress string          `yaml:"macAddress,omitempty" json:"macAddress,omitempty"`
+	BareMetal  *MachineBMCVars `yaml:"bareMetal,omitempty" json:"bareMetal,omitempty"`
 }
 
 // MachineBMCVars carries one machine's out-of-band BMC endpoint for the
@@ -790,8 +790,10 @@ func providerBMCNodes(provider v1alpha1.InfrastructureProvider, state v1alpha1.S
 		return nil
 	}
 	var result []ProviderBMCNodeVars
+	providers := providerIndex(state.InfrastructureProviders)
 	for _, infra := range state.ClusterInfrastructures {
-		if v1alpha1.FirstProviderRefName(infra) != provider.Metadata.Name {
+		closure, _ := v1alpha1.BuildProviderClosure(infra, providers)
+		if closure.MachineProviderName != provider.Metadata.Name || closure.Machine == nil || closure.Machine.Libvirt == nil {
 			continue
 		}
 		machineNames := sortedKeys(infra.Spec.Machines)
@@ -1169,10 +1171,9 @@ func primaryInterface(machine v1alpha1.MachineSpec) v1alpha1.MachineInterfaceSpe
 }
 
 // closureProvider folds a cluster's providerRefs union into a single
-// InfrastructureProvider so single-provider renderer code paths (machine
-// + loadBalancer + nameResolution) keep working over multi-provider
-// closures. Metadata.name is the LB-supplying provider when present, else
-// the first ref — used for output labels.
+// InfrastructureProvider so existing renderer projections can consume the
+// merged capability set. Metadata.name is the capability-supplying provider
+// used for output labels.
 func closureProvider(ci v1alpha1.ClusterInfrastructure, providers map[string]v1alpha1.InfrastructureProvider) v1alpha1.InfrastructureProvider {
 	closure, _ := v1alpha1.BuildProviderClosure(ci, providers)
 	name := closure.LoadBalancerProviderName
@@ -1180,7 +1181,13 @@ func closureProvider(ci v1alpha1.ClusterInfrastructure, providers map[string]v1a
 		name = closure.MachineProviderName
 	}
 	if name == "" {
-		name = v1alpha1.FirstProviderRefName(ci)
+		name = closure.NameResolutionProviderName
+	}
+	if name == "" {
+		name = closure.RegistryProviderName
+	}
+	if name == "" {
+		name = ci.Metadata.Name
 	}
 	return v1alpha1.InfrastructureProvider{
 		Metadata: v1alpha1.Metadata{Name: name},

@@ -113,6 +113,41 @@ spec: {}
 	}
 }
 
+func TestLoadRejectsMissingAPIVersion(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "missing-api-version.yaml")
+	writeFile(t, path, `kind: Environment
+metadata:
+  name: bad
+spec:
+  baseDomain: example.com
+`)
+	_, err := Load([]string{path})
+	if err == nil {
+		t.Fatal("expected error for missing apiVersion")
+	}
+	if !strings.Contains(err.Error(), "apiVersion is required") {
+		t.Fatalf("expected apiVersion error, got %v", err)
+	}
+}
+
+func TestLoadRejectsMissingSpec(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "missing-spec.yaml")
+	writeFile(t, path, `apiVersion: gitups.io/v1alpha1
+kind: Environment
+metadata:
+  name: bad
+`)
+	_, err := Load([]string{path})
+	if err == nil {
+		t.Fatal("expected error for missing spec")
+	}
+	if !strings.Contains(err.Error(), "spec is required") {
+		t.Fatalf("expected spec error, got %v", err)
+	}
+}
+
 func TestLoadRejectsLocalRegistryField(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "legacy-localregistry.yaml")
@@ -194,8 +229,8 @@ func TestDefaultsAreApplied(t *testing.T) {
 	if host.SSH == nil {
 		t.Fatalf("host-01 missing ssh connection")
 	}
-	if got, want := host.SSH.User, "root"; got != want {
-		t.Fatalf("default user got %q, want %q", got, want)
+	if got, want := host.SSH.User, "gitups"; got != want {
+		t.Fatalf("ssh user got %q, want %q", got, want)
 	}
 	if provider.Spec.Machine.Libvirt.BMCEmulation.Enabled == nil || !*provider.Spec.Machine.Libvirt.BMCEmulation.Enabled {
 		t.Fatalf("expected BMC enabled default")
@@ -386,6 +421,7 @@ spec:
     host-01:
       ssh:
         address: 10.0.0.1
+        user: gitups
         keyRef:
           name: default-key
       capabilities:

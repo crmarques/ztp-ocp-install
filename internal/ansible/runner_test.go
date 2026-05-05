@@ -53,6 +53,16 @@ exit 3
 	if readErr != nil {
 		t.Fatalf("read output log: %v", readErr)
 	}
+	if info, statErr := os.Stat(logPath); statErr != nil {
+		t.Fatalf("stat output log: %v", statErr)
+	} else if got := info.Mode().Perm(); got != 0o600 {
+		t.Fatalf("output log mode got %03o, want 600", got)
+	}
+	if info, statErr := os.Stat(artifactsDir); statErr != nil {
+		t.Fatalf("stat artifacts dir: %v", statErr)
+	} else if got := info.Mode().Perm(); got != 0o700 {
+		t.Fatalf("artifacts dir mode got %03o, want 700", got)
+	}
 	log := string(logData)
 	for _, expected := range []string{"stdout-line\n", "stderr-line\n"} {
 		if !strings.Contains(log, expected) {

@@ -321,8 +321,8 @@ func TestPreflightHubChecksDisconnectedRegistryCredentials(t *testing.T) {
 	if found.ok {
 		t.Fatalf("expected %q to fail when missing, got ok", want)
 	}
-	if !strings.Contains(found.detail, "gitups secrets bmc set --name registry-lab-credentials") {
-		t.Fatalf("expected hint pointing at `gitups secrets bmc set`, got: %s", found.detail)
+	if !strings.Contains(found.detail, "gitups secrets credentials set --name registry-lab-credentials") {
+		t.Fatalf("expected hint pointing at `gitups secrets credentials set`, got: %s", found.detail)
 	}
 }
 
@@ -368,7 +368,7 @@ func TestPreflightHubGeneratedTrustBundleChecksOpenSSL(t *testing.T) {
 	checks := collectPreflightChecks(state, nil, true, "/secrets", defaultHostStateDir, deps)
 	want := map[string]bool{
 		"openssl on PATH": true,
-		"hub additionalTrustBundleRef at /secrets/trust": true,
+		"hub additionalTrustBundleRef at /secrets/trust": false,
 	}
 	seen := map[string]bool{}
 	for _, c := range checks {
@@ -379,8 +379,8 @@ func TestPreflightHubGeneratedTrustBundleChecksOpenSSL(t *testing.T) {
 		if c.ok != want[c.name] {
 			t.Fatalf("check %q: ok=%v want=%v (%s)", c.name, c.ok, want[c.name], c.detail)
 		}
-		if c.name == "hub additionalTrustBundleRef at /secrets/trust" && !strings.Contains(c.detail, "will be generated") {
-			t.Fatalf("expected generated detail, got %+v", c)
+		if c.name == "hub additionalTrustBundleRef at /secrets/trust" && !strings.Contains(c.detail, "gitups secrets generate") {
+			t.Fatalf("expected generated-secret guidance, got %+v", c)
 		}
 	}
 	for name := range want {
@@ -666,8 +666,8 @@ func TestPreflightChecksProxyCredentialsRef(t *testing.T) {
 	if found.ok {
 		t.Fatalf("expected %q to fail when missing, got ok", want)
 	}
-	if !strings.Contains(found.detail, "gitups secrets bmc set --name proxy-credentials") {
-		t.Fatalf("expected hint pointing at `gitups secrets bmc set`, got: %s", found.detail)
+	if !strings.Contains(found.detail, "gitups secrets credentials set --name proxy-credentials") {
+		t.Fatalf("expected hint pointing at `gitups secrets credentials set`, got: %s", found.detail)
 	}
 }
 
@@ -808,8 +808,8 @@ func TestPreflightChecksBMCEmulationAndMachineCredentials(t *testing.T) {
 	}, true, map[string]bool{"/secrets": true})
 	checks := collectPreflightChecks(state, nil, true, "/secrets", defaultHostStateDir, deps)
 	want := map[string]bool{
-		"provider qemu-1-host-provider bmcEmulation credentialRef at /secrets/qemu-1-host-bmc-credentials":     false,
-		"infra ci machine master-0 baremetal bmc credentialRef at /secrets/rack-bmc-credentials": false,
+		"provider qemu-1-host-provider bmcEmulation credentialRef at /secrets/qemu-1-host-bmc-credentials": false,
+		"infra ci machine master-0 baremetal bmc credentialRef at /secrets/rack-bmc-credentials":           false,
 	}
 	seen := map[string]bool{}
 	for _, c := range checks {
@@ -820,7 +820,7 @@ func TestPreflightChecksBMCEmulationAndMachineCredentials(t *testing.T) {
 		if c.ok {
 			t.Fatalf("expected %q to fail when missing, got ok", c.name)
 		}
-		if !strings.Contains(c.detail, "gitups secrets bmc set") {
+		if !strings.Contains(c.detail, "gitups secrets credentials set") {
 			t.Fatalf("expected BMC writer hint for %q, got: %s", c.name, c.detail)
 		}
 	}

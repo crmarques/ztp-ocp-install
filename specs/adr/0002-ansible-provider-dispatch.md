@@ -7,8 +7,8 @@ Accepted
 ## Context
 
 ADR 0001 fixes the desired-state API as four layers with structural provider
-discriminators (`InfrastructureProvider.spec.{qemuKVM | bareMetal | vmware |
-openShiftVirtualization}`). The render layer compiles those discriminators
+discriminators (`InfrastructureProvider.spec.machine.{libvirt | baremetal |
+vsphere | kubevirt}`). The render layer compiles those discriminators
 into Ansible vars, and the orchestration layer (Ansible playbooks + roles)
 acts on them.
 
@@ -44,8 +44,7 @@ for substrates; `emulated`, `redfish`, `ipmi`, `none` for BMCs.
 **Dispatch contract.** The render layer emits three discriminator fields
 on the projected provider vars:
 
-- `provider.kind` — `qemu-kvm | baremetal | vmware | openshift-virtualization`
-  (mirrors `v1alpha1.ProviderKind`).
+- `provider.kind` — `qemu-kvm | baremetal | vsphere | kubevirt`.
 - `provider.substrateRole` — selects `cluster_substrate_<role>`.
 - `provider.bmcRole` — selects `provider_bmc_<role>` and `hub_boot_<role>`.
 - `provider.bootArtifactsHttp.{enabled,bindAddress,port}` — gates

@@ -124,7 +124,7 @@ type EnvironmentSpec struct {
 // `<secretsDir>/<name>` accordingly (symlink for SSH file refs, copy for
 // other file refs, fresh material for generated entries).
 type EnvironmentKeySpec struct {
-	File      string                  `yaml:"file,omitempty" json:"file,omitempty"`
+	File      string                   `yaml:"file,omitempty" json:"file,omitempty"`
 	Generated *EnvironmentKeyGenerated `yaml:"generated,omitempty" json:"generated,omitempty"`
 }
 
@@ -401,17 +401,6 @@ type ProviderClosure struct {
 	ProviderRefNames []string
 }
 
-// FirstProviderRefName returns the first declared provider name on a
-// ClusterInfrastructure, or the empty string when none is declared. Used by
-// renderer entry points that have not yet been migrated to ProviderClosure;
-// multi-provider clusters route through BuildProviderClosure.
-func FirstProviderRefName(ci ClusterInfrastructure) string {
-	if len(ci.Spec.ProviderRefs) == 0 {
-		return ""
-	}
-	return ci.Spec.ProviderRefs[0].Name
-}
-
 // MachineFlavor reports the machine-flavor discriminator on a closure.
 func (c ProviderClosure) MachineFlavor() string {
 	if c.Machine == nil {
@@ -490,9 +479,9 @@ func BuildProviderClosure(ci ClusterInfrastructure, providers map[string]Infrast
 }
 
 // MachineNetworkSpec describes a network instance the cluster needs on the
-// referenced provider. Provider-typed sub-blocks (qemuKVM, vmware) carry the
-// provider-specific realisation of that network and must match the provider's
-// structural sub-block on InfrastructureProvider.spec.
+// referenced provider. Provider-typed sub-blocks carry the provider-specific
+// realisation of that network and must match the provider's structural
+// sub-block on InfrastructureProvider.spec.
 type MachineNetworkSpec struct {
 	CIDR       string                     `yaml:"cidr" json:"cidr"`
 	Gateway    string                     `yaml:"gateway,omitempty" json:"gateway,omitempty"`
@@ -585,7 +574,6 @@ type EndpointSpec struct {
 type LoadBalancerSpec struct {
 	Endpoints []string `yaml:"endpoints" json:"endpoints"`
 }
-
 
 // ----- OCPCluster -----
 
