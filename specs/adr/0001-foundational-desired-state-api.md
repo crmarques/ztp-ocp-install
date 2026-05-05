@@ -8,7 +8,7 @@ Accepted
 
 Gitups needs one user-authored desired-state contract that survives provider
 changes. The user wants to author the OpenShift cluster intent once and have
-it apply unchanged whether the cluster runs on QEMU/KVM (with emulated BMC),
+it apply unchanged whether the cluster runs on libvirt (with emulated BMC),
 on real bare metal, on vSphere, or on OpenShift Virtualization.
 
 A schema that mixes infrastructure facts (VIPs, load-balancer placement, DNS
@@ -53,7 +53,7 @@ referenced providers' capabilities must contribute at most one supplier per
 capability. This preserves R1: an LB-only `InfrastructureProvider` (e.g.
 BigIP, future) can be added without editing the cluster's machine provider.
 
-`OCPCluster` is provider-agnostic. Swapping QEMU/KVM with emulated BMC for
+`OCPCluster` is provider-agnostic. Swapping libvirt with emulated BMC for
 real bare metal — or for vSphere — touches `InfrastructureProvider` and
 `ClusterInfrastructure` only; `Environment` and `OCPCluster` files are
 byte-identical across the swap. CI asserts this invariant by diffing the

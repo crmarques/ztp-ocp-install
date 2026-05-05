@@ -86,7 +86,7 @@ func TestPreflightHubPhaseDemandsOpenShiftCLIs(t *testing.T) {
 		"python3":          "/usr/bin/python3",
 		"sudo":             "/usr/bin/sudo",
 	}, false)
-	hub, err := selectPhases("hub")
+	hub, err := selectPhases("ocp")
 	if err != nil {
 		t.Fatalf("selectPhases hub: %v", err)
 	}
@@ -137,7 +137,7 @@ func TestPreflightClusterPhaseChecksKvmWhenQemuKvmProvider(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Fatalf("expected /dev/kvm check for qemu-kvm provider in cluster phase, got: %+v", checks)
+		t.Fatalf("expected /dev/kvm check for libvirt provider in cluster phase, got: %+v", checks)
 	}
 }
 
@@ -203,13 +203,12 @@ func TestPreflightFailsWhenAnsibleMissing(t *testing.T) {
 	}
 }
 
-func TestPreflightHubChecksSecretsDirAndFiles(t *testing.T) {
+func TestPreflightOCPChecksSecretsDirAndFiles(t *testing.T) {
 	state := v1alpha1.State{
 		OCPClusters: []v1alpha1.OCPCluster{
 			{
 				Metadata: v1alpha1.Metadata{Name: "hub"},
 				Spec: v1alpha1.OCPClusterSpec{
-					Role: v1alpha1.OCPRoleHub,
 					Install: v1alpha1.OCPInstallSpec{
 						PullSecretRef:            v1alpha1.SecretRef{Name: "pull-secret"},
 						SSHKeyRef:                v1alpha1.SecretRef{Name: "ssh-key"},
@@ -218,11 +217,10 @@ func TestPreflightHubChecksSecretsDirAndFiles(t *testing.T) {
 				},
 			},
 			{
-				Metadata: v1alpha1.Metadata{Name: "managed"},
+				Metadata: v1alpha1.Metadata{Name: "second"},
 				Spec: v1alpha1.OCPClusterSpec{
-					Role: v1alpha1.OCPRoleManaged,
 					Install: v1alpha1.OCPInstallSpec{
-						PullSecretRef: v1alpha1.SecretRef{Name: "managed-pull"},
+						PullSecretRef: v1alpha1.SecretRef{Name: "second-pull"},
 					},
 				},
 			},
@@ -239,6 +237,7 @@ func TestPreflightHubChecksSecretsDirAndFiles(t *testing.T) {
 		"/secrets":             true,
 		"/secrets/pull-secret": false,
 		"/secrets/ssh-key":     false,
+		"/secrets/second-pull": false,
 	})
 	checks := collectPreflightChecks(state, nil, true, "/secrets", defaultHostStateDir, deps)
 	want := map[string]bool{
@@ -246,6 +245,7 @@ func TestPreflightHubChecksSecretsDirAndFiles(t *testing.T) {
 		"hub pullSecretRef at /secrets/pull-secret":      true,
 		"hub sshKeyRef at /secrets/ssh-key":              true,
 		"hub additionalTrustBundleRef at /secrets/trust": false,
+		"second pullSecretRef at /secrets/second-pull":   true,
 	}
 	seen := map[string]bool{}
 	for _, c := range checks {
@@ -260,11 +260,6 @@ func TestPreflightHubChecksSecretsDirAndFiles(t *testing.T) {
 	for name := range want {
 		if !seen[name] {
 			t.Fatalf("missing expected check %q in %+v", name, checks)
-		}
-	}
-	for _, c := range checks {
-		if strings.HasPrefix(c.name, "managed ") {
-			t.Fatalf("managed cluster secrets should not be checked at hub phase: %+v", c)
 		}
 	}
 }
@@ -290,7 +285,6 @@ func TestPreflightHubChecksDisconnectedRegistryCredentials(t *testing.T) {
 			{
 				Metadata: v1alpha1.Metadata{Name: "hub"},
 				Spec: v1alpha1.OCPClusterSpec{
-					Role: v1alpha1.OCPRoleHub,
 					Install: v1alpha1.OCPInstallSpec{
 						PullSecretRef: v1alpha1.SecretRef{Name: "pull-secret"},
 						SSHKeyRef:     v1alpha1.SecretRef{Name: "ssh-key"},
@@ -347,7 +341,6 @@ func TestPreflightHubGeneratedTrustBundleChecksOpenSSL(t *testing.T) {
 			{
 				Metadata: v1alpha1.Metadata{Name: "hub"},
 				Spec: v1alpha1.OCPClusterSpec{
-					Role: v1alpha1.OCPRoleHub,
 					Install: v1alpha1.OCPInstallSpec{
 						PullSecretRef:            v1alpha1.SecretRef{Name: "pull-secret"},
 						SSHKeyRef:                v1alpha1.SecretRef{Name: "ssh-key"},
@@ -415,7 +408,6 @@ func TestPreflightFailsWhenSelfSignedCertOnDiskDoesNotMatchSpec(t *testing.T) {
 			{
 				Metadata: v1alpha1.Metadata{Name: "hub"},
 				Spec: v1alpha1.OCPClusterSpec{
-					Role: v1alpha1.OCPRoleHub,
 					Install: v1alpha1.OCPInstallSpec{
 						PullSecretRef:            v1alpha1.SecretRef{Name: "pull-secret"},
 						SSHKeyRef:                v1alpha1.SecretRef{Name: "ssh-key"},
@@ -484,7 +476,6 @@ func TestPreflightSelfSignedCertDriftCheckPassesWhenMatching(t *testing.T) {
 		OCPClusters: []v1alpha1.OCPCluster{{
 			Metadata: v1alpha1.Metadata{Name: "hub"},
 			Spec: v1alpha1.OCPClusterSpec{
-				Role: v1alpha1.OCPRoleHub,
 				Install: v1alpha1.OCPInstallSpec{
 					AdditionalTrustBundleRef: v1alpha1.SecretRef{Name: "trust"},
 				},
@@ -502,7 +493,7 @@ func TestPreflightSelfSignedCertDriftCheckPassesWhenMatching(t *testing.T) {
 func TestPreflightProviderPhaseChecksBMCPortsAvailable(t *testing.T) {
 	state := v1alpha1.State{
 		InfrastructureProviders: []v1alpha1.InfrastructureProvider{{
-			Metadata: v1alpha1.Metadata{Name: "qemu-1-host-provider"},
+			Metadata: v1alpha1.Metadata{Name: "libvirt-1-host-provider"},
 			Spec: v1alpha1.InfrastructureProviderSpec{Machine: &v1alpha1.MachineCapabilitySpec{Libvirt: &v1alpha1.MachineProviderLibvirtSpec{
 				BMCEmulation: &v1alpha1.BMCEmulationSpec{
 					Enabled:     v1alpha1.BoolPtr(true),
@@ -519,9 +510,9 @@ func TestPreflightProviderPhaseChecksBMCPortsAvailable(t *testing.T) {
 	}, true, nil, nil)
 	checks := collectPreflightChecks(state, nil, true, defaultSecretsDir(), defaultHostStateDir, deps)
 	want := map[string]bool{
-		"provider qemu-1-host-provider redfish port 0.0.0.0:8000 free":             false,
-		"provider qemu-1-host-provider vmedia HTTP port 127.0.0.1:8001 free":       false,
-		"provider qemu-1-host-provider boot-artifacts HTTP port 0.0.0.0:8002 free": false,
+		"provider libvirt-1-host-provider redfish port 0.0.0.0:8000 free":             false,
+		"provider libvirt-1-host-provider vmedia HTTP port 127.0.0.1:8001 free":       false,
+		"provider libvirt-1-host-provider boot-artifacts HTTP port 0.0.0.0:8002 free": false,
 	}
 	for _, c := range checks {
 		if _, tracked := want[c.name]; !tracked {
@@ -542,7 +533,7 @@ func TestPreflightProviderPhaseChecksBMCPortsAvailable(t *testing.T) {
 func TestPreflightProviderPhaseFailsWhenBMCPortInUse(t *testing.T) {
 	state := v1alpha1.State{
 		InfrastructureProviders: []v1alpha1.InfrastructureProvider{{
-			Metadata: v1alpha1.Metadata{Name: "qemu-1-host-provider"},
+			Metadata: v1alpha1.Metadata{Name: "libvirt-1-host-provider"},
 			Spec: v1alpha1.InfrastructureProviderSpec{Machine: &v1alpha1.MachineCapabilitySpec{Libvirt: &v1alpha1.MachineProviderLibvirtSpec{
 				BMCEmulation: &v1alpha1.BMCEmulationSpec{
 					Enabled:     v1alpha1.BoolPtr(true),
@@ -560,7 +551,7 @@ func TestPreflightProviderPhaseFailsWhenBMCPortInUse(t *testing.T) {
 		"127.0.0.1:8001": true,
 	})
 	checks := collectPreflightChecks(state, nil, true, defaultSecretsDir(), defaultHostStateDir, deps)
-	const want = "provider qemu-1-host-provider vmedia HTTP port 127.0.0.1:8001 free"
+	const want = "provider libvirt-1-host-provider vmedia HTTP port 127.0.0.1:8001 free"
 	var found *preflightCheck
 	for i := range checks {
 		if checks[i].name == want {
@@ -585,7 +576,7 @@ func TestPreflightProviderPhaseFailsWhenBMCPortInUse(t *testing.T) {
 func TestPreflightProviderPhaseAllowsPortHeldByMatchingGitupsUnit(t *testing.T) {
 	state := v1alpha1.State{
 		InfrastructureProviders: []v1alpha1.InfrastructureProvider{{
-			Metadata: v1alpha1.Metadata{Name: "qemu-1-host-provider"},
+			Metadata: v1alpha1.Metadata{Name: "libvirt-1-host-provider"},
 			Spec: v1alpha1.InfrastructureProviderSpec{Machine: &v1alpha1.MachineCapabilitySpec{Libvirt: &v1alpha1.MachineProviderLibvirtSpec{
 				BMCEmulation: &v1alpha1.BMCEmulationSpec{
 					Enabled:     v1alpha1.BoolPtr(true),
@@ -604,15 +595,15 @@ func TestPreflightProviderPhaseAllowsPortHeldByMatchingGitupsUnit(t *testing.T) 
 		"127.0.0.1:8001": true,
 		"0.0.0.0:8002":   true,
 	}, map[string]bool{
-		"gitups-sushy-qemu-1-host-provider.service":          true,
-		"gitups-vmedia-qemu-1-host-provider.service":         true,
-		"gitups-boot-artifacts-qemu-1-host-provider.service": true,
+		"gitups-sushy-libvirt-1-host-provider.service":          true,
+		"gitups-vmedia-libvirt-1-host-provider.service":         true,
+		"gitups-boot-artifacts-libvirt-1-host-provider.service": true,
 	})
 	checks := collectPreflightChecks(state, nil, true, defaultSecretsDir(), defaultHostStateDir, deps)
 	want := map[string]string{
-		"provider qemu-1-host-provider redfish port 0.0.0.0:8000 free":             "gitups-sushy-qemu-1-host-provider.service",
-		"provider qemu-1-host-provider vmedia HTTP port 127.0.0.1:8001 free":       "gitups-vmedia-qemu-1-host-provider.service",
-		"provider qemu-1-host-provider boot-artifacts HTTP port 0.0.0.0:8002 free": "gitups-boot-artifacts-qemu-1-host-provider.service",
+		"provider libvirt-1-host-provider redfish port 0.0.0.0:8000 free":             "gitups-sushy-libvirt-1-host-provider.service",
+		"provider libvirt-1-host-provider vmedia HTTP port 127.0.0.1:8001 free":       "gitups-vmedia-libvirt-1-host-provider.service",
+		"provider libvirt-1-host-provider boot-artifacts HTTP port 0.0.0.0:8002 free": "gitups-boot-artifacts-libvirt-1-host-provider.service",
 	}
 	seen := map[string]bool{}
 	for _, c := range checks {
@@ -640,7 +631,7 @@ func TestPreflightProviderPhaseAllowsPortHeldByMatchingGitupsUnit(t *testing.T) 
 func TestPreflightProviderPhaseFailsWhenPortHeldByForeignUnit(t *testing.T) {
 	state := v1alpha1.State{
 		InfrastructureProviders: []v1alpha1.InfrastructureProvider{{
-			Metadata: v1alpha1.Metadata{Name: "qemu-1-host-provider"},
+			Metadata: v1alpha1.Metadata{Name: "libvirt-1-host-provider"},
 			Spec: v1alpha1.InfrastructureProviderSpec{Machine: &v1alpha1.MachineCapabilitySpec{Libvirt: &v1alpha1.MachineProviderLibvirtSpec{
 				BMCEmulation: &v1alpha1.BMCEmulationSpec{
 					Enabled:     v1alpha1.BoolPtr(true),
@@ -660,7 +651,7 @@ func TestPreflightProviderPhaseFailsWhenPortHeldByForeignUnit(t *testing.T) {
 		"gitups-vmedia-some-other-provider.service": true,
 	})
 	checks := collectPreflightChecks(state, nil, true, defaultSecretsDir(), defaultHostStateDir, deps)
-	const want = "provider qemu-1-host-provider vmedia HTTP port 127.0.0.1:8001 free"
+	const want = "provider libvirt-1-host-provider vmedia HTTP port 127.0.0.1:8001 free"
 	var found *preflightCheck
 	for i := range checks {
 		if checks[i].name == want {
@@ -704,7 +695,6 @@ func TestPreflightSecretsDirSkippedWithoutHubPhase(t *testing.T) {
 			{
 				Metadata: v1alpha1.Metadata{Name: "hub"},
 				Spec: v1alpha1.OCPClusterSpec{
-					Role: v1alpha1.OCPRoleHub,
 					Install: v1alpha1.OCPInstallSpec{
 						PullSecretRef: v1alpha1.SecretRef{Name: "pull-secret"},
 					},
@@ -724,7 +714,7 @@ func TestPreflightSecretsDirSkippedWithoutHubPhase(t *testing.T) {
 	checks := collectPreflightChecks(state, provider, true, "/secrets", defaultHostStateDir, deps)
 	for _, c := range checks {
 		if strings.HasPrefix(c.name, "secrets directory") || strings.Contains(c.name, "pullSecretRef") {
-			t.Fatalf("secrets check should be scoped to hub phase, got %+v", c)
+			t.Fatalf("secrets check should be scoped to ocp phase, got %+v", c)
 		}
 	}
 }
@@ -772,7 +762,7 @@ func TestPreflightChecksProxyCredentialsRef(t *testing.T) {
 
 // host_proxy is the first task of both provider and cluster plays, so
 // proxy credentials are needed for either of those phases — but never for
-// a hub-only run, which goes straight to openshift-install on the hub host.
+// a ocp-only run, which goes straight to openshift-install on the ocp host.
 func TestPreflightProxyCredentialsScopedAwayFromHubOnlyRun(t *testing.T) {
 	state := v1alpha1.State{
 		Environments: []v1alpha1.Environment{{
@@ -789,7 +779,7 @@ func TestPreflightProxyCredentialsScopedAwayFromHubOnlyRun(t *testing.T) {
 			},
 		}},
 	}
-	hub, err := selectPhases("hub")
+	hub, err := selectPhases("ocp")
 	if err != nil {
 		t.Fatalf("selectPhases hub: %v", err)
 	}
@@ -804,7 +794,7 @@ func TestPreflightProxyCredentialsScopedAwayFromHubOnlyRun(t *testing.T) {
 	checks := collectPreflightChecks(state, hub, true, "/secrets", defaultHostStateDir, deps)
 	for _, c := range checks {
 		if strings.Contains(c.name, "ocpInstall proxy credentialsRef") {
-			t.Fatalf("proxy credentialsRef must not surface in hub-only run: %+v", c)
+			t.Fatalf("proxy credentialsRef must not surface in ocp-only run: %+v", c)
 		}
 	}
 
@@ -828,7 +818,7 @@ func TestPreflightProxyCredentialsScopedAwayFromHubOnlyRun(t *testing.T) {
 func TestPreflightChecksProviderHostSSHKeyRef(t *testing.T) {
 	state := v1alpha1.State{
 		InfrastructureProviders: []v1alpha1.InfrastructureProvider{{
-			Metadata: v1alpha1.Metadata{Name: "qemu-1-host-provider"},
+			Metadata: v1alpha1.Metadata{Name: "libvirt-1-host-provider"},
 			Spec: v1alpha1.InfrastructureProviderSpec{
 				Hosts: map[string]v1alpha1.ProviderHostSpec{
 					"local-qemu-host": {
@@ -850,7 +840,7 @@ func TestPreflightChecksProviderHostSSHKeyRef(t *testing.T) {
 		"sudo":             "/usr/bin/sudo",
 	}, true, map[string]bool{"/secrets": true})
 	checks := collectPreflightChecks(state, nil, true, "/secrets", defaultHostStateDir, deps)
-	const want = "provider qemu-1-host-provider host local-qemu-host sshKeyRef at /secrets/local-qemu-host-admin-key"
+	const want = "provider libvirt-1-host-provider host local-qemu-host sshKeyRef at /secrets/local-qemu-host-admin-key"
 	var found *preflightCheck
 	for i := range checks {
 		if checks[i].name == want {
@@ -869,7 +859,7 @@ func TestPreflightChecksProviderHostSSHKeyRef(t *testing.T) {
 func TestPreflightChecksBMCEmulationAndMachineCredentials(t *testing.T) {
 	state := v1alpha1.State{
 		InfrastructureProviders: []v1alpha1.InfrastructureProvider{{
-			Metadata: v1alpha1.Metadata{Name: "qemu-1-host-provider"},
+			Metadata: v1alpha1.Metadata{Name: "libvirt-1-host-provider"},
 			Spec: v1alpha1.InfrastructureProviderSpec{
 				Hosts: map[string]v1alpha1.ProviderHostSpec{
 					"local-qemu-host": {SSH: &v1alpha1.ProviderHostSSHSpec{Address: "localhost", KeyRef: v1alpha1.SecretRef{Name: "host-key"}}},
@@ -888,7 +878,7 @@ func TestPreflightChecksBMCEmulationAndMachineCredentials(t *testing.T) {
 		ClusterInfrastructures: []v1alpha1.ClusterInfrastructure{{
 			Metadata: v1alpha1.Metadata{Name: "ci"},
 			Spec: v1alpha1.ClusterInfrastructureSpec{
-				ProviderRefs: []v1alpha1.LocalObjectReference{{Name: "qemu-1-host-provider"}},
+				ProviderRefs: []v1alpha1.LocalObjectReference{{Name: "libvirt-1-host-provider"}},
 				Machines: map[string]v1alpha1.MachineSpec{
 					"master-0": {
 						Baremetal: &v1alpha1.MachineBaremetalSpec{BMC: &v1alpha1.MachineBMCSpec{
@@ -907,8 +897,8 @@ func TestPreflightChecksBMCEmulationAndMachineCredentials(t *testing.T) {
 	}, true, map[string]bool{"/secrets": true})
 	checks := collectPreflightChecks(state, nil, true, "/secrets", defaultHostStateDir, deps)
 	want := map[string]bool{
-		"provider qemu-1-host-provider bmcEmulation credentialRef at /secrets/qemu-1-host-bmc-credentials": false,
-		"infra ci machine master-0 baremetal bmc credentialRef at /secrets/rack-bmc-credentials":           false,
+		"provider libvirt-1-host-provider bmcEmulation credentialRef at /secrets/qemu-1-host-bmc-credentials": false,
+		"infra ci machine master-0 baremetal bmc credentialRef at /secrets/rack-bmc-credentials":              false,
 	}
 	seen := map[string]bool{}
 	for _, c := range checks {

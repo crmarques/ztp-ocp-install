@@ -1,0 +1,71 @@
+apiVersion: gitups.io/v1alpha1
+kind: ClusterInfrastructure
+metadata:
+  name: libvirt-3-hosts-ocp-02
+spec:
+  providerRefs:
+    - name: libvirt-3-hosts-sno-ocp-02-provider
+  networks:
+    primary:
+      cidr: 192.168.152.0/24
+      gateway: 192.168.152.1
+      dnsServers:
+        - 192.168.152.1
+      libvirt:
+        bridge: vbr-ocp-02
+  machines:
+    master-0:
+      profileRef:
+        name: compact-control-plane
+      rootDeviceHints:
+        deviceName: /dev/vda
+      interfaces:
+        enp1s0:
+          networkRef:
+            name: primary
+          ipAddress: 192.168.152.20
+          macAddress: 52:54:00:32:10:00
+      libvirt:
+        hostRef:
+          name: ocp-02-host
+    master-1:
+      profileRef:
+        name: compact-control-plane
+      rootDeviceHints:
+        deviceName: /dev/vda
+      interfaces:
+        enp1s0:
+          networkRef:
+            name: primary
+          ipAddress: 192.168.152.21
+          macAddress: 52:54:00:32:10:01
+      libvirt:
+        hostRef:
+          name: ocp-02-host
+    master-2:
+      profileRef:
+        name: compact-control-plane
+      rootDeviceHints:
+        deviceName: /dev/vda
+      interfaces:
+        enp1s0:
+          networkRef:
+            name: primary
+          ipAddress: 192.168.152.22
+          macAddress: 52:54:00:32:10:02
+      libvirt:
+        hostRef:
+          name: ocp-02-host
+  endpoints:
+    api:
+      address: 192.168.152.10
+    apiInt:
+      address: 192.168.152.10
+    ingress:
+      address: 192.168.152.11
+  loadBalancers:
+    lb-libvirt-3-hosts-ocp-02:
+      endpoints:
+        - api
+        - apiInt
+        - ingress

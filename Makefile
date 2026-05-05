@@ -9,7 +9,7 @@ E2E_STATE_DIR ?= /tmp/gitups-$(CASE)
 ANSIBLE_PLAYBOOK ?= $(shell command -v ansible-playbook 2>/dev/null)
 E2E_ANSIBLE_FLAGS = $(if $(ANSIBLE_PLAYBOOK),--ansible-playbook $(ANSIBLE_PLAYBOOK),)
 E2E_APPLY_INFRA ?= $(BIN_DIR)/$(BINARY) apply infra --yes
-E2E_APPLY_HUB ?= $(BIN_DIR)/$(BINARY) apply hub --yes
+E2E_APPLY_OCP ?= $(BIN_DIR)/$(BINARY) apply ocp --yes
 E2E_APPLY_FLAGS ?=
 E2E_DESTROY ?= $(BIN_DIR)/$(BINARY) destroy all
 E2E_DESTROY_FLAGS ?=
@@ -55,16 +55,16 @@ test:
 	$(GO) test ./...
 
 validate: build
-	$(BIN_DIR)/$(BINARY) validate -f examples/qemu-redfish-fleet
+	$(BIN_DIR)/$(BINARY) validate -f examples/libvirt-redfish-fleet
 
 plan: build
-	$(BIN_DIR)/$(BINARY) plan -f examples/qemu-redfish-fleet --state-dir $(STATE_DIR)
+	$(BIN_DIR)/$(BINARY) plan -f examples/libvirt-redfish-fleet --state-dir $(STATE_DIR)
 
 check-e2e-deps:
 	@test -n "$(ANSIBLE_PLAYBOOK)" || { printf '%s\n' 'ansible-playbook not found in PATH; install Ansible or set ANSIBLE_PLAYBOOK=/path/to/ansible-playbook'; exit 1; }
 
 check-e2e-case:
-	@test -n "$(CASE)" || { printf '%s\n' 'CASE is required; pass CASE=<name>, e.g. make e2e CASE=qemu-1-host-1-sno-hub' 'Available cases:' $(addprefix '  ',$(E2E_CASES)); exit 1; }
+	@test -n "$(CASE)" || { printf '%s\n' 'CASE is required; pass CASE=<name>, e.g. make e2e CASE=libvirt-1-host-1-sno-hub' 'Available cases:' $(addprefix '  ',$(E2E_CASES)); exit 1; }
 	@test -d "$(E2E_FIXTURE)" || { printf '%s\n' 'CASE "$(CASE)" not found at $(E2E_FIXTURE)' 'Available cases:' $(addprefix '  ',$(E2E_CASES)); exit 1; }
 
 list-e2e-cases:
@@ -72,11 +72,11 @@ list-e2e-cases:
 
 e2e-dry-run: check-e2e-case check-e2e-deps build
 	$(BIN_DIR)/$(BINARY) apply infra -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) --dry-run $(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
-	$(BIN_DIR)/$(BINARY) apply hub -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) --dry-run $(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
+	$(BIN_DIR)/$(BINARY) apply ocp -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) --dry-run $(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
 
 e2e: check-e2e-case check-e2e-deps build
 	$(E2E_APPLY_INFRA) -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) $(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
-	$(E2E_APPLY_HUB) -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) $(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
+	$(E2E_APPLY_OCP) -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) $(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
 
 e2e-destroy-dry-run: check-e2e-case check-e2e-deps build
 	$(BIN_DIR)/$(BINARY) destroy all -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) --dry-run $(E2E_ANSIBLE_FLAGS) $(E2E_DESTROY_FLAGS)
@@ -99,8 +99,8 @@ help:
 		'  build            Build bin/gitups (syncs the embedded ansible bundle first)' \
 		'  sync-bundle      Refresh internal/embedded/bundle from /ansible without building' \
 		'  test             Run Go tests' \
-		'  validate         Validate examples/qemu-redfish-fleet' \
-		'  plan             Preview examples/qemu-redfish-fleet into .state' \
+		'  validate         Validate examples/libvirt-redfish-fleet' \
+		'  plan             Preview examples/libvirt-redfish-fleet into .state' \
 		'  list-e2e-cases   List available e2e cases under test/e2e' \
 		'  check-e2e-deps   Check local e2e dependencies' \
 		'  e2e-dry-run         Render an e2e fixture and print Ansible command (requires CASE=<name>)' \

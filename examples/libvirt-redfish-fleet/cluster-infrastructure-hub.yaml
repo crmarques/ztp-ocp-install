@@ -1,0 +1,43 @@
+apiVersion: gitups.io/v1alpha1
+kind: ClusterInfrastructure
+metadata:
+  name: hub
+spec:
+  providerRefs:
+    - name: libvirt-redfish-provider
+  networks:
+    primary:
+      cidr: 192.168.130.0/24
+      gateway: 192.168.130.1
+      dnsServers:
+        - 192.168.130.1
+      libvirt:
+        bridge: vbr-hub
+  machines:
+    master-0:
+      profileRef:
+        name: sno
+      interfaces:
+        primary:
+          networkRef:
+            name: primary
+          ipAddress: 192.168.130.20
+          macAddress: 52:54:00:21:11:10
+      rootDeviceHints:
+        deviceName: /dev/vda
+      libvirt:
+        hostRef:
+          name: libvirt-host
+  endpoints:
+    api:
+      address: 192.168.130.10
+    apiInt:
+      address: 192.168.130.10
+    ingress:
+      address: 192.168.130.11
+  loadBalancers:
+    default:
+      endpoints:
+        - api
+        - apiInt
+        - ingress

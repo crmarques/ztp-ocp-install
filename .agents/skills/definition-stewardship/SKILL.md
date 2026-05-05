@@ -39,9 +39,9 @@ Confirm connected provider-swap examples keep `Environment` and `OCPCluster`
 files byte-identical:
 
 ```text
-diff -u examples/qemu-redfish-fleet/environment.yaml examples/baremetal-redfish-fleet/environment.yaml
-diff -u examples/qemu-redfish-fleet/ocp-cluster-hub.yaml examples/baremetal-redfish-fleet/ocp-cluster-hub.yaml
-diff -u examples/qemu-redfish-fleet/ocp-cluster-managed-01.yaml examples/baremetal-redfish-fleet/ocp-cluster-managed-01.yaml
+diff -u examples/libvirt-redfish-fleet/environment.yaml examples/baremetal-redfish-fleet/environment.yaml
+diff -u examples/libvirt-redfish-fleet/ocp-cluster-hub.yaml examples/baremetal-redfish-fleet/ocp-cluster-hub.yaml
+diff -u examples/libvirt-redfish-fleet/ocp-cluster-managed-01.yaml examples/baremetal-redfish-fleet/ocp-cluster-managed-01.yaml
 ```
 
 Report any remaining stale term only when it is intentionally deferred to the

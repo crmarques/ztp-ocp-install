@@ -61,7 +61,7 @@ func TestLoadNormalizeValidateExamples(t *testing.T) {
 }
 
 func TestLoadNormalizeValidateOneHostSample(t *testing.T) {
-	state, err := LoadNormalizeValidate([]string{"../../test/e2e/local-qemu-1-host-1-sno-hub"})
+	state, err := LoadNormalizeValidate([]string{"../../test/e2e/local-libvirt-1-host-1-sno-hub"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestLoadNormalizeValidateOneHostSample(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s missing master-0 machine", item.Metadata.Name)
 		}
-		if got, want := machine.Libvirt.HostRef.Name, "local-qemu-host"; got != want {
+		if got, want := machine.Libvirt.HostRef.Name, "local-libvirt-host"; got != want {
 			t.Fatalf("%s machine hostRef got %q, want %q", item.Metadata.Name, got, want)
 		}
 		if machine.Resources == nil || machine.Resources.CPU != 9 || machine.Resources.MemoryMiB != 19456 {
@@ -197,7 +197,6 @@ kind: OCPCluster
 metadata:
   name: bad
 spec:
-  role: hub
   infrastructureRef:
     name: bad
   endpoints:
@@ -329,7 +328,7 @@ func TestValidationRejectsAgentConfigMinimalISOOverride(t *testing.T) {
 }
 
 func TestDisconnectedDefaultsImageSourcesToNeverContactSource(t *testing.T) {
-	state, err := LoadNormalizeValidate([]string{"../../test/e2e/local-qemu-1-host-1-sno-hub"})
+	state, err := LoadNormalizeValidate([]string{"../../test/e2e/local-libvirt-1-host-1-sno-hub"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
@@ -347,7 +346,7 @@ func TestValidationRejectsDisconnectedAllowContactingSource(t *testing.T) {
 	body := strings.Replace(
 		validStateYAML("disconnected-source-policy", "disconnected-source-policy-provider", "192.168.156.0/24", "192.168.156.10", "192.168.156.11", "192.168.156.20"),
 		"  ocpInstall:\n    connected: {}\n",
-		"  ocpInstall:\n    disconnected:\n      registries:\n        mirror:\n          url: registry.lab.test:5000\n          credentialsRef:\n            name: registry-lab-credentials\n          trustBundleRef:\n            name: registry-lab-ca\n        imageDigestSources:\n          - source: quay.io/openshift-release-dev/ocp-release\n            mirrors:\n              - registry.lab.test:5000/openshift/release-images\n            sourcePolicy: AllowContactingSource\n          - source: quay.io/openshift-release-dev/ocp-v4.0-art-dev\n            mirrors:\n              - registry.lab.test:5000/openshift/release\n",
+		"  ocpInstall:\n    disconnected:\n      registries:\n        mirror:\n          url: registry.lab.test:5000\n          credentialsRef:\n            name: registry-lab-credentials\n          trustBundleRef:\n            name: registry-lab-ca\n        imageDigestSources:\n          - source: quay.io/openshift-release-dev/ocp-release\n            mirrors:\n              - registry.lab.test:5000/openshift/release-images\n            sourcePolicy: AllowContactingSource\n          - source: quay.io/openshift-release-dev/ocp-v4.0-art-dev\n            mirrors:\n              - registry.lab.test:5000/openshift/release-images\n",
 		1,
 	)
 	writeFile(t, filepath.Join(dir, "disconnected-source-policy.yaml"), body)
@@ -365,7 +364,7 @@ func TestValidationRejectsDisconnectedExternalOpenShiftMirror(t *testing.T) {
 	body := strings.Replace(
 		validStateYAML("disconnected-external-mirror", "disconnected-external-mirror-provider", "192.168.157.0/24", "192.168.157.10", "192.168.157.11", "192.168.157.20"),
 		"  ocpInstall:\n    connected: {}\n",
-		"  ocpInstall:\n    disconnected:\n      registries:\n        mirror:\n          url: registry.lab.test:5000\n          credentialsRef:\n            name: registry-lab-credentials\n          trustBundleRef:\n            name: registry-lab-ca\n        imageDigestSources:\n          - source: quay.io/openshift-release-dev/ocp-release\n            mirrors:\n              - quay.io/openshift-release-dev/ocp-release\n          - source: quay.io/openshift-release-dev/ocp-v4.0-art-dev\n            mirrors:\n              - registry.lab.test:5000/openshift/release\n",
+		"  ocpInstall:\n    disconnected:\n      registries:\n        mirror:\n          url: registry.lab.test:5000\n          credentialsRef:\n            name: registry-lab-credentials\n          trustBundleRef:\n            name: registry-lab-ca\n        imageDigestSources:\n          - source: quay.io/openshift-release-dev/ocp-release\n            mirrors:\n              - quay.io/openshift-release-dev/ocp-release\n          - source: quay.io/openshift-release-dev/ocp-v4.0-art-dev\n            mirrors:\n              - registry.lab.test:5000/openshift/release-images\n",
 		1,
 	)
 	writeFile(t, filepath.Join(dir, "disconnected-external-mirror.yaml"), body)
@@ -467,7 +466,6 @@ kind: OCPCluster
 metadata:
   name: %s
 spec:
-  role: managed
   topology: single-node
   infrastructureRef:
     name: %s
@@ -539,7 +537,6 @@ kind: OCPCluster
 metadata:
   name: baremetal
 spec:
-  role: managed
   topology: single-node
   infrastructureRef:
     name: baremetal
@@ -612,7 +609,6 @@ kind: OCPCluster
 metadata:
   name: vmware
 spec:
-  role: managed
   topology: single-node
   infrastructureRef:
     name: vmware
@@ -646,7 +642,7 @@ const disconnectedRegistriesBlock = `  ocpInstall:
               - registry.lab.test:5000/openshift/release-images
           - source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
             mirrors:
-              - registry.lab.test:5000/openshift/release
+              - registry.lab.test:5000/openshift/release-images
   keys:
     registry-lab-ca:
       generated:

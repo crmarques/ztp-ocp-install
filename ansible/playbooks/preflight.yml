@@ -1,6 +1,6 @@
 ---
 - name: Gitups read-only controller and provider preflight
-  hosts: gitups_provider_hosts:gitups_infra_hosts:gitups_hub_hosts
+  hosts: gitups_provider_hosts:gitups_infra_hosts:gitups_ocp_hosts
   gather_subset:
     - "!all"
     - min
@@ -52,9 +52,9 @@
       ansible.builtin.stat:
         path: /dev/kvm
       register: gitups_preflight_kvm
-      when: gitups_current_provider is defined and gitups_current_provider.kind == 'qemu-kvm'
+      when: gitups_current_provider is defined and gitups_current_provider.kind == 'libvirt'
 
     - name: Report KVM device
       ansible.builtin.debug:
         msg: "/dev/kvm={{ gitups_preflight_kvm.stat.exists | default(false) }}"
-      when: gitups_current_provider is defined and gitups_current_provider.kind == 'qemu-kvm'
+      when: gitups_current_provider is defined and gitups_current_provider.kind == 'libvirt'

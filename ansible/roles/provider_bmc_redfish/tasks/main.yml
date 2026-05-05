@@ -2,7 +2,7 @@
 # Provider-scoped role for the real-Redfish BMC path. No service install (the
 # BMCs are managed by the hardware), just credential staging and reachability
 # probing. Writes a per-provider bmc.yml manifest in the same shape as the one
-# provider_bmc_emulated will eventually emit, so hub_boot_redfish can read
+# provider_bmc_emulated will eventually emit, so ocp_boot_redfish can read
 # either path without caring whether the BMC is emulated or real.
 
 - name: Aggregate bare-metal BMC endpoints for current provider

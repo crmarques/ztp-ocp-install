@@ -18,10 +18,10 @@ type Phase struct {
 // internal/embedded). The CLI joins them with the per-run bundle directory
 // before handing the spec to the runner.
 //
-// Apply order is provider → cluster → hub: provider-scoped
-// services (mirror, BMC emulator, HAProxy) come up first so per-cluster
-// substrate convergence has somewhere to plumb VIPs, and the hub installer
-// has a reachable mirror in disconnected mode. Destroy reverses the order.
+// Apply order is provider → cluster → ocp: provider-scoped services
+// (mirror, BMC emulator, HAProxy) come up first so per-cluster substrate
+// convergence has somewhere to plumb VIPs, and the ocp installer has a
+// reachable mirror in disconnected mode. Destroy reverses the order.
 var phases = map[string]Phase{
 	"provider": {
 		Name:            "provider",
@@ -37,12 +37,12 @@ var phases = map[string]Phase{
 		NeedsRoot:       true,
 		Description:     "provision per-cluster substrate (libvirt domains and networks, managed name resolution, /etc/hosts records, VIP plumbing)",
 	},
-	"hub": {
-		Name:            "hub",
-		ApplyPlaybook:   "playbooks/hub-install.yml",
-		DestroyPlaybook: "playbooks/hub-destroy.yml",
+	"ocp": {
+		Name:            "ocp",
+		ApplyPlaybook:   "playbooks/ocp-install.yml",
+		DestroyPlaybook: "playbooks/ocp-destroy.yml",
 		NeedsRoot:       true,
-		Description:     "run openshift-install agent against the hub node (boots via Redfish, manages the libvirt domain, writes hub state)",
+		Description:     "run openshift-install agent against the cluster nodes (boots via Redfish, manages the libvirt domain, writes per-cluster install state)",
 	},
 }
 
@@ -51,10 +51,10 @@ func workflowPhases(scope string) []Phase {
 	switch strings.TrimSpace(scope) {
 	case "infra":
 		names = []string{"provider", "cluster"}
-	case "hub":
-		names = []string{"hub"}
+	case "ocp":
+		names = []string{"ocp"}
 	case "all":
-		names = []string{"provider", "cluster", "hub"}
+		names = []string{"provider", "cluster", "ocp"}
 	}
 	out := make([]Phase, 0, len(names))
 	for _, name := range names {
@@ -64,23 +64,17 @@ func workflowPhases(scope string) []Phase {
 }
 
 func phasesForApplyScope(scope string) ([]Phase, error) {
-	if scope == "clusters" {
-		return nil, fmt.Errorf("apply clusters is reserved for managed-cluster GitOps publication through the hub; that workflow is not implemented yet")
-	}
 	selected := workflowPhases(scope)
 	if len(selected) == 0 {
-		return nil, fmt.Errorf("unknown apply scope %q (known: infra, hub, clusters)", scope)
+		return nil, fmt.Errorf("unknown apply scope %q (known: infra, ocp)", scope)
 	}
 	return selected, nil
 }
 
 func phasesForDestroyScope(scope string) ([]Phase, error) {
-	if scope == "clusters" {
-		return nil, fmt.Errorf("destroy clusters is reserved for managed-cluster GitOps publication through the hub; that workflow is not implemented yet")
-	}
 	selected := workflowPhases(scope)
 	if len(selected) == 0 {
-		return nil, fmt.Errorf("unknown destroy scope %q (known: infra, hub, clusters, all)", scope)
+		return nil, fmt.Errorf("unknown destroy scope %q (known: infra, ocp, all)", scope)
 	}
 	return reversed(selected), nil
 }

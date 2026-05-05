@@ -5,9 +5,10 @@ author versioned YAML, Gitups validates it, renders deterministic inputs for
 OpenShift, Ansible, and GitOps, then converges the environment in ordered
 phases.
 
-The project is optimized for zero touch provisioning: one hub cluster runs ACM
-and OpenShift GitOps, and managed clusters are reconciled from declared fleet
-state.
+Today the CLI installs OpenShift clusters end-to-end via the agent installer.
+Forward-looking architecture leaves room for a future hub cluster running
+ACM and OpenShift GitOps to reconcile additional managed clusters from
+declared fleet state, but that GitOps publication path is not implemented yet.
 
 ## Start Here
 
@@ -28,11 +29,11 @@ User-authored YAML uses `apiVersion: gitups.io/v1alpha1` and four kinds:
 | Kind | Owns |
 | --- | --- |
 | `Environment` | Shared environment defaults: base domain, OpenShift install mode, secret refs, OpenShift release, component image pins |
-| `InfrastructureProvider` | Provider connections and capabilities: QEMU/KVM, bare metal, vSphere, OpenShift Virtualization |
+| `InfrastructureProvider` | Provider connections and capabilities: libvirt, bare metal, vSphere, OpenShift Virtualization |
 | `ClusterInfrastructure` | One cluster's realised infrastructure: networks, machines, endpoints, load balancers, name resolution |
-| `OCPCluster` | Provider-neutral OpenShift intent: role, topology, install method, networking, node identity |
+| `OCPCluster` | Provider-neutral OpenShift intent: topology, install method, networking, node identity |
 
-`OCPCluster` stays provider-neutral. Swapping from QEMU/KVM with Redfish
+`OCPCluster` stays provider-neutral. Swapping from libvirt with Redfish
 emulation to real bare metal edits only `InfrastructureProvider` and
 `ClusterInfrastructure`.
 
@@ -40,18 +41,18 @@ emulation to real bare metal edits only `InfrastructureProvider` and
 
 ```text
 gitups doctor
-gitups setup controller -f examples/qemu-redfish-fleet
-gitups init --template qemu-redfish-hub --out desired-state
-gitups validate -f examples/qemu-redfish-fleet
-gitups preflight -f examples/qemu-redfish-fleet
-gitups plan -f examples/qemu-redfish-fleet --out text
-gitups apply infra -f examples/qemu-redfish-fleet --dry-run
-gitups apply hub -f examples/qemu-redfish-fleet --dry-run
-gitups status -f examples/qemu-redfish-fleet --diff
+gitups setup controller -f examples/libvirt-redfish-fleet
+gitups init --template libvirt-redfish-hub --out desired-state
+gitups validate -f examples/libvirt-redfish-fleet
+gitups preflight -f examples/libvirt-redfish-fleet
+gitups plan -f examples/libvirt-redfish-fleet --out text
+gitups apply infra -f examples/libvirt-redfish-fleet --dry-run
+gitups apply ocp -f examples/libvirt-redfish-fleet --dry-run
+gitups status -f examples/libvirt-redfish-fleet --diff
 ```
 
 Public verbs: `doctor`, `setup controller`, `init`, `validate`, `preflight`,
-`plan`, `apply <infra|hub|clusters>`, `destroy <infra|hub|clusters|all>`,
+`plan`, `apply <infra|ocp>`, `destroy <infra|ocp|all>`,
 `status`, and `secrets`.
 The formal CLI contract lives in
 [specs/state-model.md](specs/state-model.md#cli-contract).

@@ -35,7 +35,7 @@ type EnvironmentOCPInstallVars struct {
 // CredentialsRef points at a single-line `username:password` secret. When set,
 // the host_proxy role merges the resolved credentials into the URLs at apply
 // time (writing credentialed values to /etc/environment, dnf/pip/podman, and
-// the systemd default environment), and the hub_install_agent role injects
+// the systemd default environment), and the ocp_install_agent role injects
 // credentialed URLs into the effective install-config. The plaintext URLs in
 // vars.yaml stay credential-free.
 type ProxyVars struct {
@@ -47,7 +47,6 @@ type ProxyVars struct {
 
 type ClusterVars struct {
 	Name     string             `yaml:"name" json:"name"`
-	Role     string             `yaml:"role" json:"role"`
 	OCP      OCPClusterVars     `yaml:"ocp" json:"ocp"`
 	Provider ProviderVars       `yaml:"provider" json:"provider"`
 	Network  ClusterNetworkVars `yaml:"network" json:"network"`
@@ -122,7 +121,7 @@ type OCPClusterNodeVars struct {
 // MachineBMCVars carries one machine's out-of-band BMC endpoint for the
 // bare-metal substrate. Populated only when the provider kind is baremetal;
 // consumed by cluster_substrate_baremetal (credential staging) and
-// hub_boot_redfish (per-host Redfish endpoints once it grows beyond the
+// ocp_boot_redfish (per-host Redfish endpoints once it grows beyond the
 // emulated loopback).
 type MachineBMCVars struct {
 	Address                        string `yaml:"address" json:"address"`
@@ -463,7 +462,6 @@ func proxyHasValue(p *v1alpha1.OCPInstallProxy) bool {
 func clusterVars(item v1alpha1.ClusterInfrastructure, provider v1alpha1.InfrastructureProvider, ocp v1alpha1.OCPCluster, env *v1alpha1.Environment) ClusterVars {
 	return ClusterVars{
 		Name: item.Metadata.Name,
-		Role: ocp.Spec.Role,
 		OCP: OCPClusterVars{
 			Name:      ocp.Metadata.Name,
 			Topology:  ocp.Spec.Topology,
@@ -495,7 +493,7 @@ func ocpInstallVars(ocp v1alpha1.OCPCluster, env *v1alpha1.Environment) OCPInsta
 		SSHKeyRef:                ocp.Spec.Install.SSHKeyRef.Name,
 		ReleaseImageOverride:     releaseImageOverride(ocp),
 		AdditionalTrustBundleRef: ocp.Spec.Install.AdditionalTrustBundleRef.Name,
-		GeneratedSecrets:         generatedSecretVarsFromEnv(env, ocp),
+		GeneratedSecrets:         generatedSecretVarsFromEnv(env),
 		LocalRegistry:            localRegistryVars(env, ocp),
 	}
 }
@@ -547,11 +545,11 @@ func mirrorRegistryHostname(url string) string {
 
 // generatedSecretVarsFromEnv projects every Environment.spec.keys entry
 // whose source is `generated.selfSignedCertificate` into the per-cluster
-// install vars consumed by hub_install_agent. Credentials-style generated
+// install vars consumed by ocp_install_agent. Credentials-style generated
 // keys are not exposed here — they are materialized once by `gitups
 // secrets generate` on the operator host and read by ansible directly.
-func generatedSecretVarsFromEnv(env *v1alpha1.Environment, ocp v1alpha1.OCPCluster) []GeneratedSecretVars {
-	if env == nil || ocp.Spec.Role != v1alpha1.OCPRoleHub {
+func generatedSecretVarsFromEnv(env *v1alpha1.Environment) []GeneratedSecretVars {
+	if env == nil {
 		return nil
 	}
 	names := make([]string, 0, len(env.Spec.Keys))

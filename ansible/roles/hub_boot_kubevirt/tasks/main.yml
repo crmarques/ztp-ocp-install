@@ -1,8 +1,0 @@
----
-# Boot the hub VM via KubeVirt: patch VirtualMachine.spec.running=true after
-# attaching the agent ISO as a containerDisk or DataVolume. Scaffold only:
-# implement alongside cluster_substrate_kubevirt.
-
-- name: KubeVirt hub boot is not yet implemented
-  ansible.builtin.fail:
-    msg: "hub_boot_kubevirt is a scaffold; pair with cluster_substrate_kubevirt when adding OpenShift Virtualization support."

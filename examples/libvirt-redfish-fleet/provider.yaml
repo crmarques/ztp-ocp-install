@@ -1,0 +1,48 @@
+apiVersion: gitups.io/v1alpha1
+kind: InfrastructureProvider
+metadata:
+  name: libvirt-redfish-provider
+spec:
+  hosts:
+    libvirt-host:
+      ssh:
+        address: 192.168.10.11
+        user: gitups
+        keyRef:
+          name: libvirt-host-ssh
+      capabilities:
+        - libvirt
+        - hosts-file
+        - mirror-registry
+  machine:
+    libvirt:
+      hostRefs:
+        - name: libvirt-host
+      bmcEmulation:
+        enabled: true
+        protocol: redfish
+        auth:
+          credentialRef:
+            name: libvirt-redfish-bmc
+      machineProfiles:
+        sno:
+          cpu: 8
+          memoryMiB: 22528
+          diskGiB: 120
+        compact:
+          cpu: 8
+          memoryMiB: 22528
+          diskGiB: 120
+  loadBalancer:
+    haProxy:
+      hostRef:
+        name: libvirt-host
+  nameResolution:
+    hostsFile:
+      hostRefs:
+        - name: libvirt-host
+  registry:
+    mirrorRegistry:
+      hostRef:
+        name: libvirt-host
+      port: 5000

@@ -1,0 +1,19 @@
+apiVersion: gitups.io/v1alpha1
+kind: OCPCluster
+metadata:
+  name: local-libvirt-1-host-hub
+spec:
+  topology: single-node
+  infrastructureRef:
+    name: local-libvirt-1-host-hub
+  install:
+    method: agent
+  networking:
+    clusterNetwork:
+      - cidr: 10.128.0.0/14
+        hostPrefix: 23
+    serviceNetwork:
+      - 172.30.0.0/16
+  nodes:
+    master-0:
+      role: control-plane

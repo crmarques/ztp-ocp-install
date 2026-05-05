@@ -1,7 +1,7 @@
 ---
 # Per-cluster substrate role for the bare-metal provider. Hardware is already
 # present, so this role only stages credentials and writes a baremetal.yml
-# manifest for hub_boot_redfish to consume. Mirror of the qemu/virtualization.yml
+# manifest for ocp_boot_redfish to consume. Mirror of the qemu/virtualization.yml
 # manifest written by cluster_substrate_libvirt.
 
 - name: Resolve bare-metal machines for current cluster

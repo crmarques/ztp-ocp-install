@@ -1,0 +1,23 @@
+apiVersion: gitups.io/v1alpha1
+kind: OCPCluster
+metadata:
+  name: libvirt-3-hosts-ocp-02
+spec:
+  topology: multi-node
+  infrastructureRef:
+    name: libvirt-3-hosts-ocp-02
+  install:
+    method: agent
+  networking:
+    clusterNetwork:
+      - cidr: 10.128.0.0/14
+        hostPrefix: 23
+    serviceNetwork:
+      - 172.30.0.0/16
+  nodes:
+    master-0:
+      role: control-plane
+    master-1:
+      role: control-plane
+    master-2:
+      role: control-plane

@@ -16,7 +16,7 @@ func newRootCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Comm
 		Use:   "gitups",
 		Short: "GitOps-driven OpenShift fleet provisioning",
 		Long: "Gitups renders, validates, and converges versioned desired-state YAML\n" +
-			"to drive OpenShift hub and managed-cluster lifecycle.",
+			"to drive OpenShift cluster lifecycle.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}

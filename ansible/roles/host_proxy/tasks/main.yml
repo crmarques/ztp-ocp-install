@@ -13,7 +13,7 @@
 # directory at apply time and merge it into the URLs locally — keeping the
 # raw URLs in vars.yaml credential-free. The slurp runs on the target host,
 # so the secrets directory must exist at the same path on each provider host
-# (the same assumption hub_install_agent and provider_bmc already make for
+# (the same assumption ocp_install_agent and provider_bmc already make for
 # pull-secret, ssh-key, and BMC credentials).
 - name: Read proxy credentials
   ansible.builtin.slurp:
@@ -94,7 +94,7 @@
   changed_when: false
 
 # When no proxy is configured the role is a no-op: every subsequent task is
-# gated on gitups_proxy_enabled so host_prepare, host_kvm, provider_qemu, etc.
+# gated on gitups_proxy_enabled so host_prepare, host_libvirt, provider_qemu, etc.
 # still run for direct-egress hosts.
 - name: Configure proxy on the provider host
   when: gitups_proxy_enabled
@@ -139,7 +139,7 @@
       when: (gitups_proxy_credentials_ref | length) == 0
 
     # dnf does not honor HTTP(S)_PROXY from /etc/environment in every release;
-    # set the proxy explicitly so package installs in host_prepare / host_kvm
+    # set the proxy explicitly so package installs in host_prepare / host_libvirt
     # succeed.
     - name: Stat dnf.conf
       ansible.builtin.stat:

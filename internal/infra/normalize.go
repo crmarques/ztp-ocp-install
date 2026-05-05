@@ -242,7 +242,7 @@ func deriveDisconnectedReleaseSources(registries *v1alpha1.OCPInstallRegistries)
 		path   string
 	}{
 		{v1alpha1.OCPReleaseSourceQuayOCPRelease, v1alpha1.DefaultMirroredReleasePath},
-		{v1alpha1.OCPReleaseSourceQuayARTDev, v1alpha1.DefaultMirroredARTDevPath},
+		{v1alpha1.OCPReleaseSourceQuayARTDev, v1alpha1.DefaultMirroredReleasePath},
 	}
 	for _, d := range defaults {
 		if known[d.source] {

@@ -3,7 +3,6 @@ kind: OCPCluster
 metadata:
   name: managed
 spec:
-  role: managed
   topology: single-node
   infrastructureRef:
     name: managed

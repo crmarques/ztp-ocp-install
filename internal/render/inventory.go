@@ -25,7 +25,6 @@ type InventoryHost struct {
 	AnsibleUser        string `yaml:"ansible_user" json:"ansible_user"`
 	GitupsProviderName string `yaml:"gitups_provider_name,omitempty" json:"gitups_provider_name,omitempty"`
 	GitupsClusterName  string `yaml:"gitups_cluster_name,omitempty" json:"gitups_cluster_name,omitempty"`
-	GitupsClusterRole  string `yaml:"gitups_cluster_role,omitempty" json:"gitups_cluster_role,omitempty"`
 	GitupsHostName     string `yaml:"gitups_host_name" json:"gitups_host_name"`
 	GitupsSSHKeyRef    string `yaml:"gitups_ssh_key_ref" json:"gitups_ssh_key_ref"`
 }
@@ -38,10 +37,7 @@ func Inventory(state v1alpha1.State) InventoryFile {
 		"gitups_provider_hosts": {
 			Hosts: map[string]InventoryHost{},
 		},
-		"gitups_hub_hosts": {
-			Hosts: map[string]InventoryHost{},
-		},
-		"gitups_managed_hosts": {
+		"gitups_ocp_hosts": {
 			Hosts: map[string]InventoryHost{},
 		},
 	}
@@ -64,16 +60,10 @@ func Inventory(state v1alpha1.State) InventoryFile {
 			}
 		}
 	}
-	ocpByInfra := ocpByInfrastructure(state.OCPClusters)
 	for _, item := range state.ClusterInfrastructures {
 		closure, _ := v1alpha1.BuildProviderClosure(item, providers)
 		if closure.Machine == nil || closure.Machine.Libvirt == nil {
 			continue
-		}
-		ocp := ocpByInfra[item.Metadata.Name]
-		roleGroup := "gitups_managed_hosts"
-		if ocp.Spec.Role == v1alpha1.OCPRoleHub {
-			roleGroup = "gitups_hub_hosts"
 		}
 		for _, ref := range closure.Machine.Libvirt.HostRefs {
 			hostName := ref.Name
@@ -91,12 +81,11 @@ func Inventory(state v1alpha1.State) InventoryFile {
 				AnsibleUser:        host.SSH.User,
 				GitupsProviderName: closure.MachineProviderName,
 				GitupsClusterName:  item.Metadata.Name,
-				GitupsClusterRole:  ocp.Spec.Role,
 				GitupsHostName:     hostName,
 				GitupsSSHKeyRef:    host.SSH.KeyRef.Name,
 			}
 			groups["gitups_infra_hosts"].Hosts[inventoryName] = inventoryHost
-			groups[roleGroup].Hosts[inventoryName] = inventoryHost
+			groups["gitups_ocp_hosts"].Hosts[inventoryName] = inventoryHost
 		}
 	}
 	return InventoryFile{

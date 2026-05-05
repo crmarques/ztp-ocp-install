@@ -24,9 +24,9 @@ name; it is documented in each case's `README.md`.
 
 Current cases:
 
-- `local-qemu-1-host-1-sno-hub` — control host is itself the QEMU/KVM provider
+- `local-libvirt-1-host-1-sno-hub` — control host is itself the libvirt provider
   host (SSH back to `localhost`), 1 SNO hub, no managed clusters.
-- `qemu-1-host-1-sno-hub` — 1 remote QEMU host, 1 SNO hub, no managed clusters.
+- `libvirt-1-host-1-sno-hub` — 1 remote QEMU host, 1 SNO hub, no managed clusters.
 - `qemu-3-hosts-1-sno-hub-2-ocp-fleet` — 3 QEMU hosts, 1 SNO hub plus 2
   multi-node managed OCP clusters (one cluster per host).
 - `qemu-3-hosts-1-hub-2-ocp-fleet` — 3 QEMU hosts, 1 multi-node hub plus 2
@@ -37,9 +37,9 @@ Current cases:
 ```text
 make build
 make list-e2e-cases
-make e2e-dry-run CASE=qemu-1-host-1-sno-hub
-make e2e         CASE=qemu-1-host-1-sno-hub
-make e2e-destroy CASE=qemu-1-host-1-sno-hub
+make e2e-dry-run CASE=libvirt-1-host-1-sno-hub
+make e2e         CASE=libvirt-1-host-1-sno-hub
+make e2e-destroy CASE=libvirt-1-host-1-sno-hub
 ```
 
 The user-facing equivalent is plain `gitups`:
@@ -48,16 +48,16 @@ The user-facing equivalent is plain `gitups`:
 gitups validate -f test/e2e/<case> --check-host
 gitups plan     -f test/e2e/<case> --state-dir /tmp/gitups-<case>
 gitups apply infra -f test/e2e/<case> --state-dir /tmp/gitups-<case> --dry-run
-gitups apply hub   -f test/e2e/<case> --state-dir /tmp/gitups-<case> --dry-run
+gitups apply ocp   -f test/e2e/<case> --state-dir /tmp/gitups-<case> --dry-run
 gitups apply infra -f test/e2e/<case> --state-dir /tmp/gitups-<case> --yes
-gitups apply hub   -f test/e2e/<case> --state-dir /tmp/gitups-<case> --yes
+gitups apply ocp   -f test/e2e/<case> --state-dir /tmp/gitups-<case> --yes
 gitups status   -f test/e2e/<case> --state-dir /tmp/gitups-<case> --diff
 gitups destroy all -f test/e2e/<case> --state-dir /tmp/gitups-<case> --yes
 ```
 
 ## Common Prerequisites
 
-- Linux host with KVM support (`/dev/kvm`) for QEMU/KVM cases.
+- Linux host with KVM support (`/dev/kvm`) for libvirt cases.
 - Go toolchain compatible with `go.mod`.
 - `ansible-playbook`, `python3`, `pip3`, and `sudo` on `PATH`.
 - Permission to manage host runtime state under `/var/lib/gitups`.

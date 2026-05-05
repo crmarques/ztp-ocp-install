@@ -23,15 +23,13 @@ func newApplyCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Com
 		Use:   "apply",
 		Short: "Converge desired state by workflow scope",
 		Long: "Converges one explicit workflow scope.\n" +
-			"Use `apply infra` for provider and substrate preparation, `apply hub`\n" +
-			"for hub installation, and `apply clusters` once managed-cluster\n" +
-			"GitOps publication is implemented.",
+			"Use `apply infra` for provider and substrate preparation and\n" +
+			"`apply ocp` to run openshift-install agent against the cluster nodes.",
 		Args: cobra.NoArgs,
 	}
 	cmd.AddCommand(
 		newApplyScopeCmd("infra", stdin, stdout, stderr),
-		newApplyScopeCmd("hub", stdin, stdout, stderr),
-		newApplyScopeCmd("clusters", stdin, stdout, stderr),
+		newApplyScopeCmd("ocp", stdin, stdout, stderr),
 	)
 	showSubcommandFlagsInHelp(cmd)
 	return cmd
@@ -120,7 +118,7 @@ func newApplyScopeCmd(scope string, stdin io.Reader, stdout io.Writer, stderr io
 			"gitups_secrets_dir=" + secretsDirAbs,
 			"gitups_host_state_dir=" + hostStateDirAbs,
 		}
-		pairs = append(pairs, resolvedHubBinaryPairs(selected, hostStateDirAbs)...)
+		pairs = append(pairs, resolvedOCPBinaryPairs(selected, hostStateDirAbs)...)
 		pairs = append(pairs, extraVars...)
 		runner := ansible.CommandRunner{Stdout: stdout, Stderr: stderr}
 		ctx := c.Context()
@@ -158,14 +156,13 @@ func newDestroyCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "destroy",
 		Short: "Reverse apply by workflow scope",
-		Long: "Destroys one explicit workflow scope. `destroy all` runs hub,\n" +
-			"cluster substrate, and provider teardown in reverse order.",
+		Long: "Destroys one explicit workflow scope. `destroy all` runs the ocp,\n" +
+			"cluster substrate, and provider teardowns in reverse order.",
 		Args: cobra.NoArgs,
 	}
 	cmd.AddCommand(
 		newDestroyScopeCmd("infra", stdout, stderr),
-		newDestroyScopeCmd("hub", stdout, stderr),
-		newDestroyScopeCmd("clusters", stdout, stderr),
+		newDestroyScopeCmd("ocp", stdout, stderr),
 		newDestroyScopeCmd("all", stdout, stderr),
 	)
 	showSubcommandFlagsInHelp(cmd)
@@ -304,10 +301,8 @@ func applyScopeShort(scope string) string {
 	switch scope {
 	case "infra":
 		return "Prepare provider services and per-cluster infrastructure substrate"
-	case "hub":
-		return "Install the hub OpenShift cluster"
-	case "clusters":
-		return "Publish managed-cluster desired state through the hub"
+	case "ocp":
+		return "Run openshift-install agent against the cluster nodes"
 	default:
 		return "Converge desired state"
 	}
@@ -317,12 +312,10 @@ func destroyScopeShort(scope string) string {
 	switch scope {
 	case "infra":
 		return "Destroy provider services and per-cluster infrastructure substrate"
-	case "hub":
-		return "Destroy the hub OpenShift cluster"
-	case "clusters":
-		return "Unpublish managed-cluster desired state through the hub"
+	case "ocp":
+		return "Destroy the openshift-install state for each OCPCluster"
 	case "all":
-		return "Destroy hub, infrastructure substrate, and provider services"
+		return "Destroy OCP install state, infrastructure substrate, and provider services"
 	default:
 		return "Destroy desired state"
 	}
@@ -353,20 +346,20 @@ func runApplyHostCheck(stdout io.Writer, stderr io.Writer, state v1alpha1.State,
 
 // ----- helpers reused by apply + destroy --------------------------------------
 
-// resolvedHubBinaryPairs returns extra-var pairs for binaries the hub phase
+// resolvedOCPBinaryPairs returns extra-var pairs for binaries the ocp phase
 // needs as absolute paths, so the ansible role can locate them under sudo's
 // reduced PATH. Silent on miss: preflight is the place that surfaces missing
 // binaries; if the user has overridden via --extra-var, that wins because it
 // is appended after.
-func resolvedHubBinaryPairs(selected []Phase, hostStateDir string) []string {
-	hubSelected := false
+func resolvedOCPBinaryPairs(selected []Phase, hostStateDir string) []string {
+	ocpSelected := false
 	for _, p := range selected {
-		if p.Name == "hub" {
-			hubSelected = true
+		if p.Name == "ocp" {
+			ocpSelected = true
 			break
 		}
 	}
-	if !hubSelected {
+	if !ocpSelected {
 		return nil
 	}
 	path, err := defaultLookPath("openshift-install", openshiftInstallSearchDirs(hostStateDir))

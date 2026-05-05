@@ -43,22 +43,22 @@ func collectPreflightChecks(state v1alpha1.State, selected []Phase, hasState boo
 		binaryCheck("python3", nil, deps),
 		binaryCheck("sudo", nil, deps),
 	}
-	if phaseInScope("provider", selected, hasState) && stateNeedsQemuKvm(state) {
+	if phaseInScope("provider", selected, hasState) && stateNeedsLibvirt(state) {
 		// BMC emulator, vmedia HTTP, and boot-artifacts HTTP all bind during
 		// the provider phase (sushy-tools, vmedia, boot-artifacts services).
 		checks = append(checks, bmcPortChecks(state, deps)...)
 	}
-	if phaseInScope("cluster", selected, hasState) && stateNeedsQemuKvm(state) {
+	if phaseInScope("cluster", selected, hasState) && stateNeedsLibvirt(state) {
 		// Substrate creates libvirt domains; KVM acceleration is mandatory.
 		checks = append(checks, kvmCheck(deps))
 	}
-	if phaseInScope("hub", selected, hasState) {
+	if phaseInScope("ocp", selected, hasState) {
 		checks = append(checks,
 			binaryCheck("openshift-install", openshiftInstallSearchDirs(hostStateDir), deps),
 			binaryCheck("oc", nil, deps),
 			binaryCheck("kubectl", nil, deps),
 		)
-		if hasState && hubNeedsOpenSSL(state, secretsDir, deps) {
+		if hasState && ocpNeedsOpenSSL(state, secretsDir, deps) {
 			checks = append(checks, binaryCheck("openssl", nil, deps))
 		}
 	}
@@ -88,7 +88,7 @@ func phaseInScope(name string, selected []Phase, hasState bool) bool {
 // scope under the current workflow selection. Used by secret-ref checks
 // where a single ref may be read by multiple phases (host_proxy runs in
 // both provider and cluster; mirror credentials are read in provider and
-// hub).
+// ocp).
 func anyPhaseInScope(names []string, selected []Phase) bool {
 	for _, name := range names {
 		if phaseInScope(name, selected, true) {
@@ -98,7 +98,7 @@ func anyPhaseInScope(names []string, selected []Phase) bool {
 	return false
 }
 
-func stateNeedsQemuKvm(state v1alpha1.State) bool {
+func stateNeedsLibvirt(state v1alpha1.State) bool {
 	for _, p := range state.InfrastructureProviders {
 		if v1alpha1.MachineFlavor(p) == v1alpha1.MachineFlavorLibvirt {
 			return true
@@ -117,12 +117,12 @@ func binaryCheck(name string, extraDirs []string, deps preflightDeps) preflightC
 
 func kvmCheck(deps preflightDeps) preflightCheck {
 	if _, err := deps.statPath("/dev/kvm"); err != nil {
-		return preflightCheck{name: "/dev/kvm available", ok: false, detail: "missing — qemu-kvm provider requires KVM hardware support"}
+		return preflightCheck{name: "/dev/kvm available", ok: false, detail: "missing — libvirt provider requires KVM hardware acceleration"}
 	}
 	return preflightCheck{name: "/dev/kvm available", ok: true}
 }
 
-// bmcPortChecks probes the three TCP ports each enabled qemu-kvm BMC emulator
+// bmcPortChecks probes the three TCP ports each enabled libvirt BMC emulator
 // will bind under apply: redfish on the user's bindAddress, vmedia HTTP on
 // 127.0.0.1, and boot-artifacts HTTP on 0.0.0.0. We do an in-the-moment
 // `net.Listen` rather than relying on cross-provider static analysis because
@@ -297,18 +297,15 @@ func secretRefChecks(state v1alpha1.State, secretsDir string, selected []Phase, 
 //
 //   - proxy credentialsRef: host_proxy runs in both provider and cluster
 //   - registry mirror credentialsRef: provider_mirror_registry (provider) and
-//     hub_install_agent merges it into install-config (hub)
+//     ocp_install_agent merges it into install-config (ocp)
 //   - provider host sshKeyRef: ansible connection for any phase that targets
 //     gitups_provider_hosts or gitups_infra_hosts (provider, cluster)
 //   - libvirt BMC emulation credentialRef: provider_bmc_emulated (provider)
-//     and hub_install_agent Redfish auth (hub)
+//     and ocp_install_agent Redfish auth (ocp)
 //   - vsphere/kubevirt provider refs: provider only (substrate roles)
 //   - per-machine baremetal BMC credentialRef: provider_bmc_redfish (provider)
-//     and hub_install_agent Redfish auth (hub)
-//   - hub install pullSecretRef / sshKeyRef / additionalTrustBundleRef: hub
-//
-// Managed-cluster install refs are intentionally excluded — hub-side gitops
-// manifests carry them, not local apply.
+//     and ocp_install_agent Redfish auth (ocp)
+//   - per-cluster install pullSecretRef / sshKeyRef / additionalTrustBundleRef: ocp
 func collectSecretRefRequirements(state v1alpha1.State) []secretRefRequirement {
 	generated := allGeneratedSecretNames(state)
 	var out []secretRefRequirement
@@ -325,7 +322,7 @@ func collectSecretRefRequirements(state v1alpha1.State) []secretRefRequirement {
 			out = append(out, secretRefRequirement{
 				refName: registries.Mirror.CredentialsRef.Name,
 				label:   "registry mirror credentialsRef",
-				phases:  []string{"provider", "hub"},
+				phases:  []string{"provider", "ocp"},
 			})
 		}
 	}
@@ -347,7 +344,7 @@ func collectSecretRefRequirements(state v1alpha1.State) []secretRefRequirement {
 				out = append(out, secretRefRequirement{
 					refName: bmc.Auth.CredentialRef.Name,
 					label:   fmt.Sprintf("provider %s bmcEmulation credentialRef", p.Metadata.Name),
-					phases:  []string{"provider", "hub"},
+					phases:  []string{"provider", "ocp"},
 				})
 			}
 		}
@@ -376,35 +373,32 @@ func collectSecretRefRequirements(state v1alpha1.State) []secretRefRequirement {
 			out = append(out, secretRefRequirement{
 				refName: m.Baremetal.BMC.CredentialRef.Name,
 				label:   fmt.Sprintf("infra %s machine %s baremetal bmc credentialRef", ci.Metadata.Name, mname),
-				phases:  []string{"provider", "hub"},
+				phases:  []string{"provider", "ocp"},
 			})
 		}
 	}
 
 	for _, cluster := range state.OCPClusters {
-		if cluster.Spec.Role != v1alpha1.OCPRoleHub {
-			continue
-		}
 		install := cluster.Spec.Install
 		if install.PullSecretRef.Name != "" {
 			out = append(out, secretRefRequirement{
 				refName: install.PullSecretRef.Name,
 				label:   cluster.Metadata.Name + " pullSecretRef",
-				phases:  []string{"hub"},
+				phases:  []string{"ocp"},
 			})
 		}
 		if install.SSHKeyRef.Name != "" {
 			out = append(out, secretRefRequirement{
 				refName: install.SSHKeyRef.Name,
 				label:   cluster.Metadata.Name + " sshKeyRef",
-				phases:  []string{"hub"},
+				phases:  []string{"ocp"},
 			})
 		}
 		if install.AdditionalTrustBundleRef.Name != "" {
 			out = append(out, secretRefRequirement{
 				refName:   install.AdditionalTrustBundleRef.Name,
 				label:     cluster.Metadata.Name + " additionalTrustBundleRef",
-				phases:    []string{"hub"},
+				phases:    []string{"ocp"},
 				generated: generated[install.AdditionalTrustBundleRef.Name],
 			})
 		}
@@ -443,12 +437,12 @@ func sortedMapKeys[V any](m map[string]V) []string {
 	return out
 }
 
-// hubNeedsOpenSSL reports whether the hub install will fall back to the
+// ocpNeedsOpenSSL reports whether the ocp install will fall back to the
 // in-cluster ansible cert generator (`community.crypto.openssl_*`) — i.e.
 // at least one Environment.spec.keys[name].generated.selfSignedCertificate
 // has not yet been materialised on the operator host. The fallback path
 // requires `openssl` on PATH; the operator-side path does not.
-func hubNeedsOpenSSL(state v1alpha1.State, secretsDir string, deps preflightDeps) bool {
+func ocpNeedsOpenSSL(state v1alpha1.State, secretsDir string, deps preflightDeps) bool {
 	env := primaryEnvironmentForSync(state)
 	if env == nil {
 		return false

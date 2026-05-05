@@ -47,7 +47,7 @@ func TestOperatorCheckWithStateRunsFullPreflight(t *testing.T) {
 	}
 	out := stdout.String()
 	// The libvirt example declares qemu-kvm so the cluster phase's KVM
-	// probe must surface; the hub phase brings in openshift-install on
+	// probe must surface; the ocp phase brings in openshift-install on
 	// PATH. Both come from collectPreflightChecks under hasState=true.
 	for _, expected := range []string{
 		"/dev/kvm available",
@@ -221,7 +221,7 @@ func TestOperatorBootstrapDryRunPlansCLIsFromState(t *testing.T) {
 	stateDir := t.TempDir()
 	code := Run(context.Background(), []string{
 		"setup", "controller",
-		"-f", "../../test/e2e/qemu-1-host-1-sno-hub",
+		"-f", "../../test/e2e/libvirt-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 		"--dry-run",
 	}, nil, &stdout, &stderr)
@@ -248,7 +248,7 @@ func TestOperatorBootstrapDryRunPlansCLIsFromState(t *testing.T) {
 }
 
 func TestStateOpenshiftReleaseVersionPicksFirstNonEmpty(t *testing.T) {
-	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/qemu-1-host-1-sno-hub"})
+	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/libvirt-1-host-1-sno-hub"})
 	if err != nil {
 		t.Fatalf("load fixture: %v", err)
 	}

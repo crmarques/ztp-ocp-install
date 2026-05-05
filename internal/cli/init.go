@@ -76,17 +76,17 @@ func initTemplateNames() []string {
 }
 
 var initTemplates = map[string]initTemplate{
-	"qemu-redfish-hub": {
+	"libvirt-redfish-hub": {
 		files: map[string]string{
-			"environment.yaml":                qemuRedfishHubEnvironmentYAML,
-			"provider.yaml":                   qemuRedfishHubProviderYAML,
-			"cluster-infrastructure-hub.yaml": qemuRedfishHubClusterInfrastructureYAML,
-			"ocp-cluster-hub.yaml":            qemuRedfishHubOCPClusterYAML,
+			"environment.yaml":                libvirtRedfishHubEnvironmentYAML,
+			"provider.yaml":                   libvirtRedfishHubProviderYAML,
+			"cluster-infrastructure-hub.yaml": libvirtRedfishHubClusterInfrastructureYAML,
+			"ocp-cluster-hub.yaml":            libvirtRedfishHubOCPClusterYAML,
 		},
 	},
 }
 
-const qemuRedfishHubEnvironmentYAML = `apiVersion: gitups.io/v1alpha1
+const libvirtRedfishHubEnvironmentYAML = `apiVersion: gitups.io/v1alpha1
 kind: Environment
 metadata:
   name: disconnected-hub
@@ -113,14 +113,14 @@ spec:
               - registry.disconnected.example.test:5000/openshift/release-images
           - source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
             mirrors:
-              - registry.disconnected.example.test:5000/openshift/release
+              - registry.disconnected.example.test:5000/openshift/release-images
   secrets:
     pullSecretRef:
       name: openshift-pull-secret
     clusterSSHKeyRef:
       name: cluster-admin-key
   keys:
-    qemu-host-ssh:
+    libvirt-host-ssh:
       file: ~/.ssh/id_rsa
     cluster-admin-key:
       file: ~/.ssh/id_rsa.pub
@@ -134,7 +134,7 @@ spec:
       generated:
         credentials:
           username: admin
-    qemu-redfish-bmc:
+    libvirt-redfish-bmc:
       generated:
         credentials:
           username: admin
@@ -149,18 +149,18 @@ spec:
         public: docker.io/library/haproxy:3.2.15
 `
 
-const qemuRedfishHubProviderYAML = `apiVersion: gitups.io/v1alpha1
+const libvirtRedfishHubProviderYAML = `apiVersion: gitups.io/v1alpha1
 kind: InfrastructureProvider
 metadata:
-  name: qemu-redfish-provider
+  name: libvirt-redfish-provider
 spec:
   hosts:
-    qemu-host:
+    libvirt-host:
       ssh:
         address: 192.168.10.11
         user: gitups
         keyRef:
-          name: qemu-host-ssh
+          name: libvirt-host-ssh
       capabilities:
         - libvirt
         - hosts-file
@@ -168,13 +168,13 @@ spec:
   machine:
     libvirt:
       hostRefs:
-        - name: qemu-host
+        - name: libvirt-host
       bmcEmulation:
         enabled: true
         protocol: redfish
         auth:
           credentialRef:
-            name: qemu-redfish-bmc
+            name: libvirt-redfish-bmc
       machineProfiles:
         sno:
           cpu: 8
@@ -183,25 +183,25 @@ spec:
   loadBalancer:
     haProxy:
       hostRef:
-        name: qemu-host
+        name: libvirt-host
   nameResolution:
     hostsFile:
       hostRefs:
-        - name: qemu-host
+        - name: libvirt-host
   registry:
     mirrorRegistry:
       hostRef:
-        name: qemu-host
+        name: libvirt-host
       port: 5000
 `
 
-const qemuRedfishHubClusterInfrastructureYAML = `apiVersion: gitups.io/v1alpha1
+const libvirtRedfishHubClusterInfrastructureYAML = `apiVersion: gitups.io/v1alpha1
 kind: ClusterInfrastructure
 metadata:
   name: hub
 spec:
   providerRefs:
-    - name: qemu-redfish-provider
+    - name: libvirt-redfish-provider
   networks:
     primary:
       cidr: 192.168.130.0/24
@@ -224,7 +224,7 @@ spec:
         deviceName: /dev/vda
       libvirt:
         hostRef:
-          name: qemu-host
+          name: libvirt-host
   endpoints:
     api:
       address: 192.168.130.10
@@ -240,12 +240,11 @@ spec:
         - ingress
 `
 
-const qemuRedfishHubOCPClusterYAML = `apiVersion: gitups.io/v1alpha1
+const libvirtRedfishHubOCPClusterYAML = `apiVersion: gitups.io/v1alpha1
 kind: OCPCluster
 metadata:
   name: hub
 spec:
-  role: hub
   topology: single-node
   infrastructureRef:
     name: hub

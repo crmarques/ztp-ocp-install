@@ -9,7 +9,7 @@ gitups_proxy_no: "{{ (gitups_ocp_install.proxy | default({})).noProxy | default(
 gitups_proxy_credentials_ref: "{{ (gitups_ocp_install.proxy | default({})).credentialsRef | default('') }}"
 
 # Filesystem location of user-provided secret material, mirroring the
-# hub_install_agent default. The Gitups CLI passes this explicitly via
+# ocp_install_agent default. The Gitups CLI passes this explicitly via
 # `-e gitups_secrets_dir=...`; this fallback keeps direct role execution
 # functional.
 gitups_secrets_dir: "{{ (lookup('env', 'GITUPS_HOME') | default(lookup('env', 'HOME') ~ '/.gitups', true)) }}/secrets"

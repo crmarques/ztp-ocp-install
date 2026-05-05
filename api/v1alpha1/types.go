@@ -24,8 +24,6 @@ const (
 	OCPInstallKindRestricted   = "restricted"
 	OCPInstallKindDisconnected = "disconnected"
 
-	OCPRoleHub                = "hub"
-	OCPRoleManaged            = "managed"
 	OCPTopologySingleNode     = "single-node"
 	OCPTopologyMultiNode      = "multi-node"
 	OCPInstallMethodAgent     = "agent"
@@ -39,7 +37,6 @@ const (
 	OCPReleaseSourceQuayOCPRelease = "quay.io/openshift-release-dev/ocp-release"
 	OCPReleaseSourceQuayARTDev     = "quay.io/openshift-release-dev/ocp-v4.0-art-dev"
 	DefaultMirroredReleasePath     = "openshift/release-images"
-	DefaultMirroredARTDevPath      = "openshift/release"
 
 	DefaultHostUser               = "root"
 	DefaultLibvirtBridge          = "virbr0"
@@ -586,7 +583,6 @@ type OCPCluster struct {
 }
 
 type OCPClusterSpec struct {
-	Role              string                 `yaml:"role" json:"role"`
 	Topology          string                 `yaml:"topology,omitempty" json:"topology,omitempty"`
 	InfrastructureRef LocalObjectReference   `yaml:"infrastructureRef" json:"infrastructureRef"`
 	Install           OCPInstallSpec         `yaml:"install,omitempty" json:"install,omitempty"`

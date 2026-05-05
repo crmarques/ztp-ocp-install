@@ -1,0 +1,52 @@
+apiVersion: gitups.io/v1alpha1
+kind: Environment
+metadata:
+  name: libvirt-3-hosts-hub-fleet
+spec:
+  baseDomain: gitups.test
+  ocpInstall:
+    # Connected install whose external traffic (quay.io, registry.redhat.io,
+    # mirror.openshift.com, docker.io, PyPI, dnf mirrors) flows through the
+    # proxy below; everything in noProxy is reached directly. The host_proxy
+    # role consumes proxy.* and configures dnf, pip, podman, systemd, and
+    # /etc/environment on each provider host. The renderer also projects
+    # proxy.* into install-config.yaml so the cluster bootstrap and operators
+    # honour the same proxy.
+    restricted:
+      proxy:
+        httpProxy: http://proxy.example.test:3128
+        httpsProxy: http://proxy.example.test:3128
+        # Optional: when the upstream proxy requires authentication, point
+        # credentialsRef at a `username:password` secret. host_proxy and
+        # hub_install_agent merge the credentials into URLs at apply time so
+        # they never reach committed YAML or rendered install-config artifacts.
+        # Drop this line to use an unauthenticated proxy.
+        credentialsRef:
+          name: proxy-credentials
+        noProxy:
+          - localhost
+          - 127.0.0.0/8
+          - ::1
+          - .svc
+          - .cluster.local
+          - .gitups.test
+          - 192.168.140.0/24
+          - 192.168.150.0/24
+          - 192.168.151.0/24
+          - 192.168.152.0/24
+          - 10.128.0.0/14
+          - 172.30.0.0/16
+  secrets:
+    pullSecretRef:
+      name: openshift-pull-secret
+    clusterSSHKeyRef:
+      name: cluster-admin-key
+  keys:
+    libvirt-3-hosts-hub-fleet-bmc-credentials:
+      generated:
+        credentials:
+          username: admin
+  openshift:
+    release:
+      channel: stable-4.21
+      version: 4.21.10

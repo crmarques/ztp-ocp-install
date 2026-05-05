@@ -1,0 +1,18 @@
+---
+# ocp_install_agent drives `openshift-install agent` against the cluster node.
+# Steps are separated into focused task files so each phase of the install is
+# inspectable on its own; main.yml is just the order they run in.
+- name: Validate prerequisites and resolve install context
+  ansible.builtin.import_tasks: preflight.yml
+
+- name: Materialise install secrets and merge into effective configs
+  ansible.builtin.import_tasks: secrets.yml
+
+- name: Build effective install-config / agent-config and validate mirrors
+  ansible.builtin.import_tasks: effective-config.yml
+
+- name: Generate the agent ISO and stage rootfs boot artifacts
+  ansible.builtin.import_tasks: agent-iso.yml
+
+- name: Boot the cluster node via BMC and wait for install completion
+  ansible.builtin.import_tasks: boot-and-wait.yml

@@ -60,7 +60,6 @@ kind: OCPCluster
 metadata:
   name: spoke-02
 spec:
-  role: managed
   topology: multi-node
   infrastructureRef:
     name: spoke-02

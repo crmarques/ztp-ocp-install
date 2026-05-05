@@ -18,7 +18,7 @@ virtual media BMCs.
 
 `environment.yaml` and both `ocp-cluster-*.yaml` files are byte-identical to
 the matching files under
-[`examples/qemu-redfish-fleet`](../qemu-redfish-fleet/).
+[`examples/libvirt-redfish-fleet`](../libvirt-redfish-fleet/).
 Only provider and cluster-infrastructure files change across the provider swap.
 
 External DNS and load balancing are assumed unless

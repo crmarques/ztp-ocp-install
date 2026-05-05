@@ -1,6 +1,6 @@
 ---
-# host_kvm installs libvirt + qemu packages on the orchestration host. The
+# host_libvirt installs libvirt + qemu packages on the orchestration host. The
 # substrate role can't run without them, so the dependency travels with the
 # role rather than via a playbook-level `when:` chain.
 dependencies:
-  - role: host_kvm
+  - role: host_libvirt

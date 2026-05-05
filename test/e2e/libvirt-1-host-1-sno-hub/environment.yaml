@@ -1,0 +1,27 @@
+apiVersion: gitups.io/v1alpha1
+kind: Environment
+metadata:
+  name: libvirt-1-host
+spec:
+  baseDomain: gitups.test
+  ocpInstall:
+    connected: {}
+  secrets:
+    pullSecretRef:
+      name: openshift-pull-secret
+    clusterSSHKeyRef:
+      name: cluster-admin-key
+  keys:
+    libvirt-1-host-bmc-credentials:
+      generated:
+        credentials:
+          username: admin
+  openshift:
+    release:
+      channel: stable-4.21
+      version: 4.21.10
+  componentImages:
+    load-balancer:
+      haproxy:
+        local: registry.mirror.local:5000/library/haproxy:3.2.15
+        public: docker.io/library/haproxy:3.2.15

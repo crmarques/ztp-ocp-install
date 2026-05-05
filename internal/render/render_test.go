@@ -114,7 +114,7 @@ func TestRenderAllProducesGeneratedAnsibleArtifacts(t *testing.T) {
 }
 
 func TestRenderEmitsBMCAuthCredentialRefWhenSet(t *testing.T) {
-	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/qemu-1-host-1-sno-hub"})
+	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/libvirt-1-host-1-sno-hub"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
@@ -126,7 +126,7 @@ func TestRenderEmitsBMCAuthCredentialRefWhenSet(t *testing.T) {
 	varsFile := readFile(t, result.VarsPath)
 	for _, expected := range []string{
 		"auth:",
-		"credentialRef: qemu-1-host-bmc-credentials",
+		"credentialRef: libvirt-1-host-bmc-credentials",
 	} {
 		if !strings.Contains(varsFile, expected) {
 			t.Fatalf("vars missing %q\n%s", expected, varsFile)
@@ -301,7 +301,7 @@ func TestRenderedArtifactsStayUnderStateDir(t *testing.T) {
 }
 
 func TestRenderMirrorRegistryRunVars(t *testing.T) {
-	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/local-qemu-1-host-1-sno-hub"})
+	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/local-libvirt-1-host-1-sno-hub"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
@@ -313,9 +313,9 @@ func TestRenderMirrorRegistryRunVars(t *testing.T) {
 	varsFile := readFile(t, result.VarsPath)
 	for _, expected := range []string{
 		"gitups_mirror_registries:",
-		"name: local-qemu-1-host-provider",
-		"providerRef: local-qemu-1-host-provider",
-		"providerHostRef: local-qemu-host",
+		"name: local-libvirt-1-host-provider",
+		"providerRef: local-libvirt-1-host-provider",
+		"providerHostRef: local-libvirt-host",
 		"port: 5000",
 		"credentialsSecretName: mirror-registry-credentials",
 		"trustBundleCertSecretName: mirror-registry-ca",
@@ -338,7 +338,7 @@ func TestRenderMirrorRegistryRunVars(t *testing.T) {
 }
 
 func TestRenderOneHostUsesLocalConnection(t *testing.T) {
-	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/local-qemu-1-host-1-sno-hub"})
+	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/local-libvirt-1-host-1-sno-hub"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
@@ -351,7 +351,7 @@ func TestRenderOneHostUsesLocalConnection(t *testing.T) {
 	for _, expected := range []string{
 		"ansible_host: localhost",
 		"ansible_connection: local",
-		"gitups_cluster_name: local-qemu-1-host-hub",
+		"gitups_cluster_name: local-libvirt-1-host-hub",
 	} {
 		if !strings.Contains(inventory, expected) {
 			t.Fatalf("inventory missing %q\n%s", expected, inventory)
@@ -360,7 +360,7 @@ func TestRenderOneHostUsesLocalConnection(t *testing.T) {
 }
 
 func TestRenderVarsExposeOCPInstallMetadata(t *testing.T) {
-	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/local-qemu-1-host-1-sno-hub"})
+	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/local-libvirt-1-host-1-sno-hub"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
@@ -381,9 +381,9 @@ func TestRenderVarsExposeOCPInstallMetadata(t *testing.T) {
 		"additionalTrustBundleRef: mirror-registry-ca",
 		"version: 4.21.10",
 		"channel: stable-4.21",
-		"relativeDir: clusters/local-qemu-1-host-hub/installer",
-		"relativeInstallConfigPath: clusters/local-qemu-1-host-hub/installer/install-config.yaml",
-		"relativeAgentConfigPath: clusters/local-qemu-1-host-hub/installer/agent-config.yaml",
+		"relativeDir: clusters/local-libvirt-1-host-hub/installer",
+		"relativeInstallConfigPath: clusters/local-libvirt-1-host-hub/installer/install-config.yaml",
+		"relativeAgentConfigPath: clusters/local-libvirt-1-host-hub/installer/agent-config.yaml",
 		"name: openshift-install",
 		"machineRef: master-0",
 		"localRegistry:",
@@ -406,12 +406,11 @@ func TestRenderVarsExposeOCPInstallMetadata(t *testing.T) {
 	if !strings.Contains(lock, "name: openshift-install") || !strings.Contains(lock, "version: 4.21.10") {
 		t.Fatalf("lock missing openshift-install pin\n%s", lock)
 	}
-	asset := installerAssetFor(result.InstallerAssets, "local-qemu-1-host-hub")
+	asset := installerAssetFor(result.InstallerAssets, "local-libvirt-1-host-hub")
 	installConfig := readFile(t, asset.InstallConfigPath)
 	for _, expected := range []string{
 		"imageDigestSources:",
 		"registry.mirror.local:5000/openshift/release-images",
-		"registry.mirror.local:5000/openshift/release",
 		"sourcePolicy: NeverContactSource",
 		"additionalTrustBundle: <gitups-trust-bundle-ref:mirror-registry-ca>",
 		"additionalTrustBundlePolicy: Always",
@@ -431,10 +430,10 @@ func TestRenderVarsExposeOCPInstallMetadata(t *testing.T) {
 	}
 }
 
-func TestHubInstallRoleDoesNotBlockPublicRegistries(t *testing.T) {
+func TestOCPInstallRoleDoesNotBlockPublicRegistries(t *testing.T) {
 	// The role is split into multiple include_tasks files; walk all of them
 	// so a future split cannot smuggle a sinkhole/proxy block back in.
-	tasksDir := "../../ansible/roles/hub_install_agent/tasks"
+	tasksDir := "../../ansible/roles/ocp_install_agent/tasks"
 	entries, err := os.ReadDir(tasksDir)
 	if err != nil {
 		t.Fatalf("read tasks dir: %v", err)
@@ -447,7 +446,7 @@ func TestHubInstallRoleDoesNotBlockPublicRegistries(t *testing.T) {
 		body := readFile(t, filepath.Join(tasksDir, e.Name()))
 		for _, unexpected := range blockers {
 			if strings.Contains(body, unexpected) {
-				t.Fatalf("hub_install_agent/%s contains public-registry blocking behavior %q\n%s", e.Name(), unexpected, body)
+				t.Fatalf("ocp_install_agent/%s contains public-registry blocking behavior %q\n%s", e.Name(), unexpected, body)
 			}
 		}
 	}
@@ -563,7 +562,7 @@ spec:
               - registry.lab.test:5000/openshift/release-images
           - source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
             mirrors:
-              - registry.lab.test:5000/openshift/release
+              - registry.lab.test:5000/openshift/release-images
   secrets:
     pullSecretRef:
       name: openshift-pull-secret
@@ -612,10 +611,10 @@ spec:
 
 func TestRenderManagedNetworkDetails(t *testing.T) {
 	state, err := infra.LoadNormalizeValidate([]string{
-		"../../test/e2e/qemu-1-host-1-sno-hub/cluster-infrastructure-hub.yaml",
-		"../../test/e2e/qemu-1-host-1-sno-hub/ocp-cluster-hub.yaml",
-		"../../test/e2e/qemu-1-host-1-sno-hub/provider.yaml",
-		"../../test/e2e/qemu-1-host-1-sno-hub/environment.yaml",
+		"../../test/e2e/libvirt-1-host-1-sno-hub/cluster-infrastructure-hub.yaml",
+		"../../test/e2e/libvirt-1-host-1-sno-hub/ocp-cluster-hub.yaml",
+		"../../test/e2e/libvirt-1-host-1-sno-hub/provider.yaml",
+		"../../test/e2e/libvirt-1-host-1-sno-hub/environment.yaml",
 	})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
@@ -634,7 +633,7 @@ func TestRenderManagedNetworkDetails(t *testing.T) {
 		"targetPort: 6443",
 		"backends:",
 		"address: 192.168.130.20",
-		"console-openshift-console.apps.qemu-1-host-hub.gitups.test",
+		"console-openshift-console.apps.libvirt-1-host-hub.gitups.test",
 		"name: haproxy",
 		"version: 3.2.15",
 	} {
@@ -731,8 +730,8 @@ func TestProviderDispatchCoversAllKinds(t *testing.T) {
 		"provider_bmc_redfish",
 		"provider_bmc_none",
 		"provider_boot_artifacts_http",
-		"hub_boot_emulated",
-		"hub_boot_redfish",
+		"ocp_boot_emulated",
+		"ocp_boot_redfish",
 	} {
 		path := "../../ansible/roles/" + role + "/tasks/main.yml"
 		if _, err := os.Stat(path); err != nil {

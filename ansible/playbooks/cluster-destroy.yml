@@ -24,7 +24,7 @@
       loop: "{{ gitups_current_cluster.provider.nodes | default([]) }}"
       loop_control:
         label: "{{ item.name }}"
-      when: gitups_current_cluster.provider.kind == 'qemu-kvm'
+      when: gitups_current_cluster.provider.kind == 'libvirt'
 
     - name: Undefine libvirt domains for current cluster
       community.libvirt.virt:
@@ -37,7 +37,7 @@
       loop: "{{ gitups_current_cluster.provider.nodes | default([]) }}"
       loop_control:
         label: "{{ item.name }}"
-      when: gitups_current_cluster.provider.kind == 'qemu-kvm'
+      when: gitups_current_cluster.provider.kind == 'libvirt'
 
     # Close the firewalld port opened by the substrate role before tearing
     # the libvirt bridge down: net-destroy removes the bridge, and the
@@ -50,7 +50,7 @@
       register: gitups_firewalld_state
       changed_when: false
       failed_when: false
-      when: gitups_current_cluster.provider.kind == 'qemu-kvm'
+      when: gitups_current_cluster.provider.kind == 'libvirt'
 
     - name: Close boot artifacts HTTP firewall port in the libvirt zone
       ansible.posix.firewalld:
@@ -61,7 +61,7 @@
         immediate: true
       failed_when: false
       when:
-        - gitups_current_cluster.provider.kind == 'qemu-kvm'
+        - gitups_current_cluster.provider.kind == 'libvirt'
         - gitups_firewalld_state.rc | default(1) == 0
         - gitups_current_cluster.provider.bootArtifactsHttp.enabled | default(false) | bool
 
@@ -71,7 +71,7 @@
         state: absent
       failed_when: false
       when:
-        - gitups_current_cluster.provider.kind == 'qemu-kvm'
+        - gitups_current_cluster.provider.kind == 'libvirt'
         - (gitups_current_cluster.provider.virtualization.libvirt.network | default('')) | length > 0
 
     - name: Remove managed hosts-file block for current cluster

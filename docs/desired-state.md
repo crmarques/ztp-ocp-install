@@ -90,7 +90,6 @@ kind: OCPCluster
 metadata:
   name: hub
 spec:
-  role: hub
   topology: single-node
   infrastructureRef:
     name: hub
@@ -179,9 +178,9 @@ spec:
 
 Canonical examples:
 
-- [`examples/qemu-redfish-fleet`](../examples/qemu-redfish-fleet/) (connected)
+- [`examples/libvirt-redfish-fleet`](../examples/libvirt-redfish-fleet/) (connected)
 - [`examples/baremetal-redfish-fleet`](../examples/baremetal-redfish-fleet/) (connected)
-- [`examples/qemu-redfish-hub`](../examples/qemu-redfish-hub/) (disconnected)
+- [`examples/libvirt-redfish-hub`](../examples/libvirt-redfish-hub/) (disconnected)
 
 ## Secret Material
 
@@ -191,7 +190,7 @@ Gitups home is `GITUPS_HOME` or `~/.gitups`.
 ```text
 gitups secrets pull-secret set --name openshift-pull-secret --from-file ~/pull-secret.json
 gitups secrets credentials set --name baremetal-redfish-bmc --username admin --password-stdin
-gitups secrets generate -f examples/qemu-redfish-hub
+gitups secrets generate -f examples/libvirt-redfish-hub
 ```
 
 Both file-sourced and gitups-generated secrets are declared in

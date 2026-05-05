@@ -1,7 +1,0 @@
----
-gitups_host_kvm_packages:
-  - qemu-system-x86
-  - libvirt-daemon-system
-  - virtinst
-  - python3-libvirt
-gitups_host_kvm_libvirt_service: libvirtd

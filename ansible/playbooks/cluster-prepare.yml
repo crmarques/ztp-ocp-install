@@ -1,7 +1,7 @@
 ---
 - name: Prepare Gitups per-cluster infrastructure
   hosts: gitups_infra_hosts
-  # `min` covers everything cluster_substrate_*, host_prepare, and host_kvm
+  # `min` covers everything cluster_substrate_*, host_prepare, and host_libvirt
   # need: include_vars dispatches on ansible_facts['os_family'] (in min) and
   # ansible.builtin.package picks the right manager from the same fact. No
   # role here touches env, hardware, or interfaces.
@@ -29,7 +29,7 @@
     # Substrate dispatch by structural discriminator. include_role (not
     # import_role) is required because the role name interpolates a fact
     # set in pre_tasks; import_role evaluates at parse time and would fail
-    # with `gitups_current_cluster is undefined`. host_kvm rides along as
+    # with `gitups_current_cluster is undefined`. host_libvirt rides along as
     # a meta dependency of cluster_substrate_libvirt so the package
     # install travels with the role that needs it.
     - name: Apply substrate role for current provider kind

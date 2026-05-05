@@ -239,7 +239,6 @@ kind: OCPCluster
 metadata:
   name: hub
 spec:
-  role: hub
   topology: single-node
   infrastructureRef:
     name: hub
@@ -290,8 +289,8 @@ The validator enforces:
 
 - Reject infrastructure fields in `OCPCluster`: VIPs, load-balancer refs,
   DNS placement, BMC, MACs, provider-typed blocks, network sub-blocks.
-- Reject OpenShift intent in `InfrastructureProvider`: role, topology,
-  release, install overrides, OCP node roles.
+- Reject OpenShift intent in `InfrastructureProvider`: topology, release,
+  install overrides, OCP node roles.
 - Reject per-cluster instance facts on `InfrastructureProvider`: per-cluster
   networks (bridges, portgroups), endpoints, load balancers.
 - Reject provider definitions copied into `ClusterInfrastructure`:
@@ -328,8 +327,8 @@ The user-facing CLI is:
 | `validate` | yes | no | Strict schema, defaulting, and cross-reference validation. |
 | `preflight` | yes | no | Local checks plus read-only Ansible checks against provider and cluster hosts. |
 | `plan` | yes | no | Objective preview of generated files, phases, root-required work, and prerequisite risks. |
-| `apply <infra|hub|clusters>` | yes | yes | Converges one explicit workflow scope. |
-| `destroy <infra|hub|clusters|all>` | yes | yes | Reverses one explicit workflow scope. Requires `--yes` (or `--dry-run`). |
+| `apply <infra|ocp>` | yes | yes | Converges one explicit workflow scope. |
+| `destroy <infra|ocp|all>` | yes | yes | Reverses one explicit workflow scope. Requires `--yes` (or `--dry-run`). |
 | `status` | yes | no | Reports desired counts, rendered artifact presence, phase table, and drift against `--state-dir` (`--diff` for full drift output). |
 | `secrets` | optional | yes (writes secrets) | `sync`, `generate`, `pull-secret set`, and credential writers — the only writers into `<gitups-home>/secrets`. |
 
@@ -339,9 +338,9 @@ Rendering has no public command; it is an internal step for `plan`, `preflight`,
 Workflow scopes:
 
 1. `infra` — provider infrastructure (hosts, VMs, BMC, LB, DNS).
-2. `hub` — hub OCP install plus hub-side operators.
-3. `clusters` — publish managed cluster intent through the hub once implemented.
+2. `ocp` — `openshift-install agent` against the cluster nodes.
 
-Spoke OCP installs are reconciled by the hub via ACM/GitOps after managed
-cluster publication exists; direct controller-side `openshift-install` for
-every spoke is out of scope.
+Multi-cluster fleet GitOps publication (one cluster running ACM/OpenShift
+GitOps to reconcile additional clusters) is forward-looking architecture and
+not implemented today; every `OCPCluster` in the desired state goes through
+the local `ocp` phase.

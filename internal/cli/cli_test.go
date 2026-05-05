@@ -49,7 +49,7 @@ func TestInitCommandGeneratesCurrentTemplate(t *testing.T) {
 	outDir := filepath.Join(t.TempDir(), "desired-state")
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	code := Run(context.Background(), []string{"init", "--template", "qemu-redfish-hub", "--out", outDir}, nil, &stdout, &stderr)
+	code := Run(context.Background(), []string{"init", "--template", "libvirt-redfish-hub", "--out", outDir}, nil, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
 	}
@@ -168,7 +168,6 @@ kind: OCPCluster
 metadata:
   name: vmware
 spec:
-  role: managed
   topology: single-node
   infrastructureRef:
     name: vmware
@@ -269,7 +268,6 @@ kind: OCPCluster
 metadata:
   name: hub
 spec:
-  role: hub
   topology: single-node
   infrastructureRef:
     name: hub-infra
@@ -426,7 +424,6 @@ kind: OCPCluster
 metadata:
   name: hub
 spec:
-  role: hub
   topology: single-node
   infrastructureRef:
     name: hub-infra
@@ -700,7 +697,6 @@ kind: OCPCluster
 metadata:
   name: hub
 spec:
-  role: hub
   topology: single-node
   infrastructureRef:
     name: hub-infra
@@ -919,7 +915,7 @@ func TestApplyDryRunRendersAndPrintsAnsibleCommandsForAllPhases(t *testing.T) {
 			t.Fatalf("stdout missing %q\n%s", expected, output)
 		}
 	}
-	for _, unexpected := range []string{"hub-install.yml", "gitops-publish.yml"} {
+	for _, unexpected := range []string{"ocp-install.yml", "gitops-publish.yml"} {
 		if strings.Contains(output, unexpected) {
 			t.Fatalf("infra apply leaked %q\n%s", unexpected, output)
 		}
@@ -986,7 +982,7 @@ func TestApplyHubDryRunOnlyRunsHubScope(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"apply", "hub",
+		"apply", "ocp",
 		"-f", "../../examples/infra",
 		"--state-dir", stateDir,
 		"--dry-run",
@@ -995,31 +991,13 @@ func TestApplyHubDryRunOnlyRunsHubScope(t *testing.T) {
 		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
 	}
 	output := stdout.String()
-	if !strings.Contains(output, "playbooks/hub-install.yml") {
-		t.Fatalf("stdout missing hub-install.yml: %s", output)
+	if !strings.Contains(output, "playbooks/ocp-install.yml") {
+		t.Fatalf("stdout missing ocp-install.yml: %s", output)
 	}
 	for _, leaked := range []string{"provider-prepare.yml", "cluster-prepare.yml", "gitops-publish.yml"} {
 		if strings.Contains(output, leaked) {
 			t.Fatalf("hub-scope apply leaked %s:\n%s", leaked, output)
 		}
-	}
-}
-
-func TestApplyClustersReportsNotImplemented(t *testing.T) {
-	stateDir := t.TempDir()
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	code := Run(context.Background(), []string{
-		"apply", "clusters",
-		"-f", "../../examples/infra",
-		"--state-dir", stateDir,
-		"--dry-run",
-	}, nil, &stdout, &stderr)
-	if code == 0 {
-		t.Fatal("expected managed-cluster scope to fail while publication is unimplemented")
-	}
-	if !strings.Contains(stderr.String(), "managed-cluster GitOps publication") {
-		t.Fatalf("unexpected stderr: %s", stderr.String())
 	}
 }
 
@@ -1054,7 +1032,7 @@ func TestDestroyDryRunPrintsPhasesInReverse(t *testing.T) {
 		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
 	}
 	output := stdout.String()
-	hubIdx := strings.Index(output, "hub-destroy.yml")
+	hubIdx := strings.Index(output, "ocp-destroy.yml")
 	clusterIdx := strings.Index(output, "cluster-destroy.yml")
 	providerIdx := strings.Index(output, "provider-destroy.yml")
 	if hubIdx < 0 || clusterIdx < 0 || providerIdx < 0 {
@@ -1107,7 +1085,7 @@ func TestDestroyScopedHubKeepsStateDir(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"destroy", "hub",
+		"destroy", "ocp",
 		"-f", "../../examples/infra",
 		"--state-dir", stateDir,
 		"--yes",
@@ -1248,8 +1226,8 @@ func TestApplyDryRunDefaultsToAskBecomePass(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"apply", "hub",
-		"-f", "../../test/e2e/qemu-1-host-1-sno-hub",
+		"apply", "ocp",
+		"-f", "../../test/e2e/libvirt-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 		"--dry-run",
 	}, nil, &stdout, &stderr)
@@ -1266,8 +1244,8 @@ func TestApplyDryRunOptOutAskBecomePass(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"apply", "hub",
-		"-f", "../../test/e2e/qemu-1-host-1-sno-hub",
+		"apply", "ocp",
+		"-f", "../../test/e2e/libvirt-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 		"--dry-run",
 		"--ask-become-pass=false",
@@ -1285,8 +1263,8 @@ func TestApplyDryRunPrintsEscalationSummary(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"apply", "hub",
-		"-f", "../../test/e2e/qemu-1-host-1-sno-hub",
+		"apply", "ocp",
+		"-f", "../../test/e2e/libvirt-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 		"--dry-run",
 	}, nil, &stdout, &stderr)
@@ -1296,7 +1274,7 @@ func TestApplyDryRunPrintsEscalationSummary(t *testing.T) {
 	output := stdout.String()
 	for _, expected := range []string{
 		"apply plan:",
-		"- hub [root]",
+		"- ocp [root]",
 		"[root] phases require sudo escalation",
 	} {
 		if !strings.Contains(output, expected) {
@@ -1344,8 +1322,8 @@ func TestApplyConfirmationDecline(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"apply", "hub",
-		"-f", "../../test/e2e/qemu-1-host-1-sno-hub",
+		"apply", "ocp",
+		"-f", "../../test/e2e/libvirt-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 	}, strings.NewReader("n\n"), &stdout, &stderr)
 	if code != 1 {
@@ -1365,8 +1343,8 @@ func TestApplyYesSkipsConfirmationAndStopsBeforeAnsible(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"apply", "hub",
-		"-f", "../../test/e2e/qemu-1-host-1-sno-hub",
+		"apply", "ocp",
+		"-f", "../../test/e2e/libvirt-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 		"--yes",
 		"--ansible-playbook", "/nonexistent/ansible-playbook",

@@ -34,7 +34,7 @@ writes the certificate and private key only to the local secrets directory.
 Disconnected mode requires OpenShift `imageDigestSources` for the mirrored
 release payload sources. Gitups renders those sources with
 `NeverContactSource`, rejects mirror entries outside the configured
-registry, and uses a local release-image override. For QEMU/KVM lab
+registry, and uses a local release-image override. For libvirt lab
 installs with emulated BMC, disconnected agent ISO rendering also uses
 provider-hosted boot artifacts rather than public RHCOS boot-artifact URLs.
 

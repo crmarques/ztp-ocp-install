@@ -31,7 +31,7 @@ files in other layers.
 | Cluster infra | `ClusterInfrastructure` |
 | Cluster intent | `OCPCluster` |
 
-`OCPCluster` is provider-agnostic. A provider swap (QEMU/KVM with emulated
+`OCPCluster` is provider-agnostic. A provider swap (libvirt with emulated
 BMC → real bare metal → vSphere) edits `InfrastructureProvider` and
 `ClusterInfrastructure` only. CI asserts the swap invariant by diffing the
 `OCPCluster` and `Environment` files across the canonical provider examples.
@@ -78,7 +78,7 @@ with a substrate-typed sub-block when the realisation is provider-specific.
 ## Provider Adapters
 
 Provider-specific code sits behind explicit interfaces. Bare metal,
-vSphere, OpenShift Virtualization, and lab QEMU/KVM support do not leak
+vSphere, OpenShift Virtualization, and lab libvirt support do not leak
 into shared business logic except through typed capabilities and the
 structural provider sub-blocks. New providers add a new structural
 sub-block on `InfrastructureProvider.spec`, a matching sub-block on
@@ -87,13 +87,15 @@ provider-specific realisation) a matching sub-block on
 `ClusterInfrastructure.spec.networks.<name>`. Cross-cutting code stays
 provider-neutral.
 
-## Hub and Managed Clusters
+## Future: Multi-Cluster Topology
 
-The hub hosts ACM, OpenShift GitOps, cluster provisioning assets, and
-placement / policy intent. Managed clusters are workload targets reconciled
-by the hub. The initial implementation assumes hub-SNO and bare-metal
-managed clusters; adapters and inventory contracts must not hard-code those
-choices.
+Forward-looking architecture leaves room for one cluster to host ACM,
+OpenShift GitOps, cluster provisioning assets, and placement / policy
+intent — reconciling additional clusters whose intent is published as
+fleet GitOps content. That publication path is not implemented today.
+Adapters and inventory contracts must not hard-code single-cluster
+assumptions, so a future split into provisioning-control plane plus
+reconciled workload clusters remains possible without schema rework.
 
 ## Orchestration Rules
 
@@ -130,9 +132,9 @@ kind. ADR 0002 records the contract.
 | `network_*` | provider-agnostic networking | varies |
 | `cluster_*` | per-cluster substrate | `gitups_infra_hosts` |
 | `provider_*` | provider-scoped shared services | `gitups_provider_hosts` |
-| `hub_*` | hub install / boot / destroy | `gitups_hub_hosts` |
+| `ocp_*` | openshift-install agent install / boot / destroy | `gitups_ocp_hosts` |
 
-Within `cluster_substrate_*`, `provider_bmc_*`, and `hub_boot_*` the
+Within `cluster_substrate_*`, `provider_bmc_*`, and `ocp_boot_*` the
 suffix is the provider kind: `libvirt`, `baremetal`, `vsphere`,
 `kubevirt` for substrates; `emulated`, `redfish`, `ipmi`, `none` for
 BMCs.
@@ -152,19 +154,21 @@ and per-provider Ansible vars. They drive dynamic role-name dispatch:
 | --- | --- |
 | `provider.kind` | machine flavor on the closure (`libvirt \| baremetal \| vsphere \| kubevirt`) |
 | `provider.substrateRole` | `role: cluster_substrate_<substrateRole>` |
-| `provider.bmcRole` | `role: provider_bmc_<bmcRole>` and `include_role: hub_boot_<bmcRole>` |
+| `provider.bmcRole` | `role: provider_bmc_<bmcRole>` and `include_role: ocp_boot_<bmcRole>` |
 | `provider.bootArtifactsHttp.{enabled,bindAddress,port}` | gates `provider_boot_artifacts_http` |
 
 The kind→role mapping is one switch in `render.providerDispatch`. Every
 kind resolves to a real role; substrates with no external BMC use
-`provider_bmc_none` and `hub_boot_none` so dispatch never fails to
+`provider_bmc_none` and `ocp_boot_none` so dispatch never fails to
 resolve. Adding a new provider is four role files plus one switch case;
 no playbook edits.
 
-## GitOps Output
+## GitOps Output (forward-looking)
 
-Generated GitOps content represents the desired fleet state consumed by
-the hub.
+When fleet publication is implemented, generated GitOps content represents
+the desired fleet state consumed by the cluster running ACM and OpenShift
+GitOps. Today no GitOps publication runs; this section describes the
+constraints that future content must satisfy.
 
 - Deterministic from the same input.
 - Reviewable before it is applied.
@@ -172,12 +176,11 @@ the hub.
   headers.
 - No runtime status mixed with declared intent.
 
-Expected areas: hub bootstrap applications, ACM and OpenShift GitOps
-operator configuration, managed-cluster definitions (one per `OCPCluster`
-with `role: managed`), placement / policy / day-2 configuration, and
-environment overlays. Prefer Kubernetes/OpenShift native formats. Use
-Kustomize, Helm, or templating only where the tool has a clear ownership
-boundary in the generated tree.
+Expected areas: bootstrap applications, ACM and OpenShift GitOps operator
+configuration, managed-cluster definitions, placement / policy / day-2
+configuration, and environment overlays. Prefer Kubernetes/OpenShift
+native formats. Use Kustomize, Helm, or templating only where the tool
+has a clear ownership boundary in the generated tree.
 
 ## Testing
 
@@ -187,14 +190,14 @@ boundary in the generated tree.
 - Ansible role syntax and idempotency tests.
 - GitOps manifest validation.
 - Lab end-to-end provisioning tests under `test/e2e/<case>/`. Lab
-  emulation uses Redfish over QEMU/KVM-backed nodes so the test path
+  emulation uses Redfish over libvirt-managed VMs so the test path
   stays close to real bare-metal workflows.
 - Fast validation must run without a real cluster. Cluster-dependent
   tests are isolated, documented, and opt-in until automation is reliable.
 
 E2E case fixtures are test assets, not canonical UX examples. Case names
 describe substrate, host layout, and fleet shape, for example
-`qemu-1-host-1-sno-hub` or `qemu-3-hosts-1-sno-hub-2-ocp-fleet`; OCP install
+`libvirt-1-host-1-sno-hub` or `libvirt-3-hosts-1-sno-hub-2-ocp-fleet`; OCP install
 mode (connected vs. disconnected) is documented in each case's `README.md`
 rather than encoded in the directory name. The canonical UX examples live under `examples/`. Cross-case operator
 guidance lives in `test/README.md`; per-case detail lives in

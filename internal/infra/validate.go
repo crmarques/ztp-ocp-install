@@ -509,7 +509,7 @@ func validateNetworks(ci v1alpha1.ClusterInfrastructure, provider v1alpha1.Infra
 		switch providerKind {
 		case v1alpha1.MachineFlavorLibvirt:
 			if network.Libvirt == nil || network.Libvirt.Bridge == "" {
-				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s networks[%s].libvirt.bridge is required for qemu-kvm provider", ci.Metadata.Name, name))
+				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s networks[%s].libvirt.bridge is required for libvirt provider", ci.Metadata.Name, name))
 			}
 			if network.Vsphere != nil {
 				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s networks[%s].vsphere does not match InfrastructureProvider/%s kind %q", ci.Metadata.Name, name, provider.Metadata.Name, providerKind))
@@ -701,11 +701,6 @@ func validateOCPClusters(state v1alpha1.State) []string {
 			errs = append(errs, fmt.Sprintf("duplicate OCPCluster %q", ocp.Metadata.Name))
 		}
 		seen[ocp.Metadata.Name] = true
-		switch ocp.Spec.Role {
-		case v1alpha1.OCPRoleHub, v1alpha1.OCPRoleManaged:
-		default:
-			errs = append(errs, fmt.Sprintf("OCPCluster/%s spec.role %q must be hub or managed", ocp.Metadata.Name, ocp.Spec.Role))
-		}
 		switch ocp.Spec.Topology {
 		case "", v1alpha1.OCPTopologySingleNode, v1alpha1.OCPTopologyMultiNode:
 		default:

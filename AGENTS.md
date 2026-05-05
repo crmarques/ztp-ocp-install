@@ -15,9 +15,11 @@ making changes, load only the specs that match the user request.
 
 - Preserve the long-term goal: automated, GitOps-managed provisioning of
   fleets of OpenShift clusters through zero touch provisioning.
-- Treat the initial scope as hub SNO plus bare-metal workload clusters
-  while keeping provider abstractions open for vSphere, OpenShift
-  Virtualization, and other substrates.
+- Treat the initial scope as direct openshift-install-agent runs against
+  cluster nodes (single-node and multi-node), while keeping provider
+  abstractions open for libvirt, bare metal, vSphere, OpenShift
+  Virtualization, and other substrates. Multi-cluster fleet GitOps
+  publication is forward-looking; not implemented yet.
 - Prefer declarative desired state, idempotent orchestration, typed
   schemas, deterministic rendering, and testable adapters.
 - Do not introduce secrets, kubeconfigs, pull secrets, private keys,
