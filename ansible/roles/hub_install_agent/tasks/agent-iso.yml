@@ -83,7 +83,6 @@
     owner: root
     group: root
     mode: "0755"
-  become: true
   when: gitups_hub_minimal_iso | bool
 
 - name: Stage rootfs boot artifacts for node access
@@ -94,7 +93,6 @@
     owner: root
     group: root
     mode: "0644"
-  become: true
   loop: "{{ gitups_agent_rootfs_find.files | default([]) }}"
   loop_control:
     label: "{{ item.path | basename }}"

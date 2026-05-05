@@ -24,14 +24,12 @@
     owner: root
     group: root
     mode: "0644"
-  become: true
   register: gitups_agent_iso_stage
 
 - name: Refresh libvirt vmedia pool after staging ISO
   community.libvirt.virt_pool:
     name: "gitups-{{ gitups_provider_name }}-vmedia"
     command: refresh
-  become: true
   when:
     - gitups_agent_iso_stage.changed
     - gitups_current_provider.bmcRole == 'emulated'

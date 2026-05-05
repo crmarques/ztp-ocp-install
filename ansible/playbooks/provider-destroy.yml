@@ -2,25 +2,22 @@
 - name: Tear down Gitups provider-scoped infrastructure
   hosts: gitups_provider_hosts
   gather_facts: false
-  become: false
+  become: true
 
   pre_tasks:
     - name: Select provider for current host
       ansible.builtin.set_fact:
         gitups_current_provider: "{{ gitups_providers | selectattr('name', 'equalto', gitups_provider_name) | first }}"
-      become: false
       changed_when: false
 
     - name: Select managed load balancers for current host
       ansible.builtin.set_fact:
         gitups_current_load_balancers: "{{ gitups_load_balancers | selectattr('providerRef', 'equalto', gitups_provider_name) | selectattr('placement.providerHostRef', 'equalto', gitups_host_name) | list }}"
-      become: false
       changed_when: false
 
     - name: Select mirror registry for current host
       ansible.builtin.set_fact:
         gitups_current_mirror_registry: "{{ (gitups_mirror_registries | default([]) | selectattr('providerRef', 'equalto', gitups_provider_name) | selectattr('providerHostRef', 'equalto', gitups_host_name) | list | first) | default(None) }}"
-      become: false
       changed_when: false
 
   tasks:
@@ -28,7 +25,6 @@
       containers.podman.podman_container:
         name: "gitups-mirror-registry-{{ gitups_current_mirror_registry.name }}"
         state: absent
-      become: true
       when: gitups_current_mirror_registry is not none
       failed_when: false
 
@@ -36,7 +32,6 @@
       ansible.builtin.file:
         path: "/etc/pki/ca-trust/source/anchors/gitups-mirror-{{ gitups_current_mirror_registry.host }}.crt"
         state: absent
-      become: true
       register: gitups_mirror_registry_trust_remove
       when: gitups_current_mirror_registry is not none
 
@@ -44,7 +39,6 @@
       ansible.builtin.command:
         argv:
           - update-ca-trust
-      become: true
       when:
         - gitups_current_mirror_registry is not none
         - gitups_mirror_registry_trust_remove.changed
@@ -59,7 +53,6 @@
       ansible.builtin.file:
         path: "{{ gitups_host_state_dir }}/mirror-registry/{{ gitups_current_mirror_registry.name }}"
         state: absent
-      become: true
       when:
         - gitups_current_mirror_registry is not none
         - not (gitups_keep_mirrored_images | default(false) | bool)
@@ -68,7 +61,6 @@
       ansible.builtin.file:
         path: "{{ gitups_host_state_dir }}/mirror-registry/{{ gitups_current_mirror_registry.name }}/{{ item }}"
         state: absent
-      become: true
       loop:
         - auth
         - certs
@@ -94,7 +86,6 @@
         argv:
           - rmdir
           - "{{ gitups_host_state_dir }}/mirror-registry"
-      become: true
       register: gitups_mirror_registry_parent_rm
       failed_when: false
       changed_when: gitups_mirror_registry_parent_rm.rc == 0
@@ -104,7 +95,6 @@
         name: "gitups-sushy-{{ gitups_current_provider.name }}.service"
         state: stopped
         enabled: false
-      become: true
       register: gitups_sushy_stop
       failed_when: false
       changed_when: gitups_sushy_stop.changed | default(false)
@@ -130,7 +120,6 @@
         state: disabled
         permanent: true
         immediate: true
-      become: true
       when:
         - gitups_current_provider.bmcRole == 'emulated'
         - gitups_bmc_firewalld_state.rc | default(1) == 0
@@ -140,7 +129,6 @@
         name: "gitups-vmedia-{{ gitups_current_provider.name }}.service"
         state: stopped
         enabled: false
-      become: true
       register: gitups_vmedia_stop
       failed_when: false
       changed_when: gitups_vmedia_stop.changed | default(false)
@@ -151,7 +139,6 @@
         name: "gitups-boot-artifacts-{{ gitups_current_provider.name }}.service"
         state: stopped
         enabled: false
-      become: true
       register: gitups_boot_artifacts_stop
       failed_when: false
       changed_when: gitups_boot_artifacts_stop.changed | default(false)
@@ -161,41 +148,35 @@
       ansible.builtin.file:
         path: "/etc/systemd/system/gitups-sushy-{{ gitups_current_provider.name }}.service"
         state: absent
-      become: true
       register: gitups_sushy_unit_remove
 
     - name: Remove vmedia HTTP systemd unit
       ansible.builtin.file:
         path: "/etc/systemd/system/gitups-vmedia-{{ gitups_current_provider.name }}.service"
         state: absent
-      become: true
       register: gitups_vmedia_unit_remove
 
     - name: Remove boot artifacts HTTP systemd unit
       ansible.builtin.file:
         path: "/etc/systemd/system/gitups-boot-artifacts-{{ gitups_current_provider.name }}.service"
         state: absent
-      become: true
       register: gitups_boot_artifacts_unit_remove
 
     - name: Reload systemd after removing provider units
       ansible.builtin.systemd_service:
         daemon_reload: true
-      become: true
       when: gitups_sushy_unit_remove.changed or gitups_vmedia_unit_remove.changed or gitups_boot_artifacts_unit_remove.changed
 
     - name: Destroy libvirt vmedia pool for current provider
       community.libvirt.virt_pool:
         name: "gitups-{{ gitups_current_provider.name }}-vmedia"
         state: absent
-      become: true
       failed_when: false
 
     - name: Remove managed HAProxy containers
       containers.podman.podman_container:
         name: "gitups-haproxy-{{ item.name }}"
         state: absent
-      become: true
       loop: "{{ gitups_current_load_balancers }}"
       loop_control:
         label: "{{ item.name }}"
@@ -204,7 +185,6 @@
       ansible.builtin.file:
         path: "{{ gitups_host_state_dir }}/load-balancers/{{ item.name }}"
         state: absent
-      become: true
       loop: "{{ gitups_current_load_balancers }}"
       loop_control:
         label: "{{ item.name }}"
@@ -214,7 +194,6 @@
         argv:
           - rmdir
           - "{{ gitups_host_state_dir }}/load-balancers"
-      become: true
       register: gitups_lb_parent_rm
       failed_when: false
       changed_when: gitups_lb_parent_rm.rc == 0
@@ -223,14 +202,12 @@
       ansible.builtin.file:
         path: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}"
         state: absent
-      become: true
 
     - name: Remove providers parent directory if empty
       ansible.builtin.command:
         argv:
           - rmdir
           - "{{ gitups_host_state_dir }}/providers"
-      become: true
       register: gitups_providers_parent_rm
       failed_when: false
       changed_when: gitups_providers_parent_rm.rc == 0
@@ -239,7 +216,6 @@
       ansible.builtin.file:
         path: /etc/sysctl.d/99-gitups-haproxy.conf
         state: absent
-      become: true
 
     # Owns the host-state-root rmdir because provider phase is the last to
     # run during destroy (reverse of apply order). Cluster phase has already
@@ -250,7 +226,6 @@
         argv:
           - rmdir
           - "{{ gitups_host_state_dir }}"
-      become: true
       register: gitups_root_rm
       failed_when: false
       changed_when: gitups_root_rm.rc == 0

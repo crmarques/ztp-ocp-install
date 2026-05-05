@@ -8,26 +8,23 @@
   gather_subset:
     - "!all"
     - min
-  become: false
+  become: true
   environment: "{{ gitups_proxy_env | default({}) }}"
 
   pre_tasks:
     - name: Select cluster infrastructure for current host
       ansible.builtin.set_fact:
         gitups_current_cluster: "{{ gitups_clusters | selectattr('name', 'equalto', gitups_cluster_name) | first }}"
-      become: false
       changed_when: false
 
   tasks:
     - name: Apply host proxy role
       ansible.builtin.import_role:
         name: host_proxy
-      become: true
 
     - name: Apply host prepare role
       ansible.builtin.import_role:
         name: host_prepare
-      become: true
 
     # Substrate dispatch by structural discriminator. include_role (not
     # import_role) is required because the role name interpolates a fact
@@ -38,8 +35,6 @@
     - name: Apply substrate role for current provider kind
       ansible.builtin.include_role:
         name: "cluster_substrate_{{ gitups_current_cluster.provider.substrateRole }}"
-        apply:
-          become: true
 
     # VIP plumbing is the cross-layer concern that pairs provider-scoped LB
     # bindings to the cluster's substrate bridge. It runs after substrate
@@ -48,12 +43,10 @@
     - name: Plumb managed load balancer VIPs onto the cluster bridge
       ansible.builtin.import_role:
         name: cluster_network_vips
-      become: true
 
     - name: Apply managed name resolution
       ansible.builtin.import_role:
         name: network_dns_managed
-      become: true
       when: gitups_current_cluster.network.nameResolution.mode == 'managed'
 
     - name: Validate external network reachability

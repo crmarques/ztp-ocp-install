@@ -2,24 +2,21 @@
 - name: Tear down hub OpenShift cluster install state
   hosts: gitups_hub_hosts
   gather_facts: false
-  become: false
+  become: true
 
   pre_tasks:
     - name: Select cluster infrastructure for current host
       ansible.builtin.set_fact:
         gitups_current_cluster: "{{ gitups_clusters | selectattr('name', 'equalto', gitups_cluster_name) | first }}"
-      become: false
       changed_when: false
 
     - name: Select infrastructure provider for current host
       ansible.builtin.set_fact:
         gitups_current_provider: "{{ gitups_providers | selectattr('name', 'equalto', gitups_provider_name) | first }}"
-      become: false
       changed_when: false
 
   roles:
     - role: hub_destroy_agent
-      become: true
       when:
         - gitups_current_cluster.role == 'hub'
         - gitups_current_cluster.ocp.install.method == 'agent'

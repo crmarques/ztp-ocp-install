@@ -2,13 +2,12 @@
 - name: Tear down Gitups per-cluster infrastructure
   hosts: gitups_infra_hosts
   gather_facts: false
-  become: false
+  become: true
 
   pre_tasks:
     - name: Select cluster infrastructure for current host
       ansible.builtin.set_fact:
         gitups_current_cluster: "{{ gitups_clusters | selectattr('name', 'equalto', gitups_cluster_name) | first }}"
-      become: false
       changed_when: false
 
   tasks:
@@ -16,14 +15,11 @@
       ansible.builtin.include_role:
         name: cluster_network_vips
         tasks_from: destroy.yml
-        apply:
-          become: true
 
     - name: Force-stop libvirt domains for current cluster
       community.libvirt.virt:
         name: "{{ gitups_current_cluster.name }}-{{ item.name }}"
         state: destroyed
-      become: true
       failed_when: false
       loop: "{{ gitups_current_cluster.provider.nodes | default([]) }}"
       loop_control:
@@ -37,7 +33,6 @@
         flags:
           - remove_all_storage
           - keep_nvram
-      become: true
       failed_when: false
       loop: "{{ gitups_current_cluster.provider.nodes | default([]) }}"
       loop_control:
@@ -52,7 +47,6 @@
         argv:
           - firewall-cmd
           - --state
-      become: true
       register: gitups_firewalld_state
       changed_when: false
       failed_when: false
@@ -65,7 +59,6 @@
         state: disabled
         permanent: true
         immediate: true
-      become: true
       failed_when: false
       when:
         - gitups_current_cluster.provider.kind == 'qemu-kvm'
@@ -76,7 +69,6 @@
       community.libvirt.virt_net:
         name: "{{ gitups_current_cluster.provider.virtualization.libvirt.network }}"
         state: absent
-      become: true
       failed_when: false
       when:
         - gitups_current_cluster.provider.kind == 'qemu-kvm'
@@ -87,11 +79,9 @@
         path: /etc/hosts
         marker: "# {mark} GITUPS {{ gitups_current_cluster.name }} hosts"
         state: absent
-      become: true
       when: gitups_current_cluster.network.nameResolution.mode == 'managed'
 
     - name: Remove cluster state directory
       ansible.builtin.file:
         path: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}"
         state: absent
-      become: true

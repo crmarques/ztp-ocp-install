@@ -8,33 +8,29 @@
   gather_subset:
     - "!all"
     - min
-  become: false
+  become: true
   environment: "{{ gitups_proxy_env | default({}) }}"
 
   pre_tasks:
     - name: Select provider for current host
       ansible.builtin.set_fact:
         gitups_current_provider: "{{ gitups_providers | selectattr('name', 'equalto', gitups_provider_name) | first }}"
-      become: false
       changed_when: false
 
     - name: Select managed load balancers for current host
       ansible.builtin.set_fact:
         gitups_current_load_balancers: "{{ gitups_load_balancers | selectattr('providerRef', 'equalto', gitups_provider_name) | selectattr('placement.providerHostRef', 'equalto', gitups_host_name) | list }}"
-      become: false
       changed_when: false
 
     - name: Select mirror registry for current host
       ansible.builtin.set_fact:
         gitups_current_mirror_registry: "{{ (gitups_mirror_registries | default([]) | selectattr('providerRef', 'equalto', gitups_provider_name) | selectattr('providerHostRef', 'equalto', gitups_host_name) | list | first) | default(None) }}"
-      become: false
       changed_when: false
 
   tasks:
     - name: Apply host proxy role
       ansible.builtin.import_role:
         name: host_proxy
-      become: true
 
     # BMC dispatch by structural discriminator. provider_bmc_none is the
     # explicit empty case (vSphere, KubeVirt) so the dynamic role-name
@@ -42,13 +38,10 @@
     - name: Apply BMC role for current provider kind
       ansible.builtin.include_role:
         name: "provider_bmc_{{ gitups_current_provider.bmcRole }}"
-        apply:
-          become: true
 
     - name: Apply boot-artifacts HTTP role
       ansible.builtin.import_role:
         name: provider_boot_artifacts_http
-      become: true
       when: gitups_current_provider.bootArtifactsHttp.enabled | default(false) | bool
 
     # Mirror registry must run before the load balancer role: HAProxy is
@@ -57,11 +50,9 @@
     - name: Apply mirror registry role
       ansible.builtin.import_role:
         name: provider_mirror_registry
-      become: true
       when: gitups_current_mirror_registry is not none
 
     - name: Apply managed load balancer role
       ansible.builtin.import_role:
         name: network_lb_managed
-      become: true
       when: gitups_current_load_balancers | length > 0

@@ -5,7 +5,6 @@
       - getent
       - hosts
       - "{{ item }}"
-  become: false
   loop:
     - "{{ gitups_current_cluster.network.records.api }}"
     - "{{ gitups_current_cluster.network.records.apiInt }}"
