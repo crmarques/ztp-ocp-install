@@ -1,0 +1,77 @@
+---
+- name: Resolve effective proxy state
+  ansible.builtin.set_fact:
+    gitups_proxy_enabled: "{{ (gitups_proxy_http | length) > 0 or (gitups_proxy_https | length) > 0 }}"
+  changed_when: false
+
+- name: Read proxy credentials
+  ansible.builtin.slurp:
+    src: "{{ gitups_proxy_credentials_ref }}"
+  register: gitups_proxy_credentials_slurp
+  no_log: true
+  delegate_to: localhost
+  become: false
+  when:
+    - gitups_proxy_enabled
+    - (gitups_proxy_credentials_ref | length) > 0
+
+- name: Parse proxy credentials
+  ansible.builtin.set_fact:
+    gitups_proxy_credentials: "{{ gitups_proxy_credentials_slurp | gitups_parse_credential('ocpInstall proxy credentialsRef ' ~ gitups_proxy_credentials_ref) }}"
+  no_log: true
+  changed_when: false
+  when:
+    - gitups_proxy_enabled
+    - (gitups_proxy_credentials_ref | length) > 0
+
+- name: Build credentialed proxy URLs
+  ansible.builtin.set_fact:
+    gitups_proxy_authority: >-
+      {{
+        (gitups_proxy_credentials.username | urlencode) ~ ':' ~
+        (gitups_proxy_credentials.password | urlencode) ~ '@'
+        if (gitups_proxy_credentials_ref | length) > 0
+        else ''
+      }}
+  no_log: true
+  changed_when: false
+  when: gitups_proxy_enabled
+
+- name: Resolve credentialed proxy URLs
+  ansible.builtin.set_fact:
+    gitups_proxy_http_effective: >-
+      {{
+        gitups_proxy_http | regex_replace('^([a-zA-Z][a-zA-Z0-9+.-]*://)([^@/]+@)?', '\1' ~ gitups_proxy_authority)
+        if (gitups_proxy_http | length) > 0 else ''
+      }}
+    gitups_proxy_https_effective: >-
+      {{
+        gitups_proxy_https | regex_replace('^([a-zA-Z][a-zA-Z0-9+.-]*://)([^@/]+@)?', '\1' ~ gitups_proxy_authority)
+        if (gitups_proxy_https | length) > 0 else ''
+      }}
+  no_log: true
+  changed_when: false
+  when: gitups_proxy_enabled
+
+- name: Resolve primary proxy URL for single-value config files
+  ansible.builtin.set_fact:
+    gitups_proxy_primary: "{{ gitups_proxy_https_effective if (gitups_proxy_https_effective | length) > 0 else gitups_proxy_http_effective }}"
+  no_log: true
+  changed_when: false
+  when: gitups_proxy_enabled
+
+- name: Build proxy environment for downstream task overrides
+  ansible.builtin.set_fact:
+    gitups_proxy_env: >-
+      {{
+        {
+          'HTTP_PROXY': gitups_proxy_http_effective,
+          'HTTPS_PROXY': gitups_proxy_https_effective,
+          'NO_PROXY': gitups_proxy_no,
+          'http_proxy': gitups_proxy_http_effective,
+          'https_proxy': gitups_proxy_https_effective,
+          'no_proxy': gitups_proxy_no,
+        } if gitups_proxy_enabled else {}
+      }}
+  no_log: true
+  changed_when: false

@@ -183,6 +183,39 @@ func TestPreflightProviderOnlyPhaseSkipsKvm(t *testing.T) {
 	}
 }
 
+func TestPreflightClusterPhaseSkipsKvmForRemoteLibvirtHost(t *testing.T) {
+	state := v1alpha1.State{
+		InfrastructureProviders: []v1alpha1.InfrastructureProvider{
+			{
+				Spec: v1alpha1.InfrastructureProviderSpec{
+					Hosts: map[string]v1alpha1.ProviderHostSpec{
+						"remote-host": {SSH: &v1alpha1.ProviderHostSSHSpec{Address: "192.168.1.10"}},
+					},
+					Machine: &v1alpha1.MachineCapabilitySpec{
+						Libvirt: &v1alpha1.MachineProviderLibvirtSpec{
+							HostRefs: []v1alpha1.LocalObjectReference{{Name: "remote-host"}},
+						},
+					},
+				},
+			},
+		},
+	}
+	deps := fakeDeps(map[string]string{
+		"ansible-playbook": "/usr/bin/ansible-playbook",
+		"python3":          "/usr/bin/python3",
+	}, false)
+	cluster, err := selectPhases("cluster")
+	if err != nil {
+		t.Fatalf("selectPhases cluster: %v", err)
+	}
+	checks := collectPreflightChecks(state, cluster, true, defaultSecretsDir(), defaultHostStateDir, deps)
+	for _, c := range checks {
+		if c.name == "/dev/kvm available" {
+			t.Fatalf("cluster phase must not check /dev/kvm when all libvirt hosts are remote: %+v", c)
+		}
+	}
+}
+
 func TestPreflightFailsWhenAnsibleMissing(t *testing.T) {
 	deps := fakeDeps(map[string]string{
 		"python3": "/usr/bin/python3",
@@ -238,7 +271,6 @@ func TestPreflightOCPChecksSecretsDirAndFiles(t *testing.T) {
 	})
 	checks := collectPreflightChecks(state, nil, true, "/secrets", defaultHostStateDir, deps)
 	want := map[string]bool{
-		"secrets directory at /secrets":                  true,
 		"hub pullSecretRef at /secrets/pull-secret":      true,
 		"hub sshKeyRef at /secrets/ssh-key":              true,
 		"hub additionalTrustBundleRef at /secrets/trust": false,
@@ -257,6 +289,11 @@ func TestPreflightOCPChecksSecretsDirAndFiles(t *testing.T) {
 	for name := range want {
 		if !seen[name] {
 			t.Fatalf("missing expected check %q in %+v", name, checks)
+		}
+	}
+	for _, c := range checks {
+		if strings.HasPrefix(c.name, "secrets directory") {
+			t.Fatalf("file-based reqs should not require secrets directory check: %+v", c)
 		}
 	}
 }
@@ -656,6 +693,42 @@ func TestPreflightProviderPhaseFailsWhenPortHeldByForeignUnit(t *testing.T) {
 	}
 }
 
+func TestPreflightProviderPhaseSkipsBMCPortsWhenLibvirtRemote(t *testing.T) {
+	state := v1alpha1.State{
+		InfrastructureProviders: []v1alpha1.InfrastructureProvider{{
+			Metadata: v1alpha1.Metadata{Name: "libvirt-remote-provider"},
+			Spec: v1alpha1.InfrastructureProviderSpec{
+				Hosts: map[string]v1alpha1.ProviderHostSpec{
+					"remote-libvirt-host": {SSH: &v1alpha1.ProviderHostSSHSpec{}},
+				},
+				Machine: &v1alpha1.MachineCapabilitySpec{Libvirt: &v1alpha1.MachineProviderLibvirtSpec{
+					HostRefs: []v1alpha1.LocalObjectReference{{Name: "remote-libvirt-host"}},
+					BMCEmulation: &v1alpha1.BMCEmulationSpec{
+						Enabled:     v1alpha1.BoolPtr(true),
+						BindAddress: "0.0.0.0",
+						Port:        8000,
+					},
+				}},
+			},
+		}},
+	}
+	deps := fakeDepsWithListen(map[string]string{
+		"ansible-playbook": "/usr/bin/ansible-playbook",
+		"python3":          "/usr/bin/python3",
+		"sudo":             "/usr/bin/sudo",
+	}, true, nil, map[string]bool{
+		"0.0.0.0:8000":   true,
+		"127.0.0.1:8001": true,
+		"0.0.0.0:8002":   true,
+	})
+	checks := collectPreflightChecks(state, nil, true, defaultSecretsDir(), defaultHostStateDir, deps)
+	for _, c := range checks {
+		if strings.HasPrefix(c.name, "provider libvirt-remote-provider ") && strings.Contains(c.name, " port ") {
+			t.Fatalf("BMC port check should be skipped when libvirt runs on a remote SSH host: %+v", c)
+		}
+	}
+}
+
 func TestPreflightProviderPhaseSkipsBMCPortsWhenEmulationDisabled(t *testing.T) {
 	state := v1alpha1.State{
 		InfrastructureProviders: []v1alpha1.InfrastructureProvider{{
@@ -801,6 +874,53 @@ func TestPreflightProxyCredentialsScopedAwayFromHubOnlyRun(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("proxy credentialsRef must surface in cluster-only run; host_proxy runs there")
+	}
+}
+
+func TestPreflightChecksSSHKeyRefAtSourcePathWhenFileBased(t *testing.T) {
+	state := v1alpha1.State{
+		Environments: []v1alpha1.Environment{{
+			Metadata: v1alpha1.Metadata{Name: "env"},
+			Spec: v1alpha1.EnvironmentSpec{
+				Keys: map[string]v1alpha1.EnvironmentKeySpec{
+					"my-host-key": {File: "/tmp/foo"},
+				},
+			},
+		}},
+		InfrastructureProviders: []v1alpha1.InfrastructureProvider{{
+			Metadata: v1alpha1.Metadata{Name: "p"},
+			Spec: v1alpha1.InfrastructureProviderSpec{
+				Hosts: map[string]v1alpha1.ProviderHostSpec{
+					"h": {SSH: &v1alpha1.ProviderHostSSHSpec{Address: "10.0.0.1", KeyRef: v1alpha1.SecretRef{Name: "my-host-key"}}},
+				},
+				Machine: &v1alpha1.MachineCapabilitySpec{Libvirt: &v1alpha1.MachineProviderLibvirtSpec{
+					HostRefs: []v1alpha1.LocalObjectReference{{Name: "h"}},
+				}},
+			},
+		}},
+	}
+	deps := fakeDepsWithStat(map[string]string{
+		"ansible-playbook": "/usr/bin/ansible-playbook",
+		"python3":          "/usr/bin/python3",
+		"sudo":             "/usr/bin/sudo",
+	}, true, nil)
+	checks := collectPreflightChecks(state, nil, true, "/secrets", defaultHostStateDir, deps)
+	const want = "provider p host h sshKeyRef at /tmp/foo"
+	var found *preflightCheck
+	for i := range checks {
+		if checks[i].name == want {
+			found = &checks[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatalf("missing expected ssh-key check at file-based path %q in %+v", want, checks)
+	}
+	if found.ok {
+		t.Fatalf("expected %q to fail when /tmp/foo missing, got ok", want)
+	}
+	if !strings.Contains(found.detail, "Environment.spec.keys[my-host-key].file") {
+		t.Fatalf("expected hint to point at Environment.spec.keys, got: %s", found.detail)
 	}
 }
 

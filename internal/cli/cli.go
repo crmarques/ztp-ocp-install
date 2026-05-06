@@ -145,7 +145,7 @@ func newPreflightCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 		if err := runHostCheck(stdout, stderr, state, secretsDir, hostStateDir); err != nil {
 			return err
 		}
-		result, err := render.All(cf.stateDir, state)
+		result, err := render.All(cf.stateDir, secretsDir, state)
 		if err != nil {
 			return failErr(1, err)
 		}
@@ -306,9 +306,11 @@ func buildPlanReport(state v1alpha1.State, stateDir string) planReport {
 
 func newStatusCmd(stdout io.Writer) *cobra.Command {
 	var (
-		diff  bool
-		watch bool
+		diff       bool
+		watch      bool
+		secretsDir string
 	)
+	secretsDir = defaultSecretsDir()
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Read-only view of desired counts, rendered artifacts, phases, and drift",
@@ -317,6 +319,7 @@ func newStatusCmd(stdout io.Writer) *cobra.Command {
 	cf := addCommonFlags(cmd)
 	cmd.Flags().BoolVar(&diff, "diff", false, "compare rendered desired output with --state-dir")
 	cmd.Flags().BoolVar(&watch, "watch", false, "reserved for a future watch loop; currently performs one status read")
+	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material (used with --diff)")
 	cmd.RunE = func(_ *cobra.Command, _ []string) error {
 		state, err := infra.LoadNormalizeValidate(cf.files)
 		if err != nil {
@@ -347,7 +350,7 @@ func newStatusCmd(stdout io.Writer) *cobra.Command {
 			return failErr(1, err)
 		}
 		defer os.RemoveAll(tempDir)
-		if _, err := render.All(tempDir, state); err != nil {
+		if _, err := render.All(tempDir, secretsDir, state); err != nil {
 			return failErr(1, err)
 		}
 		diffs, err := compareRenderedTrees(tempDir, cf.stateDir)

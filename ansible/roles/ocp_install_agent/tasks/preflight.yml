@@ -60,9 +60,11 @@
 
 - name: Read BMC credentials for Redfish auth
   ansible.builtin.slurp:
-    src: "{{ gitups_secrets_dir }}/{{ gitups_current_provider.bmc.auth.credentialRef }}"
+    src: "{{ gitups_current_provider.bmc.auth.credentialRef }}"
   register: gitups_ocp_bmc_credentials_slurp
   no_log: true
+  delegate_to: localhost
+  become: false
   when: gitups_ocp_bmc_auth_enabled
 
 - name: Parse BMC credentials

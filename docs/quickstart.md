@@ -48,8 +48,9 @@ bin/gitups apply ocp -f test/e2e/local-libvirt-1-host-1-sno-hub --state-dir /tmp
 ```
 
 Each `apply` scope validates first, renders state, prints the phase plan, and
-executes only that scope. Use `--ask-become-pass=false` on hosts with
-passwordless sudo.
+executes only that scope. `--ask-become-pass` defaults to false when gitups
+runs as root and true otherwise; pass `--ask-become-pass=false` on non-root
+hosts that have passwordless sudo.
 
 ## Check Status
 

@@ -6,6 +6,7 @@
     - min
     - env
   become: false
+  environment: "{{ gitups_proxy_env | default({}) }}"
 
   pre_tasks:
     - name: Select provider for current host when available
@@ -15,6 +16,11 @@
       when: gitups_provider_name is defined
 
   tasks:
+    - name: Build proxy facts for downstream tasks
+      ansible.builtin.import_role:
+        name: host_proxy
+        tasks_from: facts
+
     - name: Verify host is reachable over configured transport
       ansible.builtin.ping:
       changed_when: false

@@ -57,12 +57,16 @@ func python312InstallCmd() []string {
 		{"dnf", []string{"dnf", "install", "-y", "python3.12"}},
 		{"apt-get", []string{"apt-get", "install", "-y", "python3.12"}},
 	} {
-		if _, err := exec.LookPath(pm.bin); err == nil {
-			if os.Getuid() != 0 {
-				return append([]string{"sudo"}, pm.args...)
-			}
+		if _, err := exec.LookPath(pm.bin); err != nil {
+			continue
+		}
+		if os.Getuid() == 0 {
 			return pm.args
 		}
+		if _, err := exec.LookPath("sudo"); err == nil {
+			return append([]string{"sudo"}, pm.args...)
+		}
+		return pm.args
 	}
 	return nil
 }
@@ -79,8 +83,12 @@ func controllerBootstrapPlan() ([]bootstrapStep, error) {
 		if installCmd == nil {
 			return nil, fmt.Errorf("python3.12 not found; install it manually or ensure dnf or apt-get is available")
 		}
+		label := "install python3.12"
+		if installCmd[0] == "sudo" {
+			label += " (requires sudo)"
+		}
 		steps = append(steps, bootstrapStep{
-			label: "install python3.12 (requires sudo)",
+			label: label,
 			cmd:   installCmd,
 		})
 		python = "python3.12"
@@ -101,13 +109,14 @@ func controllerBootstrapPlan() ([]bootstrapStep, error) {
 	), nil
 }
 
-func runBootstrapPlan(ctx context.Context, stdin io.Reader, stdout io.Writer, stderr io.Writer, plan []bootstrapStep) error {
+func runBootstrapPlan(ctx context.Context, stdin io.Reader, stdout io.Writer, stderr io.Writer, plan []bootstrapStep, extraEnv map[string]string) error {
 	for _, step := range plan {
 		fmt.Fprintf(stdout, "\n>>> %s\n", step.label)
 		run := exec.CommandContext(ctx, step.cmd[0], step.cmd[1:]...)
 		run.Stdout = stdout
 		run.Stderr = stderr
 		run.Stdin = stdin
+		run.Env = mergeEnv(os.Environ(), extraEnv)
 		if err := run.Run(); err != nil {
 			return failErr(1, fmt.Errorf("%s: %w", step.label, err))
 		}
@@ -158,7 +167,7 @@ func (s controllerCLIInstallSpec) PlannedCommand() []string {
 	}
 }
 
-func runControllerCLIInstall(ctx context.Context, stdin io.Reader, stdout io.Writer, stderr io.Writer, spec controllerCLIInstallSpec) error {
+func runControllerCLIInstall(ctx context.Context, stdin io.Reader, stdout io.Writer, stderr io.Writer, spec controllerCLIInstallSpec, extraEnv map[string]string) error {
 	bundleDir, err := extractBundle(spec.StateDir)
 	if err != nil {
 		return err
@@ -181,12 +190,16 @@ func runControllerCLIInstall(ctx context.Context, stdin io.Reader, stdout io.Wri
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	cmd.Stdin = stdin
-	cmd.Env = append(os.Environ(),
-		"ANSIBLE_CONFIG="+filepath.Join(bundleDir, embedded.AnsibleCfgRelPath),
-		"ANSIBLE_ROLES_PATH="+filepath.Join(bundleDir, embedded.RolesRelPath),
-		"ANSIBLE_COLLECTIONS_PATH="+filepath.Join(bundleDir, embedded.CollectionsRelPath),
-		"ANSIBLE_FILTER_PLUGINS="+filepath.Join(bundleDir, embedded.FilterPluginsRelPath),
-	)
+	ansibleEnv := map[string]string{
+		"ANSIBLE_CONFIG":             filepath.Join(bundleDir, embedded.AnsibleCfgRelPath),
+		"ANSIBLE_ROLES_PATH":         filepath.Join(bundleDir, embedded.RolesRelPath),
+		"ANSIBLE_COLLECTIONS_PATH":   filepath.Join(bundleDir, embedded.CollectionsRelPath),
+		"ANSIBLE_FILTER_PLUGINS":     filepath.Join(bundleDir, embedded.FilterPluginsRelPath),
+	}
+	for k, v := range extraEnv {
+		ansibleEnv[k] = v
+	}
+	cmd.Env = mergeEnv(os.Environ(), ansibleEnv)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("run controller-clis playbook: %w", err)
 	}

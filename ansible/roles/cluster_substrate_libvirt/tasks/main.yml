@@ -317,8 +317,18 @@
     gitups_qemu_node: "{{ item }}"
   loop: "{{ gitups_current_cluster.provider.nodes }}"
 
+- name: Read rendered libvirt domain XML from remote
+  ansible.builtin.slurp:
+    src: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}/qemu/{{ item.name }}/domain.xml"
+  register: gitups_qemu_domain_xml_slurp
+  loop: "{{ gitups_current_cluster.provider.nodes }}"
+  loop_control:
+    label: "{{ item.name }}"
+
 - name: Define libvirt domains
   community.libvirt.virt:
     command: define
-    xml: "{{ lookup('ansible.builtin.file', gitups_host_state_dir ~ '/' ~ gitups_current_cluster.name ~ '/qemu/' ~ item.name ~ '/domain.xml') }}"
-  loop: "{{ gitups_current_cluster.provider.nodes }}"
+    xml: "{{ item.content | b64decode }}"
+  loop: "{{ gitups_qemu_domain_xml_slurp.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"

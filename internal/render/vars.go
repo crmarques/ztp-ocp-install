@@ -1,12 +1,56 @@
 package render
 
 import (
+	"errors"
 	"net/netip"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/crmarques/ztp-ocp-install-lab/api/v1alpha1"
 )
+
+func resolveKeyFilePath(file, envSourceDir string) (string, error) {
+	if file == "" {
+		return "", errors.New("file source is empty")
+	}
+	if strings.HasPrefix(file, "~/") || file == "~" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		if file == "~" {
+			return home, nil
+		}
+		return filepath.Join(home, file[2:]), nil
+	}
+	if filepath.IsAbs(file) {
+		return filepath.Clean(file), nil
+	}
+	if envSourceDir == "" || envSourceDir == "." {
+		return filepath.Abs(file)
+	}
+	return filepath.Clean(filepath.Join(envSourceDir, file)), nil
+}
+
+// resolvedSecretPath returns the absolute path for a named secret.
+// File-based keys in env.Spec.Keys resolve to their declared source path.
+// Generated and undeclared keys fall back to secretsDir/name.
+func resolvedSecretPath(name, secretsDir string, env *v1alpha1.Environment) string {
+	if name == "" {
+		return ""
+	}
+	if env != nil {
+		if key, ok := env.Spec.Keys[name]; ok && key.File != "" {
+			envSourceDir := filepath.Dir(env.SourcePath)
+			if path, err := resolveKeyFilePath(key.File, envSourceDir); err == nil {
+				return path
+			}
+		}
+	}
+	return filepath.Join(secretsDir, name)
+}
 
 type VarsFile struct {
 	GitupsOCPInstall       EnvironmentOCPInstallVars `yaml:"gitups_ocp_install" json:"gitups_ocp_install"`
@@ -76,6 +120,7 @@ type MirrorRegistryVars struct {
 
 type GeneratedSecretVars struct {
 	Name                  string                     `yaml:"name" json:"name"`
+	Path                  string                     `yaml:"path" json:"path"`
 	Type                  string                     `yaml:"type" json:"type"`
 	SelfSignedCertificate *SelfSignedCertificateVars `yaml:"selfSignedCertificate,omitempty" json:"selfSignedCertificate,omitempty"`
 }
@@ -352,7 +397,7 @@ type HostsFileEntry struct {
 	Names   []string `yaml:"names" json:"names"`
 }
 
-func Vars(state v1alpha1.State) VarsFile {
+func Vars(state v1alpha1.State, secretsDir string) VarsFile {
 	clusters := make([]ClusterVars, 0, len(state.ClusterInfrastructures))
 	providers := providerIndex(state.InfrastructureProviders)
 	ocpByInfra := ocpByInfrastructure(state.OCPClusters)
@@ -360,19 +405,19 @@ func Vars(state v1alpha1.State) VarsFile {
 	for _, item := range state.ClusterInfrastructures {
 		provider := closureProvider(item, providers)
 		ocp := ocpByInfra[item.Metadata.Name]
-		clusters = append(clusters, clusterVars(item, provider, ocp, env))
+		clusters = append(clusters, clusterVars(item, provider, ocp, env, secretsDir))
 	}
 	return VarsFile{
-		GitupsOCPInstall:       ocpInstallEnvVars(env),
-		GitupsProviders:        providerComponentVars(state),
+		GitupsOCPInstall:       ocpInstallEnvVars(env, secretsDir),
+		GitupsProviders:        providerComponentVars(state, secretsDir),
 		GitupsLoadBalancers:    sharedLoadBalancerVars(state, env),
-		GitupsMirrorRegistries: mirrorRegistryRunVars(state, env),
+		GitupsMirrorRegistries: mirrorRegistryRunVars(state, env, secretsDir),
 		GitupsClusters:         clusters,
 		GitupsComponentPins:    ComponentPins(state),
 	}
 }
 
-func ocpInstallEnvVars(env *v1alpha1.Environment) EnvironmentOCPInstallVars {
+func ocpInstallEnvVars(env *v1alpha1.Environment, secretsDir string) EnvironmentOCPInstallVars {
 	kind := v1alpha1.OCPInstallKindConnected
 	if env != nil {
 		if k := v1alpha1.OCPInstallKind(*env); k != "" {
@@ -391,7 +436,7 @@ func ocpInstallEnvVars(env *v1alpha1.Environment) EnvironmentOCPInstallVars {
 			HTTPProxy:      proxy.HTTPProxy,
 			HTTPSProxy:     proxy.HTTPSProxy,
 			NoProxy:        append([]string(nil), proxy.NoProxy...),
-			CredentialsRef: proxy.CredentialsRef.Name,
+			CredentialsRef: resolvedSecretPath(proxy.CredentialsRef.Name, secretsDir, env),
 		}
 	}
 	registries := v1alpha1.OCPInstallRegistriesOf(*env)
@@ -401,7 +446,7 @@ func ocpInstallEnvVars(env *v1alpha1.Environment) EnvironmentOCPInstallVars {
 	result.Registry = &MirrorRegistryVars{
 		URL:            registries.Mirror.URL,
 		Host:           mirrorRegistryHostname(registries.Mirror.URL),
-		CredentialsRef: registries.Mirror.CredentialsRef.Name,
+		CredentialsRef: resolvedSecretPath(registries.Mirror.CredentialsRef.Name, secretsDir, env),
 	}
 	return result
 }
@@ -410,18 +455,18 @@ func proxyHasValue(p *v1alpha1.OCPInstallProxy) bool {
 	return p != nil && (p.HTTPProxy != "" || p.HTTPSProxy != "" || len(p.NoProxy) > 0)
 }
 
-func clusterVars(item v1alpha1.ClusterInfrastructure, provider v1alpha1.InfrastructureProvider, ocp v1alpha1.OCPCluster, env *v1alpha1.Environment) ClusterVars {
+func clusterVars(item v1alpha1.ClusterInfrastructure, provider v1alpha1.InfrastructureProvider, ocp v1alpha1.OCPCluster, env *v1alpha1.Environment, secretsDir string) ClusterVars {
 	return ClusterVars{
 		Name: item.Metadata.Name,
 		OCP: OCPClusterVars{
 			Name:      ocp.Metadata.Name,
 			Topology:  ocp.Spec.Topology,
 			Release:   ocpReleaseVars(ocp),
-			Install:   ocpInstallVars(ocp, env),
+			Install:   ocpInstallVars(ocp, env, secretsDir),
 			Installer: ocpInstallerVars(ocp.Metadata.Name),
-			Nodes:     ocpClusterNodes(item, ocp),
+			Nodes:     ocpClusterNodes(item, ocp, env, secretsDir),
 		},
-		Provider: providerVars(item, provider, ocp, env),
+		Provider: providerVars(item, provider, ocp, env, secretsDir),
 		Network:  networkVars(item, provider),
 	}
 }
@@ -436,16 +481,16 @@ func ocpReleaseVars(ocp v1alpha1.OCPCluster) OCPReleaseVars {
 	}
 }
 
-func ocpInstallVars(ocp v1alpha1.OCPCluster, env *v1alpha1.Environment) OCPInstallVars {
+func ocpInstallVars(ocp v1alpha1.OCPCluster, env *v1alpha1.Environment, secretsDir string) OCPInstallVars {
 	return OCPInstallVars{
 		Method:                   ocp.Spec.Install.Method,
 		BaseDomain:               ocp.Spec.Install.BaseDomain,
-		PullSecretRef:            ocp.Spec.Install.PullSecretRef.Name,
-		SSHKeyRef:                ocp.Spec.Install.SSHKeyRef.Name,
+		PullSecretRef:            resolvedSecretPath(ocp.Spec.Install.PullSecretRef.Name, secretsDir, env),
+		SSHKeyRef:                resolvedSecretPath(ocp.Spec.Install.SSHKeyRef.Name, secretsDir, env),
 		ReleaseImageOverride:     releaseImageOverride(ocp),
-		AdditionalTrustBundleRef: ocp.Spec.Install.AdditionalTrustBundleRef.Name,
-		GeneratedSecrets:         generatedSecretVarsFromEnv(env),
-		LocalRegistry:            localRegistryVars(env, ocp),
+		AdditionalTrustBundleRef: resolvedSecretPath(ocp.Spec.Install.AdditionalTrustBundleRef.Name, secretsDir, env),
+		GeneratedSecrets:         generatedSecretVarsFromEnv(env, secretsDir),
+		LocalRegistry:            localRegistryVars(env, ocp, secretsDir),
 	}
 }
 
@@ -462,7 +507,7 @@ func releaseImageOverride(ocp v1alpha1.OCPCluster) string {
 	return ""
 }
 
-func localRegistryVars(env *v1alpha1.Environment, ocp v1alpha1.OCPCluster) *LocalRegistryVars {
+func localRegistryVars(env *v1alpha1.Environment, ocp v1alpha1.OCPCluster, secretsDir string) *LocalRegistryVars {
 	if env == nil {
 		return nil
 	}
@@ -478,8 +523,8 @@ func localRegistryVars(env *v1alpha1.Environment, ocp v1alpha1.OCPCluster) *Loca
 		Registry: MirrorRegistryVars{
 			URL:            registries.Mirror.URL,
 			Host:           mirrorRegistryHostname(registries.Mirror.URL),
-			CredentialsRef: registries.Mirror.CredentialsRef.Name,
-			TrustBundleRef: ocp.Spec.Install.AdditionalTrustBundleRef.Name,
+			CredentialsRef: resolvedSecretPath(registries.Mirror.CredentialsRef.Name, secretsDir, env),
+			TrustBundleRef: resolvedSecretPath(ocp.Spec.Install.AdditionalTrustBundleRef.Name, secretsDir, env),
 		},
 	}
 }
@@ -491,7 +536,7 @@ func mirrorRegistryHostname(url string) string {
 	return url
 }
 
-func generatedSecretVarsFromEnv(env *v1alpha1.Environment) []GeneratedSecretVars {
+func generatedSecretVarsFromEnv(env *v1alpha1.Environment, secretsDir string) []GeneratedSecretVars {
 	if env == nil {
 		return nil
 	}
@@ -508,6 +553,7 @@ func generatedSecretVarsFromEnv(env *v1alpha1.Environment) []GeneratedSecretVars
 		cert := env.Spec.Keys[name].Generated.SelfSignedCertificate
 		result = append(result, GeneratedSecretVars{
 			Name:                  name,
+			Path:                  filepath.Join(secretsDir, name),
 			Type:                  v1alpha1.GeneratedSecretSelfSigned,
 			SelfSignedCertificate: selfSignedCertificateVars(*cert),
 		})
@@ -558,7 +604,7 @@ func installerRelativeDir(clusterName string) string {
 	return "clusters/" + clusterName + "/installer"
 }
 
-func ocpClusterNodes(item v1alpha1.ClusterInfrastructure, ocp v1alpha1.OCPCluster) []OCPClusterNodeVars {
+func ocpClusterNodes(item v1alpha1.ClusterInfrastructure, ocp v1alpha1.OCPCluster, env *v1alpha1.Environment, secretsDir string) []OCPClusterNodeVars {
 	nodeNames := sortedKeys(ocp.Spec.Nodes)
 	result := make([]OCPClusterNodeVars, 0, len(nodeNames))
 	for _, name := range nodeNames {
@@ -581,7 +627,7 @@ func ocpClusterNodes(item v1alpha1.ClusterInfrastructure, ocp v1alpha1.OCPCluste
 					Address:                        machine.Baremetal.BMC.Address,
 					Port:                           machine.Baremetal.BMC.Port,
 					Protocol:                       machine.Baremetal.BMC.Protocol,
-					CredentialRef:                  machine.Baremetal.BMC.CredentialRef.Name,
+					CredentialRef:                  resolvedSecretPath(machine.Baremetal.BMC.CredentialRef.Name, secretsDir, env),
 					DisableCertificateVerification: machine.Baremetal.BMC.DisableCertificateVerification,
 					BootMACAddress:                 machine.Baremetal.BootMACAddress,
 				}
@@ -595,7 +641,7 @@ func ocpClusterNodes(item v1alpha1.ClusterInfrastructure, ocp v1alpha1.OCPCluste
 	return result
 }
 
-func providerVars(item v1alpha1.ClusterInfrastructure, provider v1alpha1.InfrastructureProvider, ocp v1alpha1.OCPCluster, env *v1alpha1.Environment) ProviderVars {
+func providerVars(item v1alpha1.ClusterInfrastructure, provider v1alpha1.InfrastructureProvider, ocp v1alpha1.OCPCluster, env *v1alpha1.Environment, secretsDir string) ProviderVars {
 	var result ProviderVars
 	result.Kind = v1alpha1.MachineFlavor(provider)
 	result.SubstrateRole, result.BmcRole, result.BootArtifactsHttp = providerDispatch(provider)
@@ -603,14 +649,14 @@ func providerVars(item v1alpha1.ClusterInfrastructure, provider v1alpha1.Infrast
 		return result
 	}
 	q := provider.Spec.Machine.Libvirt
-	result.InfrastructureHosts = providerHostVars(provider.Spec.Hosts)
+	result.InfrastructureHosts = providerHostVars(provider.Spec.Hosts, env, secretsDir)
 	result.Virtualization = &ProviderVirtualizationVars{
 		Type:        v1alpha1.VirtualizationTypeLibvirt,
 		Libvirt:     libvirtVars(item, q, env),
 		DefaultNode: defaultNodeVars(q),
 	}
 	if q.BMCEmulation != nil {
-		result.BMC = bmcVars(q.BMCEmulation, nil)
+		result.BMC = bmcVars(q.BMCEmulation, nil, env, secretsDir)
 	}
 	result.Nodes = providerNodes(item, ocp)
 	return result
@@ -639,7 +685,7 @@ func providerDispatch(provider v1alpha1.InfrastructureProvider) (string, string,
 	}
 }
 
-func providerHostVars(hosts map[string]v1alpha1.ProviderHostSpec) []ProviderHostVars {
+func providerHostVars(hosts map[string]v1alpha1.ProviderHostSpec, env *v1alpha1.Environment, secretsDir string) []ProviderHostVars {
 	names := sortedKeys(hosts)
 	out := make([]ProviderHostVars, 0, len(names))
 	for _, name := range names {
@@ -652,7 +698,7 @@ func providerHostVars(hosts map[string]v1alpha1.ProviderHostSpec) []ProviderHost
 		if host.SSH != nil {
 			entry.Address = host.SSH.Address
 			entry.User = host.SSH.User
-			entry.SSHKeyRef = host.SSH.KeyRef.Name
+			entry.SSHKeyRef = resolvedSecretPath(host.SSH.KeyRef.Name, secretsDir, env)
 		}
 		out = append(out, entry)
 	}
@@ -676,7 +722,8 @@ func defaultNodeVars(q *v1alpha1.MachineProviderLibvirtSpec) VirtualNodeResource
 	}
 }
 
-func providerComponentVars(state v1alpha1.State) []ProviderComponentVars {
+func providerComponentVars(state v1alpha1.State, secretsDir string) []ProviderComponentVars {
+	env := primaryEnvironment(state)
 	result := make([]ProviderComponentVars, 0, len(state.InfrastructureProviders))
 	for _, provider := range state.InfrastructureProviders {
 		substrateRole, bmcRole, http := providerDispatch(provider)
@@ -688,9 +735,9 @@ func providerComponentVars(state v1alpha1.State) []ProviderComponentVars {
 			BootArtifactsHttp: http,
 		}
 		if v1alpha1.ProviderMachineLibvirt(provider) != nil {
-			item.InfrastructureHosts = providerHostVars(provider.Spec.Hosts)
+			item.InfrastructureHosts = providerHostVars(provider.Spec.Hosts, env, secretsDir)
 			if provider.Spec.Machine.Libvirt.BMCEmulation != nil {
-				item.BMC = bmcVars(provider.Spec.Machine.Libvirt.BMCEmulation, providerBMCNodes(provider, state))
+				item.BMC = bmcVars(provider.Spec.Machine.Libvirt.BMCEmulation, providerBMCNodes(provider, state), env, secretsDir)
 			}
 		}
 		result = append(result, item)
@@ -698,7 +745,7 @@ func providerComponentVars(state v1alpha1.State) []ProviderComponentVars {
 	return result
 }
 
-func bmcVars(source *v1alpha1.BMCEmulationSpec, nodes []ProviderBMCNodeVars) *ProviderBMCVars {
+func bmcVars(source *v1alpha1.BMCEmulationSpec, nodes []ProviderBMCNodeVars, env *v1alpha1.Environment, secretsDir string) *ProviderBMCVars {
 	enabled := false
 	if source.Enabled != nil {
 		enabled = *source.Enabled
@@ -712,7 +759,7 @@ func bmcVars(source *v1alpha1.BMCEmulationSpec, nodes []ProviderBMCNodeVars) *Pr
 		Nodes:       nodes,
 	}
 	if source.Auth != nil && source.Auth.CredentialRef.Name != "" {
-		result.Auth = &ProviderBMCAuthVars{CredentialRef: source.Auth.CredentialRef.Name}
+		result.Auth = &ProviderBMCAuthVars{CredentialRef: resolvedSecretPath(source.Auth.CredentialRef.Name, secretsDir, env)}
 	}
 	return result
 }
@@ -1126,7 +1173,7 @@ func closureProvider(ci v1alpha1.ClusterInfrastructure, providers map[string]v1a
 	}
 }
 
-func mirrorRegistryRunVars(state v1alpha1.State, env *v1alpha1.Environment) []MirrorRegistryRunVars {
+func mirrorRegistryRunVars(state v1alpha1.State, env *v1alpha1.Environment, secretsDir string) []MirrorRegistryRunVars {
 	if env == nil {
 		return nil
 	}
@@ -1141,12 +1188,12 @@ func mirrorRegistryRunVars(state v1alpha1.State, env *v1alpha1.Environment) []Mi
 	mirror := registries.Mirror
 	host := mirrorRegistryHostname(mirror.URL)
 	urlPort := mirrorURLPortRender(mirror.URL)
-	credName := mirror.CredentialsRef.Name
-	var caCertName, caKeyName string
+	credPath := resolvedSecretPath(mirror.CredentialsRef.Name, secretsDir, env)
+	var caCertPath, caKeyPath string
 	if mirror.TrustBundleRef.Name != "" {
-		caCertName = mirror.TrustBundleRef.Name
-		if key, ok := env.Spec.Keys[caCertName]; ok && key.Generated != nil && key.Generated.SelfSignedCertificate != nil {
-			caKeyName = caCertName + ".key"
+		caCertPath = resolvedSecretPath(mirror.TrustBundleRef.Name, secretsDir, env)
+		if key, ok := env.Spec.Keys[mirror.TrustBundleRef.Name]; ok && key.Generated != nil && key.Generated.SelfSignedCertificate != nil {
+			caKeyPath = filepath.Join(secretsDir, mirror.TrustBundleRef.Name+".key")
 		}
 	}
 	regImage := componentImageURLs(env, v1alpha1.ComponentCategoryRegistry, v1alpha1.ComponentTypeMirrorRegistry)
@@ -1182,9 +1229,9 @@ func mirrorRegistryRunVars(state v1alpha1.State, env *v1alpha1.Environment) []Mi
 			Port:                      port,
 			DataDir:                   mr.DataDir,
 			Runtime:                   runtime,
-			CredentialsSecretName:     credName,
-			TrustBundleCertSecretName: caCertName,
-			TrustBundleKeySecretName:  caKeyName,
+			CredentialsSecretName:     credPath,
+			TrustBundleCertSecretName: caCertPath,
+			TrustBundleKeySecretName:  caKeyPath,
 			Image:                     regImage,
 			MirrorSet:                 mirrorSet,
 		})

@@ -30,13 +30,13 @@
 
 - name: Verify each BMC credential file exists
   ansible.builtin.stat:
-    path: "{{ gitups_secrets_dir }}/{{ item }}"
+    path: "{{ item }}"
   loop: "{{ gitups_baremetal_credential_refs }}"
   register: gitups_baremetal_credential_stats
 
 - name: Fail when any BMC credential is missing
   ansible.builtin.fail:
-    msg: "Missing bare-metal BMC credentials at {{ gitups_secrets_dir }}/{{ item.item }}"
+    msg: "Missing bare-metal BMC credentials at {{ item.item }}"
   loop: "{{ gitups_baremetal_credential_stats.results }}"
   loop_control:
     label: "{{ item.item }}"

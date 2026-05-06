@@ -8,9 +8,11 @@
 
 - name: Slurp pull secret for upstream registry auth
   ansible.builtin.slurp:
-    src: "{{ gitups_secrets_dir }}/{{ gitups_current_cluster.ocp.install.pullSecretRef | default(gitups_clusters[0].ocp.install.pullSecretRef) }}"
+    src: "{{ gitups_current_cluster.ocp.install.pullSecretRef | default(gitups_clusters[0].ocp.install.pullSecretRef) }}"
   register: gitups_mirror_registry_pull_secret_raw
   no_log: true
+  delegate_to: localhost
+  become: false
 
 - name: Build merged authfile (upstream + local mirror)
   ansible.builtin.copy:

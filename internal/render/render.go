@@ -18,7 +18,7 @@ type Result struct {
 	InstallerAssets    []InstallerAsset
 }
 
-func All(stateDir string, state v1alpha1.State) (Result, error) {
+func All(stateDir, secretsDir string, state v1alpha1.State) (Result, error) {
 	result := Result{
 		EffectiveStatePath: filepath.Join(stateDir, "effective-state.yaml"),
 		LockPath:           filepath.Join(stateDir, "gitups.lock.yaml"),
@@ -53,8 +53,8 @@ func All(stateDir string, state v1alpha1.State) (Result, error) {
 	}{
 		{path: result.EffectiveStatePath, value: EffectiveState(state)},
 		{path: result.LockPath, value: Lock(state)},
-		{path: result.InventoryPath, value: Inventory(state)},
-		{path: result.VarsPath, value: Vars(state)},
+		{path: result.InventoryPath, value: Inventory(state, secretsDir)},
+		{path: result.VarsPath, value: Vars(state, secretsDir)},
 	}
 	for _, write := range writes {
 		if err := writeYAML(write.path, write.value); err != nil {

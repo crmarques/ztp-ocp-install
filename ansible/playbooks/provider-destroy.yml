@@ -3,6 +3,7 @@
   hosts: gitups_provider_hosts
   gather_facts: false
   become: true
+  environment: "{{ gitups_proxy_env | default({}) }}"
 
   pre_tasks:
     - name: Select provider for current host
@@ -21,6 +22,11 @@
       changed_when: false
 
   tasks:
+    - name: Build proxy facts for downstream tasks
+      ansible.builtin.import_role:
+        name: host_proxy
+        tasks_from: facts
+
     - name: Stop and remove mirror registry container
       containers.podman.podman_container:
         name: "gitups-mirror-registry-{{ gitups_current_mirror_registry.name }}"

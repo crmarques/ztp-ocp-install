@@ -1,0 +1,140 @@
+---
+- name: Configure proxy on the provider host
+  when: gitups_proxy_enabled
+  block:
+    - name: Render /etc/environment proxy lines
+      ansible.builtin.blockinfile:
+        path: /etc/environment
+        create: true
+        owner: root
+        group: root
+        mode: "0644"
+        marker: "# {mark} ANSIBLE MANAGED BLOCK gitups-proxy"
+        block: |
+          HTTP_PROXY={{ gitups_proxy_http_effective }}
+          HTTPS_PROXY={{ gitups_proxy_https_effective }}
+          NO_PROXY={{ gitups_proxy_no }}
+          http_proxy={{ gitups_proxy_http_effective }}
+          https_proxy={{ gitups_proxy_https_effective }}
+          no_proxy={{ gitups_proxy_no }}
+      no_log: "{{ (gitups_proxy_credentials_ref | length) > 0 }}"
+      when: (gitups_proxy_credentials_ref | length) == 0
+
+    - name: Render /etc/profile.d/gitups-proxy.sh
+      ansible.builtin.copy:
+        dest: /etc/profile.d/gitups-proxy.sh
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          export HTTP_PROXY="{{ gitups_proxy_http_effective }}"
+          export HTTPS_PROXY="{{ gitups_proxy_https_effective }}"
+          export NO_PROXY="{{ gitups_proxy_no }}"
+          export http_proxy="{{ gitups_proxy_http_effective }}"
+          export https_proxy="{{ gitups_proxy_https_effective }}"
+          export no_proxy="{{ gitups_proxy_no }}"
+      no_log: "{{ (gitups_proxy_credentials_ref | length) > 0 }}"
+      when: (gitups_proxy_credentials_ref | length) == 0
+
+    - name: Stat dnf.conf
+      ansible.builtin.stat:
+        path: /etc/dnf/dnf.conf
+      register: gitups_proxy_dnf_stat
+
+    - name: Configure dnf proxy
+      ansible.builtin.lineinfile:
+        path: /etc/dnf/dnf.conf
+        regexp: '^proxy='
+        line: "proxy={{ gitups_proxy_primary }}"
+        insertafter: '^\[main\]'
+        owner: root
+        group: root
+        mode: "{{ '0600' if (gitups_proxy_credentials_ref | length) > 0 else '0644' }}"
+      no_log: "{{ (gitups_proxy_credentials_ref | length) > 0 }}"
+      when: gitups_proxy_dnf_stat.stat.exists
+
+    - name: Stat yum.conf (RHEL 7 / legacy)
+      ansible.builtin.stat:
+        path: /etc/yum.conf
+      register: gitups_proxy_yum_stat
+
+    - name: Configure yum proxy
+      ansible.builtin.lineinfile:
+        path: /etc/yum.conf
+        regexp: '^proxy='
+        line: "proxy={{ gitups_proxy_primary }}"
+        insertafter: '^\[main\]'
+        owner: root
+        group: root
+        mode: "{{ '0600' if (gitups_proxy_credentials_ref | length) > 0 else '0644' }}"
+      no_log: "{{ (gitups_proxy_credentials_ref | length) > 0 }}"
+      when: gitups_proxy_yum_stat.stat.exists
+
+    - name: Ensure pip config directory
+      ansible.builtin.file:
+        path: /root/.pip
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Render pip proxy config
+      ansible.builtin.copy:
+        dest: /root/.pip/pip.conf
+        owner: root
+        group: root
+        mode: "0600"
+        content: |
+          [global]
+          proxy = {{ gitups_proxy_primary }}
+      no_log: "{{ (gitups_proxy_credentials_ref | length) > 0 }}"
+
+    - name: Ensure containers config directory
+      ansible.builtin.file:
+        path: /etc/containers
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Render /etc/containers/containers.conf proxy block
+      ansible.builtin.blockinfile:
+        path: /etc/containers/containers.conf
+        create: true
+        owner: root
+        group: root
+        mode: "{{ '0600' if (gitups_proxy_credentials_ref | length) > 0 else '0644' }}"
+        marker: "# {mark} ANSIBLE MANAGED BLOCK gitups-proxy"
+        block: |
+          [engine]
+          env = [
+            "HTTP_PROXY={{ gitups_proxy_http_effective }}",
+            "HTTPS_PROXY={{ gitups_proxy_https_effective }}",
+            "NO_PROXY={{ gitups_proxy_no }}",
+          ]
+      no_log: "{{ (gitups_proxy_credentials_ref | length) > 0 }}"
+
+    - name: Ensure systemd system.conf.d directory
+      ansible.builtin.file:
+        path: /etc/systemd/system.conf.d
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Render systemd default proxy environment
+      ansible.builtin.copy:
+        dest: /etc/systemd/system.conf.d/10-gitups-proxy.conf
+        owner: root
+        group: root
+        mode: "{{ '0600' if (gitups_proxy_credentials_ref | length) > 0 else '0644' }}"
+        content: |
+          [Manager]
+          DefaultEnvironment="HTTP_PROXY={{ gitups_proxy_http_effective }}" "HTTPS_PROXY={{ gitups_proxy_https_effective }}" "NO_PROXY={{ gitups_proxy_no }}" "http_proxy={{ gitups_proxy_http_effective }}" "https_proxy={{ gitups_proxy_https_effective }}" "no_proxy={{ gitups_proxy_no }}"
+      no_log: "{{ (gitups_proxy_credentials_ref | length) > 0 }}"
+      register: gitups_proxy_systemd_dropin
+
+    - name: Reload systemd manager when proxy drop-in changed
+      ansible.builtin.systemd_service:
+        daemon_reexec: true
+      when: gitups_proxy_systemd_dropin.changed

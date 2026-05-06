@@ -25,7 +25,6 @@ func TestOperatorCheckWithStateRunsFullPreflight(t *testing.T) {
 	}
 	out := stdout.String()
 	for _, expected := range []string{
-		"/dev/kvm available",
 		"openshift-install on PATH",
 		"playbooks/preflight.yml",
 	} {

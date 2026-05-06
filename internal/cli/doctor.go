@@ -67,9 +67,11 @@ func newDoctorCheckCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 
 func newDoctorFixCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Command {
 	var (
-		dryRun bool
-		yes    bool
+		dryRun     bool
+		yes        bool
+		secretsDir string
 	)
+	secretsDir = defaultSecretsDir()
 	cmd := &cobra.Command{
 		Use:   "fix",
 		Short: "Install missing controller prerequisites",
@@ -78,6 +80,7 @@ func newDoctorFixCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra
 	cf := addCommonFlags(cmd)
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print bootstrap commands without executing them")
 	cmd.Flags().BoolVar(&yes, "yes", false, "skip the bootstrap confirmation prompt")
+	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material")
 	cmd.RunE = func(c *cobra.Command, _ []string) error {
 		var state v1alpha1.State
 		if len(cf.files) > 0 {
@@ -92,9 +95,16 @@ func newDoctorFixCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra
 			return failErr(1, err)
 		}
 		cliSpec := planControllerCLIInstall(state, cf.stateDir, defaultControllerCLIInstallDir())
+		proxyEnv, err := resolveProxyEnv(state, secretsDir)
+		if err != nil {
+			return failErr(1, err)
+		}
 
 		printTitle(stdout, "Doctor fix")
 		fmt.Fprintf(stdout, "ansible-core target: managed venv at %s\n", ansibleVenvDir())
+		if summary := proxySummary(proxyEnv); summary != "" {
+			fmt.Fprintf(stdout, "proxy: %s\n", summary)
+		}
 		printSubtitle(stdout, "planned actions:")
 		for _, step := range plan {
 			fmt.Fprintf(stdout, "- %s\n  $ %s\n", step.label, shellQuote(step.cmd))
@@ -114,11 +124,11 @@ func newDoctorFixCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra
 		if !yes && !confirm(stdin, stdout, "Continue with bootstrap? [y/N]: ") {
 			return failErr(1, errors.New("bootstrap aborted"))
 		}
-		if err := runBootstrapPlan(c.Context(), stdin, stdout, stderr, plan); err != nil {
+		if err := runBootstrapPlan(c.Context(), stdin, stdout, stderr, plan, proxyEnv); err != nil {
 			return err
 		}
 		if cliSpec != nil {
-			if err := runControllerCLIInstall(c.Context(), stdin, stdout, stderr, *cliSpec); err != nil {
+			if err := runControllerCLIInstall(c.Context(), stdin, stdout, stderr, *cliSpec, proxyEnv); err != nil {
 				return failErr(1, err)
 			}
 		}

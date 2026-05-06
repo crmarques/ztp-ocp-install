@@ -3,6 +3,7 @@
   hosts: gitups_infra_hosts
   gather_facts: false
   become: true
+  environment: "{{ gitups_proxy_env | default({}) }}"
 
   pre_tasks:
     - name: Select cluster infrastructure for current host
@@ -11,6 +12,11 @@
       changed_when: false
 
   tasks:
+    - name: Build proxy facts for downstream tasks
+      ansible.builtin.import_role:
+        name: host_proxy
+        tasks_from: facts
+
     - name: Unplumb managed load balancer VIPs from the cluster bridge
       ansible.builtin.include_role:
         name: cluster_network_vips

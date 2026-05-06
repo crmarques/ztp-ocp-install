@@ -12,7 +12,7 @@ For the variant where control = provider, see
 | Host | Address | Role |
 | --- | --- | --- |
 | Control host | (local) | runs `gitups` |
-| `remote-libvirt-host` | `192.168.140.10` (`provider.yaml: spec.hosts.remote-libvirt-host.ssh.address`) | libvirt + sushy-tools + HAProxy |
+| `remote-libvirt-host` | `10.73.7.236` (`provider.yaml: spec.hosts.remote-libvirt-host.ssh.address`) | libvirt + sushy-tools + HAProxy |
 | `libvirt-1-host-hub` (SNO) | API `192.168.130.10` / Ingress `192.168.130.11` (`cluster-infrastructure-hub.yaml: spec.endpoints`) | hub cluster |
 
 The cluster primary network (`192.168.130.0/24`) is reached through the provider host.

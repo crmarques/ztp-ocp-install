@@ -58,9 +58,11 @@
 
 - name: Read BMC credentials for sushy auth
   ansible.builtin.slurp:
-    src: "{{ gitups_secrets_dir }}/{{ gitups_current_provider.bmc.auth.credentialRef }}"
+    src: "{{ gitups_current_provider.bmc.auth.credentialRef }}"
   register: gitups_bmc_credentials_slurp
   no_log: true
+  delegate_to: localhost
+  become: false
   when: gitups_current_provider.bmc.auth is defined and gitups_current_provider.bmc.auth.credentialRef | default('') | length > 0
 
 - name: Parse BMC credentials

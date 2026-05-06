@@ -1,8 +1,8 @@
 ---
 - name: Resolve generated certificate paths
   ansible.builtin.set_fact:
-    gitups_generated_certificate_path: "{{ gitups_secrets_dir }}/{{ gitups_generated_secret.name }}"
-    gitups_generated_private_key_path: "{{ gitups_secrets_dir }}/{{ gitups_generated_secret.name }}.key"
+    gitups_generated_certificate_path: "{{ gitups_generated_secret.path }}"
+    gitups_generated_private_key_path: "{{ gitups_generated_secret.path }}.key"
   changed_when: false
 
 - name: Stat generated certificate

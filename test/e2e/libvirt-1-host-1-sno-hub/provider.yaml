@@ -6,8 +6,8 @@ spec:
   hosts:
     remote-libvirt-host:
       ssh:
-        address: 192.168.140.10
-        user: root
+        address: 10.73.7.236
+        user: crmarques
         keyRef:
           name: remote-libvirt-host-admin-key
       libvirtURI: qemu:///system

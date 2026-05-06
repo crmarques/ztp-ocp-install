@@ -17,9 +17,10 @@ func collectDoctorChecks(state v1alpha1.State, hostStateDir string, deps preflig
 	checks := []preflightCheck{
 		pythonVersionCheck(),
 		binaryCheck("ansible-playbook", []string{filepath.Join(ansibleVenvDir(), "bin")}, deps),
-		binaryCheck("git", nil, deps),
 		binaryCheck("tar", nil, deps),
-		binaryCheck("sudo", nil, deps),
+	}
+	if os.Getuid() != 0 {
+		checks = append(checks, binaryCheck("sudo", nil, deps))
 	}
 	if stateOpenshiftReleaseVersion(state) != "" {
 		checks = append(checks,
@@ -99,7 +100,7 @@ func collectPreflightChecks(state v1alpha1.State, selected []Phase, hasState boo
 	if phaseInScope("provider", selected, hasState) && stateNeedsLibvirt(state) {
 		checks = append(checks, bmcPortChecks(state, deps)...)
 	}
-	if phaseInScope("cluster", selected, hasState) && stateNeedsLibvirt(state) {
+	if phaseInScope("cluster", selected, hasState) && stateNeedsLocalLibvirt(state) {
 		checks = append(checks, kvmCheck(deps))
 	}
 	if phaseInScope("ocp", selected, hasState) {
@@ -149,6 +150,38 @@ func stateNeedsLibvirt(state v1alpha1.State) bool {
 	return false
 }
 
+// stateNeedsLocalLibvirt returns true when at least one libvirt provider has no
+// remote SSH hosts for its machine HostRefs — meaning libvirt runs on the
+// controller itself and /dev/kvm must be present locally.
+func stateNeedsLocalLibvirt(state v1alpha1.State) bool {
+	for _, p := range state.InfrastructureProviders {
+		libvirt := v1alpha1.ProviderMachineLibvirt(p)
+		if libvirt == nil {
+			continue
+		}
+		if !providerLibvirtIsRemote(p) {
+			return true
+		}
+	}
+	return false
+}
+
+// providerLibvirtIsRemote reports whether every libvirt machine HostRef on the
+// provider resolves to an SSH host — i.e. libvirt runs entirely off-controller.
+func providerLibvirtIsRemote(p v1alpha1.InfrastructureProvider) bool {
+	libvirt := v1alpha1.ProviderMachineLibvirt(p)
+	if libvirt == nil || len(libvirt.HostRefs) == 0 {
+		return false
+	}
+	for _, ref := range libvirt.HostRefs {
+		host, ok := p.Spec.Hosts[ref.Name]
+		if !ok || host.SSH == nil {
+			return false
+		}
+	}
+	return true
+}
+
 func binaryCheck(name string, extraDirs []string, deps preflightDeps) preflightCheck {
 	path, err := deps.lookPath(name, extraDirs)
 	if err != nil {
@@ -168,6 +201,9 @@ func bmcPortChecks(state v1alpha1.State, deps preflightDeps) []preflightCheck {
 	var checks []preflightCheck
 	for _, p := range state.InfrastructureProviders {
 		if v1alpha1.ProviderMachineLibvirt(p) == nil || p.Spec.Machine.Libvirt.BMCEmulation == nil {
+			continue
+		}
+		if providerLibvirtIsRemote(p) {
 			continue
 		}
 		bmc := p.Spec.Machine.Libvirt.BMCEmulation
@@ -244,8 +280,7 @@ func secretsDirCheck(secretsDir string, deps preflightDeps) preflightCheck {
 	return preflightCheck{name: name, ok: true}
 }
 
-func secretFileCheck(refName, secretsDir, label string, deps preflightDeps) preflightCheck {
-	path := filepath.Join(secretsDir, refName)
+func secretFileCheck(refName, path, label string, deps preflightDeps) preflightCheck {
 	name := label + " at " + path
 	info, err := deps.statPath(path)
 	if err != nil {
@@ -255,6 +290,8 @@ func secretFileCheck(refName, secretsDir, label string, deps preflightDeps) pref
 			detail = "missing — run `gitups secrets pull-secret set --name " + refName + " --from-file <path>`"
 		case strings.Contains(label, "credentialRef") || strings.Contains(label, "credentialsRef"):
 			detail = "missing — run `gitups secrets credentials set --name " + refName + " --from-file <path>` (or `--generate` for test fixtures)"
+		case strings.Contains(label, "sshKeyRef"):
+			detail = "missing — ensure the file exists at the path declared in Environment.spec.keys[" + refName + "].file"
 		}
 		return preflightCheck{name: name, ok: false, detail: detail}
 	}
@@ -264,8 +301,7 @@ func secretFileCheck(refName, secretsDir, label string, deps preflightDeps) pref
 	return preflightCheck{name: name, ok: true}
 }
 
-func generatedSecretCheck(refName, secretsDir, label string, deps preflightDeps) preflightCheck {
-	path := filepath.Join(secretsDir, refName)
+func generatedSecretCheck(path, label string, deps preflightDeps) preflightCheck {
 	name := label + " at " + path
 	info, err := deps.statPath(path)
 	if err != nil {
@@ -287,22 +323,32 @@ type secretRefRequirement struct {
 func secretRefChecks(state v1alpha1.State, secretsDir string, selected []Phase, deps preflightDeps) []preflightCheck {
 	requirements := collectSecretRefRequirements(state)
 	var inScope []secretRefRequirement
+	needsSecretsDir := false
 	for _, req := range requirements {
 		if !anyPhaseInScope(req.phases, selected) {
 			continue
+		}
+		if req.generated {
+			needsSecretsDir = true
 		}
 		inScope = append(inScope, req)
 	}
 	if len(inScope) == 0 {
 		return nil
 	}
-	checks := []preflightCheck{secretsDirCheck(secretsDir, deps)}
+	env := environmentForChecks(state)
+	var checks []preflightCheck
+	if needsSecretsDir {
+		checks = append(checks, secretsDirCheck(secretsDir, deps))
+	}
 	for _, req := range inScope {
 		if req.generated {
-			checks = append(checks, generatedSecretCheck(req.refName, secretsDir, req.label, deps))
+			path := filepath.Join(secretsDir, req.refName)
+			checks = append(checks, generatedSecretCheck(path, req.label, deps))
 			continue
 		}
-		checks = append(checks, secretFileCheck(req.refName, secretsDir, req.label, deps))
+		path := resolvedSecretPath(req.refName, env, secretsDir)
+		checks = append(checks, secretFileCheck(req.refName, path, req.label, deps))
 	}
 	return checks
 }

@@ -56,7 +56,7 @@ func newApplyScopeCmd(scope string, stdin io.Reader, stdout io.Writer, stderr io
 	cf := addCommonFlags(cmd)
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "render artifacts and print the Ansible commands without executing them")
 	cmd.Flags().BoolVar(&check, "check", false, "pass --check to ansible-playbook")
-	cmd.Flags().BoolVar(&askBecomePass, "ask-become-pass", true, "prompt for the Ansible become password; pass --ask-become-pass=false when provider hosts allow passwordless sudo")
+	cmd.Flags().BoolVar(&askBecomePass, "ask-become-pass", askBecomePassDefault(), "prompt for the Ansible become password; defaults to false when gitups runs as root, true otherwise")
 	cmd.Flags().BoolVar(&yes, "yes", false, "skip the apply confirmation prompt")
 	cmd.Flags().StringVar(&executable, "ansible-playbook", resolveAnsiblePlaybook(), "ansible-playbook executable to run (defaults to the gitups-managed venv when present)")
 	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material")
@@ -91,7 +91,7 @@ func newApplyScopeCmd(scope string, stdin io.Reader, stdout io.Writer, stderr io
 				return failErr(1, errors.New("apply aborted"))
 			}
 		}
-		result, err := render.All(cf.stateDir, state)
+		result, err := render.All(cf.stateDir, secretsDir, state)
 		if err != nil {
 			return failErr(1, err)
 		}
@@ -190,7 +190,7 @@ func newDestroyScopeCmd(scope string, _ io.Reader, stdout io.Writer, stderr io.W
 	}
 	cf := addCommonFlags(cmd)
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the Ansible commands without executing them")
-	cmd.Flags().BoolVar(&askBecomePass, "ask-become-pass", true, "prompt for the Ansible become password; pass --ask-become-pass=false when provider hosts allow passwordless sudo")
+	cmd.Flags().BoolVar(&askBecomePass, "ask-become-pass", askBecomePassDefault(), "prompt for the Ansible become password; defaults to false when gitups runs as root, true otherwise")
 	cmd.Flags().BoolVar(&yes, "yes", false, "skip the destroy confirmation prompt")
 	cmd.Flags().StringVar(&executable, "ansible-playbook", resolveAnsiblePlaybook(), "ansible-playbook executable to run (defaults to the gitups-managed venv when present)")
 	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material")
@@ -222,7 +222,7 @@ func newDestroyScopeCmd(scope string, _ io.Reader, stdout io.Writer, stderr io.W
 		}
 		printTitle(stdout, "Destroy")
 		printDestroySummary(stdout, selected, askBecomePass, dryRun)
-		result, err := render.All(cf.stateDir, state)
+		result, err := render.All(cf.stateDir, secretsDir, state)
 		if err != nil {
 			return failErr(1, err)
 		}
@@ -420,6 +420,8 @@ func printWorkflowSummary(w io.Writer, title string, selected []Phase, askBecome
 			fmt.Fprintln(w, "[root] phases run as root on provider hosts; ansible will prompt once for the BECOME (sudo) password and reuse it for this workflow.")
 		case askBecomePass:
 			fmt.Fprintln(w, "[root] phases run as root on provider hosts; ansible will prompt for the BECOME (sudo) password.")
+		case os.Geteuid() == 0:
+			fmt.Fprintln(w, "[root] phases run as root on provider hosts; gitups is running as root, no BECOME password prompt needed.")
 		default:
 			fmt.Fprintln(w, "[root] phases run as root on provider hosts; --ask-become-pass=false requires passwordless sudo or an already-root connection user.")
 		}
@@ -466,6 +468,8 @@ func phaseList(selected []Phase) string {
 	}
 	return strings.Join(names, ", ")
 }
+
+var askBecomePassDefault = func() bool { return os.Geteuid() != 0 }
 
 func confirm(in io.Reader, prompt io.Writer, message string) bool {
 	if in == nil {

@@ -21,16 +21,16 @@ type InventoryGroup struct {
 }
 
 type InventoryHost struct {
-	AnsibleHost        string `yaml:"ansible_host" json:"ansible_host"`
-	AnsibleConnection  string `yaml:"ansible_connection,omitempty" json:"ansible_connection,omitempty"`
-	AnsibleUser        string `yaml:"ansible_user" json:"ansible_user"`
-	GitupsProviderName string `yaml:"gitups_provider_name,omitempty" json:"gitups_provider_name,omitempty"`
-	GitupsClusterName  string `yaml:"gitups_cluster_name,omitempty" json:"gitups_cluster_name,omitempty"`
-	GitupsHostName     string `yaml:"gitups_host_name" json:"gitups_host_name"`
-	GitupsSSHKeyRef    string `yaml:"gitups_ssh_key_ref" json:"gitups_ssh_key_ref"`
+	AnsibleHost              string `yaml:"ansible_host" json:"ansible_host"`
+	AnsibleConnection        string `yaml:"ansible_connection,omitempty" json:"ansible_connection,omitempty"`
+	AnsibleUser              string `yaml:"ansible_user" json:"ansible_user"`
+	GitupsProviderName       string `yaml:"gitups_provider_name,omitempty" json:"gitups_provider_name,omitempty"`
+	GitupsClusterName        string `yaml:"gitups_cluster_name,omitempty" json:"gitups_cluster_name,omitempty"`
+	GitupsHostName           string `yaml:"gitups_host_name" json:"gitups_host_name"`
+	AnsibleSSHPrivateKeyFile string `yaml:"ansible_ssh_private_key_file" json:"ansible_ssh_private_key_file"`
 }
 
-func Inventory(state v1alpha1.State) InventoryFile {
+func Inventory(state v1alpha1.State, secretsDir string) InventoryFile {
 	groups := map[string]InventoryGroup{
 		"gitups_infra_hosts": {
 			Hosts: map[string]InventoryHost{},
@@ -43,6 +43,7 @@ func Inventory(state v1alpha1.State) InventoryFile {
 		},
 	}
 	providers := providerIndex(state.InfrastructureProviders)
+	env := primaryEnvironment(state)
 	for _, provider := range state.InfrastructureProviders {
 		hostNames := sortedKeys(provider.Spec.Hosts)
 		for _, hostName := range hostNames {
@@ -52,12 +53,12 @@ func Inventory(state v1alpha1.State) InventoryFile {
 			}
 			inventoryName := fmt.Sprintf("%s-%s", provider.Metadata.Name, hostName)
 			groups["gitups_provider_hosts"].Hosts[inventoryName] = InventoryHost{
-				AnsibleHost:        host.SSH.Address,
-				AnsibleConnection:  ansibleConnection(host.SSH.Address),
-				AnsibleUser:        host.SSH.User,
-				GitupsProviderName: provider.Metadata.Name,
-				GitupsHostName:     hostName,
-				GitupsSSHKeyRef:    host.SSH.KeyRef.Name,
+				AnsibleHost:              host.SSH.Address,
+				AnsibleConnection:        ansibleConnection(host.SSH.Address),
+				AnsibleUser:              host.SSH.User,
+				GitupsProviderName:       provider.Metadata.Name,
+				GitupsHostName:           hostName,
+				AnsibleSSHPrivateKeyFile: resolvedSecretPath(host.SSH.KeyRef.Name, secretsDir, env),
 			}
 		}
 	}
@@ -77,13 +78,13 @@ func Inventory(state v1alpha1.State) InventoryFile {
 			}
 			inventoryName := fmt.Sprintf("%s-%s", item.Metadata.Name, hostName)
 			inventoryHost := InventoryHost{
-				AnsibleHost:        host.SSH.Address,
-				AnsibleConnection:  ansibleConnection(host.SSH.Address),
-				AnsibleUser:        host.SSH.User,
-				GitupsProviderName: closure.MachineProviderName,
-				GitupsClusterName:  item.Metadata.Name,
-				GitupsHostName:     hostName,
-				GitupsSSHKeyRef:    host.SSH.KeyRef.Name,
+				AnsibleHost:              host.SSH.Address,
+				AnsibleConnection:        ansibleConnection(host.SSH.Address),
+				AnsibleUser:              host.SSH.User,
+				GitupsProviderName:       closure.MachineProviderName,
+				GitupsClusterName:        item.Metadata.Name,
+				GitupsHostName:           hostName,
+				AnsibleSSHPrivateKeyFile: resolvedSecretPath(host.SSH.KeyRef.Name, secretsDir, env),
 			}
 			groups["gitups_infra_hosts"].Hosts[inventoryName] = inventoryHost
 			groups["gitups_ocp_hosts"].Hosts[inventoryName] = inventoryHost

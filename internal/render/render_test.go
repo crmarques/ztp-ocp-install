@@ -6,8 +6,41 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/crmarques/ztp-ocp-install-lab/api/v1alpha1"
 	"github.com/crmarques/ztp-ocp-install-lab/internal/infra"
 )
+
+func TestRenderResolvesFileBasedSecretsToSourcePath(t *testing.T) {
+	state := v1alpha1.State{
+		Environments: []v1alpha1.Environment{{
+			Metadata: v1alpha1.Metadata{Name: "env"},
+			Spec: v1alpha1.EnvironmentSpec{
+				Keys: map[string]v1alpha1.EnvironmentKeySpec{
+					"my-key": {File: "/tmp/foo"},
+				},
+			},
+		}},
+		OCPClusters: []v1alpha1.OCPCluster{{
+			Metadata: v1alpha1.Metadata{Name: "hub"},
+			Spec: v1alpha1.OCPClusterSpec{
+				InfrastructureRef: v1alpha1.LocalObjectReference{Name: "hub"},
+				Install: v1alpha1.OCPInstallSpec{
+					SSHKeyRef: v1alpha1.SecretRef{Name: "my-key"},
+				},
+			},
+		}},
+		ClusterInfrastructures: []v1alpha1.ClusterInfrastructure{{
+			Metadata: v1alpha1.Metadata{Name: "hub"},
+		}},
+	}
+	vars := Vars(state, "/anywhere")
+	if got, want := vars.GitupsClusters[0].OCP.Install.SSHKeyRef, "/tmp/foo"; got != want {
+		t.Fatalf("file-based SSHKeyRef got %q, want %q", got, want)
+	}
+	if got := vars.GitupsClusters[0].OCP.Install.SSHKeyRef; strings.HasPrefix(got, "/anywhere") {
+		t.Fatalf("file-based SSHKeyRef must not use secretsDir prefix, got %q", got)
+	}
+}
 
 func TestRenderAllProducesGeneratedAnsibleArtifacts(t *testing.T) {
 	state, err := infra.LoadNormalizeValidate([]string{"../../examples/infra"})
@@ -15,7 +48,7 @@ func TestRenderAllProducesGeneratedAnsibleArtifacts(t *testing.T) {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
 	stateDir := t.TempDir()
-	result, err := All(stateDir, state)
+	result, err := All(stateDir, "", state)
 	if err != nil {
 		t.Fatalf("render All returned error: %v", err)
 	}
@@ -119,7 +152,7 @@ func TestRenderEmitsBMCAuthCredentialRefWhenSet(t *testing.T) {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
 	stateDir := t.TempDir()
-	result, err := All(stateDir, state)
+	result, err := All(stateDir, "", state)
 	if err != nil {
 		t.Fatalf("render All returned error: %v", err)
 	}
@@ -140,7 +173,7 @@ func TestRenderInstallerAssets(t *testing.T) {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
 	stateDir := t.TempDir()
-	result, err := All(stateDir, state)
+	result, err := All(stateDir, "", state)
 	if err != nil {
 		t.Fatalf("render All returned error: %v", err)
 	}
@@ -239,7 +272,7 @@ func TestRenderInstallerOverrides(t *testing.T) {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
 	stateDir := t.TempDir()
-	result, err := All(stateDir, state)
+	result, err := All(stateDir, "", state)
 	if err != nil {
 		t.Fatalf("render All returned error: %v", err)
 	}
@@ -281,7 +314,7 @@ func TestRenderedArtifactsStayUnderStateDir(t *testing.T) {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
 	stateDir := t.TempDir()
-	result, err := All(stateDir, state)
+	result, err := All(stateDir, "", state)
 	if err != nil {
 		t.Fatalf("render All returned error: %v", err)
 	}
@@ -306,7 +339,7 @@ func TestRenderMirrorRegistryRunVars(t *testing.T) {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
 	stateDir := t.TempDir()
-	result, err := All(stateDir, state)
+	result, err := All(stateDir, "", state)
 	if err != nil {
 		t.Fatalf("render All returned error: %v", err)
 	}
@@ -343,7 +376,7 @@ func TestRenderOneHostTreatsLocalhostAsProviderHost(t *testing.T) {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
 	stateDir := t.TempDir()
-	result, err := All(stateDir, state)
+	result, err := All(stateDir, "", state)
 	if err != nil {
 		t.Fatalf("render All returned error: %v", err)
 	}
@@ -372,7 +405,7 @@ func TestRenderVarsExposeOCPInstallMetadata(t *testing.T) {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
 	stateDir := t.TempDir()
-	result, err := All(stateDir, state)
+	result, err := All(stateDir, "", state)
 	if err != nil {
 		t.Fatalf("render All returned error: %v", err)
 	}
@@ -611,7 +644,7 @@ spec:
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
 	stateDir := t.TempDir()
-	result, err := All(stateDir, state)
+	result, err := All(stateDir, "", state)
 	if err != nil {
 		t.Fatalf("render All returned error: %v", err)
 	}
@@ -641,7 +674,7 @@ func TestRenderManagedNetworkDetails(t *testing.T) {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
 	stateDir := t.TempDir()
-	result, err := All(stateDir, state)
+	result, err := All(stateDir, "", state)
 	if err != nil {
 		t.Fatalf("render All returned error: %v", err)
 	}
@@ -670,7 +703,7 @@ func TestRenderBareMetalProjectsPerMachineBMC(t *testing.T) {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
 	stateDir := t.TempDir()
-	result, err := All(stateDir, state)
+	result, err := All(stateDir, "", state)
 	if err != nil {
 		t.Fatalf("render All returned error: %v", err)
 	}
@@ -705,7 +738,7 @@ func TestRenderMultiProviderClosure(t *testing.T) {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
 	stateDir := t.TempDir()
-	result, err := All(stateDir, state)
+	result, err := All(stateDir, "", state)
 	if err != nil {
 		t.Fatalf("render All returned error: %v", err)
 	}

@@ -8,6 +8,12 @@
       gitups_openshift_release_version is required (e.g. 4.21.10);
       pass it via -e or set it in the playbook vars.
 
+- name: Install controller OS packages
+  ansible.builtin.package:
+    name: "{{ gitups_clis_packages }}"
+    state: present
+  become: true
+
 - name: Compute release URL base
   ansible.builtin.set_fact:
     gitups_clis_release_url: "{{ gitups_clis_mirror_base }}/{{ gitups_openshift_release_version }}"
@@ -25,26 +31,47 @@
     state: directory
     mode: "0755"
 
+- name: Compute CLI lookup PATH (install dir + system PATH + /usr/local/bin)
+  ansible.builtin.set_fact:
+    gitups_clis_lookup_path: "{{ gitups_clis_install_dir }}:{{ ansible_facts.env.PATH }}:/usr/local/bin"
+
 - name: Probe installed openshift-install version
   ansible.builtin.command:
-    cmd: "{{ gitups_clis_install_dir }}/openshift-install version"
+    cmd: openshift-install version
   register: gitups_clis_oi_probe
+  environment:
+    PATH: "{{ gitups_clis_lookup_path }}"
   changed_when: false
   failed_when: false
 
 - name: Probe installed oc version
   ansible.builtin.command:
-    cmd: "{{ gitups_clis_install_dir }}/oc version --client"
+    cmd: oc version --client
   register: gitups_clis_oc_probe
+  environment:
+    PATH: "{{ gitups_clis_lookup_path }}"
   changed_when: false
   failed_when: false
 
-- name: Decide whether each CLI needs install
+- name: Parse installed CLI versions
+  ansible.builtin.set_fact:
+    gitups_clis_oi_version: >-
+      {{ gitups_clis_oi_probe.stdout | default('')
+         | regex_search('openshift-install\s+(\S+)', '\1') | first | default('') }}
+    gitups_clis_oc_version: >-
+      {{ gitups_clis_oc_probe.stdout | default('')
+         | regex_search('Client Version:\s*(\S+)', '\1') | first | default('') }}
+
+- name: Decide whether each CLI needs install (accept same-or-newer version)
   ansible.builtin.set_fact:
     gitups_clis_install_oi: >-
-      {{ gitups_openshift_release_version not in (gitups_clis_oi_probe.stdout | default('')) }}
+      {{ gitups_clis_oi_probe.rc != 0
+         or gitups_clis_oi_version | length == 0
+         or gitups_clis_oi_version is not version(gitups_openshift_release_version, '>=') }}
     gitups_clis_install_oc: >-
-      {{ gitups_openshift_release_version not in (gitups_clis_oc_probe.stdout | default('')) }}
+      {{ gitups_clis_oc_probe.rc != 0
+         or gitups_clis_oc_version | length == 0
+         or gitups_clis_oc_version is not version(gitups_openshift_release_version, '>=') }}
 
 - name: Download openshift-client tarball
   ansible.builtin.get_url:
@@ -88,7 +115,9 @@
 
 - name: Report installed CLI versions
   ansible.builtin.command:
-    cmd: "{{ gitups_clis_install_dir }}/{{ item }} version --client"
+    cmd: "{{ item }} version --client"
+  environment:
+    PATH: "{{ gitups_clis_lookup_path }}"
   loop:
     - oc
     - openshift-install
