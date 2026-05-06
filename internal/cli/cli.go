@@ -22,13 +22,8 @@ import (
 	"github.com/crmarques/ztp-ocp-install-lab/internal/render"
 )
 
-// ansibleBundleDirName is the directory under --state-dir where the embedded
-// Ansible bundle is materialised on render/apply/destroy.
 const ansibleBundleDirName = "ansible-bundle"
 
-// Run wires Args + I/O streams onto a fresh cobra tree and maps any returned
-// error to a process exit code. Tests drive the CLI through this function
-// with bytes.Buffer streams.
 func Run(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
 	root := newRootCmd(stdin, stdout, stderr)
 	root.SetArgs(args)
@@ -47,9 +42,6 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, 
 	return 1
 }
 
-// exitError carries a process exit code (and optional message) up through
-// cobra's Execute path. silent suppresses stderr printing for commands that
-// already emitted their own report (for example diff drift).
 type exitError struct {
 	code   int
 	err    error
@@ -70,8 +62,6 @@ func failf(code int, format string, a ...any) *exitError {
 	return &exitError{code: code, err: fmt.Errorf(format, a...)}
 }
 func silentExit(code int) *exitError { return &exitError{code: code, silent: true} }
-
-// ---------- Simple subcommands -------------------------------------------------
 
 func newValidateCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 	var (
@@ -398,11 +388,6 @@ func newStatusCmd(stdout io.Writer) *cobra.Command {
 	return cmd
 }
 
-// ---------- Shared helpers -----------------------------------------------------
-
-// extractBundle materialises the embedded Ansible tree into the state dir
-// and returns its absolute path. The bundle is rewritten on every call so a
-// stale extraction cannot leak old playbooks into a new run.
 func extractBundle(stateDir string) (string, error) {
 	bundleDir := filepath.Join(stateDir, ansibleBundleDirName)
 	if err := embedded.ExtractAnsibleBundle(bundleDir); err != nil {
@@ -411,18 +396,8 @@ func extractBundle(stateDir string) (string, error) {
 	return filepath.Abs(bundleDir)
 }
 
-// applySupportedMachineFlavors lists the InfrastructureProvider machine
-// flavors that the apply path currently supports end-to-end (preflight →
-// render → ansible bundle → e2e fixture). Adding a new flavor here is the
-// single switch every other provider integration flips on once its e2e
-// case lands; specs/architecture.md "Provider Adapters" documents what
-// "supported" means.
 var applySupportedMachineFlavors = map[string]bool{
 	v1alpha1.MachineFlavorLibvirt: true,
-	// baremetal: roles exist (cluster_substrate_baremetal, provider_bmc_redfish);
-	// e2e fixture not in tree yet.
-	// vsphere, kubevirt: substrate roles are placeholders until vCenter / KubeVirt
-	// adapters are wired through render and have a fixture.
 }
 
 func ensureApplySupported(state v1alpha1.State) error {
@@ -533,7 +508,7 @@ func splitExisting(paths []string) (present, missing []string) {
 }
 
 type fileDiff struct {
-	kind string // "missing", "extra", "changed"
+	kind string
 	path string
 }
 
@@ -592,9 +567,6 @@ func walkRelative(root string) (map[string]struct{}, error) {
 		if err != nil {
 			return err
 		}
-		// Skip ansible artifacts and the embedded-bundle extraction: both are
-		// run-time side-effects, not user intent, so they must not register
-		// as drift.
 		if strings.HasPrefix(rel, filepath.Join("ansible", "artifacts")+string(os.PathSeparator)) {
 			return nil
 		}

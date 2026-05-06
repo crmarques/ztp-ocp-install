@@ -105,9 +105,6 @@
     gitups_mirror_registry_final_state: "{{ ((gitups_mirror_registry_post_inspect.containers | first).State | default({})) if (gitups_mirror_registry_post_inspect.containers | default([]) | length) > 0 else {} }}"
   changed_when: false
 
-# timeout(1) returns 124 when the wait kept blocking; that means no stop
-# event occurred during the probe window, so the container is stably
-# running. Any other rc means the registry hit a stop state at least once.
 - name: Fail when mirror registry container is not healthy
   ansible.builtin.fail:
     msg: |
@@ -120,12 +117,6 @@
       Inspect: {{ gitups_mirror_registry_root }}/last-inspect.json
   when: gitups_mirror_registry_wait.rc != 124
 
-# The registry binds 0.0.0.0:<port> via host networking, but firewalld's
-# libvirt zone (where guest bridges land) defaults to a reject rule that
-# denies anything outside dhcp/dns/ssh. Without an explicit allow, VMs on
-# the libvirt bridge get connection-refused dialing the registry through
-# the gateway IP. Open the port permanently and live so the rule survives
-# both runtime restarts and firewalld reloads.
 - name: Check firewalld state on mirror registry host
   ansible.builtin.command:
     argv:

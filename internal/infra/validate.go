@@ -12,7 +12,6 @@ import (
 	"github.com/crmarques/ztp-ocp-install-lab/api/v1alpha1"
 )
 
-// Validate enforces the four-domain-layer model declared in ADR 0001.
 func Validate(state v1alpha1.State) error {
 	var errs []string
 	errs = append(errs, validateEnvironments(state.Environments)...)
@@ -28,8 +27,6 @@ func Validate(state v1alpha1.State) error {
 
 var dnsLabel = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
 
-// IsDNSLabel reports whether s is a lowercase DNS label suitable for SecretRef
-// or LocalObjectReference values.
 func IsDNSLabel(s string) bool {
 	return dnsLabel.MatchString(s)
 }
@@ -152,8 +149,6 @@ func validateOCPInstall(env v1alpha1.Environment) []string {
 	}
 	switch v1alpha1.OCPInstallKind(env) {
 	case v1alpha1.OCPInstallKindConnected:
-		// connected must be the empty struct: ConnectedSpec carries no fields,
-		// so the schema enforces this. There is nothing to forbid here.
 	case v1alpha1.OCPInstallKindRestricted:
 		errs = append(errs, validateRegistriesBlock(env, env.Spec.OCPInstall.Restricted.Registries, false)...)
 	case v1alpha1.OCPInstallKindDisconnected:
@@ -163,9 +158,6 @@ func validateOCPInstall(env v1alpha1.Environment) []string {
 	return errs
 }
 
-// validateOCPInstallProxy enforces the proxy contract: the URL fields are
-// optional, but when credentialsRef is set the URLs must omit inline
-// credentials so apply-time merging is the single source of auth material.
 func validateOCPInstallProxy(env v1alpha1.Environment) []string {
 	proxy := v1alpha1.OCPInstallProxyOf(env)
 	if proxy == nil {
@@ -192,10 +184,6 @@ func validateOCPInstallProxy(env v1alpha1.Environment) []string {
 	return errs
 }
 
-// proxyURLHasInlineCredentials reports whether a proxy URL of the form
-// scheme://[user[:pass]@]host[:port] already carries authority credentials.
-// The check is conservative: it matches `<scheme>://<anything>@`, which is
-// the only place credentials can legally sit in a proxy URL.
 func proxyURLHasInlineCredentials(url string) bool {
 	idx := strings.Index(url, "://")
 	if idx < 0 {
@@ -203,8 +191,6 @@ func proxyURLHasInlineCredentials(url string) bool {
 	}
 	authority := url[idx+3:]
 	if at := strings.Index(authority, "@"); at >= 0 {
-		// Reject anything before the first `/` in the authority that contains
-		// an `@`; an `@` after the first slash is part of a path, not auth.
 		if slash := strings.Index(authority, "/"); slash < 0 || at < slash {
 			return true
 		}
@@ -470,11 +456,6 @@ func validateClusterInfrastructures(state v1alpha1.State) []string {
 	return errs
 }
 
-// synthesizeClosureProvider folds a ProviderClosure into a single
-// InfrastructureProvider value so validators (and renderers) that take a
-// single provider continue to work over a multi-provider cluster's union.
-// The synthesised provider's metadata.name is the cluster name to keep
-// error messages distinguishable.
 func synthesizeClosureProvider(ci v1alpha1.ClusterInfrastructure, closure v1alpha1.ProviderClosure) v1alpha1.InfrastructureProvider {
 	return v1alpha1.InfrastructureProvider{
 		Metadata: v1alpha1.Metadata{Name: strings.Join(closure.ProviderRefNames, "+")},
@@ -750,8 +731,6 @@ func validateNodes(ocp v1alpha1.OCPCluster, ci v1alpha1.ClusterInfrastructure) [
 	return errs
 }
 
-// installOverrideForbiddenKeys lists installer-native keys whose value Gitups
-// derives. Users must not override them.
 var installOverrideForbiddenKeys = map[string]bool{
 	"apiVersion":            true,
 	"metadata":              true,
@@ -764,10 +743,6 @@ var installOverrideForbiddenKeys = map[string]bool{
 	"imageDigestSources":    true,
 }
 
-// installOverrideForbiddenNestedPaths lists `top.sub` install-config keys
-// whose value Gitups owns even when the user only supplies the inner key
-// under a permitted top-level field (e.g. networking.machineNetwork is
-// derived from ClusterInfrastructure.networks).
 var installOverrideForbiddenNestedPaths = []string{
 	"networking.machineNetwork",
 	"platform.baremetal.apiVIPs",
@@ -776,7 +751,6 @@ var installOverrideForbiddenNestedPaths = []string{
 	"platform.vsphere.ingressVIPs",
 }
 
-// agentConfigForbiddenKeys are top-level agent-config fields Gitups owns.
 var agentConfigForbiddenKeys = map[string]bool{
 	"apiVersion":           true,
 	"kind":                 true,
@@ -879,12 +853,6 @@ func validateCrossLayer(state v1alpha1.State) []string {
 	return errs
 }
 
-// validateMirrorRegistryPlacement enforces the cross-layer rule that a
-// disconnected install requires exactly one provider in the loaded set to
-// supply spec.registry.mirrorRegistry. Omission means external — but for
-// disconnected we reject that and guide the operator to add the capability or
-// switch to restricted. Also cross-checks the mirror URL's port against the
-// supplying provider's declared port.
 func validateMirrorRegistryPlacement(state v1alpha1.State) []string {
 	env := primaryEnvironment(&state)
 	if env == nil {
@@ -925,8 +893,6 @@ func validateMirrorRegistryPlacement(state v1alpha1.State) []string {
 	return errs
 }
 
-// mirrorURLPort extracts the trailing :port from a registry URL of the form
-// host[:port][/path]. Returns 0 when no explicit port is present.
 func mirrorURLPort(u string) int {
 	host := u
 	if idx := strings.Index(host, "/"); idx >= 0 {
@@ -1016,8 +982,6 @@ func isLocalMirrorRef(ref string, mirrorURL string) bool {
 	mirrorURL = strings.TrimRight(mirrorURL, "/")
 	return ref == mirrorURL || strings.HasPrefix(ref, mirrorURL+"/")
 }
-
-// ----- index helpers -----
 
 func providerIndex(providers []v1alpha1.InfrastructureProvider) map[string]v1alpha1.InfrastructureProvider {
 	out := map[string]v1alpha1.InfrastructureProvider{}

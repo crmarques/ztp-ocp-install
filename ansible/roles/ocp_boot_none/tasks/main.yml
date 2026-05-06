@@ -1,8 +1,4 @@
 ---
-# Intentional no-op. Selected when the provider has no external boot
-# control (provider_bmc_none case): the substrate role is responsible for
-# boot. Exists so the dynamic include_role in ocp_install_agent always
-# resolves.
 - name: Hub boot for provider {{ gitups_current_provider.name }} is none
   ansible.builtin.debug:
     msg: "Provider {{ gitups_current_provider.name }} (kind {{ gitups_current_provider.kind }}) has no external BMC; substrate role owns boot."

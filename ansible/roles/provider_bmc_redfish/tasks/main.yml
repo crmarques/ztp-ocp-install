@@ -1,9 +1,4 @@
 ---
-# Provider-scoped role for the real-Redfish BMC path. No service install (the
-# BMCs are managed by the hardware), just credential staging and reachability
-# probing. Writes a per-provider bmc.yml manifest in the same shape as the one
-# provider_bmc_emulated will eventually emit, so ocp_boot_redfish can read
-# either path without caring whether the BMC is emulated or real.
 
 - name: Aggregate bare-metal BMC endpoints for current provider
   ansible.builtin.set_fact:
@@ -46,9 +41,6 @@
     label: "{{ item.item }}"
   when: not (item.stat.exists | default(false))
 
-# Real-BMC reachability probe. Driven via ansible.builtin.uri so the role
-# stays portable to BMCs whose Redfish stack does not match the
-# community.general.redfish_info expectations.
 - name: Probe each BMC service root
   ansible.builtin.uri:
     url: "{{ item.bareMetal.address | regex_replace('^redfish-virtualmedia\\+', '') | regex_replace('/Systems/.*$', '/') }}"

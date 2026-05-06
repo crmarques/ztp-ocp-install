@@ -160,9 +160,6 @@ func TestPreflightClusterPhaseSkipsKvmWithoutQemuKvm(t *testing.T) {
 	}
 }
 
-// /dev/kvm is a cluster-phase concern (libvirt domain creation); the provider
-// phase only needs the BMC TCP ports free. Running provider in isolation
-// must not demand KVM.
 func TestPreflightProviderOnlyPhaseSkipsKvm(t *testing.T) {
 	state := v1alpha1.State{
 		InfrastructureProviders: []v1alpha1.InfrastructureProvider{
@@ -570,9 +567,6 @@ func TestPreflightProviderPhaseFailsWhenBMCPortInUse(t *testing.T) {
 	}
 }
 
-// Idempotent re-apply: ports held by *this provider's* own gitups units are
-// not a conflict. Apply will reconfigure/restart the unit, so the preflight
-// must pass instead of demanding the user manually stop a service we own.
 func TestPreflightProviderPhaseAllowsPortHeldByMatchingGitupsUnit(t *testing.T) {
 	state := v1alpha1.State{
 		InfrastructureProviders: []v1alpha1.InfrastructureProvider{{
@@ -626,8 +620,6 @@ func TestPreflightProviderPhaseAllowsPortHeldByMatchingGitupsUnit(t *testing.T) 
 	}
 }
 
-// Port held by something *other* than this provider's gitups unit is a real
-// conflict — preflight must still fail.
 func TestPreflightProviderPhaseFailsWhenPortHeldByForeignUnit(t *testing.T) {
 	state := v1alpha1.State{
 		InfrastructureProviders: []v1alpha1.InfrastructureProvider{{
@@ -760,9 +752,6 @@ func TestPreflightChecksProxyCredentialsRef(t *testing.T) {
 	}
 }
 
-// host_proxy is the first task of both provider and cluster plays, so
-// proxy credentials are needed for either of those phases — but never for
-// a ocp-only run, which goes straight to openshift-install on the ocp host.
 func TestPreflightProxyCredentialsScopedAwayFromHubOnlyRun(t *testing.T) {
 	state := v1alpha1.State{
 		Environments: []v1alpha1.Environment{{

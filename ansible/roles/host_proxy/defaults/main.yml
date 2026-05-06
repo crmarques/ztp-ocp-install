@@ -1,15 +1,7 @@
 ---
-# host_proxy reads the proxy block exposed by Gitups under
-# `gitups_ocp_install.proxy`. When unset, every task in this role is a no-op,
-# so it is safe to include unconditionally for both connected and proxied
-# environments.
 gitups_proxy_http: "{{ (gitups_ocp_install.proxy | default({})).httpProxy | default('') }}"
 gitups_proxy_https: "{{ (gitups_ocp_install.proxy | default({})).httpsProxy | default('') }}"
 gitups_proxy_no: "{{ (gitups_ocp_install.proxy | default({})).noProxy | default([]) | join(',') }}"
 gitups_proxy_credentials_ref: "{{ (gitups_ocp_install.proxy | default({})).credentialsRef | default('') }}"
 
-# Filesystem location of user-provided secret material, mirroring the
-# ocp_install_agent default. The Gitups CLI passes this explicitly via
-# `-e gitups_secrets_dir=...`; this fallback keeps direct role execution
-# functional.
 gitups_secrets_dir: "{{ (lookup('env', 'GITUPS_HOME') | default(lookup('env', 'HOME') ~ '/.gitups', true)) }}/secrets"

@@ -39,9 +39,6 @@
         label: "{{ item.name }}"
       when: gitups_current_cluster.provider.kind == 'libvirt'
 
-    # Close the firewalld port opened by the substrate role before tearing
-    # the libvirt bridge down: net-destroy removes the bridge, and the
-    # firewalld zone binding goes with it.
     - name: Check firewalld state
       ansible.builtin.command:
         argv:

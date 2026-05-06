@@ -1,6 +1,3 @@
-// Package v1alpha1 defines the user-authored desired-state API. The schema is
-// the four-domain-layer model declared in ADR 0001: Environment,
-// InfrastructureProvider, ClusterInfrastructure, OCPCluster.
 package v1alpha1
 
 import "fmt"
@@ -67,7 +64,6 @@ const (
 	EndpointIngress = "ingress"
 )
 
-// State is the in-memory container of all loaded resources.
 type State struct {
 	Environments            []Environment            `yaml:"environments,omitempty" json:"environments,omitempty"`
 	InfrastructureProviders []InfrastructureProvider `yaml:"infrastructureProviders" json:"infrastructureProviders"`
@@ -84,17 +80,13 @@ type Metadata struct {
 	Name string `yaml:"name" json:"name"`
 }
 
-// LocalObjectReference points at another v1alpha1 object by name.
 type LocalObjectReference struct {
 	Name string `yaml:"name" json:"name"`
 }
 
-// SecretRef points at install-time secret material by name.
 type SecretRef struct {
 	Name string `yaml:"name" json:"name"`
 }
-
-// ----- Environment -----
 
 type Environment struct {
 	APIVersion string          `yaml:"apiVersion" json:"apiVersion"`
@@ -113,48 +105,26 @@ type EnvironmentSpec struct {
 	ComponentImages map[string]map[string]ComponentImageSpec `yaml:"componentImages,omitempty" json:"componentImages,omitempty"`
 }
 
-// EnvironmentKeySpec declares the source for a named key whose name is
-// referenced by one or more SecretRefs in the desired state. Exactly one
-// source sub-block is set: `file` points at operator-supplied material on
-// disk; `generated` declares material gitups will materialize itself.
-// `gitups secrets generate` walks every declared key and produces or links
-// `<secretsDir>/<name>` accordingly (symlink for SSH file refs, copy for
-// other file refs, fresh material for generated entries).
 type EnvironmentKeySpec struct {
 	File      string                   `yaml:"file,omitempty" json:"file,omitempty"`
 	Generated *EnvironmentKeyGenerated `yaml:"generated,omitempty" json:"generated,omitempty"`
 }
 
-// EnvironmentKeyGenerated is a structural-discriminator union: exactly one
-// of Credentials or SelfSignedCertificate is set. Adding a new generated
-// kind means adding a new sub-block here, never a new top-level command.
 type EnvironmentKeyGenerated struct {
 	Credentials           *GeneratedCredentialsSpec  `yaml:"credentials,omitempty" json:"credentials,omitempty"`
 	SelfSignedCertificate *SelfSignedCertificateSpec `yaml:"selfSignedCertificate,omitempty" json:"selfSignedCertificate,omitempty"`
 }
 
-// GeneratedCredentialsSpec declares a `username:password\n` secret. The
-// password is generated on first materialization and is preserved on
-// subsequent runs to keep the BMC/registry/proxy/etc. callers stable.
 type GeneratedCredentialsSpec struct {
 	Username string `yaml:"username,omitempty" json:"username,omitempty"`
 }
 
-// EnvironmentOCPInstallSpec selects how the OpenShift install reaches its
-// release content and supporting registries. It is structural: exactly one of
-// Connected, Restricted, or Disconnected is set; the presence of the
-// sub-block is the discriminator (state-model.md R3). The selection scopes
-// only OpenShift install material — release payload, mirror registry, and
-// trust bundles — and does not describe the lab host's substrate
-// connectivity.
 type EnvironmentOCPInstallSpec struct {
 	Connected    *ConnectedSpec    `yaml:"connected,omitempty" json:"connected,omitempty"`
 	Restricted   *RestrictedSpec   `yaml:"restricted,omitempty" json:"restricted,omitempty"`
 	Disconnected *DisconnectedSpec `yaml:"disconnected,omitempty" json:"disconnected,omitempty"`
 }
 
-// ConnectedSpec is intentionally empty: no proxy, mirror, or trust material is
-// permitted under `connected` (security.md).
 type ConnectedSpec struct{}
 
 type RestrictedSpec struct {
@@ -168,14 +138,9 @@ type DisconnectedSpec struct {
 }
 
 type OCPInstallProxy struct {
-	HTTPProxy  string   `yaml:"httpProxy,omitempty" json:"httpProxy,omitempty"`
-	HTTPSProxy string   `yaml:"httpsProxy,omitempty" json:"httpsProxy,omitempty"`
-	NoProxy    []string `yaml:"noProxy,omitempty" json:"noProxy,omitempty"`
-	// CredentialsRef points at a single-line `username:password` secret used
-	// to authenticate against an upstream proxy. The URL fields above must be
-	// supplied without inline credentials when CredentialsRef is set; gitups
-	// merges the resolved credentials into the URL at apply time so they
-	// never appear in committed YAML or rendered install-config artifacts.
+	HTTPProxy      string    `yaml:"httpProxy,omitempty" json:"httpProxy,omitempty"`
+	HTTPSProxy     string    `yaml:"httpsProxy,omitempty" json:"httpsProxy,omitempty"`
+	NoProxy        []string  `yaml:"noProxy,omitempty" json:"noProxy,omitempty"`
 	CredentialsRef SecretRef `yaml:"credentialsRef,omitempty" json:"credentialsRef,omitempty"`
 }
 
@@ -187,11 +152,6 @@ type OCPInstallRegistries struct {
 type OCPInstallRegistryMirror struct {
 	URL            string    `yaml:"url" json:"url"`
 	CredentialsRef SecretRef `yaml:"credentialsRef,omitempty" json:"credentialsRef,omitempty"`
-	// TrustBundleRef names the secret that carries the registry's CA. The
-	// secret may be operator-supplied (declare it in Environment.spec.keys
-	// with a `file:` source) or gitups-generated (declare it with a
-	// `generated.selfSignedCertificate` source). Either way, this field
-	// just points at the name; how it is sourced lives in `keys`.
 	TrustBundleRef SecretRef `yaml:"trustBundleRef,omitempty" json:"trustBundleRef,omitempty"`
 }
 
@@ -205,16 +165,10 @@ type EnvironmentOpenShiftSpec struct {
 	Networking *OCPNetworkingSpec `yaml:"networking,omitempty" json:"networking,omitempty"`
 }
 
-// ComponentImageSpec carries both image refs Gitups may use to pull a
-// component. `local` is tried first when set; `public` is the fallback. At
-// least one of the two must be set, but the schema permits either to be
-// omitted (leaving the other as the only acceptable source).
 type ComponentImageSpec struct {
 	Local  string `yaml:"local,omitempty" json:"local,omitempty"`
 	Public string `yaml:"public,omitempty" json:"public,omitempty"`
 }
-
-// ----- InfrastructureProvider -----
 
 type InfrastructureProvider struct {
 	APIVersion string                     `yaml:"apiVersion" json:"apiVersion"`
@@ -224,16 +178,6 @@ type InfrastructureProvider struct {
 	SourcePath string                     `yaml:"-" json:"-"`
 }
 
-// InfrastructureProviderSpec is capability-oriented: each top-level field is
-// an independent capability the provider may supply. v1 ships only the
-// `machine` capability; later rounds add `loadBalancer`, `nameResolution`, …
-// At least one capability sub-block must be set.
-//
-// Hosts is a shared provider host pool, optional. Capabilities that need an
-// SSH-reachable Linux host (libvirt substrate, future haProxy / hostsFile)
-// reference an entry by name. Capabilities that talk to an appliance over an
-// API embed their endpoint in the capability block — the host pool stays
-// optional so appliance-style providers need not declare it.
 type InfrastructureProviderSpec struct {
 	Hosts          map[string]ProviderHostSpec   `yaml:"hosts,omitempty" json:"hosts,omitempty"`
 	Machine        *MachineCapabilitySpec        `yaml:"machine,omitempty" json:"machine,omitempty"`
@@ -242,20 +186,10 @@ type InfrastructureProviderSpec struct {
 	Registry       *RegistryCapabilitySpec       `yaml:"registry,omitempty" json:"registry,omitempty"`
 }
 
-// RegistryCapabilitySpec is the structural-discriminator union for the
-// container-image registry capability. v1 ships only mirrorRegistry — a
-// docker/distribution server colocated with a provider host. Omission of the
-// capability block on a provider means external — the operator runs the
-// mirror themselves and disconnected installs only consume it.
 type RegistryCapabilitySpec struct {
 	MirrorRegistry *RegistryMirrorSpec `yaml:"mirrorRegistry,omitempty" json:"mirrorRegistry,omitempty"`
 }
 
-// RegistryMirrorSpec describes a docker/distribution mirror server colocated
-// on a provider host. The server's URL, credentials, and trust material are
-// owned by Environment.spec.ocpInstall.{disconnected,restricted}.registries.mirror;
-// this block contributes only the placement (which provider host runs it)
-// and tunables (port, runtime, data path).
 type RegistryMirrorSpec struct {
 	HostRef LocalObjectReference `yaml:"hostRef" json:"hostRef"`
 	Port    int                  `yaml:"port,omitempty" json:"port,omitempty"`
@@ -263,10 +197,6 @@ type RegistryMirrorSpec struct {
 	Runtime string               `yaml:"runtime,omitempty" json:"runtime,omitempty"`
 }
 
-// NameResolutionCapabilitySpec is the structural-discriminator union for the
-// name-resolution capability. v1 ships only hostsFile (managed /etc/hosts on
-// listed provider hosts). Omission of the capability block on a provider
-// means external — the operator owns DNS for clusters bound to that provider.
 type NameResolutionCapabilitySpec struct {
 	HostsFile *NameResolutionHostsFileSpec `yaml:"hostsFile,omitempty" json:"hostsFile,omitempty"`
 }
@@ -276,9 +206,6 @@ type NameResolutionHostsFileSpec struct {
 	AdditionalIngressHosts []string               `yaml:"additionalIngressHosts,omitempty" json:"additionalIngressHosts,omitempty"`
 }
 
-// LoadBalancerCapabilitySpec is the structural-discriminator union for the
-// load-balancer capability. v1 ships only haProxy; future appliance flavors
-// (BigIP, NSX-LB) slot in here without schema rework.
 type LoadBalancerCapabilitySpec struct {
 	HAProxy *LoadBalancerHAProxySpec `yaml:"haProxy,omitempty" json:"haProxy,omitempty"`
 }
@@ -288,10 +215,6 @@ type LoadBalancerHAProxySpec struct {
 	Runtime string               `yaml:"runtime,omitempty" json:"runtime,omitempty"`
 }
 
-// ProviderHostSpec describes one host in the provider's pool. The connection
-// sub-block (ssh in v1) is the structural discriminator; future appliance
-// providers may add httpsApi etc. LibvirtURI is a libvirt-only hint that
-// happens to live on the host so the substrate can connect remotely.
 type ProviderHostSpec struct {
 	SSH          *ProviderHostSSHSpec `yaml:"ssh,omitempty" json:"ssh,omitempty"`
 	LibvirtURI   string               `yaml:"libvirtURI,omitempty" json:"libvirtURI,omitempty"`
@@ -304,9 +227,6 @@ type ProviderHostSSHSpec struct {
 	KeyRef  SecretRef `yaml:"keyRef" json:"keyRef"`
 }
 
-// MachineCapabilitySpec is the substrate-flavor union for the machine
-// capability. Exactly one flavor sub-block is set (state-model R3); the
-// presence of the sub-block is the discriminator.
 type MachineCapabilitySpec struct {
 	Libvirt   *MachineProviderLibvirtSpec   `yaml:"libvirt,omitempty" json:"libvirt,omitempty"`
 	Baremetal *MachineProviderBaremetalSpec `yaml:"baremetal,omitempty" json:"baremetal,omitempty"`
@@ -355,8 +275,6 @@ type MachineProviderKubevirtSpec struct {
 	StorageClassRef *LocalObjectReference `yaml:"storageClassRef,omitempty" json:"storageClassRef,omitempty"`
 }
 
-// ----- ClusterInfrastructure -----
-
 type ClusterInfrastructure struct {
 	APIVersion string                    `yaml:"apiVersion" json:"apiVersion"`
 	Kind       string                    `yaml:"kind" json:"kind"`
@@ -373,15 +291,6 @@ type ClusterInfrastructureSpec struct {
 	LoadBalancers map[string]LoadBalancerSpec   `yaml:"loadBalancers,omitempty" json:"loadBalancers,omitempty"`
 }
 
-// ProviderClosure is the merged view of all providers a ClusterInfrastructure
-// references via spec.providerRefs. Each capability sub-pointer is set by at
-// most one supplying provider in the closure; the validator rejects multiple
-// suppliers for the same capability. Hosts is the union of all referenced
-// providers' host pools (host names must be unique across the closure).
-//
-// MachineProviderName / LoadBalancerProviderName / NameResolutionProviderName
-// record which provider supplied that capability — used for renderer
-// dispatch and error messages.
 type ProviderClosure struct {
 	Hosts                      map[string]ProviderHostSpec
 	Machine                    *MachineCapabilitySpec
@@ -392,13 +301,9 @@ type ProviderClosure struct {
 	LoadBalancerProviderName   string
 	NameResolutionProviderName string
 	RegistryProviderName       string
-	// ProviderRefNames lists the provider names in the order declared on the
-	// ClusterInfrastructure; renderer entry points use this to keep deterministic
-	// output across multi-provider closures.
-	ProviderRefNames []string
+	ProviderRefNames           []string
 }
 
-// MachineFlavor reports the machine-flavor discriminator on a closure.
 func (c ProviderClosure) MachineFlavor() string {
 	if c.Machine == nil {
 		return ""
@@ -417,11 +322,6 @@ func (c ProviderClosure) MachineFlavor() string {
 	}
 }
 
-// BuildProviderClosure resolves a cluster's providerRefs against the loaded
-// provider set and merges their capabilities. Errors are returned as a slice;
-// validation reports them. The closure is best-effort — even when errors
-// exist, the returned closure carries whatever could be merged so renderer
-// callers can produce partial output for diagnostics.
 func BuildProviderClosure(ci ClusterInfrastructure, providers map[string]InfrastructureProvider) (ProviderClosure, []string) {
 	closure := ProviderClosure{Hosts: map[string]ProviderHostSpec{}}
 	var errs []string
@@ -475,10 +375,6 @@ func BuildProviderClosure(ci ClusterInfrastructure, providers map[string]Infrast
 	return closure, errs
 }
 
-// MachineNetworkSpec describes a network instance the cluster needs on the
-// referenced provider. Provider-typed sub-blocks carry the provider-specific
-// realisation of that network and must match the provider's structural
-// sub-block on InfrastructureProvider.spec.
 type MachineNetworkSpec struct {
 	CIDR       string                     `yaml:"cidr" json:"cidr"`
 	Gateway    string                     `yaml:"gateway,omitempty" json:"gateway,omitempty"`
@@ -552,7 +448,6 @@ type MachineVsphereSpec struct {
 	Template  string `yaml:"template,omitempty" json:"template,omitempty"`
 }
 
-// ClusterEndpointsSpec holds api / api-int / ingress endpoints with VIPs.
 type ClusterEndpointsSpec struct {
 	API     *EndpointSpec `yaml:"api,omitempty" json:"api,omitempty"`
 	APIInt  *EndpointSpec `yaml:"apiInt,omitempty" json:"apiInt,omitempty"`
@@ -564,15 +459,9 @@ type EndpointSpec struct {
 	Address  string `yaml:"address" json:"address"`
 }
 
-// LoadBalancerSpec binds a list of cluster endpoints (by name) to the
-// provider's load-balancer capability. Standard OpenShift LB ports are
-// implied by endpoint names: api → 6443, apiInt → 22623, ingress → 80+443.
-// Placement now lives on the provider (spec.loadBalancer.<flavor>.hostRef).
 type LoadBalancerSpec struct {
 	Endpoints []string `yaml:"endpoints" json:"endpoints"`
 }
-
-// ----- OCPCluster -----
 
 type OCPCluster struct {
 	APIVersion string         `yaml:"apiVersion" json:"apiVersion"`
@@ -636,11 +525,6 @@ type OCPClusterNetworkCIDR struct {
 	HostPrefix int    `yaml:"hostPrefix,omitempty" json:"hostPrefix,omitempty"`
 }
 
-// ----- Discriminator helpers -----
-
-// MachineFlavor reports the structural discriminator of an
-// InfrastructureProvider's machine capability. Returns the empty string when
-// no recognised flavor sub-block is set; validation rejects that case.
 func MachineFlavor(provider InfrastructureProvider) string {
 	if provider.Spec.Machine == nil {
 		return ""
@@ -659,8 +543,6 @@ func MachineFlavor(provider InfrastructureProvider) string {
 	}
 }
 
-// MachineKind reports the structural discriminator of a MachineSpec, returning
-// the substrate-flavor name that aligns with MachineFlavor() on the provider.
 func MachineKind(machine MachineSpec) string {
 	switch {
 	case machine.Libvirt != nil:
@@ -674,8 +556,6 @@ func MachineKind(machine MachineSpec) string {
 	}
 }
 
-// ProviderMachineLibvirt returns the libvirt machine-capability spec on
-// provider, or nil. Convenience for the common consumer pattern.
 func ProviderMachineLibvirt(provider InfrastructureProvider) *MachineProviderLibvirtSpec {
 	if provider.Spec.Machine == nil {
 		return nil
@@ -683,8 +563,6 @@ func ProviderMachineLibvirt(provider InfrastructureProvider) *MachineProviderLib
 	return provider.Spec.Machine.Libvirt
 }
 
-// ProviderMirrorRegistry returns the mirror-registry capability spec on
-// provider, or nil. Convenience for the common consumer pattern.
 func ProviderMirrorRegistry(provider InfrastructureProvider) *RegistryMirrorSpec {
 	if provider.Spec.Registry == nil {
 		return nil
@@ -692,9 +570,6 @@ func ProviderMirrorRegistry(provider InfrastructureProvider) *RegistryMirrorSpec
 	return provider.Spec.Registry.MirrorRegistry
 }
 
-// OCPInstallKind reports the structural discriminator of an Environment's
-// ocpInstall block. Returns the empty string when no sub-block is set;
-// validation rejects that case.
 func OCPInstallKind(env Environment) string {
 	switch {
 	case env.Spec.OCPInstall.Connected != nil:
@@ -708,8 +583,6 @@ func OCPInstallKind(env Environment) string {
 	}
 }
 
-// OCPInstallRegistriesOf returns the registries pointer for restricted or
-// disconnected modes, and nil otherwise (connected, unset).
 func OCPInstallRegistriesOf(env Environment) *OCPInstallRegistries {
 	switch {
 	case env.Spec.OCPInstall.Disconnected != nil:
@@ -721,8 +594,6 @@ func OCPInstallRegistriesOf(env Environment) *OCPInstallRegistries {
 	}
 }
 
-// OCPInstallProxyOf returns the proxy pointer for restricted or
-// disconnected modes, and nil otherwise.
 func OCPInstallProxyOf(env Environment) *OCPInstallProxy {
 	switch {
 	case env.Spec.OCPInstall.Disconnected != nil:
@@ -734,8 +605,6 @@ func OCPInstallProxyOf(env Environment) *OCPInstallProxy {
 	}
 }
 
-// StandardLoadBalancerPorts returns the implied (listen, target) port pairs
-// for a standard OpenShift endpoint name.
 func StandardLoadBalancerPorts(endpoint string) [][2]int {
 	switch endpoint {
 	case EndpointAPI:
@@ -749,10 +618,6 @@ func StandardLoadBalancerPorts(endpoint string) [][2]int {
 	}
 }
 
-// StandardEndpointBackendRole returns the recommended backend node role for an
-// endpoint. ingress goes to workers when present, otherwise control-plane;
-// callers handle the worker fallback themselves. api/apiInt always go to
-// control-plane.
 func StandardEndpointBackendRole(endpoint string) string {
 	switch endpoint {
 	case EndpointAPI, EndpointAPIInt:

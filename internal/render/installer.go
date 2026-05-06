@@ -65,11 +65,6 @@ func InstallerConfig(state v1alpha1.State, ocp v1alpha1.OCPCluster) (map[string]
 	}
 	if ocp.Spec.Install.AdditionalTrustBundleRef.Name != "" {
 		base["additionalTrustBundle"] = secretRefPlaceholder("trust-bundle", ocp.Spec.Install.AdditionalTrustBundleRef.Name)
-		// Always apply the bundle to all image pulls. The default
-		// (Proxyonly) only applies it when a proxy is configured, so a
-		// disconnected install whose mirror has a self-signed cert never
-		// propagates the CA into the booting node — image pulls then
-		// fail TLS and the agent never reaches SSH.
 		base["additionalTrustBundlePolicy"] = "Always"
 	}
 	if mirrors := imageDigestSourcesConfig(ocp.Spec.Install.ImageDigestSources); len(mirrors) > 0 {
@@ -81,10 +76,6 @@ func InstallerConfig(state v1alpha1.State, ocp v1alpha1.OCPCluster) (map[string]
 	return mergeYAMLMaps(base, ocp.Spec.Install.InstallConfigOverrides), nil
 }
 
-// installerProxyConfig projects the Environment OCP install proxy onto an
-// install-config.yaml `proxy:` map. OpenShift agent installs read this to
-// route bootstrap, MCO, and registry-pull traffic through the proxy while
-// preserving direct access to noProxy ranges.
 func installerProxyConfig(env *v1alpha1.Environment) map[string]any {
 	if env == nil {
 		return nil
@@ -151,12 +142,6 @@ func AgentConfig(state v1alpha1.State, ocp v1alpha1.OCPCluster) (map[string]any,
 	return mergeYAMLMaps(base, ocp.Spec.Install.AgentConfigOverrides), nil
 }
 
-// disconnectedBootArtifactsConfig wires the agent-installer minimal-ISO flow
-// when the environment is disconnected and the provider exposes a BMC
-// emulator. The boot-artifacts HTTP server runs on bmc.port+2 against the
-// machine network gateway (a libvirt-managed bridge address). Forcing
-// minimalISO=true and a provider-local bootArtifactsBaseURL prevents
-// `openshift-install agent create image` from reaching public RHCOS URLs.
 func disconnectedBootArtifactsConfig(infra v1alpha1.ClusterInfrastructure, provider v1alpha1.InfrastructureProvider, env *v1alpha1.Environment) map[string]any {
 	if env == nil || v1alpha1.OCPInstallKind(*env) != v1alpha1.OCPInstallKindDisconnected {
 		return nil

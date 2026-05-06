@@ -14,14 +14,6 @@ type Phase struct {
 	Description     string
 }
 
-// Playbook paths are relative to the extracted ansible bundle root (see
-// internal/embedded). The CLI joins them with the per-run bundle directory
-// before handing the spec to the runner.
-//
-// Apply order is provider → cluster → ocp: provider-scoped services
-// (mirror, BMC emulator, HAProxy) come up first so per-cluster substrate
-// convergence has somewhere to plumb VIPs, and the ocp installer has a
-// reachable mirror in disconnected mode. Destroy reverses the order.
 var phases = map[string]Phase{
 	"provider": {
 		Name:            "provider",

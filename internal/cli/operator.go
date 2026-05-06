@@ -18,10 +18,6 @@ import (
 	"github.com/crmarques/ztp-ocp-install-lab/internal/render"
 )
 
-// ansibleCorePinnedVersion returns the ansible-core version recorded in the
-// component pins. The bootstrap command uses this to drive the pip install
-// inside the managed venv so the runtime version always matches what the
-// rendered lock file declares.
 func ansibleCorePinnedVersion() (string, error) {
 	for _, pin := range render.ComponentPins(v1alpha1.State{}) {
 		if pin.Name == "ansible-core" {
@@ -161,12 +157,6 @@ type bootstrapStep struct {
 	cmd   []string
 }
 
-// controllerBootstrapPlanForMode composes the bootstrap steps for the detected
-// OS family and the chosen runtime mode. The default `--venv` mode stays
-// controller-local and user-owned: it creates a venv under Gitups home and
-// pip-installs the pinned ansible-core there. The explicit `--venv=false`
-// mode is the root-requiring system-package path. Provider-side packages
-// (libvirt, qemu-kvm, podman, skopeo) are never installed by this command.
 func controllerBootstrapPlanForMode(family string, mode bootstrapMode) ([]bootstrapStep, error) {
 	if mode.venv {
 		pin, err := ansibleCorePinnedVersion()
@@ -195,17 +185,11 @@ func controllerBootstrapPlanForMode(family string, mode bootstrapMode) ([]bootst
 	}}, nil
 }
 
-// controllerBootstrapPlan is the convenience entry the system-package mode uses;
-// callers that need the venv path use controllerBootstrapPlanForMode directly.
 func controllerBootstrapPlan(family string) []bootstrapStep {
 	steps, _ := controllerBootstrapPlanForMode(family, bootstrapMode{})
 	return steps
 }
 
-// controllerCLIInstallSpec describes the ansible-driven step that installs
-// oc, kubectl, and openshift-install on the controller from
-// mirror.openshift.com. Created by planControllerCLIInstall when the supplied
-// state declares an openshift release version; otherwise the step is skipped.
 type controllerCLIInstallSpec struct {
 	OCPReleaseVersion string
 	InstallDir        string
@@ -230,11 +214,6 @@ func planControllerCLIInstall(state v1alpha1.State, stateDir string, installDir 
 	}
 }
 
-// stateOpenshiftReleaseVersion returns the first non-empty
-// Environment.spec.openshift.release.version declared in the state. The CLI
-// installer needs a concrete x.y.z to fetch tarballs from mirror.openshift.com,
-// so a `channel`-only release is treated as "no version" and the step is
-// skipped.
 func stateOpenshiftReleaseVersion(state v1alpha1.State) string {
 	for _, env := range state.Environments {
 		if env.Spec.OpenShift.Release == nil {
@@ -247,12 +226,6 @@ func stateOpenshiftReleaseVersion(state v1alpha1.State) string {
 	return ""
 }
 
-// PlannedCommand returns the ansible-playbook invocation displayed in the
-// dry-run plan. The bundle path is computed from the configured state-dir
-// and will exist by the time runControllerCLIInstall actually executes the
-// command (which extracts the embedded bundle first). The controller CLI
-// playbook runs as the invoking user; the default install directory is
-// user-owned Gitups state rather than a root-owned system path.
 func (s controllerCLIInstallSpec) PlannedCommand() []string {
 	bundleDir := filepath.Join(s.StateDir, ansibleBundleDirName)
 	return []string{
@@ -264,11 +237,6 @@ func (s controllerCLIInstallSpec) PlannedCommand() []string {
 	}
 }
 
-// runControllerCLIInstall extracts the embedded ansible bundle, writes a
-// localhost inventory next to it, and runs the setup-controller-clis playbook
-// against the local host. The playbook is idempotent: it skips the download
-// + install when the binary at the requested version already exists at the
-// install directory.
 func runControllerCLIInstall(ctx context.Context, stdin io.Reader, stdout io.Writer, stderr io.Writer, spec controllerCLIInstallSpec) error {
 	bundleDir, err := extractBundle(spec.StateDir)
 	if err != nil {
@@ -342,9 +310,6 @@ func dedupe(in []string) []string {
 
 const defaultOSReleasePath = "/etc/os-release"
 
-// detectOSFamily reads /etc/os-release and maps ID / ID_LIKE onto the
-// supported package-manager families. Path is parameterised so tests can
-// drive the parser against fixture files without poking the real host.
 func detectOSFamily(osReleasePath string) (string, error) {
 	data, err := os.ReadFile(osReleasePath)
 	if err != nil {

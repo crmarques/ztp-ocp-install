@@ -8,14 +8,6 @@
     gitups_ocp_bmc_auth_enabled: "{{ (gitups_current_provider.bmc | default({})).auth is defined and (gitups_current_provider.bmc | default({})).auth.credentialRef | default('') | length > 0 }}"
   changed_when: false
 
-# A killed/timed-out apply can leave openshift-install (and the oc/kubectl
-# subprocesses it spawns to poll the agent install) running in the background.
-# They keep the kubeconfig / installer work dir busy and block a re-apply.
-# Match on the relative installer work subpath ("clusters/<name>/installer/work"),
-# which is unique per cluster and stable regardless of how `--state-dir` was
-# resolved at apply time vs. destroy time. A path-absolute matcher misses
-# the process whenever the two invocations resolve `--state-dir` to different
-# absolute prefixes (e.g., relative path from a different working directory).
 - name: Find lingering openshift-install / oc processes for this cluster
   ansible.builtin.command:
     argv:
@@ -27,14 +19,6 @@
   failed_when: false
   changed_when: false
 
-# Kill captured PIDs directly instead of `pkill -f <pattern>`. With local
-# connection + a task `environment:`, ansible prepends `VAR=value` to the
-# remote command, putting the pattern into the cmdline of the bash that
-# wraps the python module wrapper. `pkill -f` then SIGTERMs that bash —
-# which manifests here as rc=-15 / "Module result deserialization failed"
-# because the python wrapper dies before printing its JSON result. Killing
-# by PID has no such collateral: pgrep itself is skipped from its own match,
-# and ansible's wrappers do not have these PIDs.
 - name: Terminate lingering openshift-install / oc processes for this cluster
   ansible.builtin.shell: |
     set -uo pipefail

@@ -13,6 +13,20 @@ Only direct-import packages from trusted, widely-used upstreams. The standard
 library is always the first choice; reach for a third-party module only when
 the standard library does not cover the need.
 
+## Standing Rules
+
+These two checks apply on every dependency add, upgrade, and periodic review:
+
+1. **Community trust** — every direct dependency must meet all four Trust
+   Criteria below. If a module no longer meets them (abandoned, licence
+   change, maintainer incident), replace or remove it regardless of whether
+   the API changed.
+2. **Latest stable version** — direct dependencies must be pinned to the
+   latest tagged stable release. Patch-level drift is not acceptable. When a
+   module migrates to a new canonical import path and releases new versions
+   only on that path (example: `gopkg.in/yaml.v3` → `go.yaml.in/yaml/v3`),
+   migrate to the new path.
+
 ## Trust Criteria
 
 A module qualifies as trusted-and-widely-used when **all** of the following

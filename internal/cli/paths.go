@@ -9,12 +9,7 @@ import (
 const (
 	gitupsHomeEnv       = "GITUPS_HOME"
 	defaultHostStateDir = "/var/lib/gitups"
-	// ansibleVenvDirName is the directory name (under <gitups-home>) that
-	// `gitups setup controller --venv` materialises with a pinned
-	// ansible-core inside it. The runner prefers this path over the system
-	// ansible-playbook so a stateless controller host can run apply with only
-	// the gitups binary plus a one-shot bootstrap.
-	ansibleVenvDirName = "ansible-venv"
+	ansibleVenvDirName  = "ansible-venv"
 )
 
 func defaultGitupsHome() string {
@@ -52,10 +47,6 @@ func ansibleVenvBin(name string) string {
 	return filepath.Join(ansibleVenvDir(), "bin", name)
 }
 
-// resolveAnsiblePlaybook returns the path the runner should hand to exec.
-// Prefers a venv-managed ansible-core when present; falls back to the
-// literal "ansible-playbook" so PATH resolution still applies on hosts that
-// installed ansible system-wide.
 func resolveAnsiblePlaybook() string {
 	bin := ansibleVenvBin("ansible-playbook")
 	if isExecutable(bin) {

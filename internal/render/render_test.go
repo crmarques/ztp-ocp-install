@@ -104,8 +104,8 @@ func TestRenderAllProducesGeneratedAnsibleArtifacts(t *testing.T) {
 	for _, expected := range []string{
 		"name: ansible-core",
 		"version: 2.20.4",
-		"name: gopkg.in/yaml.v3",
-		"version: v3.0.1",
+		"name: go.yaml.in/yaml/v3",
+		"version: v3.0.4",
 	} {
 		if !strings.Contains(lock, expected) {
 			t.Fatalf("lock missing %q\n%s", expected, lock)
@@ -438,8 +438,6 @@ func TestRenderVarsExposeOCPInstallMetadata(t *testing.T) {
 }
 
 func TestOCPInstallRoleDoesNotBlockPublicRegistries(t *testing.T) {
-	// The role is split into multiple include_tasks files; walk all of them
-	// so a future split cannot smuggle a sinkhole/proxy block back in.
 	tasksDir := "../../ansible/roles/ocp_install_agent/tasks"
 	entries, err := os.ReadDir(tasksDir)
 	if err != nil {
@@ -496,9 +494,6 @@ func TestLibvirtSubstrateOpensBootArtifactsHTTPPort(t *testing.T) {
 		"<host mac='{{ node.macAddress }}'",
 		"name='{{ gitups_current_cluster.name }}-{{ node.name }}'",
 		"ip='{{ node.ipAddress }}'",
-		// Firewall mutations go through ansible.posix.firewalld — this also
-		// pins that the role uses zone=libvirt for both the interface bind
-		// and the boot-artifacts port-open.
 		"ansible.posix.firewalld",
 		"zone: libvirt",
 		"interface: \"{{ gitups_current_cluster.provider.virtualization.libvirt.bridge }}\"",
@@ -508,10 +503,6 @@ func TestLibvirtSubstrateOpensBootArtifactsHTTPPort(t *testing.T) {
 			t.Fatalf("cluster_substrate_libvirt is missing %q\n%s", expected, tasks)
 		}
 	}
-	// VIP plumbing was extracted into cluster_network_vips; substrate must no
-	// longer reach into LB-scoped state, and BMC fields were never substrate
-	// concerns. The shell-out workarounds for the firewalld module are also
-	// gone now that ansible.posix is pinned below 2.1.x.
 	for _, leak := range []string{
 		"provider.bmc.port",
 		"provider.bmc.enabled",
@@ -527,10 +518,6 @@ func TestLibvirtSubstrateOpensBootArtifactsHTTPPort(t *testing.T) {
 	}
 }
 
-// VIP plumbing belongs to cluster_network_vips, not the substrate role.
-// This test pins both the apply and destroy tasks of the new role and the
-// custom test plugin it relies on, so a future refactor cannot silently
-// drop the cross-layer logic that pairs LB bindings to the cluster bridge.
 func TestClusterNetworkVipsOwnsVIPPlumbing(t *testing.T) {
 	apply := readFile(t, "../../ansible/roles/cluster_network_vips/tasks/main.yml")
 	for _, expected := range []string{
@@ -562,8 +549,6 @@ func TestRenderVarsExposeGeneratedSecrets(t *testing.T) {
 			t.Fatalf("write %s: %v", name, err)
 		}
 	}
-	// Reuse the example provider but trim the spoke entry and add the
-	// mirror-registry capability the disconnected env requires below.
 	providerData, err := os.ReadFile(filepath.Join("../../examples/infra", "provider.yaml"))
 	if err != nil {
 		t.Fatalf("read provider.yaml: %v", err)
@@ -621,7 +606,6 @@ spec:
 `), 0o644); err != nil {
 		t.Fatalf("write environment: %v", err)
 	}
-	// drop the spoke fixtures so we only need the hub for this test
 	state, err := infra.LoadNormalizeValidate([]string{dir})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
@@ -759,7 +743,6 @@ func TestProviderDispatchCoversAllKinds(t *testing.T) {
 			t.Fatalf("provider-prepare.yml missing dispatch fragment %q\n%s", expected, providerTasks)
 		}
 	}
-	// Dynamic dispatch implies every kind resolves to a real role.
 	for _, role := range []string{
 		"cluster_substrate_libvirt",
 		"cluster_substrate_baremetal",

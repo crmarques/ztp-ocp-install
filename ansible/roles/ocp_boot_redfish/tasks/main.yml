@@ -1,19 +1,5 @@
 ---
-# Booting the OCP cluster node via Redfish: power off, eject prior media, insert
-# the agent ISO, power back on. Selected by ocp_install_agent through dynamic
-# include_role on `ocp_boot_{{ provider.bmcRole }}`. Both provider_bmc_emulated
-# (sushy-tools loopback) and provider_bmc_redfish (real BMC) expose the same
-# Redfish surface, so this role serves both.
-#
-# Inputs (set by ocp_install_agent before include_role):
-#   gitups_ocp_provider_bmc          → ProviderBMCVars (port, bindAddress, auth)
-#   gitups_ocp_bmc_auth_enabled      → bool
-#   gitups_ocp_bmc_username/password → resolved if auth_enabled
-#   gitups_current_cluster           → ClusterVars (used to compute system name)
-#   gitups_current_provider          → ProviderComponentVars (bmc.port for ISO URL)
 
-# Loopback HTTP probes are simple readiness checks; the Redfish API
-# tasks below carry the semantic protocol calls.
 - name: Wait for Redfish endpoint readiness
   ansible.builtin.uri:
     url: "http://127.0.0.1:{{ gitups_ocp_provider_bmc.port }}/redfish/v1/Systems"
@@ -29,10 +15,6 @@
   until: gitups_ocp_redfish_ready.status == 200
   no_log: "{{ gitups_ocp_bmc_auth_enabled }}"
 
-# sushy-tools fetches the InsertMedia Image over HTTP from the loopback
-# vmedia server provider_bmc_emulated stands up on bmc.port + 1. If that
-# unit is missing, InsertMedia returns Base.1.0.GeneralError with a
-# connection-refused cause; fail fast here with a clearer signal.
 - name: Wait for vmedia HTTP server readiness
   ansible.builtin.uri:
     url: "http://127.0.0.1:{{ gitups_ocp_provider_bmc.port | int + 1 }}/"
@@ -50,10 +32,6 @@
     gitups_ocp_system_name: "{{ gitups_current_cluster.name }}-{{ (gitups_current_cluster.ocp.nodes | first).name }}"
   changed_when: false
 
-# community.general.redfish_{info,command} hardcode an `https://` prefix
-# on baseuri (redfish_utils root_uri = "https://" + baseuri), so they
-# cannot drive the loopback sushy-emulator that serves plain HTTP. Drive
-# the Redfish API directly via ansible.builtin.uri instead.
 - name: Enumerate Redfish systems
   ansible.builtin.uri:
     url: "{{ gitups_ocp_redfish_baseuri }}/redfish/v1/Systems"
@@ -88,10 +66,6 @@
           | list | first) }}
   changed_when: false
 
-# sushy-tools exposes VirtualMedia under the ComputerSystem resource, not
-# under the Manager (despite the Redfish spec putting it under Managers in
-# many vendor implementations). Discover the collection URI from the
-# system entry rather than constructing it from the manager URI.
 - name: Resolve cluster-node Redfish system identifiers
   ansible.builtin.set_fact:
     gitups_ocp_system_id: "{{ gitups_ocp_system_entry.Id }}"
@@ -157,10 +131,6 @@
   register: gitups_ocp_vmedia_details
   no_log: "{{ gitups_ocp_bmc_auth_enabled }}"
 
-# json_query (jmespath) would let us filter on `MediaTypes contains CD`,
-# but jmespath isn't a guaranteed dep on the controller. sushy-tools
-# always names its optical slot `Cd`, so an Id-equality selectattr is
-# both portable (no extra deps) and accurate for this emulator.
 - name: Resolve cluster-node CD virtual media slot
   ansible.builtin.set_fact:
     gitups_ocp_vmedia_cd: >-
@@ -198,15 +168,7 @@
     force_basic_auth: "{{ gitups_ocp_bmc_auth_enabled }}"
   no_log: "{{ gitups_ocp_bmc_auth_enabled }}"
 
-# cluster_substrate_libvirt renders the libvirt domain XML with OS-level
-# <boot dev='hd'/><boot dev='cdrom'/>, so SeaBIOS falls through to the
-# cdrom on first boot (empty disk) and prefers disk after install. Per-
-# device <boot order> is avoided because sushy-tools InsertMedia rewrites
-# the cdrom block on the running domain and strips the order attribute,
-# leaving only the empty disk bootable.
 
-# YAML 1.1 coerces bare On/Off/Yes/No to booleans -- ResetType must stay
-# a string, so the value is quoted explicitly.
 - name: Power on cluster node
   ansible.builtin.uri:
     url: "{{ gitups_ocp_redfish_baseuri }}{{ gitups_ocp_system_reset_uri }}"

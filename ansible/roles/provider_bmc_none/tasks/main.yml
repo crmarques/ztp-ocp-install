@@ -1,8 +1,4 @@
 ---
-# Intentional no-op. Selected when the provider substrate has no external
-# BMC surface (vSphere, KubeVirt — power and media live in the substrate
-# API). The dynamic role-name dispatch in infra-prepare.yml expects every
-# provider kind to resolve to a real role; this is the explicit empty case.
 - name: BMC role for provider {{ gitups_current_provider.name }} is none
   ansible.builtin.debug:
     msg: "Provider {{ gitups_current_provider.name }} (kind {{ gitups_current_provider.kind }}) has no external BMC; skipping BMC tasks."

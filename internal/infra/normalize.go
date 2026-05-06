@@ -9,8 +9,6 @@ import (
 	"github.com/crmarques/ztp-ocp-install-lab/api/v1alpha1"
 )
 
-// Normalize applies defaults from upper layers down. It does not convert
-// legacy shapes — those are rejected at load time.
 func Normalize(state *v1alpha1.State) {
 	for i := range state.Environments {
 		normalizeEnvironment(&state.Environments[i])
@@ -181,11 +179,6 @@ func applyEnvironmentInstallDefaults(ocp *v1alpha1.OCPCluster, env *v1alpha1.Env
 	}
 }
 
-// applyOCPInstallEnvIntoInstall folds Environment.ocpInstall into the
-// per-OCPCluster install spec. For disconnected installs Gitups owns the
-// derivation of trust material, image-digest mirrors, and source policy so
-// the renderer sees one source of truth — and so a "disconnected" environment
-// cannot accidentally point at public registries.
 func applyOCPInstallEnvIntoInstall(ocp *v1alpha1.OCPCluster, env *v1alpha1.Environment) {
 	if env == nil {
 		return
@@ -214,12 +207,6 @@ func applyOCPInstallEnvIntoInstall(ocp *v1alpha1.OCPCluster, env *v1alpha1.Envir
 	}
 }
 
-// deriveDisconnectedReleaseSources returns the OpenShift release-payload
-// imageDigestSources Gitups requires for a disconnected install, derived from
-// Environment.ocpInstall.disconnected.registries. User-declared sources in
-// registries.imageDigestSources take precedence; any missing standard release
-// source is filled in by pointing at the configured local mirror under the
-// canonical OpenShift mirror paths.
 func deriveDisconnectedReleaseSources(registries *v1alpha1.OCPInstallRegistries) []v1alpha1.ImageDigestSource {
 	if registries == nil {
 		return nil
@@ -256,9 +243,6 @@ func deriveDisconnectedReleaseSources(registries *v1alpha1.OCPInstallRegistries)
 	return out
 }
 
-// mergeImageDigestSources combines two ImageDigestSource lists by source,
-// preferring entries from `existing` and appending any new sources from
-// `derived`.
 func mergeImageDigestSources(existing, derived []v1alpha1.ImageDigestSource) []v1alpha1.ImageDigestSource {
 	out := append([]v1alpha1.ImageDigestSource(nil), existing...)
 	known := map[string]bool{}
@@ -283,9 +267,6 @@ func defaultDisconnectedImageSourcePolicy(sources []v1alpha1.ImageDigestSource) 
 	}
 }
 
-// defaultEnvironmentKeys fills in defaults for declared key sources:
-// `validityDays` for generated self-signed certs, and a default username
-// of "admin" for generated credentials when the user did not name one.
 func defaultEnvironmentKeys(env *v1alpha1.Environment) {
 	if env == nil {
 		return

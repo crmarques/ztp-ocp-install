@@ -1,15 +1,4 @@
 ---
-# Plumb managed load balancer VIPs onto the cluster's libvirt bridge so the
-# addresses answer ARP. ip_nonlocal_bind lets HAProxy listen on a non-local
-# IP, but without an interface owning it neither the cluster nodes nor the
-# host can reach the listener — the installer then loops on
-# "Bootstrap Kube API never initialized" while bootkube actually runs fine
-# on the SNO node, because traffic to the API VIP never arrives.
-#
-# Sourced from the cluster's machineNetworks (libvirt sub-block) and the
-# cluster's load balancer bindings — this role owns the cross-layer concern
-# (provider-scoped LB intent + cluster-scoped substrate bridge) so neither
-# cluster_substrate_* nor network_lb_managed has to reach into the other.
 
 - name: Resolve cluster managed load balancer VIPs against libvirt bridges
   ansible.builtin.set_fact:

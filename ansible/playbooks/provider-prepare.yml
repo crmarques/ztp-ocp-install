@@ -1,16 +1,10 @@
 ---
 - name: Prepare Gitups provider-scoped infrastructure components
   hosts: gitups_provider_hosts
-  # `min` is enough for everything this play does: ansible.builtin.package
-  # dispatch needs ansible_distribution / ansible_os_family (both in min),
-  # and no role on this host group reads ansible_facts.env, mounts, or
-  # interfaces. Stripping the rest avoids the multi-second hardware probe.
   gather_subset:
     - "!all"
     - min
   become: true
-  # Provider hosts are remote execution targets, even when their address is
-  # localhost. Controller-local setup lives in setup-controller-clis.yml.
   environment: "{{ gitups_proxy_env | default({}) }}"
 
   pre_tasks:
@@ -34,9 +28,6 @@
       ansible.builtin.import_role:
         name: host_proxy
 
-    # BMC dispatch by structural discriminator. provider_bmc_none is the
-    # explicit empty case (vSphere, KubeVirt) so the dynamic role-name
-    # always resolves.
     - name: Apply BMC role for current provider kind
       ansible.builtin.include_role:
         name: "provider_bmc_{{ gitups_current_provider.bmcRole }}"
@@ -46,9 +37,6 @@
         name: provider_boot_artifacts_http
       when: gitups_current_provider.bootArtifactsHttp.enabled | default(false) | bool
 
-    # Mirror registry must run before the load balancer role: HAProxy is
-    # pulled from the local mirror on subsequent applies, so the registry
-    # has to be reachable first.
     - name: Apply mirror registry role
       ansible.builtin.import_role:
         name: provider_mirror_registry

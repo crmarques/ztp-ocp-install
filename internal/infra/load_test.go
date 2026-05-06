@@ -306,9 +306,6 @@ func TestValidationRejectsInvalidProviderHostRef(t *testing.T) {
 
 func TestValidationRejectsRegistriesUnderConnected(t *testing.T) {
 	dir := t.TempDir()
-	// `connected` is structural: it carries no fields. Registries declared next
-	// to it (mode-style) become a `registries` key the schema does not know,
-	// so the load-time strict decoder must reject it before normalization runs.
 	body := strings.Replace(
 		validStateYAML("connected-with-registries", "connected-provider", "192.168.154.0/24", "192.168.154.10", "192.168.154.11", "192.168.154.20"),
 		"  ocpInstall:\n    connected: {}\n",
@@ -411,7 +408,6 @@ func TestBareMetalAndVMwareSchemasValidate(t *testing.T) {
 	}
 }
 
-// minimal four-domain-layer YAML factory for table-driven tests.
 func validStateYAML(name string, providerName string, cidr string, apiVIP string, ingressVIP string, nodeIP string) string {
 	envName := "env-" + name
 	return fmt.Sprintf(`apiVersion: gitups.io/v1alpha1

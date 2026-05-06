@@ -1,7 +1,4 @@
 ---
-# State directory layout under the provider host's gitups state dir. Auth
-# and certificate material live alongside the registry data so a single
-# `chown root:root, chmod 0700` cap suffices.
 gitups_mirror_registry_root: "{{ gitups_host_state_dir }}/mirror-registry/{{ gitups_current_mirror_registry.name }}"
 gitups_mirror_registry_data_dir: "{{ gitups_current_mirror_registry.dataDir | default(gitups_mirror_registry_root ~ '/data') }}"
 gitups_mirror_registry_auth_dir: "{{ gitups_mirror_registry_root }}/auth"

@@ -1,10 +1,4 @@
 ---
-# Substrate-neutral HTTP server that publishes RHCOS rootfs and other agent
-# boot artifacts to nodes. Required for substrates that cannot mount media
-# out-of-band (qemu-kvm + emulated BMC, real bare-metal Redfish), skipped for
-# substrates that mount via their own API (vSphere, KubeVirt). Inputs come
-# from gitups_current_provider.bootArtifactsHttp, computed in vars.go's
-# providerDispatch().
 
 - name: Validate boot-artifacts HTTP inputs
   ansible.builtin.assert:

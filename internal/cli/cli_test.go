@@ -455,8 +455,6 @@ func TestSecretsGenerateMaterializesCredentials(t *testing.T) {
 		if len(parts) != 2 {
 			t.Fatalf("%s: expected user:pass, got %q", name, text)
 		}
-		// Both keys default username to "admin" — explicit on bmc-credentials,
-		// defaulted by normalize for mirror-creds.
 		if parts[0] != "admin" {
 			t.Fatalf("%s: username got %q, want admin", name, parts[0])
 		}
@@ -470,7 +468,6 @@ func TestSecretsGenerateMaterializesCredentials(t *testing.T) {
 		}
 	}
 
-	// Idempotent: rerunning preserves the existing password.
 	bmcBefore, err := os.ReadFile(filepath.Join(secretsDir, "bmc-credentials"))
 	if err != nil {
 		t.Fatalf("read bmc before: %v", err)
@@ -491,7 +488,6 @@ func TestSecretsGenerateMaterializesCredentials(t *testing.T) {
 		t.Fatalf("expected reuse output, got %s", stdout.String())
 	}
 
-	// Username drift fails fast with a remediation hint.
 	driftFixture := strings.Replace(generatedCredentialsFixture, "username: admin", "username: operator", 1)
 	driftPath := filepath.Join(dir, "drift.yaml")
 	if err := os.WriteFile(driftPath, []byte(driftFixture), 0o644); err != nil {
@@ -1319,11 +1315,6 @@ func TestApplyDryRunPrintsEscalationSummary(t *testing.T) {
 	}
 }
 
-// stubPreflightAlwaysOK lets tests that exercise downstream apply flow assume
-// preflight passes: TCP listeners are free and any lookup under the default
-// secrets directory reports a regular file. Other statPath callers (/dev/kvm,
-// host_state_dir) fall through to the real os.Stat so KVM-aware tests still
-// observe the host's true capability.
 func stubPreflightAlwaysOK(t *testing.T) {
 	t.Helper()
 	origListen := defaultPreflightDeps.tryListen

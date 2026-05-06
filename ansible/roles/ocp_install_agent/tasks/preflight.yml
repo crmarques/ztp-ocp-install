@@ -20,13 +20,6 @@
     gitups_ocp_release_image_override: "{{ gitups_current_cluster.ocp.install.releaseImageOverride | default('') }}"
   changed_when: false
 
-# A previous apply that was interrupted (Ctrl+C, host reboot, async timeout)
-# can leave a detached `openshift-install agent wait-for install-complete`
-# bound to the cluster's installer work dir. Re-running apply with that
-# process still alive blocks ISO regen, BMC media swap, and the new wait-for.
-# Kill any matching process before we touch the work dir. Match on the
-# relative installer subpath so the rule does not depend on how
-# `--state-dir` was resolved when the lingering process was launched.
 - name: Find lingering openshift-install / oc processes from a prior apply
   ansible.builtin.command:
     argv:
@@ -38,14 +31,6 @@
   failed_when: false
   changed_when: false
 
-# Kill captured PIDs directly instead of `pkill -f <pattern>`. With local
-# connection + a task `environment:`, ansible prepends `VAR=value` to the
-# remote command, putting the pattern into the cmdline of the bash that
-# wraps the python module wrapper. `pkill -f` then SIGTERMs that bash —
-# which manifests as rc=-15 / "Module result deserialization failed"
-# because the python wrapper dies before printing its JSON result. Killing
-# by PID has no such collateral: pgrep itself is skipped from its own match,
-# and ansible's wrappers do not have these PIDs.
 - name: Terminate lingering openshift-install / oc processes from a prior apply
   ansible.builtin.shell: |
     set -uo pipefail
@@ -87,9 +72,6 @@
   changed_when: false
   when: gitups_ocp_bmc_auth_enabled
 
-# ocp_boot_redfish reads gitups_ocp_bmc_username / gitups_ocp_bmc_password
-# directly; expose them once so a single facts snapshot drives every Redfish
-# call without re-parsing the credential file.
 - name: Expose BMC username and password as facts
   ansible.builtin.set_fact:
     gitups_ocp_bmc_username: "{{ gitups_ocp_bmc_credentials.username }}"

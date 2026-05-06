@@ -1,14 +1,6 @@
 ---
-# Filesystem location of user-provided and generated install secret material
-# referenced by the effective cluster install spec.
-# The Gitups CLI passes this explicitly; this fallback mirrors its
-# GITUPS_HOME-or-HOME default for direct role execution.
-# Each ref name maps to a single file: <gitups_secrets_dir>/<refName>.
 gitups_secrets_dir: "{{ (lookup('env', 'GITUPS_HOME') | default(lookup('env', 'HOME') ~ '/.gitups', true)) }}/secrets"
 
-# Path to the openshift-install binary used to create the agent ISO and wait
-# for install-complete. Override with `-e gitups_openshift_install=/abs/path`.
 gitups_openshift_install: openshift-install
 
-# How long to wait for the agent-based install to converge before failing.
 gitups_ocp_install_timeout_seconds: 5400

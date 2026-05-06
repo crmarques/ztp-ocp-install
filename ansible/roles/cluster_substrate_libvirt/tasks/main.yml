@@ -55,9 +55,6 @@
   changed_when: false
   when: gitups_libvirt_net_exists
 
-# net-define rejects XML whose UUID differs from the persistent
-# definition's, so reuse the existing UUID when present and synthesize a
-# stable one otherwise.
 - name: Resolve libvirt network UUID
   ansible.builtin.set_fact:
     gitups_libvirt_net_uuid: >-
@@ -69,10 +66,6 @@
       }}
   changed_when: false
 
-# Pick the cluster machineNetwork whose libvirt sub-block names this
-# bridge so the bridge IP/prefix come from the same desired-state object
-# that drives node NMState; fall back to the first network when only one
-# is present.
 - name: Resolve machine network for this libvirt network
   ansible.builtin.set_fact:
     gitups_libvirt_machine_network: >-
@@ -86,13 +79,6 @@
       }}
   changed_when: false
 
-# Build an opaque fingerprint over every desired-state input that affects
-# the network XML. Embed it in <description> so the running network
-# carries the fingerprint of the rendered XML it was defined from. When a
-# subsequent run renders different inputs (DNS hostnames, MAC->IP
-# bindings, dnsmasq options), the fingerprint shifts and the drift check
-# below tears down the live network even if the on-disk XML was already
-# up-to-date from a prior partial run.
 - name: Compute libvirt network desired-state fingerprint
   ansible.builtin.set_fact:
     gitups_libvirt_net_fingerprint: >-
@@ -158,9 +144,6 @@
     content: "{{ gitups_libvirt_net_xml_content }}"
   register: gitups_libvirt_net_xml_file
 
-# Drift = the running network was defined from a different fingerprint
-# (or pre-dates fingerprinting entirely). Use simple substring containment
-# so the check is decoupled from libvirt's XML reformatting on dumpxml.
 - name: Detect libvirt network drift between rendered and live XML
   ansible.builtin.set_fact:
     gitups_libvirt_net_drifted: >-
@@ -171,10 +154,6 @@
       }}
   changed_when: false
 
-# When our named network does not yet exist, libvirt's net-define
-# rejects the XML if any other (often stale) network already claims this
-# bridge. Detect the conflict by reading every other network's XML and
-# tear it down first.
 - name: Reconcile libvirt bridge conflicts before defining network
   when: not gitups_libvirt_net_exists
   block:
@@ -207,9 +186,6 @@
       loop: "{{ gitups_libvirt_conflicting_nets }}"
       failed_when: false
 
-# net-define updates the persistent definition but the running network
-# keeps the old XML until destroyed; tear down before redefining when
-# the rendered XML changed on disk OR the live network drifted from it.
 - name: Stop libvirt network before applying XML changes
   community.libvirt.virt_net:
     name: "{{ gitups_current_cluster.provider.virtualization.libvirt.network }}"
@@ -234,9 +210,6 @@
     name: "{{ gitups_current_cluster.provider.virtualization.libvirt.network }}"
     state: active
 
-# Probe firewalld with a single command shell-out so the rest of the
-# firewall logic can no-op cleanly on hosts where firewalld isn't running
-# (Debian, hardened images, lab CI).
 - name: Check firewalld state
   ansible.builtin.command:
     argv:
@@ -246,12 +219,6 @@
   changed_when: false
   failed_when: false
 
-# A freshly-defined libvirt bridge is not bound to any firewalld zone
-# until something (libvirtd hook, NetworkManager, an admin) places it
-# there. Bind to the libvirt zone (always present on RHEL/Fedora hosts
-# that ship libvirt) so the port-open task below has a target. The
-# firewalld module is idempotent: re-applying with the bridge already in
-# the libvirt zone reports `changed=false`.
 - name: Attach libvirt bridge to libvirt firewalld zone
   ansible.posix.firewalld:
     zone: libvirt
@@ -350,8 +317,6 @@
     gitups_qemu_node: "{{ item }}"
   loop: "{{ gitups_current_cluster.provider.nodes }}"
 
-# Always re-define so XML changes (cdrom, boot order) reach existing
-# domains; the module is idempotent on a no-op redefine.
 - name: Define libvirt domains
   community.libvirt.virt:
     command: define

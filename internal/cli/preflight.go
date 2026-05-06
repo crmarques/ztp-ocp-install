@@ -34,21 +34,14 @@ var defaultPreflightDeps = preflightDeps{
 }
 
 func collectPreflightChecks(state v1alpha1.State, selected []Phase, hasState bool, secretsDir string, hostStateDir string, deps preflightDeps) []preflightCheck {
-	// ansible-playbook is searched in the gitups-managed venv as a fallback
-	// so the universal "ansible-playbook on PATH" check still passes after
-	// `gitups setup controller --venv` even on a host that has no system
-	// ansible-core installed.
 	checks := []preflightCheck{
 		binaryCheck("ansible-playbook", []string{filepath.Join(ansibleVenvDir(), "bin")}, deps),
 		binaryCheck("python3", nil, deps),
 	}
 	if phaseInScope("provider", selected, hasState) && stateNeedsLibvirt(state) {
-		// BMC emulator, vmedia HTTP, and boot-artifacts HTTP all bind during
-		// the provider phase (sushy-tools, vmedia, boot-artifacts services).
 		checks = append(checks, bmcPortChecks(state, deps)...)
 	}
 	if phaseInScope("cluster", selected, hasState) && stateNeedsLibvirt(state) {
-		// Substrate creates libvirt domains; KVM acceleration is mandatory.
 		checks = append(checks, kvmCheck(deps))
 	}
 	if phaseInScope("ocp", selected, hasState) {
@@ -68,9 +61,6 @@ func collectPreflightChecks(state v1alpha1.State, selected []Phase, hasState boo
 	return checks
 }
 
-// phaseInScope returns true when the current workflow selection includes the
-// named phase. With no selection, every implemented phase is in scope iff the
-// user supplied desired-state input. With neither, only universal checks run.
 func phaseInScope(name string, selected []Phase, hasState bool) bool {
 	if len(selected) == 0 {
 		return hasState
@@ -83,11 +73,6 @@ func phaseInScope(name string, selected []Phase, hasState bool) bool {
 	return false
 }
 
-// anyPhaseInScope reports true when at least one of the named phases is in
-// scope under the current workflow selection. Used by secret-ref checks
-// where a single ref may be read by multiple phases (host_proxy runs in
-// both provider and cluster; mirror credentials are read in provider and
-// ocp).
 func anyPhaseInScope(names []string, selected []Phase) bool {
 	for _, name := range names {
 		if phaseInScope(name, selected, true) {
@@ -121,13 +106,6 @@ func kvmCheck(deps preflightDeps) preflightCheck {
 	return preflightCheck{name: "/dev/kvm available", ok: true}
 }
 
-// bmcPortChecks probes the three TCP ports each enabled libvirt BMC emulator
-// will bind under apply: redfish on the user's bindAddress, vmedia HTTP on
-// 127.0.0.1, and boot-artifacts HTTP on 0.0.0.0. We do an in-the-moment
-// `net.Listen` rather than relying on cross-provider static analysis because
-// stale `gitups-sushy-*`/`gitups-vmedia-*`/`gitups-boot-artifacts-*` units
-// from a prior provider name (no longer in the state file) are the common
-// real-world cause of the wait-tasks hanging.
 func bmcPortChecks(state v1alpha1.State, deps preflightDeps) []preflightCheck {
 	var checks []preflightCheck
 	for _, p := range state.InfrastructureProviders {
@@ -163,8 +141,6 @@ func bmcPortCheck(providerName, label, bindAddr string, port int, unitKind strin
 	addr := net.JoinHostPort(bindAddr, strconv.Itoa(port))
 	name := fmt.Sprintf("provider %s %s port %s free", providerName, label, addr)
 	if err := deps.tryListen("tcp", addr); err != nil {
-		// Idempotent path: if the port is held by the gitups unit that owns it
-		// for *this* provider, apply will reconfigure/restart it — pass.
 		expectedUnit := fmt.Sprintf("gitups-%s-%s.service", unitKind, providerName)
 		if deps.unitActive != nil && deps.unitActive(expectedUnit) {
 			return preflightCheck{
@@ -190,10 +166,6 @@ func defaultTryListen(network, address string) error {
 	return l.Close()
 }
 
-// defaultUnitActive reports whether a systemd unit is currently active on the
-// local host. Used by the BMC port preflight to recognise when a port is held
-// by *this provider's* expected gitups unit (idempotent re-apply) versus an
-// unrelated process (real conflict).
 func defaultUnitActive(unit string) bool {
 	if _, err := exec.LookPath("systemctl"); err != nil {
 		return false
@@ -224,9 +196,6 @@ func secretFileCheck(refName, secretsDir, label string, deps preflightDeps) pref
 		case strings.Contains(label, "pullSecretRef"):
 			detail = "missing — run `gitups secrets pull-secret set --name " + refName + " --from-file <path>`"
 		case strings.Contains(label, "credentialRef") || strings.Contains(label, "credentialsRef"):
-			// credentialRef and credentialsRef both store a single
-			// `username:password` line; `gitups secrets credentials set` is the only
-			// supported writer for that shape (proxy, mirror, BMC all share it).
 			detail = "missing — run `gitups secrets credentials set --name " + refName + " --from-file <path>` (or `--generate` for test fixtures)"
 		}
 		return preflightCheck{name: name, ok: false, detail: detail}
@@ -250,11 +219,6 @@ func generatedSecretCheck(refName, secretsDir, label string, deps preflightDeps)
 	return preflightCheck{name: name, ok: true}
 }
 
-// secretRefRequirement describes a single SecretRef declared somewhere in the
-// desired state, the phases that need the file present on the host, and
-// whether `gitups secrets generate` can materialize it before apply. A
-// single ref may be read by multiple phases (e.g. host_proxy runs in both
-// the provider and cluster phases) so phases is a list.
 type secretRefRequirement struct {
 	refName   string
 	label     string
@@ -262,11 +226,6 @@ type secretRefRequirement struct {
 	generated bool
 }
 
-// secretRefChecks walks every SecretRef the state declares and emits one
-// preflight per ref whose owning phase is in scope. The secrets directory
-// check is prepended only when at least one in-scope ref needs it. Refs
-// covered by `generatedSecrets` are reported as informational since
-// `gitups secrets generate` will create them at apply time.
 func secretRefChecks(state v1alpha1.State, secretsDir string, selected []Phase, deps preflightDeps) []preflightCheck {
 	requirements := collectSecretRefRequirements(state)
 	var inScope []secretRefRequirement
@@ -290,21 +249,6 @@ func secretRefChecks(state v1alpha1.State, secretsDir string, selected []Phase, 
 	return checks
 }
 
-// collectSecretRefRequirements enumerates every SecretRef across all four
-// kinds. Each requirement is tagged with the apply phases that read the
-// file:
-//
-//   - proxy credentialsRef: host_proxy runs in both provider and cluster
-//   - registry mirror credentialsRef: provider_mirror_registry (provider) and
-//     ocp_install_agent merges it into install-config (ocp)
-//   - provider host sshKeyRef: ansible connection for any phase that targets
-//     gitups_provider_hosts or gitups_infra_hosts (provider, cluster)
-//   - libvirt BMC emulation credentialRef: provider_bmc_emulated (provider)
-//     and ocp_install_agent Redfish auth (ocp)
-//   - vsphere/kubevirt provider refs: provider only (substrate roles)
-//   - per-machine baremetal BMC credentialRef: provider_bmc_redfish (provider)
-//     and ocp_install_agent Redfish auth (ocp)
-//   - per-cluster install pullSecretRef / sshKeyRef / additionalTrustBundleRef: ocp
 func collectSecretRefRequirements(state v1alpha1.State) []secretRefRequirement {
 	generated := allGeneratedSecretNames(state)
 	var out []secretRefRequirement
@@ -412,9 +356,6 @@ func environmentForChecks(state v1alpha1.State) *v1alpha1.Environment {
 	return &state.Environments[0]
 }
 
-// allGeneratedSecretNames returns the set of SecretRef names that
-// `gitups secrets generate` will materialise — every Environment.spec.keys
-// entry whose source is `generated:` (cert or credentials).
 func allGeneratedSecretNames(state v1alpha1.State) map[string]bool {
 	out := map[string]bool{}
 	if env := primaryEnvironmentForSync(state); env != nil {
@@ -436,11 +377,6 @@ func sortedMapKeys[V any](m map[string]V) []string {
 	return out
 }
 
-// ocpNeedsOpenSSL reports whether the ocp install will fall back to the
-// in-cluster ansible cert generator (`community.crypto.openssl_*`) — i.e.
-// at least one Environment.spec.keys[name].generated.selfSignedCertificate
-// has not yet been materialised on the operator host. The fallback path
-// requires `openssl` on PATH; the operator-side path does not.
 func ocpNeedsOpenSSL(state v1alpha1.State, secretsDir string, deps preflightDeps) bool {
 	env := primaryEnvironmentForSync(state)
 	if env == nil {
@@ -465,11 +401,6 @@ func generatedCertificatePairExists(refName, secretsDir string, deps preflightDe
 	return certErr == nil && keyErr == nil && !certInfo.IsDir() && !keyInfo.IsDir()
 }
 
-// generatedSelfSignedDriftChecks fails the preflight when a previously
-// materialised self-signed cert on disk no longer matches the desired
-// SelfSignedCertificateSpec (commonName / dnsNames / ipAddresses). Without
-// this, apply happily reuses the stale cert and the failure surfaces deep
-// inside ansible (e.g. mirror push fails with x509 SAN mismatch).
 func generatedSelfSignedDriftChecks(state v1alpha1.State, secretsDir string) []preflightCheck {
 	requests, err := generatedSelfSignedRequests(state)
 	if err != nil {

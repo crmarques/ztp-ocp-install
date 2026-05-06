@@ -22,6 +22,16 @@ and coding agents. Load only the specs and skills needed for the current task.
 | `code-quality` | Adding, modifying, deleting, or reviewing Go code |
 | `implementation-validation` | Final validation before completing implementation work |
 
+## Knowledge Base
+
+When a user reports an error or an unexpected failure, check `.agents/knowledge/KNOWLEDGE.md`
+for a matching symptom or error fragment before investigating. Load only the matching file; do
+not scan or bulk-load the full knowledge directory.
+
+| Index | Location |
+| --- | --- |
+| Category + symptom map | `.agents/knowledge/KNOWLEDGE.md` |
+
 ## Operating Rules
 
 - Desired state is the user-facing API.

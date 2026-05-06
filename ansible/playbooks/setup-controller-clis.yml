@@ -1,8 +1,4 @@
 ---
-# Installs `oc`, `kubectl`, and `openshift-install` on the controller from
-# the public OpenShift mirror. Only CLIs that the mirror serves without an
-# entitlement token are handled here; a `cluster_admin_creds`-bearing source
-# would belong to a separate playbook by design.
 - name: Install OpenShift CLIs on the controller host
   hosts: localhost
   connection: local

@@ -51,14 +51,6 @@
   ansible.builtin.set_fact:
     gitups_mirror_registry_oc: "{{ gitups_mirror_registry_oc_probe.stdout if gitups_mirror_registry_oc_probe.rc == 0 else (gitups_mirror_registry_tools_dir ~ '/oc') }}"
 
-# Probe the local registry for each requested mirror tag before invoking the
-# heavy mirror commands. `oc adm release mirror` and `skopeo copy` are
-# digest-idempotent at the blob level, but they still pull upstream
-# manifests on every run. A successful local inspect short-circuits that:
-# when --keep-mirrored-images preserved the data volume from a prior run,
-# this loop confirms the image is already there and the loops below skip
-# it entirely. That makes a second apply fully air-gappable from the
-# cluster network's perspective.
 - name: Probe local registry for already-mirrored images
   ansible.builtin.command:
     argv:

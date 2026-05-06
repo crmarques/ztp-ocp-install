@@ -1,7 +1,4 @@
 ---
-# Boot the cluster node via the vSphere API (PowerOnVM_Task with attached
-# install-config ISO mounted as a CD-ROM). Scaffold only: implement
-# alongside cluster_substrate_vsphere.
 
 - name: vSphere hub boot is not yet implemented
   ansible.builtin.fail:

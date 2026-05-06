@@ -7,10 +7,6 @@ import (
 	"testing"
 )
 
-// The bundle may or may not be synced into internal/embedded/bundle when this
-// test runs (it is gitignored and only populated by `make build`). We assert
-// the contract either way: extraction succeeds and yields ansible.cfg, or it
-// fails with the documented "rebuild gitups" hint.
 func TestExtractAnsibleBundleEitherSucceedsOrReportsEmpty(t *testing.T) {
 	dest := filepath.Join(t.TempDir(), "bundle")
 	err := ExtractAnsibleBundle(dest)

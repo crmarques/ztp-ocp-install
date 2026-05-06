@@ -110,12 +110,6 @@ func (r CommandRunner) Run(ctx context.Context, spec RunSpec) error {
 	return nil
 }
 
-// sudoUserSitePackages returns the original (pre-sudo) user's pip --user
-// site-packages directory when gitups is invoked under sudo. Returns ""
-// otherwise. This lets the runner pick up an `ansible` installed via
-// `pip install --user` even though root's sys.path does not include the
-// invoking user's home — allowing a sudo-wrapped invocation to work without a
-// manual `PYTHONPATH=…` env wrapper.
 func sudoUserSitePackages() string {
 	sudoUser := os.Getenv("SUDO_USER")
 	if sudoUser == "" || sudoUser == "root" {
@@ -141,8 +135,6 @@ func sudoUserSitePackages() string {
 	return site
 }
 
-// appendPythonPath prepends `extra` to a PYTHONPATH entry already in env if
-// present, otherwise appends a new PYTHONPATH=extra entry.
 func appendPythonPath(env []string, extra string) []string {
 	for index, entry := range env {
 		if strings.HasPrefix(entry, "PYTHONPATH=") {

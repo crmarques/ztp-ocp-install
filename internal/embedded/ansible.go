@@ -1,6 +1,3 @@
-// Package embedded ships the repository's Ansible workflow bundle inside the
-// gitups binary so the CLI is installable independent of the source tree. The
-// bundle is materialised on disk under the user's state directory at runtime.
 package embedded
 
 import (
@@ -11,34 +8,19 @@ import (
 	"path/filepath"
 )
 
-// `all:` keeps files whose names start with `_` or `.` — collections such as
-// ansible.posix ship `_respawn.py`, `__init__.py`, and other underscore-
-// prefixed module_utils that the default embed pattern silently drops.
-//
 //go:embed all:bundle
 var bundleFS embed.FS
 
 const bundleRoot = "bundle"
 
-// AnsibleCfgRelPath is the path of ansible.cfg inside the extracted bundle.
 const AnsibleCfgRelPath = "ansible.cfg"
 
-// RolesRelPath is the path of the roles directory inside the extracted bundle.
 const RolesRelPath = "roles"
 
-// CollectionsRelPath is the path of the collections directory inside the
-// extracted bundle.
 const CollectionsRelPath = "collections"
 
-// FilterPluginsRelPath is the path of the Jinja filter-plugins directory
-// inside the extracted bundle. The runner exports this as
-// ANSIBLE_FILTER_PLUGINS so plugins ship with the binary.
 const FilterPluginsRelPath = "filter_plugins"
 
-// ExtractAnsibleBundle writes the embedded Ansible tree to dest, replacing any
-// previous contents at that location. The destination is left in a clean state
-// containing only the embedded files so a stale extraction cannot leak old
-// playbooks into a new run.
 func ExtractAnsibleBundle(dest string) error {
 	sub, err := fs.Sub(bundleFS, bundleRoot)
 	if err != nil {

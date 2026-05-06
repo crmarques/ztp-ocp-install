@@ -1,7 +1,4 @@
 ---
-# Per-cluster substrate role for the vSphere provider. Scaffold only:
-# vCenter login, folder/datastore validation, and template-clone tasks land
-# alongside vSphere-spec extensions on InfrastructureProvider.spec.machine.vsphere.
 
 - name: vSphere substrate is not yet implemented
   ansible.builtin.fail:

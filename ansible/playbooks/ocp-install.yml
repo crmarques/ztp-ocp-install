@@ -1,9 +1,6 @@
 ---
 - name: Install OpenShift cluster via openshift-install agent
   hosts: gitups_ocp_hosts
-  # `min` is enough for what every role on this play needs (os_family for
-  # package dispatch). `env` is gathered separately below under the same
-  # remote-root context because every provider-host step runs through become.
   gather_subset:
     - "!all"
     - min

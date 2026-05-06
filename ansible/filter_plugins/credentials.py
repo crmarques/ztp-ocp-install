@@ -1,8 +1,3 @@
-# Filter plugin for parsing the on-disk `username:password` credential files
-# every gitups role uses. Centralising the slurp-decode-validate-split shape
-# here means no_log discipline and shape errors live in one place; callers
-# go from a 4-task pattern (slurp → decode → validate → split) to two tasks
-# (slurp → set_fact via filter).
 
 from __future__ import annotations
 
@@ -12,12 +7,6 @@ from ansible.errors import AnsibleFilterError
 
 
 def gitups_parse_credential(slurp_result, label="credential"):
-    """Decode an ``ansible.builtin.slurp`` result and split it into username
-    and password. Returns ``{"username": str, "password": str}`` on success;
-    raises ``AnsibleFilterError`` with a labelled message otherwise so the
-    failure surfaces at the call site instead of as an opaque KeyError
-    deeper in the role.
-    """
     if not isinstance(slurp_result, dict):
         raise AnsibleFilterError(
             f"{label}: expected an ansible.builtin.slurp result mapping, "

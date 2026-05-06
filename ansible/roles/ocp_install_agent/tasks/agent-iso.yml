@@ -36,10 +36,6 @@
     - { name: agent-config.yaml, content: "{{ gitups_effective_agent_config | to_nice_yaml(indent=2) }}" }
   when: not gitups_agent_iso_stat.stat.exists or gitups_effective_install_config_file.changed or gitups_effective_agent_config_file.changed
 
-# openshift-install caches asset state in .openshift_install_state.json after a
-# successful run; on a re-run with re-written install-config.yaml/agent-config.yaml,
-# the cached Agent Installer ISO asset is replayed and fails with "cannot generate
-# ISO image due to configuration errors". Drop the cached state and outputs first.
 - name: Purge stale openshift-install state before regenerating agent ISO
   ansible.builtin.file:
     path: "{{ gitups_ocp_installer_dir }}/work/{{ item }}"

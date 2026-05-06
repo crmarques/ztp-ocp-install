@@ -31,7 +31,6 @@ func TestOperatorCheckUniversalChecksWithoutInputs(t *testing.T) {
 	}
 }
 
-// `preflight` with `-f` runs the full state-driven preflight.
 func TestOperatorCheckWithStateRunsFullPreflight(t *testing.T) {
 	stubPreflightAlwaysOK(t)
 	var stdout bytes.Buffer
@@ -45,9 +44,6 @@ func TestOperatorCheckWithStateRunsFullPreflight(t *testing.T) {
 		t.Fatalf("expected ok, got %d, stderr=%s", code, stderr.String())
 	}
 	out := stdout.String()
-	// The libvirt example declares qemu-kvm so the cluster phase's KVM
-	// probe must surface; the ocp phase brings in openshift-install on
-	// PATH. Both come from collectPreflightChecks under hasState=true.
 	for _, expected := range []string{
 		"/dev/kvm available",
 		"openshift-install on PATH",
@@ -59,11 +55,6 @@ func TestOperatorCheckWithStateRunsFullPreflight(t *testing.T) {
 	}
 }
 
-// Bootstrap dry-run must enumerate the package manager invocation it would
-// make. The plan is OS-driven, so we exercise the planner directly with a
-// fixture instead of relying on the real /etc/os-release. Provider-side
-// packages (libvirt, qemu-kvm, podman) must never appear: they belong to the
-// provider host's own preparation, even when the state declares them.
 func TestOperatorBootstrapPlanRedhatBaseOnly(t *testing.T) {
 	plan := controllerBootstrapPlan("redhat")
 	if len(plan) != 1 {
@@ -117,7 +108,6 @@ func TestOperatorBootstrapPlanVenvModeStaysUserOwned(t *testing.T) {
 	}
 }
 
-// resolveAnsiblePlaybook prefers the venv binary when present.
 func TestResolveAnsiblePlaybookPrefersVenvBinaryWhenPresent(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv(gitupsHomeEnv, home)
@@ -143,14 +133,6 @@ func TestOperatorBootstrapDryRunPrintsPlanAndDoesNotExecute(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Cleanup(func() { _ = os.Remove(osRelease) })
 
-	// Point detectOSFamily at the fixture by overriding the constant via a
-	// temporary symlink. detectOSFamily takes the path as a parameter, but
-	// the cobra command always passes defaultOSReleasePath; rather than
-	// plumb a flag, exercise the planner / parser directly here and the
-	// command-level flow at the dry-run level above by setting up a real
-	// fixture in CWD-relative path. The simpler test is to assert the dry
-	// run prints the expected sentinel text against the real /etc/os-release
-	// when present; skip when absent (hermetic CI).
 	if _, err := os.Stat(defaultOSReleasePath); err != nil {
 		t.Skipf("/etc/os-release missing on this host: %v", err)
 	}
@@ -171,9 +153,6 @@ func TestOperatorBootstrapDryRunPrintsPlanAndDoesNotExecute(t *testing.T) {
 	}
 }
 
-// Without -f the dry-run notes that the OCP CLI installer is skipped because
-// no release version is known. This is the path users on a fresh controller
-// hit when they run `setup controller` before authoring any state.
 func TestOperatorBootstrapDryRunSkipsCLIsWithoutState(t *testing.T) {
 	if _, err := os.Stat(defaultOSReleasePath); err != nil {
 		t.Skipf("/etc/os-release missing on this host: %v", err)
@@ -191,9 +170,6 @@ func TestOperatorBootstrapDryRunSkipsCLIsWithoutState(t *testing.T) {
 	}
 }
 
-// With -f pointing at a fixture that declares an openshift release version,
-// the dry-run output must include the planned ansible-playbook invocation
-// for setup-controller-clis.yml so the user can preview the install.
 func TestOperatorBootstrapDryRunPlansCLIsFromState(t *testing.T) {
 	if _, err := os.Stat(defaultOSReleasePath); err != nil {
 		t.Skipf("/etc/os-release missing on this host: %v", err)

@@ -1,8 +1,4 @@
 ---
-# OCP CLI installer defaults. The mirror serves every public OpenShift release
-# without authentication, so no token-bearing source is configured here. If a
-# fork ever needs an entitled mirror, override gitups_clis_mirror_base before
-# running setup-controller-clis.yml.
 gitups_clis_mirror_base: "https://mirror.openshift.com/pub/openshift-v4/clients/ocp"
 gitups_clis_install_dir: "{{ ansible_env.HOME }}/.gitups/bin"
 gitups_clis_tmp_dir: "{{ ansible_env.HOME }}/.gitups/tmp/controller-clis"

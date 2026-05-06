@@ -1,20 +1,9 @@
 ---
-# Configure proxy on the remote provider host so dnf, pip, podman, systemd
-# units, and `openshift-install` traffic flows through the proxy declared in
-# Environment.spec.ocpInstall.{restricted,disconnected}.proxy. NoProxy ranges
-# (libvirt bridges, cluster machine networks, baseDomain, BMC loopback) stay
-# direct so internal cluster URLs are reached without proxy.
 - name: Resolve effective proxy state
   ansible.builtin.set_fact:
     gitups_proxy_enabled: "{{ (gitups_proxy_http | length) > 0 or (gitups_proxy_https | length) > 0 }}"
   changed_when: false
 
-# When credentialsRef is set we resolve username:password from the secrets
-# directory at apply time and merge it into the URLs locally — keeping the
-# raw URLs in vars.yaml credential-free. The slurp runs on the target host,
-# so the secrets directory must exist at the same path on each provider host
-# (the same assumption ocp_install_agent and provider_bmc already make for
-# pull-secret, ssh-key, and BMC credentials).
 - name: Read proxy credentials
   ansible.builtin.slurp:
     src: "{{ gitups_secrets_dir }}/{{ gitups_proxy_credentials_ref }}"
@@ -33,10 +22,6 @@
     - gitups_proxy_enabled
     - (gitups_proxy_credentials_ref | length) > 0
 
-# Build the credential authority once (URL-encoded) and splice it into every
-# scheme://host URL the rest of the role writes out. Stripping any pre-existing
-# `user:pass@` keeps the role idempotent if the YAML accidentally embedded
-# credentials despite the validator.
 - name: Build credentialed proxy URLs
   ansible.builtin.set_fact:
     gitups_proxy_authority: >-
@@ -73,10 +58,6 @@
   changed_when: false
   when: gitups_proxy_enabled
 
-# gitups_proxy_env is the dict the play-level `environment:` evaluates against;
-# always define it so dependent plays do not need a `default({})` fallback.
-# When no proxy is configured this is an empty dict — direct egress, no env
-# override on subsequent tasks.
 - name: Build proxy environment for downstream task overrides
   ansible.builtin.set_fact:
     gitups_proxy_env: >-
@@ -93,9 +74,6 @@
   no_log: true
   changed_when: false
 
-# When no proxy is configured the role is a no-op: every subsequent task is
-# gated on gitups_proxy_enabled so host_prepare, host_libvirt, provider_qemu, etc.
-# still run for direct-egress hosts.
 - name: Configure proxy on the provider host
   when: gitups_proxy_enabled
   block:
@@ -117,10 +95,6 @@
       no_log: "{{ (gitups_proxy_credentials_ref | length) > 0 }}"
       when: (gitups_proxy_credentials_ref | length) == 0
 
-    # Login shells (sshed-in admins, ansible's `become` shells) source
-    # /etc/profile.d/*.sh; /etc/environment alone does not propagate to all of
-    # them on every distro. Drop a profile.d snippet so interactive and
-    # non-interactive shells both export the proxy.
     - name: Render /etc/profile.d/gitups-proxy.sh
       ansible.builtin.copy:
         dest: /etc/profile.d/gitups-proxy.sh
@@ -128,7 +102,6 @@
         group: root
         mode: "0644"
         content: |
-          # Managed by gitups host_proxy role.
           export HTTP_PROXY="{{ gitups_proxy_http_effective }}"
           export HTTPS_PROXY="{{ gitups_proxy_https_effective }}"
           export NO_PROXY="{{ gitups_proxy_no }}"
@@ -138,9 +111,6 @@
       no_log: "{{ (gitups_proxy_credentials_ref | length) > 0 }}"
       when: (gitups_proxy_credentials_ref | length) == 0
 
-    # dnf does not honor HTTP(S)_PROXY from /etc/environment in every release;
-    # set the proxy explicitly so package installs in host_prepare / host_libvirt
-    # succeed.
     - name: Stat dnf.conf
       ansible.builtin.stat:
         path: /etc/dnf/dnf.conf
@@ -175,10 +145,6 @@
       no_log: "{{ (gitups_proxy_credentials_ref | length) > 0 }}"
       when: gitups_proxy_yum_stat.stat.exists
 
-    # pip respects per-process env, but its config keeps installs working when
-    # an ansible task overrides `environment:` and clears the parent env (e.g.,
-    # pinned ansible.builtin.pip). Root's pip config is read by
-    # `ansible.builtin.pip` under become=true.
     - name: Ensure pip config directory
       ansible.builtin.file:
         path: /root/.pip
@@ -194,15 +160,10 @@
         group: root
         mode: "0600"
         content: |
-          # Managed by gitups host_proxy role.
           [global]
           proxy = {{ gitups_proxy_primary }}
       no_log: "{{ (gitups_proxy_credentials_ref | length) > 0 }}"
 
-    # Podman pulls (HAProxy image, etc.) inherit env from the calling shell.
-    # When Ansible runs podman via systemd or a wrapped command, the env may
-    # not be set; the system-wide containers env file makes the proxy
-    # unconditional.
     - name: Ensure containers config directory
       ansible.builtin.file:
         path: /etc/containers
@@ -228,9 +189,6 @@
           ]
       no_log: "{{ (gitups_proxy_credentials_ref | length) > 0 }}"
 
-    # systemd-managed services (sushy-tools, libvirtd, gitups-* units) do not
-    # inherit /etc/environment; place a system.conf.d drop-in so spawned
-    # services pick up the proxy when they need to reach external endpoints.
     - name: Ensure systemd system.conf.d directory
       ansible.builtin.file:
         path: /etc/systemd/system.conf.d
@@ -246,7 +204,6 @@
         group: root
         mode: "{{ '0600' if (gitups_proxy_credentials_ref | length) > 0 else '0644' }}"
         content: |
-          # Managed by gitups host_proxy role.
           [Manager]
           DefaultEnvironment="HTTP_PROXY={{ gitups_proxy_http_effective }}" "HTTPS_PROXY={{ gitups_proxy_https_effective }}" "NO_PROXY={{ gitups_proxy_no }}" "http_proxy={{ gitups_proxy_http_effective }}" "https_proxy={{ gitups_proxy_https_effective }}" "no_proxy={{ gitups_proxy_no }}"
       no_log: "{{ (gitups_proxy_credentials_ref | length) > 0 }}"

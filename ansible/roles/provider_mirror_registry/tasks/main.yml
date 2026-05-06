@@ -1,8 +1,4 @@
 ---
-# provider_mirror_registry brings up a docker/distribution registry on the
-# provider host so disconnected installs can pull the OCP release payload
-# from a local source. The flow is split into focused task files so each
-# stage of the convergence is inspectable on its own.
 - name: Install packages, create state dirs, persist requirements snapshots
   ansible.builtin.import_tasks: prepare-host.yml
 

@@ -1,8 +1,4 @@
 ---
-# provider_bmc_emulated (sushy-tools loopback) and provider_bmc_redfish (real
-# BMC) expose the same Redfish surface, so the boot sequence is shared.
-# ADR 0002 dispatches on `bmcRole` literally (ocp_boot_<role>), so this role
-# must exist for bmcRole=emulated; it delegates to ocp_boot_redfish.
 - name: Boot OCP cluster node via emulated Redfish (sushy-tools)
   ansible.builtin.include_role:
     name: ocp_boot_redfish

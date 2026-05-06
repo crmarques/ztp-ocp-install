@@ -44,11 +44,6 @@
         - gitups_mirror_registry_trust_remove.changed
       changed_when: gitups_mirror_registry_trust_remove.changed
 
-    # When `gitups destroy --keep-mirrored-images` is set we skip removal of
-    # the registry data volume so the next apply does not have to re-pull
-    # the release payload + componentImages from public registries. The
-    # trust anchor, htpasswd, certs, and metadata are still wiped — they
-    # are cheap to re-render from secrets on the next apply.
     - name: Remove mirror registry state directory (full destroy)
       ansible.builtin.file:
         path: "{{ gitups_host_state_dir }}/mirror-registry/{{ gitups_current_mirror_registry.name }}"
@@ -100,10 +95,6 @@
       changed_when: gitups_sushy_stop.changed | default(false)
       when: gitups_current_provider.bmcRole == 'emulated'
 
-    # The Redfish port-open lives in provider_bmc_emulated; mirror its scope
-    # here so a destroy leaves the host firewall in the same shape as before
-    # apply. firewalld is probed first so the close no-ops on hosts where
-    # the role originally did too.
     - name: Check firewalld state on provider host
       ansible.builtin.command:
         argv:
@@ -217,10 +208,6 @@
         path: /etc/sysctl.d/99-gitups-haproxy.conf
         state: absent
 
-    # Owns the host-state-root rmdir because provider phase is the last to
-    # run during destroy (reverse of apply order). Cluster phase has already
-    # cleared its per-cluster directories; everything else under the root
-    # belongs to provider-scoped resources cleared above.
     - name: Remove Gitups host state root if empty
       ansible.builtin.command:
         argv:

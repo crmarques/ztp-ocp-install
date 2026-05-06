@@ -49,10 +49,6 @@ func newSecretsCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 	return cmd
 }
 
-// newSecretsSyncCmd materialises every Environment.spec.keys[name] entry into
-// <secretsDir>/<name>. SSH refs are symlinked to the resolved source so the
-// operator's ~/.ssh/ stays the single source of truth; non-SSH refs are
-// copied with mode 0600.
 func newSecretsSyncCmd(stdout io.Writer, _ io.Writer) *cobra.Command {
 	var (
 		files      []string
@@ -113,9 +109,6 @@ func newSecretsSyncCmd(stdout io.Writer, _ io.Writer) *cobra.Command {
 	return cmd
 }
 
-// resolveKeyFilePath expands a `file:` source: leading `~/` is mapped to the
-// user's home directory; relative paths are interpreted relative to the
-// Environment YAML's source directory; absolute paths are used as-is.
 func resolveKeyFilePath(file, envSourceDir string) (string, error) {
 	if file == "" {
 		return "", errors.New("file source is empty")
@@ -143,9 +136,6 @@ func resolveKeyFilePath(file, envSourceDir string) (string, error) {
 	return filepath.Clean(filepath.Join(envSourceDir, file)), nil
 }
 
-// sshRefNamesForState returns the set of SecretRef names that name an SSH
-// key — provider host SSH keys and the cluster SSH key. These are the refs
-// that get symlinked into <secretsDir>/<name> rather than copied.
 func sshRefNamesForState(state v1alpha1.State) map[string]bool {
 	out := map[string]bool{}
 	for _, env := range state.Environments {
@@ -312,11 +302,6 @@ func newSecretsGenerateCmd(stdout io.Writer, _ io.Writer) *cobra.Command {
 	return cmd
 }
 
-// materializeGeneratedCredentials writes <secretsDir>/<name> as the single
-// line "<username>:<random-password>" with mode 0600. Existing files are
-// reused as-is to keep the BMC/registry/proxy callers stable; if the file
-// is present but its username prefix does not match the desired spec we
-// fail loudly with a remediation hint, mirroring the cert drift check.
 func materializeGeneratedCredentials(secretsDir string, request generatedCredentialsRequest) (string, error) {
 	target := filepath.Join(secretsDir, request.name)
 	wantUser := request.credentials.Username

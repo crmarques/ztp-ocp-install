@@ -1,7 +1,4 @@
 ---
-# Provider-scoped role for the IPMI BMC path. Scaffold only — most modern
-# bare-metal Redfish BMCs use provider_bmc_redfish; this role exists for
-# legacy IPMI-only hardware.
 
 - name: IPMI BMC is not yet implemented
   ansible.builtin.fail:

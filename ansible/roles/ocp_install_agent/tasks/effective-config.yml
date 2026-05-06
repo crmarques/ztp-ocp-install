@@ -51,10 +51,6 @@
     gitups_ocp_boot_artifacts_http_port: "{{ gitups_current_provider.bootArtifactsHttp.port | int }}"
   changed_when: false
 
-# Probe each configured imageDigestSources mirror endpoint to fail fast on
-# obvious local registry mistakes. This only validates the configured local
-# registry path; disconnected mode is enforced by rendering imageDigestSources
-# with NeverContactSource and by overriding the installer release image below.
 - name: Collect imageDigestSources mirror endpoints
   ansible.builtin.set_fact:
     gitups_ocp_mirror_endpoints: >-

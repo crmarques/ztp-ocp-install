@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/crmarques/ztp-ocp-install-lab/api/v1alpha1"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 func LoadNormalizeValidate(paths []string) (v1alpha1.State, error) {

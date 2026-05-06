@@ -80,9 +80,6 @@
       {% endfor %}
   register: gitups_haproxy_config
 
-# Bump this whenever the run spec changes so existing containers get
-# recreated. Both image refs participate in the fingerprint so a swap
-# between local-only and local+public also recreates the container.
 - name: Compute managed HAProxy spec fingerprint
   ansible.builtin.set_fact:
     gitups_haproxy_spec_hash: >-
@@ -109,16 +106,6 @@
       }}
   changed_when: false
 
-# Pull strategy: try `local` first when the user declared one; fall back
-# to `public` only when local is unset or its pull fails. Operators who
-# want a strict-local install (no public fallback) declare only `local`.
-#
-# Failure detection uses `podman image exists` (rc=0 == present in local
-# storage) rather than the module's `.failed` flag. failed_when: false
-# zeroes out .failed and would silently mask pull failures; ignore_errors
-# preserves .failed but logs a noisy fatal even on the expected fallback
-# path. The exists-check sidesteps both: pull tasks stay quiet, fallback
-# logic is driven by ground truth.
 - name: Pull managed HAProxy image from local registry
   containers.podman.podman_image:
     name: "{{ gitups_current_load_balancer.image.local }}"
@@ -267,10 +254,6 @@
     gitups_haproxy_final_restart_count: "{{ ((gitups_haproxy_post_inspect.containers | first).RestartCount | default('n/a')) if (gitups_haproxy_post_inspect.containers | default([]) | length) > 0 else 'n/a' }}"
   changed_when: false
 
-# timeout(1) returns 124 when the wait kept blocking; that means no stop
-# event occurred during the probe window, so the container is stably
-# running. Any other rc means `podman wait` returned because the container
-# hit a stop state at least once (i.e. it is crash-looping).
 - name: Fail when managed HAProxy container is not healthy
   ansible.builtin.fail:
     msg: |

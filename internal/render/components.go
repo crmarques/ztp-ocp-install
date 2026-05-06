@@ -20,9 +20,9 @@ func ComponentPins(state v1alpha1.State) []ComponentPin {
 			LookupDate: versionLookupDate,
 		},
 		{
-			Name:       "gopkg.in/yaml.v3",
-			Version:    "v3.0.1",
-			Source:     "https://gopkg.in/yaml.v3",
+			Name:       "go.yaml.in/yaml/v3",
+			Version:    "v3.0.4",
+			Source:     "https://go.yaml.in/yaml/v3",
 			LookupDate: versionLookupDate,
 		},
 	}

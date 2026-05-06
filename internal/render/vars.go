@@ -17,9 +17,6 @@ type VarsFile struct {
 	GitupsComponentPins    []ComponentPin            `yaml:"gitups_component_pins" json:"gitups_component_pins"`
 }
 
-// EnvironmentOCPInstallVars projects Environment.spec.ocpInstall to Ansible
-// vars. Only OpenShift install material (release payload, mirror registry,
-// trust bundles) is gated by these values.
 type EnvironmentOCPInstallVars struct {
 	Mode         string              `yaml:"mode" json:"mode"`
 	Disconnected bool                `yaml:"disconnected" json:"disconnected"`
@@ -27,17 +24,6 @@ type EnvironmentOCPInstallVars struct {
 	Proxy        *ProxyVars          `yaml:"proxy,omitempty" json:"proxy,omitempty"`
 }
 
-// ProxyVars projects Environment.spec.ocpInstall.{restricted,disconnected}.proxy
-// onto Ansible vars. The host_proxy role and per-task `environment:` blocks
-// consume these to drive package, container-pull, and openshift-install traffic
-// through the configured proxy while leaving NoProxy ranges direct.
-//
-// CredentialsRef points at a single-line `username:password` secret. When set,
-// the host_proxy role merges the resolved credentials into the URLs at apply
-// time (writing credentialed values to /etc/environment, dnf/pip/podman, and
-// the systemd default environment), and the ocp_install_agent role injects
-// credentialed URLs into the effective install-config. The plaintext URLs in
-// vars.yaml stay credential-free.
 type ProxyVars struct {
 	HTTPProxy      string   `yaml:"httpProxy,omitempty" json:"httpProxy,omitempty"`
 	HTTPSProxy     string   `yaml:"httpsProxy,omitempty" json:"httpsProxy,omitempty"`
@@ -118,11 +104,6 @@ type OCPClusterNodeVars struct {
 	BareMetal  *MachineBMCVars `yaml:"bareMetal,omitempty" json:"bareMetal,omitempty"`
 }
 
-// MachineBMCVars carries one machine's out-of-band BMC endpoint for the
-// bare-metal substrate. Populated only when the provider kind is baremetal;
-// consumed by cluster_substrate_baremetal (credential staging) and
-// ocp_boot_redfish (per-host Redfish endpoints once it grows beyond the
-// emulated loopback).
 type MachineBMCVars struct {
 	Address                        string `yaml:"address" json:"address"`
 	Port                           int    `yaml:"port,omitempty" json:"port,omitempty"`
@@ -132,13 +113,6 @@ type MachineBMCVars struct {
 	BootMACAddress                 string `yaml:"bootMACAddress,omitempty" json:"bootMACAddress,omitempty"`
 }
 
-// ProviderVars projects the provider chosen by a ClusterInfrastructure onto
-// the per-cluster Ansible vars surface. Kind is the structural discriminator
-// (mirrors v1alpha1.ProviderKind). SubstrateRole, BmcRole, and
-// BootArtifactsHttp drive the dynamic role-name dispatch in the playbooks:
-// roles are selected as `cluster_substrate_<SubstrateRole>` and
-// `provider_bmc_<BmcRole>`, and the boot-artifacts HTTP role is gated on
-// BootArtifactsHttp.Enabled.
 type ProviderVars struct {
 	Kind                string                        `yaml:"kind" json:"kind"`
 	SubstrateRole       string                        `yaml:"substrateRole" json:"substrateRole"`
@@ -150,9 +124,6 @@ type ProviderVars struct {
 	Nodes               []ProviderNodeVars            `yaml:"nodes,omitempty" json:"nodes,omitempty"`
 }
 
-// ProviderComponentVars is the provider-scoped twin of ProviderVars consumed
-// by provider-prepare.yml. Same dispatch fields, different scope (one entry
-// per InfrastructureProvider, not per cluster).
 type ProviderComponentVars struct {
 	Name                string                        `yaml:"name" json:"name"`
 	Kind                string                        `yaml:"kind" json:"kind"`
@@ -163,11 +134,6 @@ type ProviderComponentVars struct {
 	BMC                 *ProviderBMCVars              `yaml:"bmc,omitempty" json:"bmc,omitempty"`
 }
 
-// ProviderBootArtifactsHTTPVars carries the inputs of the
-// provider_boot_artifacts_http role: the substrate-neutral HTTP server that
-// publishes RHCOS rootfs and other boot artifacts to nodes that can't fetch
-// them out-of-band. Disabled for substrates that mount media via their own
-// API (vSphere, KubeVirt).
 type ProviderBootArtifactsHTTPVars struct {
 	Enabled     bool   `yaml:"enabled" json:"enabled"`
 	BindAddress string `yaml:"bindAddress,omitempty" json:"bindAddress,omitempty"`
@@ -298,12 +264,6 @@ type SharedLoadBalancerVars struct {
 	Frontends   []SharedLoadBalancerFrontendVars `yaml:"frontends" json:"frontends"`
 }
 
-// MirrorRegistryRunVars carries one provider's mirror-registry instance to
-// the provider_mirror_registry role: server placement, the URL the cluster
-// network reaches the mirror at, the secret refs that materialize htpasswd
-// auth and the TLS material, the registry server image (local-then-public
-// fallback like SharedLoadBalancerVars.Image), and the full mirror set the
-// role pushes to make the cluster install fully air-gappable.
 type MirrorRegistryRunVars struct {
 	Name                      string             `yaml:"name" json:"name"`
 	ProviderRef               string             `yaml:"providerRef" json:"providerRef"`
@@ -320,9 +280,6 @@ type MirrorRegistryRunVars struct {
 	MirrorSet                 []MirrorImageRef   `yaml:"mirrorSet" json:"mirrorSet"`
 }
 
-// MirrorImageRef is one upstream→mirror image pair the registry role pushes.
-// Kind drives the strategy: releasePayload uses `oc adm release mirror`,
-// componentImage and registryServer use `skopeo copy`.
 type MirrorImageRef struct {
 	Kind   string `yaml:"kind" json:"kind"`
 	Public string `yaml:"public" json:"public"`
@@ -335,8 +292,6 @@ const (
 	MirrorImageKindRegistryServer = "registryServer"
 )
 
-// ComponentImageURLs exposes both image refs to Ansible. The role tries
-// `local` first when set and falls back to `public` on pull failure.
 type ComponentImageURLs struct {
 	Local  string `yaml:"local,omitempty" json:"local,omitempty"`
 	Public string `yaml:"public,omitempty" json:"public,omitempty"`
@@ -363,10 +318,6 @@ type LoadBalancerBackendVars struct {
 	NodeRole string `yaml:"nodeRole,omitempty" json:"nodeRole,omitempty"`
 }
 
-// LoadBalancerBindingVars describes one VIP bind for a load-balancer
-// frontend. VIP-to-bridge plumbing is handled by the substrate role
-// (cluster_substrate_libvirt) — it walks the cluster's libvirt
-// machineNetworks and attaches addresses whose CIDR contains the bind.
 type LoadBalancerBindingVars struct {
 	ClusterName string                    `yaml:"clusterName" json:"clusterName"`
 	OCPName     string                    `yaml:"ocpName" json:"ocpName"`
@@ -511,9 +462,6 @@ func releaseImageOverride(ocp v1alpha1.OCPCluster) string {
 	return ""
 }
 
-// localRegistryVars projects the Environment ocpInstall registry mirror
-// onto the per-cluster install vars so the Ansible bundle continues to read
-// `gitups_clusters[].ocp.install.localRegistry.*`.
 func localRegistryVars(env *v1alpha1.Environment, ocp v1alpha1.OCPCluster) *LocalRegistryVars {
 	if env == nil {
 		return nil
@@ -543,11 +491,6 @@ func mirrorRegistryHostname(url string) string {
 	return url
 }
 
-// generatedSecretVarsFromEnv projects every Environment.spec.keys entry
-// whose source is `generated.selfSignedCertificate` into the per-cluster
-// install vars consumed by ocp_install_agent. Credentials-style generated
-// keys are not exposed here — they are materialized once by `gitups
-// secrets generate` on the operator host and read by ansible directly.
 func generatedSecretVarsFromEnv(env *v1alpha1.Environment) []GeneratedSecretVars {
 	if env == nil {
 		return nil
@@ -673,15 +616,6 @@ func providerVars(item v1alpha1.ClusterInfrastructure, provider v1alpha1.Infrast
 	return result
 }
 
-// providerDispatch maps the structural provider discriminator onto the three
-// fields the playbooks use to pick roles by name. Sources of truth:
-//   - SubstrateRole → cluster_substrate_<role> (per-cluster substrate concerns
-//     such as VM lifecycle, hardware credential staging).
-//   - BmcRole → provider_bmc_<role> (provider-scoped BMC handling: emulated
-//     sushy stack, real Redfish credentials, no-op for substrates with no
-//     external power-control surface).
-//   - BootArtifactsHttp → enables provider_boot_artifacts_http when the
-//     substrate cannot deliver the agent rootfs / boot artifacts out-of-band.
 func providerDispatch(provider v1alpha1.InfrastructureProvider) (string, string, ProviderBootArtifactsHTTPVars) {
 	switch v1alpha1.MachineFlavor(provider) {
 	case v1alpha1.MachineFlavorLibvirt:
@@ -954,9 +888,6 @@ func machineNetworksList(item v1alpha1.ClusterInfrastructure) []MachineNetworkVa
 	return out
 }
 
-// libvirtNetworkName builds a deterministic libvirt network identifier from
-// the ClusterInfrastructure name and the cluster-local network key. Multiple
-// clusters can share a libvirt host, so the name has to be unique per cluster.
 func libvirtNetworkName(clusterName, networkKey string) string {
 	return clusterName + "-" + networkKey
 }
@@ -1168,10 +1099,6 @@ func primaryInterface(machine v1alpha1.MachineSpec) v1alpha1.MachineInterfaceSpe
 	return machine.Interfaces[keys[0]]
 }
 
-// closureProvider folds a cluster's providerRefs union into a single
-// InfrastructureProvider so existing renderer projections can consume the
-// merged capability set. Metadata.name is the capability-supplying provider
-// used for output labels.
 func closureProvider(ci v1alpha1.ClusterInfrastructure, providers map[string]v1alpha1.InfrastructureProvider) v1alpha1.InfrastructureProvider {
 	closure, _ := v1alpha1.BuildProviderClosure(ci, providers)
 	name := closure.LoadBalancerProviderName
@@ -1199,11 +1126,6 @@ func closureProvider(ci v1alpha1.ClusterInfrastructure, providers map[string]v1a
 	}
 }
 
-// mirrorRegistryRunVars projects each InfrastructureProvider that supplies
-// spec.registry.mirrorRegistry into a per-provider runner var consumed by
-// the provider_mirror_registry role. Returns nil when the env's ocpInstall
-// is connected, when no provider supplies the capability, or when the env
-// does not declare a registries.mirror block.
 func mirrorRegistryRunVars(state v1alpha1.State, env *v1alpha1.Environment) []MirrorRegistryRunVars {
 	if env == nil {
 		return nil
@@ -1270,13 +1192,6 @@ func mirrorRegistryRunVars(state v1alpha1.State, env *v1alpha1.Environment) []Mi
 	return result
 }
 
-// buildMirrorSet enumerates every public→local image pair the registry must
-// hold for cluster nodes to install without internet access:
-//   - the OCP release payload for each distinct cluster release version
-//     (handled at apply time by `oc adm release mirror`),
-//   - every Environment.spec.componentImages.<cat>.<name> with both refs set,
-//   - the registry-server image itself (so subsequent applies can pull from
-//     the local mirror once the bootstrap pull from public has completed).
 func buildMirrorSet(state v1alpha1.State, env *v1alpha1.Environment, mirrorURL string, regImage ComponentImageURLs) []MirrorImageRef {
 	var out []MirrorImageRef
 	mirrorURL = strings.TrimRight(mirrorURL, "/")
@@ -1330,8 +1245,6 @@ func buildMirrorSet(state v1alpha1.State, env *v1alpha1.Environment, mirrorURL s
 	return out
 }
 
-// mirrorURLPortRender extracts an explicit :port from a registry URL of the
-// form host[:port][/path]. Returns 0 when no explicit port is present.
 func mirrorURLPortRender(u string) int {
 	host := u
 	if idx := strings.Index(host, "/"); idx >= 0 {
@@ -1374,12 +1287,6 @@ func primaryEnvironment(state v1alpha1.State) *v1alpha1.Environment {
 	return &state.Environments[0]
 }
 
-// componentImageURLs returns both image refs for a component declared under
-// `Environment.spec.componentImages.<category>.<type>`. The Ansible role
-// chooses at apply time: it pulls `local` first when set and falls back to
-// `public` on failure. When the user declared neither, Gitups supplies a
-// built-in default for known components (haproxy → DefaultHAProxyImageRef as
-// `public`).
 func componentImageURLs(env *v1alpha1.Environment, category, typ string) ComponentImageURLs {
 	if env != nil {
 		if types, ok := env.Spec.ComponentImages[category]; ok {

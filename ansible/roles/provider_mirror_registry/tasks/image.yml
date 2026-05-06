@@ -1,10 +1,4 @@
 ---
-# Pull strategy: try `local` first when the user declared one; fall back to
-# `public` only when local is unset or its pull fails. On bootstrap the
-# local registry does not exist yet, so the fallback to `public` is the
-# expected first-apply path. After mirror-images.yml runs once the registry
-# server image has been mirrored locally and subsequent applies stay
-# air-gapped from the cluster network.
 - name: Pull mirror registry server image from local registry
   containers.podman.podman_image:
     name: "{{ gitups_current_mirror_registry.image.local }}"

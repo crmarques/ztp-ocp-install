@@ -34,10 +34,6 @@
     - gitups_agent_iso_stage.changed
     - gitups_current_provider.bmcRole == 'emulated'
 
-# Hand off to the BMC-specific boot role. provider_bmc_emulated and
-# provider_bmc_redfish both expose Redfish, so the same role serves both;
-# real bare-metal will set bmcRole to 'redfish' and read per-host endpoints
-# from the same `bmc.yml` shape that emulated writes.
 - name: Boot OCP cluster node via BMC
   ansible.builtin.include_role:
     name: "ocp_boot_{{ gitups_current_provider.bmcRole }}"

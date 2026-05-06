@@ -281,10 +281,6 @@ func newDestroyScopeCmd(scope string, _ io.Reader, stdout io.Writer, stderr io.W
 				return failErr(1, err)
 			}
 		}
-		// `destroy all` owns the entire state-dir teardown: rendered artifacts,
-		// extracted ansible bundle, and ansible logs all live under
-		// stateDirAbs and refer to infrastructure that no longer exists. Scoped
-		// destroys leave state in place because the remaining scopes still need it.
 		if dryRun {
 			if scope == "all" && !keepStateDir {
 				fmt.Fprintf(stdout, "dry-run: would remove state-dir: %s\n", stateDirAbs)
@@ -327,9 +323,6 @@ func destroyScopeShort(scope string) string {
 	}
 }
 
-// runApplyHostCheck enforces the spec rule that apply must run a
-// `validate --check-host` pass before mutating anything. Failures abort
-// before render, before phase prompt, and before any ansible execution.
 func runApplyHostCheck(stdout io.Writer, stderr io.Writer, state v1alpha1.State, selected []Phase, secretsDir, hostStateDir string) error {
 	checks := collectPreflightChecks(state, selected, true, secretsDir, hostStateDir, defaultPreflightDeps)
 	printSubtitle(stdout, "host check:")
@@ -350,13 +343,6 @@ func runApplyHostCheck(stdout io.Writer, stderr io.Writer, state v1alpha1.State,
 	return nil
 }
 
-// ----- helpers reused by apply + destroy --------------------------------------
-
-// resolvedOCPBinaryPairs returns extra-var pairs for binaries the ocp phase
-// needs as absolute paths, so the ansible role can locate them under become's
-// reduced PATH. Silent on miss: preflight is the place that surfaces missing
-// binaries; if the user has overridden via --extra-var, that wins because it
-// is appended after.
 func resolvedOCPBinaryPairs(selected []Phase, hostStateDir string) []string {
 	ocpSelected := false
 	for _, p := range selected {
@@ -407,8 +393,6 @@ func destroyWorkflow(scope string, selected []Phase) (phaseWorkflow, error) {
 	}
 }
 
-// printApplySummary lists the phases apply will run, marks which need root
-// on the target hosts, and tells the user how Ansible will obtain escalation.
 func printApplySummary(w io.Writer, selected []Phase, askBecomePass bool, dryRun bool) {
 	printWorkflowSummary(w, "apply plan:", selected, askBecomePass, dryRun)
 }
@@ -457,8 +441,6 @@ func printWorkflowStart(w io.Writer, workflowName string, selected []Phase, askB
 	fmt.Fprintf(w, "\n>>> running workflow %q — phases: %s\n", workflowName, phaseList(selected))
 }
 
-// printPhaseStart announces the phase that is about to run so the user knows
-// which remote root step the upcoming Ansible become prompt authorizes.
 func printPhaseStart(w io.Writer, phase Phase, askBecomePass bool) {
 	if phase.NeedsRoot && askBecomePass {
 		fmt.Fprintf(w, "\n>>> running phase %q [root] — %s\n>>> ansible may prompt for the sudo (BECOME) password for this phase.\n", phase.Name, phase.Description)
@@ -485,9 +467,6 @@ func phaseList(selected []Phase) string {
 	return strings.Join(names, ", ")
 }
 
-// confirm reads a single line from stdin and returns true for "y"/"yes".
-// Returns false when stdin is nil or unreadable so non-interactive callers
-// must opt in via --yes.
 func confirm(in io.Reader, prompt io.Writer, message string) bool {
 	if in == nil {
 		return false
