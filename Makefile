@@ -20,6 +20,7 @@ EMBED_BUNDLE_DIR = internal/embedded/bundle
 ANSIBLE_GALAXY ?= $(shell command -v ansible-galaxy 2>/dev/null)
 COLLECTIONS_REQUIREMENTS = $(ANSIBLE_SRC_DIR)/collections/requirements.yml
 EMBED_COLLECTIONS_DIR = $(EMBED_BUNDLE_DIR)/collections
+COLLECTIONS_STAMP = $(EMBED_COLLECTIONS_DIR)/.stamp
 
 E2E_CASES = $(notdir $(patsubst %/,%,$(wildcard $(E2E_DIR)/*/)))
 
@@ -35,18 +36,23 @@ build: $(BIN_DIR) sync-bundle
 # $(COLLECTIONS_REQUIREMENTS) are resolved at build time into
 # $(EMBED_COLLECTIONS_DIR) so the gitups binary ships every Ansible
 # collection it needs and disconnected hosts never reach Galaxy.
-sync-bundle:
+sync-bundle: $(COLLECTIONS_STAMP)
 	@find $(EMBED_BUNDLE_DIR) -mindepth 1 -maxdepth 1 \
-		! -name PLACEHOLDER ! -name .gitignore -exec rm -rf {} +
+		! -name PLACEHOLDER ! -name .gitignore ! -name collections -exec rm -rf {} +
 	@cp -R $(ANSIBLE_SRC_DIR)/. $(EMBED_BUNDLE_DIR)/
+
+# Galaxy download is gated on requirements.yml — only re-runs when it changes.
+$(COLLECTIONS_STAMP): $(COLLECTIONS_REQUIREMENTS)
 	@test -n "$(ANSIBLE_GALAXY)" || { printf '%s\n' 'ansible-galaxy not found in PATH; install Ansible or set ANSIBLE_GALAXY=/path/to/ansible-galaxy'; exit 1; }
-	@$(ANSIBLE_GALAXY) collection install --force -r $(COLLECTIONS_REQUIREMENTS) -p $(EMBED_COLLECTIONS_DIR) >/dev/null
+	@rm -rf $(EMBED_COLLECTIONS_DIR)/ansible_collections
+	@$(ANSIBLE_GALAXY) collection install -r $(COLLECTIONS_REQUIREMENTS) -p $(EMBED_COLLECTIONS_DIR) >/dev/null
 	@# Slim embedded collections: strip test/CI/docs trees that bloat the
 	@# binary without contributing to runtime module execution.
 	@find $(EMBED_COLLECTIONS_DIR)/ansible_collections -maxdepth 4 -type d \( \
 		-name tests -o -name docs -o -name changelogs \
 		-o -name .github -o -name .azure-pipelines -o -name ci \
 		\) -exec rm -rf {} +
+	@touch $@
 
 $(BIN_DIR):
 	mkdir -p $(BIN_DIR)

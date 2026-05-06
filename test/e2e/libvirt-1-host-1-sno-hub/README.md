@@ -57,28 +57,27 @@ Installs a pinned Ansible venv and the OCP CLIs (`oc`, `kubectl`,
 > If migrating from an existing controller, skip this section and follow
 > [Migrating from an existing controller](#migrating-from-an-existing-controller) instead.
 
-Create the SSH keypairs and stage them where gitups expects them:
+Generate the SSH keypair and sync all file-sourced secrets into the gitups
+secrets store:
 
 ```text
 install -d -m 0700 ~/.ssh ~/.gitups/secrets
 
-# Cluster node SSH key — public half goes to the cluster, private half stays local.
-ssh-keygen -t ed25519 -f ~/.ssh/gitups-libvirt-1-host      -N '' -C gitups-libvirt-1-host
-install -m 0600 ~/.ssh/gitups-libvirt-1-host.pub ~/.gitups/secrets/cluster-admin-key
+# One keypair is used for both the cluster nodes and provider host SSH access.
+ssh-keygen -t ed25519 -f ~/.ssh/gitups-ssh-key -N '' -C gitups-ssh-key
 
-# Provider host SSH key — used by Ansible to connect to the libvirt host.
-ssh-keygen -t ed25519 -f ~/.ssh/gitups-remote-libvirt-host -N '' -C gitups-remote-libvirt-host
-install -m 0600 ~/.ssh/gitups-remote-libvirt-host ~/.gitups/secrets/remote-libvirt-host-admin-key
-
-# Authorize the provider key on the remote host (requires an existing way in:
+# Authorize the key on the remote provider host (requires an existing way in:
 # console, password, or another key).
-ssh-copy-id -i ~/.ssh/gitups-remote-libvirt-host.pub root@<provider-host-ip>
+ssh-copy-id -i ~/.ssh/gitups-ssh-key.pub root@<provider-host-ip>
+
+# Stage the pull secret downloaded from https://console.redhat.com.
+install -m 0600 ~/pull-secret.json ~/.gitups/secrets/openshift-pull-secret
 ```
 
-Then stage the pull secret and let gitups generate the remaining credentials:
+Then sync file-sourced keys and generate the remaining credentials:
 
 ```text
-bin/gitups secrets pull-secret set --name openshift-pull-secret --from-file ~/pull-secret.json
+bin/gitups secrets sync -f test/e2e/libvirt-1-host-1-sno-hub
 bin/gitups secrets generate -f test/e2e/libvirt-1-host-1-sno-hub
 ```
 
@@ -108,15 +107,13 @@ authorized, so generating new keys would break SSH access.
 ```text
 # On the old control host:
 rsync -av ~/.gitups/secrets/  <new-control-host>:~/.gitups/secrets/
-rsync -av ~/.ssh/gitups-libvirt-1-host \
-          ~/.ssh/gitups-libvirt-1-host.pub \
-          ~/.ssh/gitups-remote-libvirt-host \
-          ~/.ssh/gitups-remote-libvirt-host.pub \
+rsync -av ~/.ssh/gitups-ssh-key \
+          ~/.ssh/gitups-ssh-key.pub \
           <new-control-host>:~/.ssh/
 
 # On the new control host:
-chmod 600 ~/.ssh/gitups-remote-libvirt-host ~/.ssh/gitups-libvirt-1-host
-chmod 644 ~/.ssh/gitups-remote-libvirt-host.pub ~/.ssh/gitups-libvirt-1-host.pub
+chmod 600 ~/.ssh/gitups-ssh-key
+chmod 644 ~/.ssh/gitups-ssh-key.pub
 ```
 
 Then continue from step 1 (build + setup controller); skip step 3.
@@ -154,10 +151,8 @@ podman run --rm -it \
   --network=host \
   -e GITUPS_HOME=/gitups-home \
   -v "$HOME/.gitups":/gitups-home:Z \
-  -v "$HOME/.ssh/gitups-libvirt-1-host":/root/.ssh/gitups-libvirt-1-host:ro,Z \
-  -v "$HOME/.ssh/gitups-libvirt-1-host.pub":/root/.ssh/gitups-libvirt-1-host.pub:ro,Z \
-  -v "$HOME/.ssh/gitups-remote-libvirt-host":/root/.ssh/gitups-remote-libvirt-host:ro,Z \
-  -v "$HOME/.ssh/gitups-remote-libvirt-host.pub":/root/.ssh/gitups-remote-libvirt-host.pub:ro,Z \
+  -v "$HOME/.ssh/gitups-ssh-key":/root/.ssh/gitups-ssh-key:ro,Z \
+  -v "$HOME/.ssh/gitups-ssh-key.pub":/root/.ssh/gitups-ssh-key.pub:ro,Z \
   -v "$(pwd)":/workspace:ro,Z \
   -v "$STATE_DIR:$STATE_DIR:Z" \
   -w /workspace \
@@ -177,8 +172,8 @@ To simulate a fully clean controller (no shared venv), omit the
 podman run --rm -it \
   --network=host \
   -v "$HOME/.gitups/secrets":/root/.gitups/secrets:ro,Z \
-  -v "$HOME/.ssh/gitups-remote-libvirt-host":/root/.ssh/gitups-remote-libvirt-host:ro,Z \
-  -v "$HOME/.ssh/gitups-remote-libvirt-host.pub":/root/.ssh/gitups-remote-libvirt-host.pub:ro,Z \
+  -v "$HOME/.ssh/gitups-ssh-key":/root/.ssh/gitups-ssh-key:ro,Z \
+  -v "$HOME/.ssh/gitups-ssh-key.pub":/root/.ssh/gitups-ssh-key.pub:ro,Z \
   -v "$(pwd)":/workspace:ro,Z \
   -v "$STATE_DIR:$STATE_DIR:Z" \
   -w /workspace \

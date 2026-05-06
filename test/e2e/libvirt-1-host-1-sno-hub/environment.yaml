@@ -12,6 +12,12 @@ spec:
     clusterSSHKeyRef:
       name: cluster-admin-key
   keys:
+    cluster-admin-key:
+      file: ~/.ssh/gitups-ssh-key.pub
+    remote-libvirt-host-admin-key:
+      file: ~/.ssh/gitups-ssh-key
+    openshift-pull-secret:
+      file: ~/.gitups/secrets/openshift-pull-secret
     libvirt-1-host-bmc-credentials:
       generated:
         credentials:
@@ -23,5 +29,4 @@ spec:
   componentImages:
     load-balancer:
       haproxy:
-        local: registry.mirror.local:5000/library/haproxy:3.2.15
         public: docker.io/library/haproxy:3.2.15

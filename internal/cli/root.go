@@ -25,8 +25,7 @@ func newRootCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Comm
 	root.SetErr(stderr)
 
 	root.AddCommand(
-		newDoctorCmd(stdout, stderr),
-		newSetupCmd(stdin, stdout, stderr),
+		newDoctorCmd(stdin, stdout, stderr),
 		newInitCmd(stdout),
 		newValidateCmd(stdout, stderr),
 		newPreflightCmd(stdout, stderr),

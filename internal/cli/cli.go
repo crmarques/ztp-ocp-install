@@ -116,26 +116,6 @@ func runHostCheck(stdout io.Writer, stderr io.Writer, state v1alpha1.State, secr
 	return nil
 }
 
-func newDoctorCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
-	var (
-		secretsDir   string
-		hostStateDir string
-	)
-	secretsDir = defaultSecretsDir()
-	hostStateDir = defaultHostStateDir
-	cmd := &cobra.Command{
-		Use:   "doctor",
-		Short: "Check the controller machine for baseline Gitups prerequisites",
-		Args:  cobra.NoArgs,
-	}
-	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material")
-	cmd.Flags().StringVar(&hostStateDir, "host-state-dir", hostStateDir, "root-managed host runtime state directory")
-	cmd.RunE = func(_ *cobra.Command, _ []string) error {
-		printTitle(stdout, "Doctor")
-		return runHostCheck(stdout, stderr, v1alpha1.State{}, secretsDir, hostStateDir)
-	}
-	return cmd
-}
 
 func newPreflightCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 	var (

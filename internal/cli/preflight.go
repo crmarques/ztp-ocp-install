@@ -13,6 +13,64 @@ import (
 	"github.com/crmarques/ztp-ocp-install-lab/api/v1alpha1"
 )
 
+func collectDoctorChecks(state v1alpha1.State, hostStateDir string, deps preflightDeps) []preflightCheck {
+	checks := []preflightCheck{
+		pythonVersionCheck(),
+		binaryCheck("ansible-playbook", []string{filepath.Join(ansibleVenvDir(), "bin")}, deps),
+		binaryCheck("git", nil, deps),
+		binaryCheck("tar", nil, deps),
+		binaryCheck("sudo", nil, deps),
+	}
+	if stateOpenshiftReleaseVersion(state) != "" {
+		checks = append(checks,
+			binaryCheck("openshift-install", openshiftInstallSearchDirs(hostStateDir), deps),
+			binaryCheck("oc", openshiftInstallSearchDirs(hostStateDir), deps),
+			binaryCheck("kubectl", openshiftInstallSearchDirs(hostStateDir), deps),
+		)
+	}
+	return checks
+}
+
+func pythonVersionCheck() preflightCheck {
+	name := "python3 version >= 3.12"
+	for _, bin := range []string{"python3.12", "python3"} {
+		if _, err := exec.LookPath(bin); err != nil {
+			continue
+		}
+		out, err := exec.Command(bin, "--version").CombinedOutput()
+		if err != nil {
+			continue
+		}
+		major, minor, err := parsePythonVersion(strings.TrimSpace(string(out)))
+		if err != nil {
+			continue
+		}
+		ver := fmt.Sprintf("%d.%d", major, minor)
+		if major > 3 || (major == 3 && minor >= 12) {
+			return preflightCheck{name: name, ok: true, detail: bin + " " + ver}
+		}
+		return preflightCheck{name: name, ok: false, detail: bin + " is " + ver + "; run `gitups doctor fix`"}
+	}
+	return preflightCheck{name: name, ok: false, detail: "python3 not found; run `gitups doctor fix`"}
+}
+
+func parsePythonVersion(s string) (major, minor int, err error) {
+	s = strings.TrimPrefix(s, "Python ")
+	parts := strings.SplitN(s, ".", 3)
+	if len(parts) < 2 {
+		return 0, 0, fmt.Errorf("unexpected version string: %q", s)
+	}
+	major, err = strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, 0, fmt.Errorf("parse major: %w", err)
+	}
+	minor, err = strconv.Atoi(parts[1])
+	if err != nil {
+		return 0, 0, fmt.Errorf("parse minor: %w", err)
+	}
+	return major, minor, nil
+}
+
 type preflightCheck struct {
 	name   string
 	ok     bool
