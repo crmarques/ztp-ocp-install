@@ -52,7 +52,7 @@ gitups validate -f examples/libvirt-redfish-fleet
 gitups preflight -f examples/libvirt-redfish-fleet
 gitups plan -f examples/libvirt-redfish-fleet --out text
 gitups apply infra -f examples/libvirt-redfish-fleet --dry-run
-gitups apply ocp -f examples/libvirt-redfish-fleet --dry-run
+gitups apply clusters -f examples/libvirt-redfish-fleet --dry-run
 gitups status -f examples/libvirt-redfish-fleet --diff
 ```
 

@@ -22,6 +22,6 @@ generated self-signed registry trust referenced through `SecretRef`.
 gitups validate -f examples/libvirt-redfish-hub
 gitups plan -f examples/libvirt-redfish-hub --state-dir .state
 gitups apply infra -f examples/libvirt-redfish-hub --state-dir .state --dry-run
-gitups apply ocp -f examples/libvirt-redfish-hub --state-dir .state --dry-run
+gitups apply clusters -f examples/libvirt-redfish-hub --state-dir .state --dry-run
 gitups secrets generate -f examples/libvirt-redfish-hub
 ```

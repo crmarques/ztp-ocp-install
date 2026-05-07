@@ -914,14 +914,14 @@ func TestDestroyDryRunPrintsPhasesInReverse(t *testing.T) {
 		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
 	}
 	output := stdout.String()
-	hubIdx := strings.Index(output, "- ocp [root]")
+	clustersIdx := strings.Index(output, "- clusters [root]")
 	clusterIdx := strings.Index(output, "- cluster [root]")
 	providerIdx := strings.Index(output, "- provider [root]")
-	if hubIdx < 0 || clusterIdx < 0 || providerIdx < 0 {
+	if clustersIdx < 0 || clusterIdx < 0 || providerIdx < 0 {
 		t.Fatalf("missing destroy phase entries:\n%s", output)
 	}
-	if !(hubIdx < clusterIdx && clusterIdx < providerIdx) {
-		t.Fatalf("destroy phases not in reverse order (hub=%d cluster=%d provider=%d)\n%s", hubIdx, clusterIdx, providerIdx, output)
+	if !(clustersIdx < clusterIdx && clusterIdx < providerIdx) {
+		t.Fatalf("destroy phases not in reverse order (clusters=%d cluster=%d provider=%d)\n%s", clustersIdx, clusterIdx, providerIdx, output)
 	}
 	for _, expected := range []string{
 		"dry-run ansible command [workflow=all destroy]: ansible-playbook",

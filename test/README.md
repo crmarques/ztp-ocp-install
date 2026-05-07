@@ -48,9 +48,9 @@ The user-facing equivalent is plain `gitups`:
 gitups validate -f test/e2e/<case> --check-host
 gitups plan     -f test/e2e/<case> --state-dir /tmp/gitups-<case>
 gitups apply infra -f test/e2e/<case> --state-dir /tmp/gitups-<case> --dry-run
-gitups apply ocp   -f test/e2e/<case> --state-dir /tmp/gitups-<case> --dry-run
+gitups apply clusters -f test/e2e/<case> --state-dir /tmp/gitups-<case> --dry-run
 gitups apply infra -f test/e2e/<case> --state-dir /tmp/gitups-<case> --yes
-gitups apply ocp   -f test/e2e/<case> --state-dir /tmp/gitups-<case> --yes
+gitups apply clusters -f test/e2e/<case> --state-dir /tmp/gitups-<case> --yes
 gitups status   -f test/e2e/<case> --state-dir /tmp/gitups-<case> --diff
 gitups destroy all -f test/e2e/<case> --state-dir /tmp/gitups-<case> --yes
 ```

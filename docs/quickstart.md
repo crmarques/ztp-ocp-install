@@ -34,7 +34,7 @@ bin/gitups validate -f test/e2e/local-libvirt-1-host-1-sno-hub --check-host
 bin/gitups preflight -f test/e2e/local-libvirt-1-host-1-sno-hub --state-dir /tmp/gitups-local-libvirt-1-host-1-sno-hub --dry-run
 bin/gitups plan -f test/e2e/local-libvirt-1-host-1-sno-hub --state-dir /tmp/gitups-local-libvirt-1-host-1-sno-hub
 bin/gitups apply infra -f test/e2e/local-libvirt-1-host-1-sno-hub --state-dir /tmp/gitups-local-libvirt-1-host-1-sno-hub --dry-run
-bin/gitups apply ocp -f test/e2e/local-libvirt-1-host-1-sno-hub --state-dir /tmp/gitups-local-libvirt-1-host-1-sno-hub --dry-run
+bin/gitups apply clusters -f test/e2e/local-libvirt-1-host-1-sno-hub --state-dir /tmp/gitups-local-libvirt-1-host-1-sno-hub --dry-run
 ```
 
 The dry run renders state and prints the Ansible command for each phase without
@@ -44,7 +44,7 @@ changing the host.
 
 ```text
 bin/gitups apply infra -f test/e2e/local-libvirt-1-host-1-sno-hub --state-dir /tmp/gitups-local-libvirt-1-host-1-sno-hub --yes
-bin/gitups apply ocp -f test/e2e/local-libvirt-1-host-1-sno-hub --state-dir /tmp/gitups-local-libvirt-1-host-1-sno-hub --yes
+bin/gitups apply clusters -f test/e2e/local-libvirt-1-host-1-sno-hub --state-dir /tmp/gitups-local-libvirt-1-host-1-sno-hub --yes
 ```
 
 Each `apply` scope validates first, renders state, prints the phase plan, and

@@ -63,7 +63,7 @@ installer.
 
 1. `infra`: provider infrastructure, BMC emulation, load balancing, DNS or host
    name resolution.
-2. `ocp`: openshift-install agent against the cluster nodes plus per-cluster
+2. `clusters`: openshift-install agent against the cluster nodes plus per-cluster
    install state.
 
 ## Rendered Output

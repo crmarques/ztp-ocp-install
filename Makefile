@@ -9,7 +9,7 @@ E2E_STATE_DIR ?= /tmp/gitups-$(CASE)
 ANSIBLE_PLAYBOOK ?= $(shell command -v ansible-playbook 2>/dev/null)
 E2E_ANSIBLE_FLAGS = $(if $(ANSIBLE_PLAYBOOK),--ansible-playbook $(ANSIBLE_PLAYBOOK),)
 E2E_APPLY_INFRA ?= $(BIN_DIR)/$(BINARY) apply infra --yes
-E2E_APPLY_OCP ?= $(BIN_DIR)/$(BINARY) apply ocp --yes
+E2E_APPLY_CLUSTERS ?= $(BIN_DIR)/$(BINARY) apply clusters --yes
 E2E_APPLY_FLAGS ?=
 E2E_DESTROY ?= $(BIN_DIR)/$(BINARY) destroy all
 E2E_DESTROY_FLAGS ?=
@@ -26,7 +26,7 @@ ANSIBLE_SYNTAX_ENV = ANSIBLE_LOCAL_TEMP=/tmp/gitups-ansible-local ANSIBLE_REMOTE
 ANSIBLE_SYNTAX_PLAYBOOKS = \
 	ansible/playbooks/preflight.yml \
 	ansible/playbooks/apply-infra.yml \
-	ansible/playbooks/apply-ocp.yml \
+	ansible/playbooks/apply-clusters.yml \
 	ansible/playbooks/destroy-all.yml \
 	ansible/playbooks/provider-prepare.yml \
 	ansible/playbooks/setup-controller-clis.yml
@@ -110,11 +110,11 @@ list-e2e-cases:
 
 e2e-dry-run: check-e2e-case check-e2e-deps build
 	$(BIN_DIR)/$(BINARY) apply infra -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) --dry-run $(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
-	$(BIN_DIR)/$(BINARY) apply ocp -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) --dry-run $(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
+	$(BIN_DIR)/$(BINARY) apply clusters -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) --dry-run $(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
 
 e2e: check-e2e-case check-e2e-deps build
 	$(E2E_APPLY_INFRA) -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) $(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
-	$(E2E_APPLY_OCP) -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) $(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
+	$(E2E_APPLY_CLUSTERS) -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) $(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
 
 e2e-destroy-dry-run: check-e2e-case check-e2e-deps build
 	$(BIN_DIR)/$(BINARY) destroy all -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) --dry-run $(E2E_ANSIBLE_FLAGS) $(E2E_DESTROY_FLAGS)

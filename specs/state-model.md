@@ -332,8 +332,8 @@ The user-facing CLI is:
 | `validate` | yes | no | Strict schema, defaulting, and cross-reference validation. |
 | `preflight` | yes | no | Local checks plus read-only Ansible checks against provider and cluster hosts. |
 | `plan` | yes | no | Objective preview of generated files, phases, root-required work, and prerequisite risks. |
-| `apply <infra|ocp>` | yes | yes | Converges one explicit workflow scope. |
-| `destroy <infra|ocp|all>` | yes | yes | Reverses one explicit workflow scope. Requires `--yes` (or `--dry-run`). |
+| `apply <infra|clusters>` | yes | yes | Converges one explicit workflow scope. |
+| `destroy <infra|clusters|all>` | yes | yes | Reverses one explicit workflow scope. Requires `--yes` (or `--dry-run`). |
 | `status` | yes | no | Reports desired counts, rendered artifact presence, phase table, and drift against `--state-dir` (`--diff` for full drift output). |
 | `secrets` | optional | yes (writes secrets) | `generate`, `pull-secret set`, and credential writers — the only writers into `<gitups-home>/secrets`. |
 
@@ -343,9 +343,9 @@ Rendering has no public command; it is an internal step for `plan`, `preflight`,
 Workflow scopes:
 
 1. `infra` — provider infrastructure (hosts, VMs, BMC, LB, DNS).
-2. `ocp` — `openshift-install agent` against the cluster nodes.
+2. `clusters` — `openshift-install agent` against the cluster nodes.
 
 Multi-cluster fleet GitOps publication (one cluster running ACM/OpenShift
 GitOps to reconcile additional clusters) is forward-looking architecture and
 not implemented today; every `OCPCluster` in the desired state goes through
-the local `ocp` phase.
+the local `clusters` phase.

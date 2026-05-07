@@ -123,9 +123,9 @@ Equivalent CLI flow:
 gitups validate -f test/e2e/libvirt-3-hosts-1-hub-2-ocp-fleet --check-host
 gitups plan     -f test/e2e/libvirt-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-hub-2-ocp-fleet
 gitups apply infra -f test/e2e/libvirt-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-hub-2-ocp-fleet --dry-run
-gitups apply ocp   -f test/e2e/libvirt-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-hub-2-ocp-fleet --dry-run
+gitups apply clusters -f test/e2e/libvirt-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-hub-2-ocp-fleet --dry-run
 gitups apply infra -f test/e2e/libvirt-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-hub-2-ocp-fleet --yes
-gitups apply ocp   -f test/e2e/libvirt-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-hub-2-ocp-fleet --yes
+gitups apply clusters -f test/e2e/libvirt-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-hub-2-ocp-fleet --yes
 gitups status   -f test/e2e/libvirt-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-hub-2-ocp-fleet --diff
 gitups destroy all -f test/e2e/libvirt-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-hub-2-ocp-fleet --yes
 ```

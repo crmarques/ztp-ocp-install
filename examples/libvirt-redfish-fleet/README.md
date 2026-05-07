@@ -27,5 +27,5 @@ the matching files under
 gitups validate -f examples/libvirt-redfish-fleet
 gitups plan -f examples/libvirt-redfish-fleet --state-dir .state
 gitups apply infra -f examples/libvirt-redfish-fleet --state-dir .state --dry-run
-gitups apply ocp -f examples/libvirt-redfish-fleet --state-dir .state --dry-run
+gitups apply clusters -f examples/libvirt-redfish-fleet --state-dir .state --dry-run
 ```
