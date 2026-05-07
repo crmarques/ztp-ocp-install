@@ -15,11 +15,20 @@ import (
 type fakeFileInfo struct {
 	name  string
 	isDir bool
+	mode  os.FileMode
 }
 
-func (f fakeFileInfo) Name() string       { return f.name }
-func (f fakeFileInfo) Size() int64        { return 0 }
-func (f fakeFileInfo) Mode() os.FileMode  { return 0 }
+func (f fakeFileInfo) Name() string { return f.name }
+func (f fakeFileInfo) Size() int64  { return 0 }
+func (f fakeFileInfo) Mode() os.FileMode {
+	if f.mode != 0 {
+		return f.mode
+	}
+	if f.isDir {
+		return os.ModeDir | 0o700
+	}
+	return 0o600
+}
 func (f fakeFileInfo) ModTime() time.Time { return time.Time{} }
 func (f fakeFileInfo) IsDir() bool        { return f.isDir }
 func (f fakeFileInfo) Sys() any           { return nil }
@@ -144,7 +153,7 @@ func TestPreflightClusterPhaseChecksKvmWhenQemuKvmProvider(t *testing.T) {
 func TestPreflightClusterPhaseSkipsKvmWithoutQemuKvm(t *testing.T) {
 	state := v1alpha1.State{
 		InfrastructureProviders: []v1alpha1.InfrastructureProvider{
-			{Spec: v1alpha1.InfrastructureProviderSpec{Machine: &v1alpha1.MachineCapabilitySpec{Baremetal: &v1alpha1.MachineProviderBaremetalSpec{}}}},
+			{Spec: v1alpha1.InfrastructureProviderSpec{Machine: &v1alpha1.MachineCapabilitySpec{BareMetal: &v1alpha1.MachineProviderBareMetalSpec{}}}},
 		},
 	}
 	deps := fakeDeps(map[string]string{
@@ -990,7 +999,7 @@ func TestPreflightChecksBMCEmulationAndMachineCredentials(t *testing.T) {
 				ProviderRefs: []v1alpha1.LocalObjectReference{{Name: "libvirt-1-host-provider"}},
 				Machines: map[string]v1alpha1.MachineSpec{
 					"master-0": {
-						Baremetal: &v1alpha1.MachineBaremetalSpec{BMC: &v1alpha1.MachineBMCSpec{
+						BareMetal: &v1alpha1.MachineBareMetalSpec{BMC: &v1alpha1.MachineBMCSpec{
 							Address:       "redfish://10.0.0.5",
 							CredentialRef: v1alpha1.SecretRef{Name: "rack-bmc-credentials"},
 						}},
@@ -1034,7 +1043,7 @@ func TestPreflightChecksVMwareAndOSVProviderRefs(t *testing.T) {
 		InfrastructureProviders: []v1alpha1.InfrastructureProvider{
 			{
 				Metadata: v1alpha1.Metadata{Name: "vmw"},
-				Spec: v1alpha1.InfrastructureProviderSpec{Machine: &v1alpha1.MachineCapabilitySpec{Vsphere: &v1alpha1.MachineProviderVsphereSpec{
+				Spec: v1alpha1.InfrastructureProviderSpec{Machine: &v1alpha1.MachineCapabilitySpec{VSphere: &v1alpha1.MachineProviderVSphereSpec{
 					VCenterRef: v1alpha1.SecretRef{Name: "lab-vcenter"},
 					Datacenter: "dc",
 					Cluster:    "cl",
@@ -1042,7 +1051,7 @@ func TestPreflightChecksVMwareAndOSVProviderRefs(t *testing.T) {
 			},
 			{
 				Metadata: v1alpha1.Metadata{Name: "osv"},
-				Spec: v1alpha1.InfrastructureProviderSpec{Machine: &v1alpha1.MachineCapabilitySpec{Kubevirt: &v1alpha1.MachineProviderKubevirtSpec{
+				Spec: v1alpha1.InfrastructureProviderSpec{Machine: &v1alpha1.MachineCapabilitySpec{KubeVirt: &v1alpha1.MachineProviderKubeVirtSpec{
 					ClusterRef: v1alpha1.SecretRef{Name: "lab-osv-cluster"},
 					Namespace:  "lab",
 				}}},

@@ -2,7 +2,7 @@ package render
 
 import "github.com/crmarques/ztp-ocp-install-lab/api/v1alpha1"
 
-const versionLookupDate = "2026-04-29"
+const versionLookupDate = "2026-05-06"
 
 type ComponentPin struct {
 	Name       string `yaml:"name" json:"name"`
@@ -15,7 +15,7 @@ func ComponentPins(state v1alpha1.State) []ComponentPin {
 	pins := []ComponentPin{
 		{
 			Name:       "ansible-core",
-			Version:    "2.20.4",
+			Version:    "2.20.5",
 			Source:     "https://pypi.org/project/ansible-core/",
 			LookupDate: versionLookupDate,
 		},
@@ -37,7 +37,7 @@ func ComponentPins(state v1alpha1.State) []ComponentPin {
 	if usesManagedHAProxy(state) {
 		pins = append(pins, ComponentPin{
 			Name:       v1alpha1.ComponentTypeHAProxy,
-			Version:    "3.2.15",
+			Version:    "3.3.8",
 			Source:     "https://hub.docker.com/_/haproxy",
 			LookupDate: versionLookupDate,
 		})
@@ -45,7 +45,7 @@ func ComponentPins(state v1alpha1.State) []ComponentPin {
 	if usesManagedMirrorRegistry(state) {
 		pins = append(pins, ComponentPin{
 			Name:       v1alpha1.ComponentTypeMirrorRegistry,
-			Version:    "2",
+			Version:    "3.1.1",
 			Source:     "https://hub.docker.com/_/registry",
 			LookupDate: versionLookupDate,
 		})

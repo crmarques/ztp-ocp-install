@@ -30,6 +30,14 @@ spec:
     clusterSSHKeyRef:
       name: cluster-admin-key
   keys:
+    openshift-pull-secret:
+      file: ~/.gitups/secrets/openshift-pull-secret
+    cluster-admin-key:
+      file: ~/.ssh/gitups-ssh-key.pub
+    provider-host-admin-key:
+      file: ~/.ssh/gitups-ssh-key
+    proxy-credentials:
+      file: ~/.gitups/secrets/proxy-credentials
     libvirt-3-hosts-hub-fleet-bmc-credentials:
       generated:
         credentials:
@@ -37,4 +45,4 @@ spec:
   openshift:
     release:
       channel: stable-4.21
-      version: 4.21.10
+      version: 4.21.12

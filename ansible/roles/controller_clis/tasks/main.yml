@@ -5,7 +5,7 @@
       - gitups_openshift_release_version is defined
       - (gitups_openshift_release_version | string | length) > 0
     fail_msg: >-
-      gitups_openshift_release_version is required (e.g. 4.21.10);
+      gitups_openshift_release_version is required (e.g. 4.21.12);
       pass it via -e or set it in the playbook vars.
 
 - name: Install controller OS packages
@@ -73,11 +73,47 @@
          or gitups_clis_oc_version | length == 0
          or gitups_clis_oc_version is not version(gitups_openshift_release_version, '>=') }}
 
+- name: Download OpenShift CLI checksums
+  ansible.builtin.get_url:
+    url: "{{ gitups_clis_release_url }}/sha256sum.txt"
+    dest: "{{ gitups_clis_workdir }}/sha256sum.txt"
+    mode: "0644"
+  when: gitups_clis_install_oc | bool or gitups_clis_install_oi | bool
+
+- name: Read OpenShift CLI checksums
+  ansible.builtin.slurp:
+    src: "{{ gitups_clis_workdir }}/sha256sum.txt"
+  register: gitups_clis_checksums
+  when: gitups_clis_install_oc | bool or gitups_clis_install_oi | bool
+
+- name: Resolve OpenShift CLI checksums
+  ansible.builtin.set_fact:
+    gitups_clis_client_checksum: >-
+      {{ (gitups_clis_checksums.content | b64decode).splitlines()
+         | select('search', '\s+openshift-client-linux-' ~ gitups_openshift_release_version ~ '\.tar\.gz$')
+         | first | default('')
+         | regex_replace('\s+.*$', '') }}
+    gitups_clis_installer_checksum: >-
+      {{ (gitups_clis_checksums.content | b64decode).splitlines()
+         | select('search', '\s+openshift-install-linux-' ~ gitups_openshift_release_version ~ '\.tar\.gz$')
+         | first | default('')
+         | regex_replace('\s+.*$', '') }}
+  when: gitups_clis_install_oc | bool or gitups_clis_install_oi | bool
+
+- name: Verify OpenShift CLI checksums are known
+  ansible.builtin.assert:
+    that:
+      - not (gitups_clis_install_oc | bool) or gitups_clis_client_checksum is match('^[0-9a-f]{64}$')
+      - not (gitups_clis_install_oi | bool) or gitups_clis_installer_checksum is match('^[0-9a-f]{64}$')
+    fail_msg: "sha256sum.txt did not contain the expected OpenShift CLI tarball checksums"
+  when: gitups_clis_install_oc | bool or gitups_clis_install_oi | bool
+
 - name: Download openshift-client tarball
   ansible.builtin.get_url:
     url: "{{ gitups_clis_release_url }}/openshift-client-linux-{{ gitups_openshift_release_version }}.tar.gz"
     dest: "{{ gitups_clis_workdir }}/openshift-client.tar.gz"
     mode: "0644"
+    checksum: "sha256:{{ gitups_clis_client_checksum }}"
   when: gitups_clis_install_oc | bool
 
 - name: Download openshift-install tarball
@@ -85,6 +121,7 @@
     url: "{{ gitups_clis_release_url }}/openshift-install-linux-{{ gitups_openshift_release_version }}.tar.gz"
     dest: "{{ gitups_clis_workdir }}/openshift-install.tar.gz"
     mode: "0644"
+    checksum: "sha256:{{ gitups_clis_installer_checksum }}"
   when: gitups_clis_install_oi | bool
 
 - name: Extract oc and kubectl into install dir

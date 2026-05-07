@@ -43,7 +43,7 @@ func TestRenderResolvesFileBasedSecretsToSourcePath(t *testing.T) {
 }
 
 func TestRenderAllProducesGeneratedAnsibleArtifacts(t *testing.T) {
-	state, err := infra.LoadNormalizeValidate([]string{"../../examples/infra"})
+	state, err := infra.LoadNormalizeValidate([]string{"../../examples/libvirt-redfish-lab-fleet"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
@@ -94,8 +94,8 @@ func TestRenderAllProducesGeneratedAnsibleArtifacts(t *testing.T) {
 	inventory := readFile(t, result.InventoryPath)
 	for _, expected := range []string{
 		"hub-hub-sno-host:",
-		"spoke-01-spoke-01-host:",
-		"spoke-02-spoke-02-host:",
+		"managed-01-managed-01-host:",
+		"managed-02-managed-02-host:",
 		"gitups_cluster_name: hub",
 	} {
 		if !strings.Contains(inventory, expected) {
@@ -105,8 +105,8 @@ func TestRenderAllProducesGeneratedAnsibleArtifacts(t *testing.T) {
 	varsFile := readFile(t, result.VarsPath)
 	for _, expected := range []string{
 		"api.hub.example.com",
-		"api-int.spoke-01.example.com",
-		"*.apps.spoke-02.example.com",
+		"api-int.managed-01.example.com",
+		"*.apps.managed-02.example.com",
 		"infrastructureHosts:",
 		"virtualization:",
 		"bmc:",
@@ -136,7 +136,7 @@ func TestRenderAllProducesGeneratedAnsibleArtifacts(t *testing.T) {
 	lock := readFile(t, result.LockPath)
 	for _, expected := range []string{
 		"name: ansible-core",
-		"version: 2.20.4",
+		"version: 2.20.5",
 		"name: go.yaml.in/yaml/v3",
 		"version: v3.0.4",
 	} {
@@ -168,7 +168,7 @@ func TestRenderEmitsBMCAuthCredentialRefWhenSet(t *testing.T) {
 }
 
 func TestRenderInstallerAssets(t *testing.T) {
-	state, err := infra.LoadNormalizeValidate([]string{"../../examples/infra"})
+	state, err := infra.LoadNormalizeValidate([]string{"../../examples/libvirt-redfish-lab-fleet"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
@@ -237,7 +237,7 @@ func TestRenderInstallerAssets(t *testing.T) {
 func TestRenderInstallerOverrides(t *testing.T) {
 	dir := t.TempDir()
 	for _, name := range []string{"environment.yaml", "provider.yaml", "hub.yaml"} {
-		data, err := os.ReadFile(filepath.Join("../../examples/infra", name))
+		data, err := os.ReadFile(filepath.Join("../../examples/libvirt-redfish-lab-fleet", name))
 		if err != nil {
 			t.Fatalf("read %s: %v", name, err)
 		}
@@ -309,7 +309,7 @@ func TestRenderInstallerOverrides(t *testing.T) {
 }
 
 func TestRenderedArtifactsStayUnderStateDir(t *testing.T) {
-	state, err := infra.LoadNormalizeValidate([]string{"../../examples/infra"})
+	state, err := infra.LoadNormalizeValidate([]string{"../../examples/libvirt-redfish-lab-fleet"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
@@ -353,15 +353,15 @@ func TestRenderMirrorRegistryRunVars(t *testing.T) {
 		"credentialsSecretName: mirror-registry-credentials",
 		"trustBundleCertSecretName: mirror-registry-ca",
 		"trustBundleKeySecretName: mirror-registry-ca.key",
-		"local: registry.mirror.local:5000/library/registry:2",
-		"public: docker.io/library/registry:2",
+		"local: registry.mirror.local:5000/library/registry:3.1.1",
+		"public: docker.io/library/registry:3.1.1@sha256:85347ed2ecde64161c7a4788a4d7d3dcc9d6f86f7be95834022e3c6a423a945a",
 		"mirrorSet:",
 		"kind: releasePayload",
-		"public: quay.io/openshift-release-dev/ocp-release:4.21.10-x86_64",
-		"local: registry.mirror.local:5000/openshift/release-images:4.21.10-x86_64",
+		"public: quay.io/openshift-release-dev/ocp-release:4.21.12-x86_64",
+		"local: registry.mirror.local:5000/openshift/release-images:4.21.12-x86_64",
 		"kind: componentImage",
-		"public: docker.io/library/haproxy:3.2.15",
-		"local: registry.mirror.local:5000/library/haproxy:3.2.15",
+		"public: docker.io/library/haproxy:3.3.8@sha256:f14a1788b56894e7ec7b5cb0ca09dbb959b674cf3c980f92139ec008167d4a91",
+		"local: registry.mirror.local:5000/library/haproxy:3.3.8",
 		"kind: registryServer",
 	} {
 		if !strings.Contains(varsFile, expected) {
@@ -410,16 +410,20 @@ func TestRenderVarsExposeOCPInstallMetadata(t *testing.T) {
 		t.Fatalf("render All returned error: %v", err)
 	}
 	varsFile := readFile(t, result.VarsPath)
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("user home: %v", err)
+	}
 	for _, expected := range []string{
 		"gitups_ocp_install:",
 		"mode: disconnected",
 		"disconnected: true",
 		"method: agent",
-		"pullSecretRef: openshift-pull-secret",
-		"sshKeyRef: cluster-admin-key",
-		"releaseImageOverride: registry.mirror.local:5000/openshift/release-images:4.21.10-x86_64",
+		"pullSecretRef: " + filepath.Join(home, ".gitups/secrets/openshift-pull-secret"),
+		"sshKeyRef: " + filepath.Join(home, ".ssh/gitups-ssh-key.pub"),
+		"releaseImageOverride: registry.mirror.local:5000/openshift/release-images:4.21.12-x86_64",
 		"additionalTrustBundleRef: mirror-registry-ca",
-		"version: 4.21.10",
+		"version: 4.21.12",
 		"channel: stable-4.21",
 		"relativeDir: clusters/local-libvirt-1-host-hub/installer",
 		"relativeInstallConfigPath: clusters/local-libvirt-1-host-hub/installer/install-config.yaml",
@@ -443,7 +447,7 @@ func TestRenderVarsExposeOCPInstallMetadata(t *testing.T) {
 		t.Fatalf("vars.yaml leaked stateDir %q (paths must be relative)\n%s", stateDir, varsFile)
 	}
 	lock := readFile(t, result.LockPath)
-	if !strings.Contains(lock, "name: openshift-install") || !strings.Contains(lock, "version: 4.21.10") {
+	if !strings.Contains(lock, "name: openshift-install") || !strings.Contains(lock, "version: 4.21.12") {
 		t.Fatalf("lock missing openshift-install pin\n%s", lock)
 	}
 	asset := installerAssetFor(result.InstallerAssets, "local-libvirt-1-host-hub")
@@ -574,7 +578,7 @@ func TestClusterNetworkVipsOwnsVIPPlumbing(t *testing.T) {
 func TestRenderVarsExposeGeneratedSecrets(t *testing.T) {
 	dir := t.TempDir()
 	for _, name := range []string{"hub.yaml"} {
-		data, err := os.ReadFile(filepath.Join("../../examples/infra", name))
+		data, err := os.ReadFile(filepath.Join("../../examples/libvirt-redfish-lab-fleet", name))
 		if err != nil {
 			t.Fatalf("read %s: %v", name, err)
 		}
@@ -582,7 +586,7 @@ func TestRenderVarsExposeGeneratedSecrets(t *testing.T) {
 			t.Fatalf("write %s: %v", name, err)
 		}
 	}
-	providerData, err := os.ReadFile(filepath.Join("../../examples/infra", "provider.yaml"))
+	providerData, err := os.ReadFile(filepath.Join("../../examples/libvirt-redfish-lab-fleet", "provider.yaml"))
 	if err != nil {
 		t.Fatalf("read provider.yaml: %v", err)
 	}
@@ -624,6 +628,16 @@ spec:
     clusterSSHKeyRef:
       name: cluster-admin-key
   keys:
+    openshift-pull-secret:
+      file: ~/.gitups/secrets/openshift-pull-secret
+    cluster-admin-key:
+      file: ~/.ssh/gitups-ssh-key.pub
+    lab-provider-key:
+      file: ~/.ssh/gitups-ssh-key
+    lab-bmc-credentials:
+      generated:
+        credentials:
+          username: admin
     registry-lab-ca:
       generated:
         selfSignedCertificate:
@@ -635,7 +649,7 @@ spec:
   openshift:
     release:
       channel: stable-4.21
-      version: 4.21.10
+      version: 4.21.12
 `), 0o644); err != nil {
 		t.Fatalf("write environment: %v", err)
 	}
@@ -680,8 +694,7 @@ func TestRenderManagedNetworkDetails(t *testing.T) {
 	}
 	varsFile := readFile(t, result.VarsPath)
 	for _, expected := range []string{
-		"local: registry.mirror.local:5000/library/haproxy:3.2.15",
-		"public: docker.io/library/haproxy:3.2.15",
+		"public: docker.io/library/haproxy:3.3.8@sha256:f14a1788b56894e7ec7b5cb0ca09dbb959b674cf3c980f92139ec008167d4a91",
 		"runtime: podman",
 		"bindAddress: 192.168.130.10",
 		"targetPort: 6443",
@@ -689,11 +702,14 @@ func TestRenderManagedNetworkDetails(t *testing.T) {
 		"address: 192.168.130.20",
 		"console-openshift-console.apps.libvirt-1-host-hub.gitups.test",
 		"name: haproxy",
-		"version: 3.2.15",
+		"version: 3.3.8",
 	} {
 		if !strings.Contains(varsFile, expected) {
 			t.Fatalf("vars missing %q\n%s", expected, varsFile)
 		}
+	}
+	if strings.Contains(varsFile, "local: registry.mirror.local:5000/library/haproxy:3.3.8") {
+		t.Fatalf("connected fixture rendered disconnected HAProxy image\n%s", varsFile)
 	}
 }
 

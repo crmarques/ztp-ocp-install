@@ -19,6 +19,7 @@ func Validate(state v1alpha1.State) error {
 	errs = append(errs, validateClusterInfrastructures(state)...)
 	errs = append(errs, validateOCPClusters(state)...)
 	errs = append(errs, validateCrossLayer(state)...)
+	errs = append(errs, validateSecretReferences(state)...)
 	if len(errs) == 0 {
 		return nil
 	}
@@ -107,6 +108,14 @@ func validateGeneratedKey(envName, keyName string, gen *v1alpha1.EnvironmentKeyG
 		if gen.SelfSignedCertificate.ValidityDays < 0 {
 			errs = append(errs, fmt.Sprintf("Environment/%s spec.keys[%s].generated.selfSignedCertificate.validityDays must not be negative", envName, keyName))
 		}
+	case hasCreds:
+		username := gen.Credentials.Username
+		if username != "" && strings.TrimSpace(username) != username {
+			errs = append(errs, fmt.Sprintf("Environment/%s spec.keys[%s].generated.credentials.username must not contain leading or trailing whitespace", envName, keyName))
+		}
+		if strings.ContainsAny(username, ":\r\n\t ") {
+			errs = append(errs, fmt.Sprintf("Environment/%s spec.keys[%s].generated.credentials.username must not contain whitespace, colon, or newlines", envName, keyName))
+		}
 	}
 	return errs
 }
@@ -168,17 +177,15 @@ func validateOCPInstallProxy(env v1alpha1.Environment) []string {
 	if proxy.CredentialsRef.Name != "" && !dnsLabel.MatchString(proxy.CredentialsRef.Name) {
 		errs = append(errs, fmt.Sprintf("%s.credentialsRef.name %q is not a DNS label", owner, proxy.CredentialsRef.Name))
 	}
-	if proxy.CredentialsRef.Name != "" {
-		for _, field := range []struct{ name, value string }{
-			{"httpProxy", proxy.HTTPProxy},
-			{"httpsProxy", proxy.HTTPSProxy},
-		} {
-			if field.value == "" {
-				continue
-			}
-			if proxyURLHasInlineCredentials(field.value) {
-				errs = append(errs, fmt.Sprintf("%s.%s must not embed credentials when credentialsRef is set; supply the bare URL", owner, field.name))
-			}
+	for _, field := range []struct{ name, value string }{
+		{"httpProxy", proxy.HTTPProxy},
+		{"httpsProxy", proxy.HTTPSProxy},
+	} {
+		if field.value == "" {
+			continue
+		}
+		if proxyURLHasInlineCredentials(field.value) {
+			errs = append(errs, fmt.Sprintf("%s.%s must not embed credentials; use credentialsRef and supply the bare URL", owner, field.name))
 		}
 	}
 	return errs
@@ -272,13 +279,13 @@ func validateProviders(providers []v1alpha1.InfrastructureProvider) []string {
 			if p.Spec.Machine.Libvirt != nil {
 				set++
 			}
-			if p.Spec.Machine.Baremetal != nil {
+			if p.Spec.Machine.BareMetal != nil {
 				set++
 			}
-			if p.Spec.Machine.Vsphere != nil {
+			if p.Spec.Machine.VSphere != nil {
 				set++
 			}
-			if p.Spec.Machine.Kubevirt != nil {
+			if p.Spec.Machine.KubeVirt != nil {
 				set++
 			}
 			if set != 1 {
@@ -287,11 +294,14 @@ func validateProviders(providers []v1alpha1.InfrastructureProvider) []string {
 			if p.Spec.Machine.Libvirt != nil {
 				errs = append(errs, validateLibvirtProvider(p)...)
 			}
-			if p.Spec.Machine.Vsphere != nil {
-				errs = append(errs, validateVsphereProvider(p)...)
+			if p.Spec.Machine.BareMetal != nil {
+				errs = append(errs, validateBareMetalProvider(p)...)
 			}
-			if p.Spec.Machine.Kubevirt != nil {
-				errs = append(errs, validateKubevirtProvider(p)...)
+			if p.Spec.Machine.VSphere != nil {
+				errs = append(errs, validateVSphereProvider(p)...)
+			}
+			if p.Spec.Machine.KubeVirt != nil {
+				errs = append(errs, validateKubeVirtProvider(p)...)
 			}
 		}
 		errs = append(errs, validateProviderLoadBalancer(p)...)
@@ -299,6 +309,14 @@ func validateProviders(providers []v1alpha1.InfrastructureProvider) []string {
 		errs = append(errs, validateProviderRegistry(p)...)
 	}
 	return errs
+}
+
+func validateBareMetalProvider(p v1alpha1.InfrastructureProvider) []string {
+	protocol := p.Spec.Machine.BareMetal.BMCProtocol
+	if protocol == "" || protocol == v1alpha1.DefaultBMCProtocol {
+		return nil
+	}
+	return []string{fmt.Sprintf("InfrastructureProvider/%s machine.baremetal.bmcProtocol %q is not supported yet; only %q is implemented", p.Metadata.Name, protocol, v1alpha1.DefaultBMCProtocol)}
 }
 
 func validateProviderRegistry(p v1alpha1.InfrastructureProvider) []string {
@@ -399,9 +417,9 @@ func validateProviderHosts(p v1alpha1.InfrastructureProvider) []string {
 	return errs
 }
 
-func validateVsphereProvider(p v1alpha1.InfrastructureProvider) []string {
+func validateVSphereProvider(p v1alpha1.InfrastructureProvider) []string {
 	var errs []string
-	v := p.Spec.Machine.Vsphere
+	v := p.Spec.Machine.VSphere
 	if v.VCenterRef.Name == "" {
 		errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s machine.vsphere.vCenterRef.name is required", p.Metadata.Name))
 	}
@@ -416,9 +434,9 @@ func validateVsphereProvider(p v1alpha1.InfrastructureProvider) []string {
 	return errs
 }
 
-func validateKubevirtProvider(p v1alpha1.InfrastructureProvider) []string {
+func validateKubeVirtProvider(p v1alpha1.InfrastructureProvider) []string {
 	var errs []string
-	kv := p.Spec.Machine.Kubevirt
+	kv := p.Spec.Machine.KubeVirt
 	if kv.ClusterRef.Name == "" {
 		errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s machine.kubevirt.clusterRef.name is required", p.Metadata.Name))
 	}
@@ -489,10 +507,10 @@ func validateNetworks(ci v1alpha1.ClusterInfrastructure, provider v1alpha1.Infra
 			if network.Libvirt == nil || network.Libvirt.Bridge == "" {
 				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s networks[%s].libvirt.bridge is required for libvirt provider", ci.Metadata.Name, name))
 			}
-			if network.Vsphere != nil {
+			if network.VSphere != nil {
 				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s networks[%s].vsphere does not match InfrastructureProvider/%s kind %q", ci.Metadata.Name, name, provider.Metadata.Name, providerKind))
 			}
-		case v1alpha1.MachineFlavorVsphere:
+		case v1alpha1.MachineFlavorVSphere:
 			if network.Libvirt != nil {
 				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s networks[%s].libvirt does not match InfrastructureProvider/%s kind %q", ci.Metadata.Name, name, provider.Metadata.Name, providerKind))
 			}
@@ -500,7 +518,7 @@ func validateNetworks(ci v1alpha1.ClusterInfrastructure, provider v1alpha1.Infra
 			if network.Libvirt != nil {
 				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s networks[%s].libvirt does not match InfrastructureProvider/%s kind %q", ci.Metadata.Name, name, provider.Metadata.Name, providerKind))
 			}
-			if network.Vsphere != nil {
+			if network.VSphere != nil {
 				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s networks[%s].vsphere does not match InfrastructureProvider/%s kind %q", ci.Metadata.Name, name, provider.Metadata.Name, providerKind))
 			}
 		}
@@ -516,10 +534,10 @@ func validateMachines(ci v1alpha1.ClusterInfrastructure, provider v1alpha1.Infra
 		if machine.Libvirt != nil {
 			set++
 		}
-		if machine.Baremetal != nil {
+		if machine.BareMetal != nil {
 			set++
 		}
-		if machine.Vsphere != nil {
+		if machine.VSphere != nil {
 			set++
 		}
 		if set != 1 {
@@ -533,9 +551,12 @@ func validateMachines(ci v1alpha1.ClusterInfrastructure, provider v1alpha1.Infra
 				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s machines[%s].libvirt.hostRef %q not defined on InfrastructureProvider/%s", ci.Metadata.Name, name, machine.Libvirt.HostRef.Name, provider.Metadata.Name))
 			}
 		}
-		if machine.Baremetal != nil && machine.Baremetal.BMC != nil {
-			if machine.Baremetal.BMC.Address == "" {
+		if machine.BareMetal != nil && machine.BareMetal.BMC != nil {
+			if machine.BareMetal.BMC.Address == "" {
 				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s machines[%s].baremetal.bmc.address is required", ci.Metadata.Name, name))
+			}
+			if protocol := machine.BareMetal.BMC.Protocol; protocol != "" && protocol != v1alpha1.DefaultBMCProtocol {
+				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s machines[%s].baremetal.bmc.protocol %q is not supported yet; only %q is implemented", ci.Metadata.Name, name, protocol, v1alpha1.DefaultBMCProtocol))
 			}
 		}
 		errs = append(errs, validateMachineInterfaces(ci, name, machine)...)
@@ -769,12 +790,8 @@ func validateInstallOverrides(ocp v1alpha1.OCPCluster) []string {
 		if installOverrideForbiddenKeys[k] {
 			errs = append(errs, fmt.Sprintf("OCPCluster/%s install.installConfigOverrides[%s] is owned by Gitups and cannot be overridden", ocp.Metadata.Name, k))
 		}
-		for _, sub := range sensitiveOverrideKeys {
-			if strings.Contains(strings.ToLower(k), sub) {
-				errs = append(errs, fmt.Sprintf("OCPCluster/%s install.installConfigOverrides[%s] looks like a sensitive value; use SecretRef instead", ocp.Metadata.Name, k))
-			}
-		}
 	}
+	errs = append(errs, validateSensitiveOverridePaths(fmt.Sprintf("OCPCluster/%s install.installConfigOverrides", ocp.Metadata.Name), ocp.Spec.Install.InstallConfigOverrides)...)
 	for _, path := range installOverrideForbiddenNestedPaths {
 		if hasNestedKey(ocp.Spec.Install.InstallConfigOverrides, path) {
 			errs = append(errs, fmt.Sprintf("OCPCluster/%s install.installConfigOverrides[%s] is owned by Gitups and cannot be overridden", ocp.Metadata.Name, path))
@@ -785,6 +802,7 @@ func validateInstallOverrides(ocp v1alpha1.OCPCluster) []string {
 			errs = append(errs, fmt.Sprintf("OCPCluster/%s install.agentConfigOverrides[%s] is owned by Gitups and cannot be overridden", ocp.Metadata.Name, k))
 		}
 	}
+	errs = append(errs, validateSensitiveOverridePaths(fmt.Sprintf("OCPCluster/%s install.agentConfigOverrides", ocp.Metadata.Name), ocp.Spec.Install.AgentConfigOverrides)...)
 	for _, src := range ocp.Spec.Install.ImageDigestSources {
 		errs = append(errs, validateImageDigestSource(fmt.Sprintf("OCPCluster/%s install", ocp.Metadata.Name), src)...)
 	}
@@ -797,6 +815,40 @@ func validateInstallOverrides(ocp v1alpha1.OCPCluster) []string {
 	if ocp.Spec.Install.BaseDomain == "" {
 		errs = append(errs, fmt.Sprintf("OCPCluster/%s install.baseDomain is required (inheritable from Environment)", ocp.Metadata.Name))
 	}
+	return errs
+}
+
+func validateSensitiveOverridePaths(owner string, value any) []string {
+	var errs []string
+	var walk func(path string, current any)
+	walk = func(path string, current any) {
+		switch typed := current.(type) {
+		case map[string]any:
+			for key, value := range typed {
+				next := key
+				if path != "" {
+					next = path + "." + key
+				}
+				lower := strings.ToLower(key)
+				for _, sub := range sensitiveOverrideKeys {
+					if strings.Contains(lower, sub) {
+						errs = append(errs, fmt.Sprintf("%s[%s] looks like a sensitive value; use SecretRef instead", owner, next))
+						break
+					}
+				}
+				walk(next, value)
+			}
+		case []any:
+			for i, value := range typed {
+				next := fmt.Sprintf("[%d]", i)
+				if path != "" {
+					next = fmt.Sprintf("%s[%d]", path, i)
+				}
+				walk(next, value)
+			}
+		}
+	}
+	walk("", value)
 	return errs
 }
 
@@ -850,6 +902,72 @@ func validateCrossLayer(state v1alpha1.State) []string {
 	}
 	errs = append(errs, validateDisconnectedOpenShiftSources(state)...)
 	errs = append(errs, validateMirrorRegistryPlacement(state)...)
+	return errs
+}
+
+func validateSecretReferences(state v1alpha1.State) []string {
+	env := primaryEnvironment(&state)
+	if env == nil {
+		return nil
+	}
+	declared := map[string]bool{}
+	for name := range env.Spec.Keys {
+		declared[name] = true
+	}
+	var errs []string
+	require := func(owner string, ref v1alpha1.SecretRef) {
+		if ref.Name == "" {
+			return
+		}
+		if !dnsLabel.MatchString(ref.Name) {
+			errs = append(errs, fmt.Sprintf("%s.name %q is not a DNS label", owner, ref.Name))
+			return
+		}
+		if !declared[ref.Name] {
+			errs = append(errs, fmt.Sprintf("%s %q is not declared in Environment/%s spec.keys", owner, ref.Name, env.Metadata.Name))
+		}
+	}
+	require(fmt.Sprintf("Environment/%s spec.secrets.pullSecretRef", env.Metadata.Name), env.Spec.Secrets.PullSecretRef)
+	require(fmt.Sprintf("Environment/%s spec.secrets.clusterSSHKeyRef", env.Metadata.Name), env.Spec.Secrets.ClusterSSHKeyRef)
+	if proxy := v1alpha1.OCPInstallProxyOf(*env); proxy != nil {
+		require(fmt.Sprintf("Environment/%s ocpInstall.%s.proxy.credentialsRef", env.Metadata.Name, v1alpha1.OCPInstallKind(*env)), proxy.CredentialsRef)
+	}
+	if registries := v1alpha1.OCPInstallRegistriesOf(*env); registries != nil && registries.Mirror != nil {
+		owner := fmt.Sprintf("Environment/%s ocpInstall.%s.registries.mirror", env.Metadata.Name, v1alpha1.OCPInstallKind(*env))
+		require(owner+".credentialsRef", registries.Mirror.CredentialsRef)
+		require(owner+".trustBundleRef", registries.Mirror.TrustBundleRef)
+	}
+	for _, provider := range state.InfrastructureProviders {
+		for hostName, host := range provider.Spec.Hosts {
+			if host.SSH != nil {
+				require(fmt.Sprintf("InfrastructureProvider/%s hosts[%s].ssh.keyRef", provider.Metadata.Name, hostName), host.SSH.KeyRef)
+			}
+		}
+		if provider.Spec.Machine == nil {
+			continue
+		}
+		if provider.Spec.Machine.Libvirt != nil && provider.Spec.Machine.Libvirt.BMCEmulation != nil && provider.Spec.Machine.Libvirt.BMCEmulation.Auth != nil {
+			require(fmt.Sprintf("InfrastructureProvider/%s machine.libvirt.bmcEmulation.auth.credentialRef", provider.Metadata.Name), provider.Spec.Machine.Libvirt.BMCEmulation.Auth.CredentialRef)
+		}
+		if provider.Spec.Machine.VSphere != nil {
+			require(fmt.Sprintf("InfrastructureProvider/%s machine.vsphere.vCenterRef", provider.Metadata.Name), provider.Spec.Machine.VSphere.VCenterRef)
+		}
+		if provider.Spec.Machine.KubeVirt != nil {
+			require(fmt.Sprintf("InfrastructureProvider/%s machine.kubevirt.clusterRef", provider.Metadata.Name), provider.Spec.Machine.KubeVirt.ClusterRef)
+		}
+	}
+	for _, ci := range state.ClusterInfrastructures {
+		for machineName, machine := range ci.Spec.Machines {
+			if machine.BareMetal != nil && machine.BareMetal.BMC != nil {
+				require(fmt.Sprintf("ClusterInfrastructure/%s machines[%s].baremetal.bmc.credentialRef", ci.Metadata.Name, machineName), machine.BareMetal.BMC.CredentialRef)
+			}
+		}
+	}
+	for _, ocp := range state.OCPClusters {
+		require(fmt.Sprintf("OCPCluster/%s install.pullSecretRef", ocp.Metadata.Name), ocp.Spec.Install.PullSecretRef)
+		require(fmt.Sprintf("OCPCluster/%s install.sshKeyRef", ocp.Metadata.Name), ocp.Spec.Install.SSHKeyRef)
+		require(fmt.Sprintf("OCPCluster/%s install.additionalTrustBundleRef", ocp.Metadata.Name), ocp.Spec.Install.AdditionalTrustBundleRef)
+	}
 	return errs
 }
 

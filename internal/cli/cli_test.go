@@ -15,7 +15,7 @@ import (
 func TestValidateCommand(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	code := Run(context.Background(), []string{"validate", "-f", "../../examples/infra"}, nil, &stdout, &stderr)
+	code := Run(context.Background(), []string{"validate", "-f", "../../examples/libvirt-redfish-lab-fleet"}, nil, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
 	}
@@ -28,7 +28,7 @@ func TestPlanCommandShowsInstallerAssets(t *testing.T) {
 	stateDir := t.TempDir()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	code := Run(context.Background(), []string{"plan", "-f", "../../examples/infra", "--state-dir", stateDir}, nil, &stdout, &stderr)
+	code := Run(context.Background(), []string{"plan", "-f", "../../examples/libvirt-redfish-lab-fleet", "--state-dir", stateDir}, nil, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
 	}
@@ -121,6 +121,13 @@ spec:
       name: pull-secret
     clusterSSHKeyRef:
       name: ssh-key
+  keys:
+    pull-secret:
+      file: ./pull-secret
+    ssh-key:
+      file: ./ssh-key
+    example-vcenter:
+      file: ./vcenter
 ---
 apiVersion: gitups.io/v1alpha1
 kind: InfrastructureProvider
@@ -188,7 +195,7 @@ spec:
 	if !strings.Contains(stderr.String(), `apply does not yet support provider kind "vsphere"`) {
 		t.Fatalf("unexpected stderr: %s", stderr.String())
 	}
-	if !strings.Contains(stderr.String(), "supported: libvirt") {
+	if !strings.Contains(stderr.String(), "supported: baremetal, libvirt") {
 		t.Fatalf("error must list the supported flavors, got: %s", stderr.String())
 	}
 }
@@ -210,6 +217,12 @@ spec:
     clusterSSHKeyRef:
       name: ssh-key
   keys:
+    pull-secret:
+      file: ./pull-secret
+    ssh-key:
+      file: ./ssh-key.pub
+    default-key:
+      file: ./default-key
     registry-lab-ca:
       generated:
         selfSignedCertificate:
@@ -363,6 +376,12 @@ spec:
     clusterSSHKeyRef:
       name: ssh-key
   keys:
+    pull-secret:
+      file: ./pull-secret
+    ssh-key:
+      file: ./ssh-key.pub
+    default-key:
+      file: ./default-key
     bmc-credentials:
       generated:
         credentials:
@@ -755,7 +774,7 @@ func TestApplyDryRunRendersAndPrintsAnsibleCommandsForAllPhases(t *testing.T) {
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
 		"apply", "infra",
-		"-f", "../../examples/infra",
+		"-f", "../../examples/libvirt-redfish-lab-fleet",
 		"--state-dir", stateDir,
 		"--dry-run",
 	}, nil, &stdout, &stderr)
@@ -794,7 +813,7 @@ func TestApplyDryRunPassesStateSecretsAndHostStateDirs(t *testing.T) {
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
 		"apply", "infra",
-		"-f", "../../examples/infra",
+		"-f", "../../examples/libvirt-redfish-lab-fleet",
 		"--state-dir", stateDir,
 		"--secrets-dir", secretsDir,
 		"--host-state-dir", hostStateDir,
@@ -846,7 +865,7 @@ func TestApplyHubDryRunOnlyRunsHubScope(t *testing.T) {
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
 		"apply", "ocp",
-		"-f", "../../examples/infra",
+		"-f", "../../examples/libvirt-redfish-lab-fleet",
 		"--state-dir", stateDir,
 		"--dry-run",
 	}, nil, &stdout, &stderr)
@@ -870,7 +889,7 @@ func TestDestroyRequiresYesOrDryRun(t *testing.T) {
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
 		"destroy", "all",
-		"-f", "../../examples/infra",
+		"-f", "../../examples/libvirt-redfish-lab-fleet",
 		"--state-dir", stateDir,
 	}, nil, &stdout, &stderr)
 	if code == 0 {
@@ -887,7 +906,7 @@ func TestDestroyDryRunPrintsPhasesInReverse(t *testing.T) {
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
 		"destroy", "all",
-		"-f", "../../examples/infra",
+		"-f", "../../examples/libvirt-redfish-lab-fleet",
 		"--state-dir", stateDir,
 		"--dry-run",
 	}, nil, &stdout, &stderr)
@@ -932,7 +951,7 @@ func TestDestroyInfraDryRunUsesSingleWorkflowBecomePrompt(t *testing.T) {
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
 		"destroy", "infra",
-		"-f", "../../examples/infra",
+		"-f", "../../examples/libvirt-redfish-lab-fleet",
 		"--state-dir", stateDir,
 		"--dry-run",
 	}, nil, &stdout, &stderr)
@@ -964,7 +983,7 @@ func TestDestroyRemovesStateDirOnSuccess(t *testing.T) {
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
 		"destroy", "all",
-		"-f", "../../examples/infra",
+		"-f", "../../examples/libvirt-redfish-lab-fleet",
 		"--state-dir", stateDir,
 		"--yes",
 		"--ansible-playbook", "/bin/true",
@@ -989,7 +1008,7 @@ func TestDestroyScopedHubKeepsStateDir(t *testing.T) {
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
 		"destroy", "ocp",
-		"-f", "../../examples/infra",
+		"-f", "../../examples/libvirt-redfish-lab-fleet",
 		"--state-dir", stateDir,
 		"--yes",
 		"--ansible-playbook", "/bin/true",
@@ -1014,7 +1033,7 @@ func TestDestroyKeepStateDirFlagPreservesStateDir(t *testing.T) {
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
 		"destroy", "all",
-		"-f", "../../examples/infra",
+		"-f", "../../examples/libvirt-redfish-lab-fleet",
 		"--state-dir", stateDir,
 		"--yes",
 		"--keep-state-dir",
@@ -1035,7 +1054,7 @@ func TestStatusReportsRenderedPresence(t *testing.T) {
 	stateDir := t.TempDir()
 	if code := Run(context.Background(), []string{
 		"apply", "infra",
-		"-f", "../../examples/infra",
+		"-f", "../../examples/libvirt-redfish-lab-fleet",
 		"--state-dir", stateDir,
 		"--dry-run",
 	}, nil, io.Discard, io.Discard); code != 0 {
@@ -1045,7 +1064,7 @@ func TestStatusReportsRenderedPresence(t *testing.T) {
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
 		"status",
-		"-f", "../../examples/infra",
+		"-f", "../../examples/libvirt-redfish-lab-fleet",
 		"--state-dir", stateDir,
 	}, nil, &stdout, &stderr)
 	if code != 0 {
@@ -1069,7 +1088,7 @@ func TestDiffReportsDriftWhenStateIsStale(t *testing.T) {
 	stateDir := t.TempDir()
 	if code := Run(context.Background(), []string{
 		"apply", "infra",
-		"-f", "../../examples/infra",
+		"-f", "../../examples/libvirt-redfish-lab-fleet",
 		"--state-dir", stateDir,
 		"--dry-run",
 	}, nil, io.Discard, io.Discard); code != 0 {
@@ -1083,7 +1102,7 @@ func TestDiffReportsDriftWhenStateIsStale(t *testing.T) {
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
 		"status",
-		"-f", "../../examples/infra",
+		"-f", "../../examples/libvirt-redfish-lab-fleet",
 		"--state-dir", stateDir,
 		"--diff",
 	}, nil, &stdout, &stderr)
@@ -1102,7 +1121,7 @@ func TestDiffReportsNoDriftAfterFreshRender(t *testing.T) {
 	stateDir := t.TempDir()
 	if code := Run(context.Background(), []string{
 		"apply", "infra",
-		"-f", "../../examples/infra",
+		"-f", "../../examples/libvirt-redfish-lab-fleet",
 		"--state-dir", stateDir,
 		"--dry-run",
 	}, nil, io.Discard, io.Discard); code != 0 {
@@ -1112,7 +1131,7 @@ func TestDiffReportsNoDriftAfterFreshRender(t *testing.T) {
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
 		"status",
-		"-f", "../../examples/infra",
+		"-f", "../../examples/libvirt-redfish-lab-fleet",
 		"--state-dir", stateDir,
 		"--diff",
 	}, nil, &stdout, &stderr)

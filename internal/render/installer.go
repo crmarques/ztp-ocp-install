@@ -240,14 +240,14 @@ func platformConfig(provider v1alpha1.InfrastructureProvider, infra v1alpha1.Clu
 		ingressAddress = infra.Spec.Endpoints.Ingress.Address
 	}
 	switch v1alpha1.MachineFlavor(provider) {
-	case v1alpha1.MachineFlavorLibvirt, v1alpha1.MachineFlavorBaremetal:
+	case v1alpha1.MachineFlavorLibvirt, v1alpha1.MachineFlavorBareMetal:
 		return map[string]any{
 			"baremetal": map[string]any{
 				"apiVIPs":     []any{apiAddress},
 				"ingressVIPs": []any{ingressAddress},
 			},
 		}
-	case v1alpha1.MachineFlavorVsphere:
+	case v1alpha1.MachineFlavorVSphere:
 		return map[string]any{
 			"vsphere": map[string]any{
 				"apiVIPs":     []any{apiAddress},

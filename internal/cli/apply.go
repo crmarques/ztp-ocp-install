@@ -42,7 +42,6 @@ func newApplyScopeCmd(scope string, stdin io.Reader, stdout io.Writer, stderr io
 		askBecomePass bool
 		yes           bool
 		executable    string
-		extraVars     []string
 		secretsDir    string
 		hostStateDir  string
 	)
@@ -61,13 +60,7 @@ func newApplyScopeCmd(scope string, stdin io.Reader, stdout io.Writer, stderr io
 	cmd.Flags().StringVar(&executable, "ansible-playbook", resolveAnsiblePlaybook(), "ansible-playbook executable to run (defaults to the gitups-managed venv when present)")
 	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material")
 	cmd.Flags().StringVar(&hostStateDir, "host-state-dir", hostStateDir, "root-managed host runtime state directory")
-	cmd.Flags().StringArrayVar(&extraVars, "extra-var", nil, "extra ansible variable in key=value form; may be repeated (passed via -e)")
 	cmd.RunE = func(c *cobra.Command, _ []string) error {
-		for _, v := range extraVars {
-			if !strings.Contains(v, "=") {
-				return failf(2, "--extra-var %q must be key=value", v)
-			}
-		}
 		selected, err := phasesForApplyScope(scope)
 		if err != nil {
 			return failErr(1, err)
@@ -119,7 +112,6 @@ func newApplyScopeCmd(scope string, stdin io.Reader, stdout io.Writer, stderr io
 			"gitups_host_state_dir=" + hostStateDirAbs,
 		}
 		pairs = append(pairs, resolvedOCPBinaryPairs(selected, hostStateDirAbs)...)
-		pairs = append(pairs, extraVars...)
 		workflow, err := applyWorkflow(scope)
 		if err != nil {
 			return failErr(1, err)
@@ -177,7 +169,6 @@ func newDestroyScopeCmd(scope string, _ io.Reader, stdout io.Writer, stderr io.W
 		askBecomePass bool
 		yes           bool
 		executable    string
-		extraVars     []string
 		secretsDir    string
 		hostStateDir  string
 	)
@@ -195,17 +186,11 @@ func newDestroyScopeCmd(scope string, _ io.Reader, stdout io.Writer, stderr io.W
 	cmd.Flags().StringVar(&executable, "ansible-playbook", resolveAnsiblePlaybook(), "ansible-playbook executable to run (defaults to the gitups-managed venv when present)")
 	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material")
 	cmd.Flags().StringVar(&hostStateDir, "host-state-dir", hostStateDir, "root-managed host runtime state directory")
-	cmd.Flags().StringArrayVar(&extraVars, "extra-var", nil, "extra ansible variable in key=value form; may be repeated (passed via -e)")
 	var keepStateDir bool
 	cmd.Flags().BoolVar(&keepStateDir, "keep-state-dir", false, "keep --state-dir after `destroy all` succeeds")
 	var keepMirroredImages bool
 	cmd.Flags().BoolVar(&keepMirroredImages, "keep-mirrored-images", false, "keep the mirror-registry data volume on the provider host so the next apply does not have to re-pull from public registries")
 	cmd.RunE = func(c *cobra.Command, _ []string) error {
-		for _, v := range extraVars {
-			if !strings.Contains(v, "=") {
-				return failf(2, "--extra-var %q must be key=value", v)
-			}
-		}
 		selected, err := phasesForDestroyScope(scope)
 		if err != nil {
 			return failErr(1, err)
@@ -252,7 +237,6 @@ func newDestroyScopeCmd(scope string, _ io.Reader, stdout io.Writer, stderr io.W
 		if keepMirroredImages {
 			pairs = append(pairs, "gitups_keep_mirrored_images=true")
 		}
-		pairs = append(pairs, extraVars...)
 		workflow, err := destroyWorkflow(scope, selected)
 		if err != nil {
 			return failErr(1, err)

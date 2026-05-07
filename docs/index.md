@@ -25,8 +25,10 @@ surface, security rules, adapter boundaries, and ADRs.
 
 - OpenShift cluster install: openshift-install agent against the cluster
   nodes (single-node and multi-node both supported).
-- Lab provider: libvirt-managed virtual machines with Redfish BMC emulation.
-- Provider boundary: real bare metal, vSphere, and OpenShift Virtualization
-  remain first-class targets behind the same desired-state model.
+- Current apply providers: libvirt-managed virtual machines with Redfish BMC
+  emulation and Redfish bare metal.
+- Provider boundary: vSphere, OpenShift Virtualization, and IPMI remain
+  schema targets behind the same desired-state model, but their apply
+  workflows are not implemented yet.
 - Future: a hub cluster running ACM and OpenShift GitOps to reconcile
   additional clusters as fleet GitOps content; not implemented yet.

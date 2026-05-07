@@ -22,7 +22,7 @@ report any check that could not be run, including the reason:
 - `staticcheck ./...` — must report no findings. Pay special attention
   to `U1000` (unused). If `staticcheck` is not installed, install it
   once with:
-  `go install honnef.co/go/tools/cmd/staticcheck@latest`
+  `go install honnef.co/go/tools/cmd/staticcheck@v0.7.0`
   and ensure `$(go env GOPATH)/bin` is on `PATH`.
 
 `go test -race ./...` (from the `implementation-validation` skill) must

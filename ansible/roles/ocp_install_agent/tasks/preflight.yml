@@ -93,8 +93,9 @@
   when: (gitups_ocp_cluster_install.method | default('')) != 'agent'
 
 - name: Resolve openshift-install binary
-  ansible.builtin.command:
-    cmd: "command -v {{ gitups_openshift_install }}"
+  ansible.builtin.shell: "command -v {{ gitups_openshift_install | quote }}"
+  args:
+    executable: /bin/sh
   register: gitups_openshift_install_lookup
   changed_when: false
   failed_when: gitups_openshift_install_lookup.rc != 0

@@ -191,10 +191,10 @@ func runControllerCLIInstall(ctx context.Context, stdin io.Reader, stdout io.Wri
 	cmd.Stderr = stderr
 	cmd.Stdin = stdin
 	ansibleEnv := map[string]string{
-		"ANSIBLE_CONFIG":             filepath.Join(bundleDir, embedded.AnsibleCfgRelPath),
-		"ANSIBLE_ROLES_PATH":         filepath.Join(bundleDir, embedded.RolesRelPath),
-		"ANSIBLE_COLLECTIONS_PATH":   filepath.Join(bundleDir, embedded.CollectionsRelPath),
-		"ANSIBLE_FILTER_PLUGINS":     filepath.Join(bundleDir, embedded.FilterPluginsRelPath),
+		"ANSIBLE_CONFIG":           filepath.Join(bundleDir, embedded.AnsibleCfgRelPath),
+		"ANSIBLE_ROLES_PATH":       filepath.Join(bundleDir, embedded.RolesRelPath),
+		"ANSIBLE_COLLECTIONS_PATH": filepath.Join(bundleDir, embedded.CollectionsRelPath),
+		"ANSIBLE_FILTER_PLUGINS":   filepath.Join(bundleDir, embedded.FilterPluginsRelPath),
 	}
 	for k, v := range extraEnv {
 		ansibleEnv[k] = v

@@ -141,12 +141,12 @@ spec:
   openshift:
     release:
       channel: stable-4.21
-      version: 4.21.10
+      version: 4.21.12
   componentImages:
     load-balancer:
       haproxy:
-        local: registry.disconnected.example.test:5000/library/haproxy:3.2.15
-        public: docker.io/library/haproxy:3.2.15
+        local: registry.disconnected.example.test:5000/library/haproxy:3.3.8
+        public: docker.io/library/haproxy:3.3.8@sha256:f14a1788b56894e7ec7b5cb0ca09dbb959b674cf3c980f92139ec008167d4a91
 `
 
 const libvirtRedfishHubProviderYAML = `apiVersion: gitups.io/v1alpha1

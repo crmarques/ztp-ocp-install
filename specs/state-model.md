@@ -53,7 +53,7 @@ spec:
   openshift:
     release:
       channel: stable-4.21
-      version: 4.21.10
+      version: 4.21.12
   componentImages: {}
 ```
 
@@ -77,8 +77,9 @@ Rules:
   exactly one source set: `file:` for operator-supplied material on
   disk, or `generated:` for material gitups produces (a
   `username:password\n` credentials file or a self-signed cert/key
-  pair). `gitups secrets generate -f` materializes both kinds; the
-  bytes never appear in YAML.
+  pair). `gitups secrets generate -f` materializes only generated keys;
+  file-sourced keys must exist at their declared paths or be written by the
+  dedicated secret writer commands. The bytes never appear in YAML.
 - `Environment` owns proxy, registry mirrors, trust bundles, secret refs,
   OpenShift defaults, and component image pins.
 - `Environment` must not define machines, provider hosts, BMC settings,
@@ -325,8 +326,8 @@ The user-facing CLI is:
 
 | Command | Reads input? | Mutates? | Purpose |
 | --- | --- | --- | --- |
-| `doctor` | no | no | Controller baseline prerequisite checks. |
-| `setup controller` | optional | yes | Installs pinned controller-local dependencies, defaulting to the user-owned Gitups-managed Ansible venv; system-package mode is explicit. |
+| `doctor check` | yes | no | Controller prerequisite checks for the selected desired state. |
+| `doctor fix` | optional | yes | Installs pinned controller-local dependencies, defaulting to the user-owned Gitups-managed Ansible venv; system-package mode is explicit. |
 | `init --template <name> --out <dir>` | no | local only | Writes current validating desired-state templates. |
 | `validate` | yes | no | Strict schema, defaulting, and cross-reference validation. |
 | `preflight` | yes | no | Local checks plus read-only Ansible checks against provider and cluster hosts. |
@@ -334,7 +335,7 @@ The user-facing CLI is:
 | `apply <infra|ocp>` | yes | yes | Converges one explicit workflow scope. |
 | `destroy <infra|ocp|all>` | yes | yes | Reverses one explicit workflow scope. Requires `--yes` (or `--dry-run`). |
 | `status` | yes | no | Reports desired counts, rendered artifact presence, phase table, and drift against `--state-dir` (`--diff` for full drift output). |
-| `secrets` | optional | yes (writes secrets) | `sync`, `generate`, `pull-secret set`, and credential writers — the only writers into `<gitups-home>/secrets`. |
+| `secrets` | optional | yes (writes secrets) | `generate`, `pull-secret set`, and credential writers — the only writers into `<gitups-home>/secrets`. |
 
 Rendering has no public command; it is an internal step for `plan`, `preflight`,
 `apply`, and `status --diff`.

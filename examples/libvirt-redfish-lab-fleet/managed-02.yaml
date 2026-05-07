@@ -1,10 +1,10 @@
 apiVersion: gitups.io/v1alpha1
 kind: ClusterInfrastructure
 metadata:
-  name: spoke-02
+  name: managed-02
 spec:
   providerRefs:
-    - name: lab-spoke-02-provider
+    - name: lab-managed-02-provider
   networks:
     primary:
       cidr: 192.168.124.0/24
@@ -12,7 +12,7 @@ spec:
       dnsServers:
         - 192.168.124.1
       libvirt:
-        bridge: vbr-spoke-02
+        bridge: vbr-managed-02
   machines:
     master-0:
       interfaces:
@@ -22,7 +22,7 @@ spec:
           ipAddress: 192.168.124.20
       libvirt:
         hostRef:
-          name: spoke-02-host
+          name: managed-02-host
     master-1:
       interfaces:
         primary:
@@ -31,7 +31,7 @@ spec:
           ipAddress: 192.168.124.21
       libvirt:
         hostRef:
-          name: spoke-02-host
+          name: managed-02-host
     master-2:
       interfaces:
         primary:
@@ -40,7 +40,7 @@ spec:
           ipAddress: 192.168.124.22
       libvirt:
         hostRef:
-          name: spoke-02-host
+          name: managed-02-host
   endpoints:
     api:
       address: 192.168.124.10
@@ -58,11 +58,11 @@ spec:
 apiVersion: gitups.io/v1alpha1
 kind: OCPCluster
 metadata:
-  name: spoke-02
+  name: managed-02
 spec:
   topology: multi-node
   infrastructureRef:
-    name: spoke-02
+    name: managed-02
   install:
     method: agent
   nodes:

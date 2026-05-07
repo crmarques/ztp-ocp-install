@@ -38,7 +38,7 @@ spec:
   openshift:
     release:
       channel: stable-4.21
-      version: 4.21.10
+      version: 4.21.12
 ---
 apiVersion: gitups.io/v1alpha1
 kind: InfrastructureProvider
@@ -200,5 +200,7 @@ secret itself — either a `username:password\n` file (`generated.credentials`)
 or a self-signed cert/key pair (`generated.selfSignedCertificate`). The
 mirror trust bundle is wired via `registries.mirror.trustBundleRef.name`;
 the matching `keys[name].generated.selfSignedCertificate` decides how that
-reference is sourced. `gitups secrets generate -f` reads the keys map and
-materializes every entry; the secret bytes never reach committed YAML.
+reference is sourced. `gitups secrets generate -f` materializes only
+`generated:` entries; `file:` entries must already exist at their declared
+paths or be written with the specific `secrets pull-secret set` and
+`secrets credentials set` commands.

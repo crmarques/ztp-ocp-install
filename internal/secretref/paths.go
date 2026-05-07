@@ -1,0 +1,56 @@
+package secretref
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/crmarques/ztp-ocp-install-lab/api/v1alpha1"
+)
+
+func ResolveKeyFilePath(file, envSourceDir string) (string, error) {
+	if file == "" {
+		return "", errors.New("file source is empty")
+	}
+	if strings.HasPrefix(file, "~/") || file == "~" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("resolve home directory: %w", err)
+		}
+		if file == "~" {
+			return home, nil
+		}
+		return filepath.Join(home, file[2:]), nil
+	}
+	if filepath.IsAbs(file) {
+		return filepath.Clean(file), nil
+	}
+	if envSourceDir == "" || envSourceDir == "." {
+		abs, err := filepath.Abs(file)
+		if err != nil {
+			return "", fmt.Errorf("resolve %s: %w", file, err)
+		}
+		return abs, nil
+	}
+	return filepath.Clean(filepath.Join(envSourceDir, file)), nil
+}
+
+// ResolvePath returns the local filesystem path for a declared SecretRef.
+// File-sourced keys resolve to their declared source path. Generated keys and
+// non-file keys resolve inside secretsDir.
+func ResolvePath(name string, env *v1alpha1.Environment, secretsDir string) string {
+	if name == "" {
+		return ""
+	}
+	if env != nil {
+		if key, ok := env.Spec.Keys[name]; ok && key.File != "" {
+			envSourceDir := filepath.Dir(env.SourcePath)
+			if path, err := ResolveKeyFilePath(key.File, envSourceDir); err == nil {
+				return path
+			}
+		}
+	}
+	return filepath.Join(secretsDir, name)
+}

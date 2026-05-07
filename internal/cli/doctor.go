@@ -29,7 +29,10 @@ func newDoctorCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Co
 }
 
 func newDoctorCheckCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
-	var hostStateDir string
+	var (
+		hostStateDir string
+		yes          bool
+	)
 	hostStateDir = defaultHostStateDir
 	cmd := &cobra.Command{
 		Use:   "check",
@@ -38,6 +41,7 @@ func newDoctorCheckCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 	}
 	cf := addCommonFlags(cmd)
 	cmd.Flags().StringVar(&hostStateDir, "host-state-dir", hostStateDir, "root-managed host runtime state directory")
+	cmd.Flags().BoolVar(&yes, "yes", false, "accepted for command-line symmetry; doctor check never mutates")
 	_ = cmd.MarkFlagRequired("file")
 	cmd.RunE = func(_ *cobra.Command, _ []string) error {
 		state, err := infra.LoadNormalizeValidate(cf.files)
@@ -60,6 +64,7 @@ func newDoctorCheckCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 			return silentExit(1)
 		}
 		fmt.Fprintf(stdout, "doctor check: all %d check(s) passed\n", len(checks))
+		_ = yes
 		return nil
 	}
 	return cmd

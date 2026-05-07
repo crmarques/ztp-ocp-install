@@ -1,55 +1,17 @@
 package render
 
 import (
-	"errors"
 	"net/netip"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/crmarques/ztp-ocp-install-lab/api/v1alpha1"
+	"github.com/crmarques/ztp-ocp-install-lab/internal/secretref"
 )
 
-func resolveKeyFilePath(file, envSourceDir string) (string, error) {
-	if file == "" {
-		return "", errors.New("file source is empty")
-	}
-	if strings.HasPrefix(file, "~/") || file == "~" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", err
-		}
-		if file == "~" {
-			return home, nil
-		}
-		return filepath.Join(home, file[2:]), nil
-	}
-	if filepath.IsAbs(file) {
-		return filepath.Clean(file), nil
-	}
-	if envSourceDir == "" || envSourceDir == "." {
-		return filepath.Abs(file)
-	}
-	return filepath.Clean(filepath.Join(envSourceDir, file)), nil
-}
-
-// resolvedSecretPath returns the absolute path for a named secret.
-// File-based keys in env.Spec.Keys resolve to their declared source path.
-// Generated and undeclared keys fall back to secretsDir/name.
 func resolvedSecretPath(name, secretsDir string, env *v1alpha1.Environment) string {
-	if name == "" {
-		return ""
-	}
-	if env != nil {
-		if key, ok := env.Spec.Keys[name]; ok && key.File != "" {
-			envSourceDir := filepath.Dir(env.SourcePath)
-			if path, err := resolveKeyFilePath(key.File, envSourceDir); err == nil {
-				return path
-			}
-		}
-	}
-	return filepath.Join(secretsDir, name)
+	return secretref.ResolvePath(name, env, secretsDir)
 }
 
 type VarsFile struct {
@@ -161,7 +123,7 @@ type MachineBMCVars struct {
 type ProviderVars struct {
 	Kind                string                        `yaml:"kind" json:"kind"`
 	SubstrateRole       string                        `yaml:"substrateRole" json:"substrateRole"`
-	BmcRole             string                        `yaml:"bmcRole" json:"bmcRole"`
+	BMCRole             string                        `yaml:"bmcRole" json:"bmcRole"`
 	BootArtifactsHttp   ProviderBootArtifactsHTTPVars `yaml:"bootArtifactsHttp" json:"bootArtifactsHttp"`
 	InfrastructureHosts []ProviderHostVars            `yaml:"infrastructureHosts,omitempty" json:"infrastructureHosts,omitempty"`
 	Virtualization      *ProviderVirtualizationVars   `yaml:"virtualization,omitempty" json:"virtualization,omitempty"`
@@ -173,7 +135,7 @@ type ProviderComponentVars struct {
 	Name                string                        `yaml:"name" json:"name"`
 	Kind                string                        `yaml:"kind" json:"kind"`
 	SubstrateRole       string                        `yaml:"substrateRole" json:"substrateRole"`
-	BmcRole             string                        `yaml:"bmcRole" json:"bmcRole"`
+	BMCRole             string                        `yaml:"bmcRole" json:"bmcRole"`
 	BootArtifactsHttp   ProviderBootArtifactsHTTPVars `yaml:"bootArtifactsHttp" json:"bootArtifactsHttp"`
 	InfrastructureHosts []ProviderHostVars            `yaml:"infrastructureHosts,omitempty" json:"infrastructureHosts,omitempty"`
 	BMC                 *ProviderBMCVars              `yaml:"bmc,omitempty" json:"bmc,omitempty"`
@@ -264,7 +226,7 @@ type MachineNetworkVars struct {
 	Gateway    string                     `yaml:"gateway,omitempty" json:"gateway,omitempty"`
 	DNSServers []string                   `yaml:"dnsServers,omitempty" json:"dnsServers,omitempty"`
 	Libvirt    *MachineNetworkLibvirtVars `yaml:"libvirt,omitempty" json:"libvirt,omitempty"`
-	Vsphere    *MachineNetworkVsphereVars `yaml:"vsphere,omitempty" json:"vsphere,omitempty"`
+	VSphere    *MachineNetworkVSphereVars `yaml:"vsphere,omitempty" json:"vsphere,omitempty"`
 }
 
 type MachineNetworkLibvirtVars struct {
@@ -272,7 +234,7 @@ type MachineNetworkLibvirtVars struct {
 	Bridge         string `yaml:"bridge" json:"bridge"`
 }
 
-type MachineNetworkVsphereVars struct {
+type MachineNetworkVSphereVars struct {
 	Portgroup string `yaml:"portgroup,omitempty" json:"portgroup,omitempty"`
 }
 
@@ -622,14 +584,14 @@ func ocpClusterNodes(item v1alpha1.ClusterInfrastructure, ocp v1alpha1.OCPCluste
 			if machine.Libvirt != nil {
 				entry.HostRef = machine.Libvirt.HostRef.Name
 			}
-			if machine.Baremetal != nil && machine.Baremetal.BMC != nil {
+			if machine.BareMetal != nil && machine.BareMetal.BMC != nil {
 				entry.BareMetal = &MachineBMCVars{
-					Address:                        machine.Baremetal.BMC.Address,
-					Port:                           machine.Baremetal.BMC.Port,
-					Protocol:                       machine.Baremetal.BMC.Protocol,
-					CredentialRef:                  resolvedSecretPath(machine.Baremetal.BMC.CredentialRef.Name, secretsDir, env),
-					DisableCertificateVerification: machine.Baremetal.BMC.DisableCertificateVerification,
-					BootMACAddress:                 machine.Baremetal.BootMACAddress,
+					Address:                        machine.BareMetal.BMC.Address,
+					Port:                           machine.BareMetal.BMC.Port,
+					Protocol:                       machine.BareMetal.BMC.Protocol,
+					CredentialRef:                  resolvedSecretPath(machine.BareMetal.BMC.CredentialRef.Name, secretsDir, env),
+					DisableCertificateVerification: machine.BareMetal.BMC.DisableCertificateVerification,
+					BootMACAddress:                 machine.BareMetal.BootMACAddress,
 				}
 			}
 			primary := primaryInterface(machine)
@@ -644,7 +606,7 @@ func ocpClusterNodes(item v1alpha1.ClusterInfrastructure, ocp v1alpha1.OCPCluste
 func providerVars(item v1alpha1.ClusterInfrastructure, provider v1alpha1.InfrastructureProvider, ocp v1alpha1.OCPCluster, env *v1alpha1.Environment, secretsDir string) ProviderVars {
 	var result ProviderVars
 	result.Kind = v1alpha1.MachineFlavor(provider)
-	result.SubstrateRole, result.BmcRole, result.BootArtifactsHttp = providerDispatch(provider)
+	result.SubstrateRole, result.BMCRole, result.BootArtifactsHttp = providerDispatch(provider)
 	if v1alpha1.ProviderMachineLibvirt(provider) == nil {
 		return result
 	}
@@ -674,11 +636,11 @@ func providerDispatch(provider v1alpha1.InfrastructureProvider) (string, string,
 			}
 		}
 		return "libvirt", "emulated", http
-	case v1alpha1.MachineFlavorBaremetal:
+	case v1alpha1.MachineFlavorBareMetal:
 		return "baremetal", "redfish", ProviderBootArtifactsHTTPVars{}
-	case v1alpha1.MachineFlavorVsphere:
+	case v1alpha1.MachineFlavorVSphere:
 		return "vsphere", "none", ProviderBootArtifactsHTTPVars{}
-	case v1alpha1.MachineFlavorKubevirt:
+	case v1alpha1.MachineFlavorKubeVirt:
 		return "kubevirt", "none", ProviderBootArtifactsHTTPVars{}
 	default:
 		return "", "none", ProviderBootArtifactsHTTPVars{}
@@ -731,7 +693,7 @@ func providerComponentVars(state v1alpha1.State, secretsDir string) []ProviderCo
 			Name:              provider.Metadata.Name,
 			Kind:              v1alpha1.MachineFlavor(provider),
 			SubstrateRole:     substrateRole,
-			BmcRole:           bmcRole,
+			BMCRole:           bmcRole,
 			BootArtifactsHttp: http,
 		}
 		if v1alpha1.ProviderMachineLibvirt(provider) != nil {
@@ -927,8 +889,8 @@ func machineNetworksList(item v1alpha1.ClusterInfrastructure) []MachineNetworkVa
 				Bridge:         n.Libvirt.Bridge,
 			}
 		}
-		if n.Vsphere != nil {
-			entry.Vsphere = &MachineNetworkVsphereVars{Portgroup: n.Vsphere.Portgroup}
+		if n.VSphere != nil {
+			entry.VSphere = &MachineNetworkVSphereVars{Portgroup: n.VSphere.Portgroup}
 		}
 		out = append(out, entry)
 	}

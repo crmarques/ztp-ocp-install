@@ -116,7 +116,6 @@ func runHostCheck(stdout io.Writer, stderr io.Writer, state v1alpha1.State, secr
 	return nil
 }
 
-
 func newPreflightCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 	var (
 		secretsDir   string
@@ -380,7 +379,8 @@ func extractBundle(stateDir string) (string, error) {
 }
 
 var applySupportedMachineFlavors = map[string]bool{
-	v1alpha1.MachineFlavorLibvirt: true,
+	v1alpha1.MachineFlavorBareMetal: true,
+	v1alpha1.MachineFlavorLibvirt:   true,
 }
 
 func ensureApplySupported(state v1alpha1.State) error {

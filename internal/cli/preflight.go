@@ -277,6 +277,9 @@ func secretsDirCheck(secretsDir string, deps preflightDeps) preflightCheck {
 	if !info.IsDir() {
 		return preflightCheck{name: name, ok: false, detail: "exists but is not a directory"}
 	}
+	if got := info.Mode().Perm(); got != 0o700 {
+		return preflightCheck{name: name, ok: false, detail: fmt.Sprintf("mode %04o; expected 0700", got)}
+	}
 	return preflightCheck{name: name, ok: true}
 }
 
@@ -298,6 +301,9 @@ func secretFileCheck(refName, path, label string, deps preflightDeps) preflightC
 	if info.IsDir() {
 		return preflightCheck{name: name, ok: false, detail: "is a directory; expected a file"}
 	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		return preflightCheck{name: name, ok: false, detail: fmt.Sprintf("mode %04o; expected 0600", got)}
+	}
 	return preflightCheck{name: name, ok: true}
 }
 
@@ -309,6 +315,9 @@ func generatedSecretCheck(path, label string, deps preflightDeps) preflightCheck
 	}
 	if info.IsDir() {
 		return preflightCheck{name: name, ok: false, detail: "is a directory; expected a generated file"}
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		return preflightCheck{name: name, ok: false, detail: fmt.Sprintf("mode %04o; expected 0600", got)}
 	}
 	return preflightCheck{name: name, ok: true}
 }
@@ -395,16 +404,16 @@ func collectSecretRefRequirements(state v1alpha1.State) []secretRefRequirement {
 				})
 			}
 		}
-		if p.Spec.Machine != nil && p.Spec.Machine.Vsphere != nil && p.Spec.Machine.Vsphere.VCenterRef.Name != "" {
+		if p.Spec.Machine != nil && p.Spec.Machine.VSphere != nil && p.Spec.Machine.VSphere.VCenterRef.Name != "" {
 			out = append(out, secretRefRequirement{
-				refName: p.Spec.Machine.Vsphere.VCenterRef.Name,
+				refName: p.Spec.Machine.VSphere.VCenterRef.Name,
 				label:   fmt.Sprintf("provider %s vsphere vCenterRef", p.Metadata.Name),
 				phases:  []string{"provider"},
 			})
 		}
-		if p.Spec.Machine != nil && p.Spec.Machine.Kubevirt != nil && p.Spec.Machine.Kubevirt.ClusterRef.Name != "" {
+		if p.Spec.Machine != nil && p.Spec.Machine.KubeVirt != nil && p.Spec.Machine.KubeVirt.ClusterRef.Name != "" {
 			out = append(out, secretRefRequirement{
-				refName: p.Spec.Machine.Kubevirt.ClusterRef.Name,
+				refName: p.Spec.Machine.KubeVirt.ClusterRef.Name,
 				label:   fmt.Sprintf("provider %s kubevirt clusterRef", p.Metadata.Name),
 				phases:  []string{"provider"},
 			})
@@ -414,11 +423,11 @@ func collectSecretRefRequirements(state v1alpha1.State) []secretRefRequirement {
 	for _, ci := range state.ClusterInfrastructures {
 		for _, mname := range sortedMapKeys(ci.Spec.Machines) {
 			m := ci.Spec.Machines[mname]
-			if m.Baremetal == nil || m.Baremetal.BMC == nil || m.Baremetal.BMC.CredentialRef.Name == "" {
+			if m.BareMetal == nil || m.BareMetal.BMC == nil || m.BareMetal.BMC.CredentialRef.Name == "" {
 				continue
 			}
 			out = append(out, secretRefRequirement{
-				refName: m.Baremetal.BMC.CredentialRef.Name,
+				refName: m.BareMetal.BMC.CredentialRef.Name,
 				label:   fmt.Sprintf("infra %s machine %s baremetal bmc credentialRef", ci.Metadata.Name, mname),
 				phases:  []string{"provider", "ocp"},
 			})

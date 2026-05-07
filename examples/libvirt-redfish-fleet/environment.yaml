@@ -11,7 +11,22 @@ spec:
       name: openshift-pull-secret
     clusterSSHKeyRef:
       name: cluster-admin-key
+  keys:
+    openshift-pull-secret:
+      file: ~/.gitups/secrets/openshift-pull-secret
+    cluster-admin-key:
+      file: ~/.ssh/gitups-ssh-key.pub
+    libvirt-host-ssh:
+      file: ~/.ssh/gitups-ssh-key
+    libvirt-redfish-bmc:
+      generated:
+        credentials:
+          username: admin
+    baremetal-redfish-bmc:
+      generated:
+        credentials:
+          username: admin
   openshift:
     release:
       channel: stable-4.21
-      version: 4.21.10
+      version: 4.21.12

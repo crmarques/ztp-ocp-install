@@ -26,6 +26,12 @@ spec:
     clusterSSHKeyRef:
       name: cluster-admin-key
   keys:
+    openshift-pull-secret:
+      file: ~/.gitups/secrets/openshift-pull-secret
+    cluster-admin-key:
+      file: ~/.ssh/gitups-ssh-key.pub
+    local-libvirt-host-admin-key:
+      file: ~/.ssh/gitups-ssh-key
     mirror-registry-ca:
       generated:
         selfSignedCertificate:
@@ -41,13 +47,13 @@ spec:
   openshift:
     release:
       channel: stable-4.21
-      version: 4.21.10
+      version: 4.21.12
   componentImages:
     load-balancer:
       haproxy:
-        local: registry.mirror.local:5000/library/haproxy:3.2.15
-        public: docker.io/library/haproxy:3.2.15
+        local: registry.mirror.local:5000/library/haproxy:3.3.8
+        public: docker.io/library/haproxy:3.3.8@sha256:f14a1788b56894e7ec7b5cb0ca09dbb959b674cf3c980f92139ec008167d4a91
     registry:
       mirror-registry:
-        local: registry.mirror.local:5000/library/registry:2
-        public: docker.io/library/registry:2
+        local: registry.mirror.local:5000/library/registry:3.1.1
+        public: docker.io/library/registry:3.1.1@sha256:85347ed2ecde64161c7a4788a4d7d3dcc9d6f86f7be95834022e3c6a423a945a

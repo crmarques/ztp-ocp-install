@@ -29,7 +29,7 @@ User-authored YAML uses `apiVersion: gitups.io/v1alpha1` and four kinds:
 | Kind | Owns |
 | --- | --- |
 | `Environment` | Shared environment defaults: base domain, OpenShift install mode, secret refs, OpenShift release, component image pins |
-| `InfrastructureProvider` | Provider connections and capabilities: libvirt, bare metal, vSphere, OpenShift Virtualization |
+| `InfrastructureProvider` | Provider connections and capabilities: libvirt, bare metal, and future vSphere/OpenShift Virtualization scaffolds |
 | `ClusterInfrastructure` | One cluster's realised infrastructure: networks, machines, endpoints, load balancers, name resolution |
 | `OCPCluster` | Provider-neutral OpenShift intent: topology, install method, networking, node identity |
 
@@ -37,11 +37,16 @@ User-authored YAML uses `apiVersion: gitups.io/v1alpha1` and four kinds:
 emulation to real bare metal edits only `InfrastructureProvider` and
 `ClusterInfrastructure`.
 
+Current `apply` support is explicit: libvirt/Redfish lab providers and
+Redfish bare-metal providers are converged by the shipped Ansible workflows.
+vSphere, OpenShift Virtualization, and IPMI are schema/validation scaffolds
+until their provider roles land.
+
 ## CLI
 
 ```text
-gitups doctor
-gitups setup controller -f examples/libvirt-redfish-fleet
+gitups doctor check -f examples/libvirt-redfish-fleet --yes
+gitups doctor fix -f examples/libvirt-redfish-fleet --yes
 gitups init --template libvirt-redfish-hub --out desired-state
 gitups validate -f examples/libvirt-redfish-fleet
 gitups preflight -f examples/libvirt-redfish-fleet
@@ -51,7 +56,7 @@ gitups apply ocp -f examples/libvirt-redfish-fleet --dry-run
 gitups status -f examples/libvirt-redfish-fleet --diff
 ```
 
-Public verbs: `doctor`, `setup controller`, `init`, `validate`, `preflight`,
+Public verbs: `doctor check`, `doctor fix`, `init`, `validate`, `preflight`,
 `plan`, `apply <infra|ocp>`, `destroy <infra|ocp|all>`,
 `status`, and `secrets`.
 The formal CLI contract lives in

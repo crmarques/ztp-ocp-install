@@ -13,9 +13,9 @@ const (
 	KindGitupsLock             = "GitupsLock"
 
 	MachineFlavorLibvirt   = "libvirt"
-	MachineFlavorBaremetal = "baremetal"
-	MachineFlavorVsphere   = "vsphere"
-	MachineFlavorKubevirt  = "kubevirt"
+	MachineFlavorBareMetal = "baremetal"
+	MachineFlavorVSphere   = "vsphere"
+	MachineFlavorKubeVirt  = "kubevirt"
 
 	OCPInstallKindConnected    = "connected"
 	OCPInstallKindRestricted   = "restricted"
@@ -55,8 +55,8 @@ const (
 	ComponentTypeHAProxy          = "haproxy"
 	ComponentTypeMirrorRegistry   = "mirror-registry"
 	ContainerRuntimePodman        = "podman"
-	DefaultHAProxyImageRef        = "docker.io/library/haproxy:3.2.15"
-	DefaultMirrorRegistryImageRef = "docker.io/library/registry:2"
+	DefaultHAProxyImageRef        = "docker.io/library/haproxy:3.3.8@sha256:f14a1788b56894e7ec7b5cb0ca09dbb959b674cf3c980f92139ec008167d4a91"
+	DefaultMirrorRegistryImageRef = "docker.io/library/registry:3.1.1@sha256:85347ed2ecde64161c7a4788a4d7d3dcc9d6f86f7be95834022e3c6a423a945a"
 	DefaultMirrorRegistryPort     = 5000
 
 	EndpointAPI     = "api"
@@ -229,9 +229,9 @@ type ProviderHostSSHSpec struct {
 
 type MachineCapabilitySpec struct {
 	Libvirt   *MachineProviderLibvirtSpec   `yaml:"libvirt,omitempty" json:"libvirt,omitempty"`
-	Baremetal *MachineProviderBaremetalSpec `yaml:"baremetal,omitempty" json:"baremetal,omitempty"`
-	Vsphere   *MachineProviderVsphereSpec   `yaml:"vsphere,omitempty" json:"vsphere,omitempty"`
-	Kubevirt  *MachineProviderKubevirtSpec  `yaml:"kubevirt,omitempty" json:"kubevirt,omitempty"`
+	BareMetal *MachineProviderBareMetalSpec `yaml:"baremetal,omitempty" json:"baremetal,omitempty"`
+	VSphere   *MachineProviderVSphereSpec   `yaml:"vsphere,omitempty" json:"vsphere,omitempty"`
+	KubeVirt  *MachineProviderKubeVirtSpec  `yaml:"kubevirt,omitempty" json:"kubevirt,omitempty"`
 }
 
 type MachineProviderLibvirtSpec struct {
@@ -259,17 +259,17 @@ type MachineProfileSpec struct {
 	DiskGiB   int `yaml:"diskGiB,omitempty" json:"diskGiB,omitempty"`
 }
 
-type MachineProviderBaremetalSpec struct {
+type MachineProviderBareMetalSpec struct {
 	BMCProtocol string `yaml:"bmcProtocol,omitempty" json:"bmcProtocol,omitempty"`
 }
 
-type MachineProviderVsphereSpec struct {
+type MachineProviderVSphereSpec struct {
 	VCenterRef SecretRef `yaml:"vCenterRef" json:"vCenterRef"`
 	Datacenter string    `yaml:"datacenter" json:"datacenter"`
 	Cluster    string    `yaml:"cluster" json:"cluster"`
 }
 
-type MachineProviderKubevirtSpec struct {
+type MachineProviderKubeVirtSpec struct {
 	ClusterRef      SecretRef             `yaml:"clusterRef" json:"clusterRef"`
 	Namespace       string                `yaml:"namespace" json:"namespace"`
 	StorageClassRef *LocalObjectReference `yaml:"storageClassRef,omitempty" json:"storageClassRef,omitempty"`
@@ -311,12 +311,12 @@ func (c ProviderClosure) MachineFlavor() string {
 	switch {
 	case c.Machine.Libvirt != nil:
 		return MachineFlavorLibvirt
-	case c.Machine.Baremetal != nil:
-		return MachineFlavorBaremetal
-	case c.Machine.Vsphere != nil:
-		return MachineFlavorVsphere
-	case c.Machine.Kubevirt != nil:
-		return MachineFlavorKubevirt
+	case c.Machine.BareMetal != nil:
+		return MachineFlavorBareMetal
+	case c.Machine.VSphere != nil:
+		return MachineFlavorVSphere
+	case c.Machine.KubeVirt != nil:
+		return MachineFlavorKubeVirt
 	default:
 		return ""
 	}
@@ -380,14 +380,14 @@ type MachineNetworkSpec struct {
 	Gateway    string                     `yaml:"gateway,omitempty" json:"gateway,omitempty"`
 	DNSServers []string                   `yaml:"dnsServers,omitempty" json:"dnsServers,omitempty"`
 	Libvirt    *MachineNetworkLibvirtSpec `yaml:"libvirt,omitempty" json:"libvirt,omitempty"`
-	Vsphere    *MachineNetworkVsphereSpec `yaml:"vsphere,omitempty" json:"vsphere,omitempty"`
+	VSphere    *MachineNetworkVSphereSpec `yaml:"vsphere,omitempty" json:"vsphere,omitempty"`
 }
 
 type MachineNetworkLibvirtSpec struct {
 	Bridge string `yaml:"bridge" json:"bridge"`
 }
 
-type MachineNetworkVsphereSpec struct {
+type MachineNetworkVSphereSpec struct {
 	Portgroup string `yaml:"portgroup,omitempty" json:"portgroup,omitempty"`
 }
 
@@ -397,8 +397,8 @@ type MachineSpec struct {
 	Interfaces      map[string]MachineInterfaceSpec `yaml:"interfaces,omitempty" json:"interfaces,omitempty"`
 	RootDeviceHints *RootDeviceHintsSpec            `yaml:"rootDeviceHints,omitempty" json:"rootDeviceHints,omitempty"`
 	Libvirt         *MachineLibvirtSpec             `yaml:"libvirt,omitempty" json:"libvirt,omitempty"`
-	Baremetal       *MachineBaremetalSpec           `yaml:"baremetal,omitempty" json:"baremetal,omitempty"`
-	Vsphere         *MachineVsphereSpec             `yaml:"vsphere,omitempty" json:"vsphere,omitempty"`
+	BareMetal       *MachineBareMetalSpec           `yaml:"baremetal,omitempty" json:"baremetal,omitempty"`
+	VSphere         *MachineVSphereSpec             `yaml:"vsphere,omitempty" json:"vsphere,omitempty"`
 }
 
 type MachineResourcesSpec struct {
@@ -429,7 +429,7 @@ type MachineLibvirtSpec struct {
 	HostRef LocalObjectReference `yaml:"hostRef" json:"hostRef"`
 }
 
-type MachineBaremetalSpec struct {
+type MachineBareMetalSpec struct {
 	BootMACAddress string          `yaml:"bootMACAddress,omitempty" json:"bootMACAddress,omitempty"`
 	BMC            *MachineBMCSpec `yaml:"bmc,omitempty" json:"bmc,omitempty"`
 }
@@ -442,7 +442,7 @@ type MachineBMCSpec struct {
 	DisableCertificateVerification bool      `yaml:"disableCertificateVerification,omitempty" json:"disableCertificateVerification,omitempty"`
 }
 
-type MachineVsphereSpec struct {
+type MachineVSphereSpec struct {
 	Datastore string `yaml:"datastore,omitempty" json:"datastore,omitempty"`
 	Folder    string `yaml:"folder,omitempty" json:"folder,omitempty"`
 	Template  string `yaml:"template,omitempty" json:"template,omitempty"`
@@ -532,12 +532,12 @@ func MachineFlavor(provider InfrastructureProvider) string {
 	switch {
 	case provider.Spec.Machine.Libvirt != nil:
 		return MachineFlavorLibvirt
-	case provider.Spec.Machine.Baremetal != nil:
-		return MachineFlavorBaremetal
-	case provider.Spec.Machine.Vsphere != nil:
-		return MachineFlavorVsphere
-	case provider.Spec.Machine.Kubevirt != nil:
-		return MachineFlavorKubevirt
+	case provider.Spec.Machine.BareMetal != nil:
+		return MachineFlavorBareMetal
+	case provider.Spec.Machine.VSphere != nil:
+		return MachineFlavorVSphere
+	case provider.Spec.Machine.KubeVirt != nil:
+		return MachineFlavorKubeVirt
 	default:
 		return ""
 	}
@@ -547,10 +547,10 @@ func MachineKind(machine MachineSpec) string {
 	switch {
 	case machine.Libvirt != nil:
 		return MachineFlavorLibvirt
-	case machine.Baremetal != nil:
-		return MachineFlavorBaremetal
-	case machine.Vsphere != nil:
-		return MachineFlavorVsphere
+	case machine.BareMetal != nil:
+		return MachineFlavorBareMetal
+	case machine.VSphere != nil:
+		return MachineFlavorVSphere
 	default:
 		return ""
 	}

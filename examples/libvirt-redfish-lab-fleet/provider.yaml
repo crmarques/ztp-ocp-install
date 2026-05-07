@@ -36,10 +36,10 @@ spec:
 apiVersion: gitups.io/v1alpha1
 kind: InfrastructureProvider
 metadata:
-  name: lab-spoke-01-provider
+  name: lab-managed-01-provider
 spec:
   hosts:
-    spoke-01-host:
+    managed-01-host:
       ssh:
         address: 10.10.10.2
         user: gitups
@@ -51,7 +51,7 @@ spec:
   machine:
     libvirt:
       hostRefs:
-        - name: spoke-01-host
+        - name: managed-01-host
       bmcEmulation:
         enabled: true
         protocol: redfish
@@ -62,19 +62,19 @@ spec:
   loadBalancer:
     haProxy:
       hostRef:
-        name: spoke-01-host
+        name: managed-01-host
   nameResolution:
     hostsFile:
       hostRefs:
-        - name: spoke-01-host
+        - name: managed-01-host
 ---
 apiVersion: gitups.io/v1alpha1
 kind: InfrastructureProvider
 metadata:
-  name: lab-spoke-02-provider
+  name: lab-managed-02-provider
 spec:
   hosts:
-    spoke-02-host:
+    managed-02-host:
       ssh:
         address: 10.10.10.3
         user: gitups
@@ -86,7 +86,7 @@ spec:
   machine:
     libvirt:
       hostRefs:
-        - name: spoke-02-host
+        - name: managed-02-host
       bmcEmulation:
         enabled: true
         protocol: redfish
@@ -97,8 +97,8 @@ spec:
   loadBalancer:
     haProxy:
       hostRef:
-        name: spoke-02-host
+        name: managed-02-host
   nameResolution:
     hostsFile:
       hostRefs:
-        - name: spoke-02-host
+        - name: managed-02-host

@@ -4,6 +4,6 @@
   ansible.builtin.fail:
     msg: |
       cluster_substrate_vsphere is a scaffold. To enable, extend
-      InfrastructureProviderSpec.Machine.Vsphere with host/datastore/folder fields
+      InfrastructureProviderSpec.Machine.VSphere with host/datastore/folder fields
       and project them in internal/render/vars.go, then implement the
       vCenter session + clone tasks here.

@@ -78,14 +78,14 @@ gitups destroy all -f test/e2e/local-libvirt-1-host-1-sno-hub --state-dir /tmp/g
 
 The provider's `spec.registry.mirrorRegistry` capability bootstraps the local
 registry automatically: the `provider_mirror_registry` role brings up
-`docker.io/library/registry:2` on the control host (port `5000`) with htpasswd
+`docker.io/library/registry:3.1.1@sha256:85347ed2ecde64161c7a4788a4d7d3dcc9d6f86f7be95834022e3c6a423a945a` on the control host (port `5000`) with htpasswd
 auth and the generated self-signed CA, then mirrors the OpenShift release
 payload, every `componentImages.<cat>.<type>` `public→local` pair, and the
 registry-server image itself. Subsequent applies are fully air-gapped from the
 cluster network's perspective.
 
 First apply only requires outbound public reachability for the provider host
-to reach `docker.io/library/registry:2`, `quay.io/openshift-release-dev/*`, and
+to reach `docker.io/library/registry:3.1.1@sha256:85347ed2ecde64161c7a4788a4d7d3dcc9d6f86f7be95834022e3c6a423a945a`, `quay.io/openshift-release-dev/*`, and
 each `componentImages[*].public` ref. After the role completes once, the
 local mirror serves them.
 

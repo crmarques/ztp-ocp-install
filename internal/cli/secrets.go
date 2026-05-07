@@ -27,6 +27,7 @@ import (
 
 	"github.com/crmarques/ztp-ocp-install-lab/api/v1alpha1"
 	"github.com/crmarques/ztp-ocp-install-lab/internal/infra"
+	"github.com/crmarques/ztp-ocp-install-lab/internal/secretref"
 )
 
 type generatedSelfSignedRequest struct {
@@ -48,49 +49,8 @@ func newSecretsCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 	return cmd
 }
 
-// resolvedSecretPath returns the absolute path for a named secret as the
-// rendered Ansible vars expose it: file-based keys resolve to their declared
-// source path; generated and undeclared keys fall back to <secretsDir>/<name>.
 func resolvedSecretPath(name string, env *v1alpha1.Environment, secretsDir string) string {
-	if name == "" {
-		return ""
-	}
-	if env != nil {
-		if key, ok := env.Spec.Keys[name]; ok && key.File != "" {
-			envSourceDir := filepath.Dir(env.SourcePath)
-			if path, err := resolveKeyFilePath(key.File, envSourceDir); err == nil {
-				return path
-			}
-		}
-	}
-	return filepath.Join(secretsDir, name)
-}
-
-func resolveKeyFilePath(file, envSourceDir string) (string, error) {
-	if file == "" {
-		return "", errors.New("file source is empty")
-	}
-	if strings.HasPrefix(file, "~/") || file == "~" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("resolve home directory: %w", err)
-		}
-		if file == "~" {
-			return home, nil
-		}
-		return filepath.Join(home, file[2:]), nil
-	}
-	if filepath.IsAbs(file) {
-		return filepath.Clean(file), nil
-	}
-	if envSourceDir == "" || envSourceDir == "." {
-		abs, err := filepath.Abs(file)
-		if err != nil {
-			return "", fmt.Errorf("resolve %s: %w", file, err)
-		}
-		return abs, nil
-	}
-	return filepath.Clean(filepath.Join(envSourceDir, file)), nil
+	return secretref.ResolvePath(name, env, secretsDir)
 }
 
 func primaryEnvironmentForSync(state v1alpha1.State) *v1alpha1.Environment {

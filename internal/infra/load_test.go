@@ -11,7 +11,7 @@ import (
 )
 
 func TestLoadNormalizeValidateExamples(t *testing.T) {
-	state, err := LoadNormalizeValidate([]string{"../../examples/infra"})
+	state, err := LoadNormalizeValidate([]string{"../../examples/libvirt-redfish-lab-fleet"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
@@ -423,6 +423,21 @@ spec:
       name: pull-secret
     clusterSSHKeyRef:
       name: ssh-key
+  keys:
+    pull-secret:
+      file: ./pull-secret
+    ssh-key:
+      file: ./ssh-key.pub
+    default-key:
+      file: ./default-key
+    registry-lab-credentials:
+      generated:
+        credentials:
+          username: admin
+    registry-lab-ca:
+      generated:
+        selfSignedCertificate:
+          commonName: registry.lab.test
 ---
 apiVersion: gitups.io/v1alpha1
 kind: InfrastructureProvider
@@ -504,6 +519,15 @@ spec:
       name: pull-secret
     clusterSSHKeyRef:
       name: ssh-key
+  keys:
+    pull-secret:
+      file: ./pull-secret
+    ssh-key:
+      file: ./ssh-key.pub
+    baremetal-bmc:
+      generated:
+        credentials:
+          username: admin
 ---
 apiVersion: gitups.io/v1alpha1
 kind: InfrastructureProvider
@@ -575,6 +599,13 @@ spec:
       name: pull-secret
     clusterSSHKeyRef:
       name: ssh-key
+  keys:
+    pull-secret:
+      file: ./pull-secret
+    ssh-key:
+      file: ./ssh-key.pub
+    example-vcenter:
+      file: ./vcenter
 ---
 apiVersion: gitups.io/v1alpha1
 kind: InfrastructureProvider
@@ -656,15 +687,6 @@ const disconnectedRegistriesBlock = `  ocpInstall:
           - source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
             mirrors:
               - registry.lab.test:5000/openshift/release-images
-  keys:
-    registry-lab-ca:
-      generated:
-        selfSignedCertificate:
-          commonName: registry.lab.test
-    registry-lab-credentials:
-      generated:
-        credentials:
-          username: admin
 `
 
 func disconnectedYAML(name, providerName, cidr, apiVIP, ingressVIP, nodeIP string, withMirrorRegistry bool, mirrorRegistryPort int) string {
@@ -753,6 +775,12 @@ func TestValidationRejectsMirrorRegistryPortMismatch(t *testing.T) {
 }
 
 func keysFixtureYAML(keysBlock string) string {
+	keysBlock = strings.Replace(keysBlock, "  keys:\n", `  keys:
+    pull-secret:
+      file: ./pull-secret
+    ssh-key:
+      file: ./ssh-key.pub
+`, 1)
 	return `apiVersion: gitups.io/v1alpha1
 kind: Environment
 metadata:

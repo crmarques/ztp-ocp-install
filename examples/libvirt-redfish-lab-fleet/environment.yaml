@@ -1,9 +1,9 @@
 apiVersion: gitups.io/v1alpha1
 kind: Environment
 metadata:
-  name: libvirt-1-host
+  name: lab
 spec:
-  baseDomain: gitups.test
+  baseDomain: example.com
   ocpInstall:
     connected: {}
   secrets:
@@ -12,13 +12,13 @@ spec:
     clusterSSHKeyRef:
       name: cluster-admin-key
   keys:
-    cluster-admin-key:
-      file: ~/.ssh/gitups-ssh-key.pub
-    remote-libvirt-host-admin-key:
-      file: ~/.ssh/gitups-ssh-key
     openshift-pull-secret:
       file: ~/.gitups/secrets/openshift-pull-secret
-    libvirt-1-host-bmc-credentials:
+    cluster-admin-key:
+      file: ~/.ssh/gitups-ssh-key.pub
+    lab-provider-key:
+      file: ~/.ssh/gitups-ssh-key
+    lab-bmc-credentials:
       generated:
         credentials:
           username: admin
@@ -26,7 +26,3 @@ spec:
     release:
       channel: stable-4.21
       version: 4.21.12
-  componentImages:
-    load-balancer:
-      haproxy:
-        public: docker.io/library/haproxy:3.3.8@sha256:f14a1788b56894e7ec7b5cb0ca09dbb959b674cf3c980f92139ec008167d4a91

@@ -21,10 +21,19 @@ ANSIBLE_GALAXY ?= $(shell command -v ansible-galaxy 2>/dev/null)
 COLLECTIONS_REQUIREMENTS = $(ANSIBLE_SRC_DIR)/collections/requirements.yml
 EMBED_COLLECTIONS_DIR = $(EMBED_BUNDLE_DIR)/collections
 COLLECTIONS_STAMP = $(EMBED_COLLECTIONS_DIR)/.stamp
+GOFMT_FILES = $(shell find . -path './internal/embedded/bundle' -prune -o -name '*.go' -print)
+ANSIBLE_SYNTAX_ENV = ANSIBLE_LOCAL_TEMP=/tmp/gitups-ansible-local ANSIBLE_REMOTE_TEMP=/tmp/gitups-ansible-remote ANSIBLE_ROLES_PATH=ansible/roles ANSIBLE_COLLECTIONS_PATH=internal/embedded/bundle/collections ANSIBLE_FILTER_PLUGINS=ansible/filter_plugins
+ANSIBLE_SYNTAX_PLAYBOOKS = \
+	ansible/playbooks/preflight.yml \
+	ansible/playbooks/apply-infra.yml \
+	ansible/playbooks/apply-ocp.yml \
+	ansible/playbooks/destroy-all.yml \
+	ansible/playbooks/provider-prepare.yml \
+	ansible/playbooks/setup-controller-clis.yml
 
 E2E_CASES = $(notdir $(patsubst %/,%,$(wildcard $(E2E_DIR)/*/)))
 
-.PHONY: all build sync-bundle test validate plan check-e2e-deps check-e2e-case list-e2e-cases e2e-dry-run e2e e2e-destroy-dry-run e2e-destroy clean clean-e2e-state help
+.PHONY: all build sync-bundle test validate plan check check-gofmt ansible-syntax-check stale-term-check provider-swap-check check-e2e-deps check-e2e-case list-e2e-cases e2e-dry-run e2e e2e-destroy-dry-run e2e-destroy clean clean-e2e-state help
 
 all: build
 
@@ -48,8 +57,8 @@ $(COLLECTIONS_STAMP): $(COLLECTIONS_REQUIREMENTS)
 	@$(ANSIBLE_GALAXY) collection install -r $(COLLECTIONS_REQUIREMENTS) -p $(EMBED_COLLECTIONS_DIR) >/dev/null
 	@# Slim embedded collections: strip test/CI/docs trees that bloat the
 	@# binary without contributing to runtime module execution.
-	@find $(EMBED_COLLECTIONS_DIR)/ansible_collections -maxdepth 4 -type d \( \
-		-name tests -o -name docs -o -name changelogs \
+	@find $(EMBED_COLLECTIONS_DIR)/ansible_collections -maxdepth 8 -type d \( \
+		-name tests -o -name docs -o -name examples -o -name changelogs \
 		-o -name .github -o -name .azure-pipelines -o -name ci \
 		\) -exec rm -rf {} +
 	@touch $@
@@ -59,6 +68,29 @@ $(BIN_DIR):
 
 test:
 	$(GO) test ./...
+
+check: check-gofmt
+	$(GO) vet ./...
+	$(GO) test ./...
+	$(MAKE) ansible-syntax-check
+	$(MAKE) stale-term-check
+	$(MAKE) provider-swap-check
+
+check-gofmt:
+	@test -z "$$(gofmt -l $(GOFMT_FILES))" || { gofmt -l $(GOFMT_FILES); exit 1; }
+
+ansible-syntax-check: check-e2e-deps
+	@for playbook in $(ANSIBLE_SYNTAX_PLAYBOOKS); do \
+		$(ANSIBLE_SYNTAX_ENV) $(ANSIBLE_PLAYBOOK) --syntax-check -i localhost, "$$playbook"; \
+	done
+
+stale-term-check:
+	@! rg -n 'connectivity[.](mode|connected|restricted|disconnected)|spec[.]connectivity|gitups_connectivity|localRegistry|gitups diff|spoke|examples/infra|ADR 0003' README.md docs specs examples test
+
+provider-swap-check:
+	diff -u examples/libvirt-redfish-fleet/environment.yaml examples/baremetal-redfish-fleet/environment.yaml
+	diff -u examples/libvirt-redfish-fleet/ocp-cluster-hub.yaml examples/baremetal-redfish-fleet/ocp-cluster-hub.yaml
+	diff -u examples/libvirt-redfish-fleet/ocp-cluster-managed-01.yaml examples/baremetal-redfish-fleet/ocp-cluster-managed-01.yaml
 
 validate: build
 	$(BIN_DIR)/$(BINARY) validate -f examples/libvirt-redfish-fleet
@@ -104,6 +136,7 @@ help:
 		'Targets:' \
 		'  build            Build bin/gitups (syncs the embedded ansible bundle first)' \
 		'  sync-bundle      Refresh internal/embedded/bundle from /ansible without building' \
+		'  check            Run formatting, Go, Ansible, stale-term, and provider-swap checks' \
 		'  test             Run Go tests' \
 		'  validate         Validate examples/libvirt-redfish-fleet' \
 		'  plan             Preview examples/libvirt-redfish-fleet into .state' \

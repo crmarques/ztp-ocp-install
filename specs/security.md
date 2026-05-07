@@ -81,6 +81,16 @@ service-user access become harder and less predictable.
   tags such as `latest`.
 - Verify downloaded artifacts where practical.
 - Keep generated assets reproducible.
+- Dependency additions, upgrades, and periodic dependency reviews must
+  pass two standing checks:
+  - **Community trust:** every direct dependency must come from a trusted,
+    widely-used upstream or vendor source with active maintenance. Replace
+    abandoned modules, one-off forks, and dependencies with unresolved
+    maintainer or provenance concerns.
+  - **Latest stable pin:** every direct dependency must be pinned to the
+    latest stable version available from its canonical source. Do not leave
+    patch-level drift, semver ranges, floating image tags, or preview tags
+    in source-controlled dependency declarations.
 - Go module dependencies must come from trusted, widely-used upstreams
   and be pinned via `go.mod` and `go.sum`. Reject one-off forks,
   abandoned modules, and `replace` directives that point at a fork. The

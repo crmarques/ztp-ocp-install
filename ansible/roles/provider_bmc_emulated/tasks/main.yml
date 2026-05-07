@@ -82,7 +82,12 @@
 
 - name: Verify existing sushy htpasswd bcrypt entry
   ansible.builtin.command:
-    cmd: "htpasswd -vbB {{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/htpasswd {{ gitups_bmc_username }} {{ gitups_bmc_password }}"
+    argv:
+      - htpasswd
+      - -viB
+      - "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/htpasswd"
+      - "{{ gitups_bmc_username }}"
+    stdin: "{{ gitups_bmc_password }}"
   register: gitups_bmc_htpasswd_verify
   changed_when: false
   failed_when: false
@@ -91,7 +96,12 @@
 
 - name: Write sushy htpasswd file with bcrypt entry
   ansible.builtin.command:
-    cmd: "htpasswd -bBc {{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/htpasswd {{ gitups_bmc_username }} {{ gitups_bmc_password }}"
+    argv:
+      - htpasswd
+      - -iBc
+      - "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/htpasswd"
+      - "{{ gitups_bmc_username }}"
+    stdin: "{{ gitups_bmc_password }}"
   no_log: true
   register: gitups_bmc_htpasswd
   when:

@@ -40,11 +40,9 @@
   no_log: true
 
 - name: Locate oc binary on host
-  ansible.builtin.command:
-    argv:
-      - command
-      - -v
-      - oc
+  ansible.builtin.shell: "command -v oc"
+  args:
+    executable: /bin/sh
   register: gitups_mirror_registry_oc_probe
   changed_when: false
   failed_when: false

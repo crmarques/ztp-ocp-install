@@ -11,3 +11,14 @@ spec:
       name: openshift-pull-secret
     clusterSSHKeyRef:
       name: cluster-admin-key
+  keys:
+    openshift-pull-secret:
+      file: ~/.gitups/secrets/openshift-pull-secret
+    cluster-admin-key:
+      file: ~/.ssh/gitups-ssh-key.pub
+    edge-host-ssh:
+      file: ~/.ssh/gitups-ssh-key
+    baremetal-redfish-bmc:
+      generated:
+        credentials:
+          username: admin

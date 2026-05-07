@@ -6,7 +6,7 @@ spec:
   hosts:
     remote-libvirt-host:
       ssh:
-        address: 10.73.7.236
+        address: 192.168.15.26
         user: crmarques
         keyRef:
           name: remote-libvirt-host-admin-key

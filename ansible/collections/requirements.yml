@@ -1,14 +1,17 @@
 ---
+# Trusted collection dependencies. Keep this list exact-pinned: every entry
+# must come from an official Ansible community or vendor namespace
+# (community.*, ansible.*, containers.*, redhat.*).
 collections:
   - name: community.general
-    version: ">=10.0.0,<11.0.0"
+    version: "12.6.0"
   - name: community.libvirt
-    version: ">=1.3.0,<2.0.0"
+    version: "2.2.0"
   - name: containers.podman
-    version: ">=1.16.0,<2.0.0"
+    version: "1.20.1"
   - name: ansible.posix
-    version: ">=2.0.0,<3.0.0"
+    version: "2.1.0"
   - name: community.crypto
-    version: ">=2.22.0,<3.0.0"
+    version: "3.2.0"
   - name: ansible.utils
-    version: ">=5.0.0,<6.0.0"
+    version: "6.0.2"

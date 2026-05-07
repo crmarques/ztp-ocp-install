@@ -7,6 +7,11 @@ separate machine; gitups reaches the provider over SSH. Connected install
 For the variant where control = provider, see
 [`local-libvirt-1-host-1-sno-hub`](../local-libvirt-1-host-1-sno-hub/README.md).
 
+Prefer to run `gitups` from a container instead of installing the controller
+toolchain on the host? Skip ahead to
+[Running the controller in a container](#running-the-controller-in-a-container)
+for an end-to-end recipe.
+
 ## Topology
 
 | Host | Address | Role |
@@ -44,13 +49,13 @@ Compiles the CLI and syncs the embedded Ansible bundle into the binary.
 ### 2. Bootstrap the controller
 
 ```text
-bin/gitups setup controller -f test/e2e/libvirt-1-host-1-sno-hub
-bin/gitups doctor
+bin/gitups doctor fix -f test/e2e/libvirt-1-host-1-sno-hub --yes
+bin/gitups doctor check -f test/e2e/libvirt-1-host-1-sno-hub --yes
 ```
 
 Installs a pinned Ansible venv and the OCP CLIs (`oc`, `kubectl`,
 `openshift-install`) at the release version declared in `environment.yaml`.
-`doctor` confirms every controller dependency is satisfied before you proceed.
+`doctor check` confirms every controller dependency is satisfied before you proceed.
 
 ### 3. Stage secrets
 
@@ -74,10 +79,9 @@ ssh-copy-id -i ~/.ssh/gitups-ssh-key.pub root@<provider-host-ip>
 install -m 0600 ~/pull-secret.json ~/.gitups/secrets/openshift-pull-secret
 ```
 
-Then sync file-sourced keys and generate the remaining credentials:
+Then ensure file-sourced keys exist and generate remaining credentials:
 
 ```text
-bin/gitups secrets sync -f test/e2e/libvirt-1-host-1-sno-hub
 bin/gitups secrets generate -f test/e2e/libvirt-1-host-1-sno-hub
 ```
 
@@ -116,32 +120,68 @@ chmod 600 ~/.ssh/gitups-ssh-key
 chmod 644 ~/.ssh/gitups-ssh-key.pub
 ```
 
-Then continue from step 1 (build + setup controller); skip step 3.
+Then continue from step 1 (build + doctor fix); skip step 3.
 
-## Running the controller in a container (same machine)
+## Running the controller in a container
 
-Use this to simulate the control-host / provider-host separation on a single
-machine. The container acts as the control host; the Linux host is the provider
-(libvirt runs on it). SSH leaves the container and re-enters the host at its
-real IP.
+End-to-end recipe that runs `gitups` from a UBI9 container while libvirt stays
+on the host. The container is the control host; the Linux host is the
+provider. SSH leaves the container with `--network=host` and re-enters the
+host at its real IP. The host-installed OCP CLIs are bind-mounted into the
+container, so the image does not bundle them.
 
 **Before starting:** set `provider.yaml: spec.hosts.remote-libvirt-host.ssh.address`
 to the host machine's real IP (not `127.0.0.1`; the SSH daemon must accept
-connections on that address).
+connections on that address). Stage the SSH key and pull secret on the host as
+described in [Stage secrets](#3-stage-secrets).
 
-Build a minimal controller image once:
+Replace `crmarques` / `/home/crmarques` and `4.21.10` below with your
+username and the OCP release declared in `environment.yaml`.
+
+### 1. Build the binary
 
 ```text
-podman build -t gitups-controller - <<'EOF'
-FROM fedora:41
-RUN dnf install -y python3 openssh-clients && dnf clean all
+make build
+```
+
+### 2. Build the controller image
+
+The image bakes the freshly built `gitups` binary in and creates a non-root
+user. NOPASSWD sudo is required for the playbooks.
+
+```text
+podman build -t gitups-controller-4.21.10 -f - . <<'EOF'
+FROM docker.io/redhat/ubi9:9.7
+
+RUN dnf install -y sudo \
+    && dnf clean all \
+    && rm -rf /var/cache/dnf
+
+RUN useradd \
+    --uid 10001 \
+    --create-home \
+    --home-dir /home/crmarques \
+    --shell /sbin/nologin \
+    crmarques
+
+RUN echo 'crmarques ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/crmarques \
+    && chmod 0440 /etc/sudoers.d/crmarques
+
+RUN install -d -o 10001 -g 10001 -m 0700 /home/crmarques/.ssh \
+    && install -d -o 10001 -g 10001 -m 0755 /home/crmarques/.gitups \
+    && install -d -o 10001 -g 10001 -m 0700 /home/crmarques/.gitups/secrets
+
+COPY bin/gitups /usr/local/bin/gitups
+
+USER 10001
 EOF
 ```
 
-Run any `gitups` command inside the container. `--network=host` lets the
-container reach the provider at its real IP. `GITUPS_HOME` redirects gitups to
-the mounted directory so the container reuses the ansible venv, OCP tools, and
-secrets already installed on the host — no re-bootstrap needed.
+### 3. Start the controller shell
+
+`--userns=keep-id` maps uid 10001 inside to your host uid so bind mounts are
+readable. The state dir is mounted with the same path inside and outside the
+container, so generated files remain accessible from the host afterwards.
 
 ```text
 STATE_DIR=/tmp/gitups-libvirt-1-host-1-sno-hub
@@ -149,42 +189,39 @@ mkdir -p "$STATE_DIR"
 
 podman run --rm -it \
   --network=host \
-  -e GITUPS_HOME=/gitups-home \
-  -v "$HOME/.gitups":/gitups-home:Z \
-  -v "$HOME/.ssh/gitups-ssh-key":/root/.ssh/gitups-ssh-key:ro,Z \
-  -v "$HOME/.ssh/gitups-ssh-key.pub":/root/.ssh/gitups-ssh-key.pub:ro,Z \
-  -v "$(pwd)":/workspace:ro,Z \
+  --userns=keep-id:uid=10001,gid=10001 \
+  -v "$HOME/.ssh/gitups-ssh-key":/home/crmarques/.ssh/gitups-ssh-key:ro,Z \
+  -v "$HOME/.ssh/gitups-ssh-key.pub":/home/crmarques/.ssh/gitups-ssh-key.pub:ro,Z \
+  -v "$HOME/.gitups/secrets/openshift-pull-secret":/home/crmarques/.gitups/secrets/openshift-pull-secret:ro,Z \
+  -v "$HOME/.ssh/known_hosts":/home/crmarques/.ssh/known_hosts:ro,Z \
+  -v "$(pwd)"/test/e2e:/gitups/test/e2e:ro,Z \
+  -v /usr/local/bin/openshift-install:/usr/local/bin/openshift-install:Z \
+  -v /usr/local/bin/kubectl:/usr/local/bin/kubectl:Z \
+  -v /usr/local/bin/oc:/usr/local/bin/oc:Z \
   -v "$STATE_DIR:$STATE_DIR:Z" \
-  -w /workspace \
-  gitups-controller \
-  bin/gitups apply infra -f test/e2e/libvirt-1-host-1-sno-hub \
-    --state-dir "$STATE_DIR" --yes
+  -u crmarques \
+    gitups-controller-4.21.10 \
+      /bin/bash
 ```
 
-Swap the last two lines to run any other verb (`doctor`, `plan`, `apply ocp`,
-`destroy all`, etc.). The state dir mount uses the same path inside and outside
-the container so generated files are accessible from the host after the run.
-
-To simulate a fully clean controller (no shared venv), omit the
-`GITUPS_HOME` mount and run `setup controller` as the first command:
+### 4. Drive the install from inside the container
 
 ```text
-podman run --rm -it \
-  --network=host \
-  -v "$HOME/.gitups/secrets":/root/.gitups/secrets:ro,Z \
-  -v "$HOME/.ssh/gitups-ssh-key":/root/.ssh/gitups-ssh-key:ro,Z \
-  -v "$HOME/.ssh/gitups-ssh-key.pub":/root/.ssh/gitups-ssh-key.pub:ro,Z \
-  -v "$(pwd)":/workspace:ro,Z \
-  -v "$STATE_DIR:$STATE_DIR:Z" \
-  -w /workspace \
-  gitups-controller \
-  sh -c 'bin/gitups setup controller -f test/e2e/libvirt-1-host-1-sno-hub && \
-         bin/gitups apply infra -f test/e2e/libvirt-1-host-1-sno-hub \
-           --state-dir '"$STATE_DIR"' --yes'
+gitups doctor check -f /gitups/test/e2e/libvirt-1-host-1-sno-hub/ --yes
+gitups doctor fix -f /gitups/test/e2e/libvirt-1-host-1-sno-hub/ --yes
+
+gitups secrets generate -f /gitups/test/e2e/libvirt-1-host-1-sno-hub/
+
+gitups apply infra -f /gitups/test/e2e/libvirt-1-host-1-sno-hub/ --state-dir /tmp/gitups-libvirt-1-host-1-sno-hub --yes
+
+gitups apply ocp -f /gitups/test/e2e/libvirt-1-host-1-sno-hub/ --state-dir /tmp/gitups-libvirt-1-host-1-sno-hub --yes
 ```
 
-In this form the ansible venv is created inside the container and discarded
-when it exits; each run re-bootstraps from scratch.
+### 5. Tear down
+
+```text
+gitups destroy all -f /gitups/test/e2e/libvirt-1-host-1-sno-hub/ --state-dir /tmp/gitups-libvirt-1-host-1-sno-hub --yes
+```
 
 ## Secrets used
 

@@ -11,13 +11,13 @@ import (
 	"github.com/crmarques/ztp-ocp-install-lab/internal/infra"
 )
 
-func TestOperatorCheckWithStateRunsFullPreflight(t *testing.T) {
+func TestPreflightWithStateRunsFullPreflight(t *testing.T) {
 	stubPreflightAlwaysOK(t)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
 		"preflight",
-		"-f", "../../examples/infra",
+		"-f", "../../examples/libvirt-redfish-lab-fleet",
 		"--dry-run",
 	}, nil, &stdout, &stderr)
 	if code != 0 {
@@ -34,7 +34,43 @@ func TestOperatorCheckWithStateRunsFullPreflight(t *testing.T) {
 	}
 }
 
-func TestOperatorBootstrapPlanVenvModeStaysUserOwned(t *testing.T) {
+func TestDoctorCheckAcceptsStateAndYesFlag(t *testing.T) {
+	stubDoctorLookPathAlwaysOK(t)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Run(context.Background(), []string{
+		"doctor",
+		"check",
+		"-f", "../../test/e2e/libvirt-1-host-1-sno-hub",
+		"--yes",
+	}, nil, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected ok, got %d, stderr=%s", code, stderr.String())
+	}
+	out := stdout.String()
+	for _, expected := range []string{
+		"Doctor check",
+		"openshift-install on PATH",
+		"doctor check: all",
+	} {
+		if !strings.Contains(out, expected) {
+			t.Fatalf("stdout missing %q\n%s", expected, out)
+		}
+	}
+}
+
+func stubDoctorLookPathAlwaysOK(t *testing.T) {
+	t.Helper()
+	origLookPath := defaultPreflightDeps.lookPath
+	defaultPreflightDeps.lookPath = func(name string, _ []string) (string, error) {
+		return filepath.Join("/usr/bin", name), nil
+	}
+	t.Cleanup(func() {
+		defaultPreflightDeps.lookPath = origLookPath
+	})
+}
+
+func TestControllerBootstrapPlanVenvModeStaysUserOwned(t *testing.T) {
 	plan, err := controllerBootstrapPlan()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -135,7 +171,7 @@ func TestDoctorFixDryRunPlansCLIsFromState(t *testing.T) {
 	for _, expected := range []string{
 		"install OCP CLIs",
 		"setup-controller-clis.yml",
-		"gitups_openshift_release_version=4.21.10",
+		"gitups_openshift_release_version=4.21.12",
 		"gitups_clis_install_dir=" + wantInstallDir,
 	} {
 		if !strings.Contains(out, expected) {
@@ -154,7 +190,7 @@ func TestStateOpenshiftReleaseVersionPicksFirstNonEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load fixture: %v", err)
 	}
-	if got := stateOpenshiftReleaseVersion(state); got != "4.21.10" {
-		t.Fatalf("got %q want 4.21.10", got)
+	if got := stateOpenshiftReleaseVersion(state); got != "4.21.12" {
+		t.Fatalf("got %q want 4.21.12", got)
 	}
 }
