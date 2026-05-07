@@ -797,7 +797,7 @@ func TestApplyDryRunRendersAndPrintsAnsibleCommandsForAllPhases(t *testing.T) {
 	if got := strings.Count(output, "--ask-become-pass"); got != 1 {
 		t.Fatalf("infra apply should ask become once, got %d prompts\n%s", got, output)
 	}
-	for _, unexpected := range []string{"ocp-install.yml", "gitops-publish.yml"} {
+	for _, unexpected := range []string{"clusters-install.yml", "gitops-publish.yml"} {
 		if strings.Contains(output, unexpected) {
 			t.Fatalf("infra apply leaked %q\n%s", unexpected, output)
 		}
@@ -864,7 +864,7 @@ func TestApplyHubDryRunOnlyRunsHubScope(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"apply", "ocp",
+		"apply", "clusters",
 		"-f", "../../examples/libvirt-redfish-lab-fleet",
 		"--state-dir", stateDir,
 		"--dry-run",
@@ -873,10 +873,10 @@ func TestApplyHubDryRunOnlyRunsHubScope(t *testing.T) {
 		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
 	}
 	output := stdout.String()
-	if !strings.Contains(output, "playbooks/apply-ocp.yml") {
-		t.Fatalf("stdout missing apply-ocp.yml: %s", output)
+	if !strings.Contains(output, "playbooks/apply-clusters.yml") {
+		t.Fatalf("stdout missing apply-clusters.yml: %s", output)
 	}
-	for _, leaked := range []string{"provider-prepare.yml", "cluster-prepare.yml", "ocp-install.yml", "gitops-publish.yml"} {
+	for _, leaked := range []string{"provider-prepare.yml", "cluster-prepare.yml", "clusters-install.yml", "gitops-publish.yml"} {
 		if strings.Contains(output, leaked) {
 			t.Fatalf("hub-scope apply leaked %s:\n%s", leaked, output)
 		}
@@ -1007,7 +1007,7 @@ func TestDestroyScopedHubKeepsStateDir(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"destroy", "ocp",
+		"destroy", "clusters",
 		"-f", "../../examples/libvirt-redfish-lab-fleet",
 		"--state-dir", stateDir,
 		"--yes",
@@ -1148,7 +1148,7 @@ func TestApplyDryRunUsesAnsibleBecomePrompt(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"apply", "ocp",
+		"apply", "clusters",
 		"-f", "../../test/e2e/libvirt-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 		"--dry-run",
@@ -1162,14 +1162,14 @@ func TestApplyDryRunUsesAnsibleBecomePrompt(t *testing.T) {
 	if !strings.Contains(stdout.String(), "--ask-become-pass") {
 		t.Fatalf("stdout must include --ask-become-pass for remote become prompts\n%s", stdout.String())
 	}
-	if !strings.Contains(stdout.String(), "dry-run ansible command [workflow=ocp]: ansible-playbook") {
-		t.Fatalf("stdout must use the ocp workflow playbook\n%s", stdout.String())
+	if !strings.Contains(stdout.String(), "dry-run ansible command [workflow=clusters]: ansible-playbook") {
+		t.Fatalf("stdout must use the clusters workflow playbook\n%s", stdout.String())
 	}
-	if !strings.Contains(stdout.String(), "playbooks/apply-ocp.yml") {
-		t.Fatalf("stdout missing apply-ocp wrapper playbook\n%s", stdout.String())
+	if !strings.Contains(stdout.String(), "playbooks/apply-clusters.yml") {
+		t.Fatalf("stdout missing apply-clusters wrapper playbook\n%s", stdout.String())
 	}
-	if strings.Contains(stdout.String(), "playbooks/ocp-install.yml") {
-		t.Fatalf("apply ocp should run through apply-ocp.yml, not directly through ocp-install.yml\n%s", stdout.String())
+	if strings.Contains(stdout.String(), "playbooks/clusters-install.yml") {
+		t.Fatalf("apply clusters should run through apply-clusters.yml, not directly through clusters-install.yml\n%s", stdout.String())
 	}
 }
 
@@ -1181,7 +1181,7 @@ func TestApplyAsRootSkipsBecomePrompt(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"apply", "ocp",
+		"apply", "clusters",
 		"-f", "../../test/e2e/libvirt-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 		"--dry-run",
@@ -1199,7 +1199,7 @@ func TestApplyDryRunPrintsEscalationSummary(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"apply", "ocp",
+		"apply", "clusters",
 		"-f", "../../test/e2e/libvirt-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 		"--dry-run",
@@ -1210,7 +1210,7 @@ func TestApplyDryRunPrintsEscalationSummary(t *testing.T) {
 	output := stdout.String()
 	for _, expected := range []string{
 		"apply plan:",
-		"- ocp [root]",
+		"- clusters [root]",
 		"[root] phases require sudo escalation",
 	} {
 		if !strings.Contains(output, expected) {
@@ -1249,7 +1249,7 @@ func TestApplyConfirmationDecline(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"apply", "ocp",
+		"apply", "clusters",
 		"-f", "../../test/e2e/libvirt-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 	}, strings.NewReader("n\n"), &stdout, &stderr)
@@ -1270,7 +1270,7 @@ func TestApplyYesSkipsConfirmationAndStopsBeforeAnsible(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"apply", "ocp",
+		"apply", "clusters",
 		"-f", "../../test/e2e/libvirt-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 		"--yes",

@@ -95,7 +95,7 @@ func TestPreflightHubPhaseDemandsOpenShiftCLIs(t *testing.T) {
 		"python3":          "/usr/bin/python3",
 		"sudo":             "/usr/bin/sudo",
 	}, false)
-	hub, err := selectPhases("ocp")
+	hub, err := selectPhases("clusters")
 	if err != nil {
 		t.Fatalf("selectPhases hub: %v", err)
 	}
@@ -788,7 +788,7 @@ func TestPreflightSecretsDirSkippedWithoutHubPhase(t *testing.T) {
 	checks := collectPreflightChecks(state, provider, true, "/secrets", defaultHostStateDir, deps)
 	for _, c := range checks {
 		if strings.HasPrefix(c.name, "secrets directory") || strings.Contains(c.name, "pullSecretRef") {
-			t.Fatalf("secrets check should be scoped to ocp phase, got %+v", c)
+			t.Fatalf("secrets check should be scoped to clusters phase, got %+v", c)
 		}
 	}
 }
@@ -850,7 +850,7 @@ func TestPreflightProxyCredentialsScopedAwayFromHubOnlyRun(t *testing.T) {
 			},
 		}},
 	}
-	hub, err := selectPhases("ocp")
+	hub, err := selectPhases("clusters")
 	if err != nil {
 		t.Fatalf("selectPhases hub: %v", err)
 	}
@@ -865,7 +865,7 @@ func TestPreflightProxyCredentialsScopedAwayFromHubOnlyRun(t *testing.T) {
 	checks := collectPreflightChecks(state, hub, true, "/secrets", defaultHostStateDir, deps)
 	for _, c := range checks {
 		if strings.Contains(c.name, "ocpInstall proxy credentialsRef") {
-			t.Fatalf("proxy credentialsRef must not surface in ocp-only run: %+v", c)
+			t.Fatalf("proxy credentialsRef must not surface in clusters-only run: %+v", c)
 		}
 	}
 

@@ -393,9 +393,9 @@ func TestRenderOneHostTreatsLocalhostAsProviderHost(t *testing.T) {
 	if strings.Contains(inventory, "ansible_become:") {
 		t.Fatalf("provider root escalation belongs on mutating playbooks, not inventory\n%s", inventory)
 	}
-	playbook := readFile(t, "../../ansible/playbooks/ocp-destroy.yml")
+	playbook := readFile(t, "../../ansible/playbooks/clusters-destroy.yml")
 	if !strings.Contains(playbook, "become: true") {
-		t.Fatalf("ocp-destroy.yml must keep provider-host root escalation\n%s", playbook)
+		t.Fatalf("clusters-destroy.yml must keep provider-host root escalation\n%s", playbook)
 	}
 }
 

@@ -29,10 +29,10 @@ var phases = map[string]Phase{
 		NeedsRoot:       true,
 		Description:     "provision per-cluster substrate (libvirt domains and networks, managed name resolution, /etc/hosts records, VIP plumbing)",
 	},
-	"ocp": {
-		Name:            "ocp",
-		ApplyPlaybook:   "playbooks/ocp-install.yml",
-		DestroyPlaybook: "playbooks/ocp-destroy.yml",
+	"clusters": {
+		Name:            "clusters",
+		ApplyPlaybook:   "playbooks/clusters-install.yml",
+		DestroyPlaybook: "playbooks/clusters-destroy.yml",
 		NeedsRoot:       true,
 		Description:     "run openshift-install agent against the cluster nodes (boots via Redfish, manages the libvirt domain, writes per-cluster install state)",
 	},
@@ -43,10 +43,10 @@ func workflowPhases(scope string) []Phase {
 	switch strings.TrimSpace(scope) {
 	case "infra":
 		names = []string{"provider", "cluster"}
-	case "ocp":
-		names = []string{"ocp"}
+	case "clusters":
+		names = []string{"clusters"}
 	case "all":
-		names = []string{"provider", "cluster", "ocp"}
+		names = []string{"provider", "cluster", "clusters"}
 	}
 	out := make([]Phase, 0, len(names))
 	for _, name := range names {
@@ -58,7 +58,7 @@ func workflowPhases(scope string) []Phase {
 func phasesForApplyScope(scope string) ([]Phase, error) {
 	selected := workflowPhases(scope)
 	if len(selected) == 0 {
-		return nil, fmt.Errorf("unknown apply scope %q (known: infra, ocp)", scope)
+		return nil, fmt.Errorf("unknown apply scope %q (known: infra, clusters)", scope)
 	}
 	return selected, nil
 }
@@ -66,7 +66,7 @@ func phasesForApplyScope(scope string) ([]Phase, error) {
 func phasesForDestroyScope(scope string) ([]Phase, error) {
 	selected := workflowPhases(scope)
 	if len(selected) == 0 {
-		return nil, fmt.Errorf("unknown destroy scope %q (known: infra, ocp, all)", scope)
+		return nil, fmt.Errorf("unknown destroy scope %q (known: infra, clusters, all)", scope)
 	}
 	return reversed(selected), nil
 }

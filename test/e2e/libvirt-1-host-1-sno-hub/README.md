@@ -91,7 +91,7 @@ bin/gitups secrets generate -f test/e2e/libvirt-1-host-1-sno-hub
 make e2e CASE=libvirt-1-host-1-sno-hub
 ```
 
-Runs `apply infra` then `apply ocp` against
+Runs `apply infra` then `apply clusters` against
 `/tmp/gitups-libvirt-1-host-1-sno-hub` with `--yes`. Use
 `make e2e-dry-run CASE=libvirt-1-host-1-sno-hub` to preview without changing
 the host.
@@ -214,7 +214,7 @@ gitups secrets generate -f /gitups/test/e2e/libvirt-1-host-1-sno-hub/
 
 gitups apply infra -f /gitups/test/e2e/libvirt-1-host-1-sno-hub/ --state-dir /tmp/gitups-libvirt-1-host-1-sno-hub --yes
 
-gitups apply ocp -f /gitups/test/e2e/libvirt-1-host-1-sno-hub/ --state-dir /tmp/gitups-libvirt-1-host-1-sno-hub --yes
+gitups apply clusters -f /gitups/test/e2e/libvirt-1-host-1-sno-hub/ --state-dir /tmp/gitups-libvirt-1-host-1-sno-hub --yes
 ```
 
 ### 5. Tear down

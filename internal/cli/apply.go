@@ -24,12 +24,12 @@ func newApplyCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Com
 		Short: "Converge desired state by workflow scope",
 		Long: "Converges one explicit workflow scope.\n" +
 			"Use `apply infra` for provider and substrate preparation and\n" +
-			"`apply ocp` to run openshift-install agent against the cluster nodes.",
+			"`apply clusters` to run openshift-install agent against the cluster nodes.",
 		Args: cobra.NoArgs,
 	}
 	cmd.AddCommand(
 		newApplyScopeCmd("infra", stdin, stdout, stderr),
-		newApplyScopeCmd("ocp", stdin, stdout, stderr),
+		newApplyScopeCmd("clusters", stdin, stdout, stderr),
 	)
 	showSubcommandFlagsInHelp(cmd)
 	return cmd
@@ -150,13 +150,13 @@ func newDestroyCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.C
 	cmd := &cobra.Command{
 		Use:   "destroy",
 		Short: "Reverse apply by workflow scope",
-		Long: "Destroys one explicit workflow scope. `destroy all` runs the ocp,\n" +
+		Long: "Destroys one explicit workflow scope. `destroy all` runs the clusters,\n" +
 			"cluster substrate, and provider teardowns in reverse order.",
 		Args: cobra.NoArgs,
 	}
 	cmd.AddCommand(
 		newDestroyScopeCmd("infra", stdin, stdout, stderr),
-		newDestroyScopeCmd("ocp", stdin, stdout, stderr),
+		newDestroyScopeCmd("clusters", stdin, stdout, stderr),
 		newDestroyScopeCmd("all", stdin, stdout, stderr),
 	)
 	showSubcommandFlagsInHelp(cmd)
@@ -287,7 +287,7 @@ func applyScopeShort(scope string) string {
 	switch scope {
 	case "infra":
 		return "Prepare provider services and per-cluster infrastructure substrate"
-	case "ocp":
+	case "clusters":
 		return "Run openshift-install agent against the cluster nodes"
 	default:
 		return "Converge desired state"
@@ -298,7 +298,7 @@ func destroyScopeShort(scope string) string {
 	switch scope {
 	case "infra":
 		return "Destroy provider services and per-cluster infrastructure substrate"
-	case "ocp":
+	case "clusters":
 		return "Destroy the openshift-install state for each OCPCluster"
 	case "all":
 		return "Destroy OCP install state, infrastructure substrate, and provider services"
@@ -328,14 +328,14 @@ func runApplyHostCheck(stdout io.Writer, stderr io.Writer, state v1alpha1.State,
 }
 
 func resolvedOCPBinaryPairs(selected []Phase, hostStateDir string) []string {
-	ocpSelected := false
+	clustersSelected := false
 	for _, p := range selected {
-		if p.Name == "ocp" {
-			ocpSelected = true
+		if p.Name == "clusters" {
+			clustersSelected = true
 			break
 		}
 	}
-	if !ocpSelected {
+	if !clustersSelected {
 		return nil
 	}
 	path, err := defaultLookPath("openshift-install", openshiftInstallSearchDirs(hostStateDir))
@@ -355,8 +355,8 @@ func applyWorkflow(scope string) (phaseWorkflow, error) {
 	switch scope {
 	case "infra":
 		return phaseWorkflow{Name: "infra", Playbook: "playbooks/apply-infra.yml", ArtifactsDir: "infra"}, nil
-	case "ocp":
-		return phaseWorkflow{Name: "ocp", Playbook: "playbooks/apply-ocp.yml", ArtifactsDir: "ocp"}, nil
+	case "clusters":
+		return phaseWorkflow{Name: "clusters", Playbook: "playbooks/apply-clusters.yml", ArtifactsDir: "clusters"}, nil
 	default:
 		return phaseWorkflow{}, fmt.Errorf("apply scope %q has no workflow playbook", scope)
 	}

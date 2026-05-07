@@ -103,13 +103,13 @@ func collectPreflightChecks(state v1alpha1.State, selected []Phase, hasState boo
 	if phaseInScope("cluster", selected, hasState) && stateNeedsLocalLibvirt(state) {
 		checks = append(checks, kvmCheck(deps))
 	}
-	if phaseInScope("ocp", selected, hasState) {
+	if phaseInScope("clusters", selected, hasState) {
 		checks = append(checks,
 			binaryCheck("openshift-install", openshiftInstallSearchDirs(hostStateDir), deps),
 			binaryCheck("oc", openshiftInstallSearchDirs(hostStateDir), deps),
 			binaryCheck("kubectl", openshiftInstallSearchDirs(hostStateDir), deps),
 		)
-		if hasState && ocpNeedsOpenSSL(state, secretsDir, deps) {
+		if hasState && clustersNeedOpenSSL(state, secretsDir, deps) {
 			checks = append(checks, binaryCheck("openssl", nil, deps))
 		}
 	}
@@ -378,7 +378,7 @@ func collectSecretRefRequirements(state v1alpha1.State) []secretRefRequirement {
 			out = append(out, secretRefRequirement{
 				refName: registries.Mirror.CredentialsRef.Name,
 				label:   "registry mirror credentialsRef",
-				phases:  []string{"provider", "ocp"},
+				phases:  []string{"provider", "clusters"},
 			})
 		}
 	}
@@ -400,7 +400,7 @@ func collectSecretRefRequirements(state v1alpha1.State) []secretRefRequirement {
 				out = append(out, secretRefRequirement{
 					refName: bmc.Auth.CredentialRef.Name,
 					label:   fmt.Sprintf("provider %s bmcEmulation credentialRef", p.Metadata.Name),
-					phases:  []string{"provider", "ocp"},
+					phases:  []string{"provider", "clusters"},
 				})
 			}
 		}
@@ -429,7 +429,7 @@ func collectSecretRefRequirements(state v1alpha1.State) []secretRefRequirement {
 			out = append(out, secretRefRequirement{
 				refName: m.BareMetal.BMC.CredentialRef.Name,
 				label:   fmt.Sprintf("infra %s machine %s baremetal bmc credentialRef", ci.Metadata.Name, mname),
-				phases:  []string{"provider", "ocp"},
+				phases:  []string{"provider", "clusters"},
 			})
 		}
 	}
@@ -440,21 +440,21 @@ func collectSecretRefRequirements(state v1alpha1.State) []secretRefRequirement {
 			out = append(out, secretRefRequirement{
 				refName: install.PullSecretRef.Name,
 				label:   cluster.Metadata.Name + " pullSecretRef",
-				phases:  []string{"ocp"},
+				phases:  []string{"clusters"},
 			})
 		}
 		if install.SSHKeyRef.Name != "" {
 			out = append(out, secretRefRequirement{
 				refName: install.SSHKeyRef.Name,
 				label:   cluster.Metadata.Name + " sshKeyRef",
-				phases:  []string{"ocp"},
+				phases:  []string{"clusters"},
 			})
 		}
 		if install.AdditionalTrustBundleRef.Name != "" {
 			out = append(out, secretRefRequirement{
 				refName:   install.AdditionalTrustBundleRef.Name,
 				label:     cluster.Metadata.Name + " additionalTrustBundleRef",
-				phases:    []string{"ocp"},
+				phases:    []string{"clusters"},
 				generated: generated[install.AdditionalTrustBundleRef.Name],
 			})
 		}
@@ -490,7 +490,7 @@ func sortedMapKeys[V any](m map[string]V) []string {
 	return out
 }
 
-func ocpNeedsOpenSSL(state v1alpha1.State, secretsDir string, deps preflightDeps) bool {
+func clustersNeedOpenSSL(state v1alpha1.State, secretsDir string, deps preflightDeps) bool {
 	env := primaryEnvironmentForSync(state)
 	if env == nil {
 		return false
