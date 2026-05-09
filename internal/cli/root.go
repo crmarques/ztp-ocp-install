@@ -31,6 +31,7 @@ func newRootCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Comm
 		newScopeCmd(providerScope, stdin, stdout, stderr),
 		newScopeCmd(clustersScope, stdin, stdout, stderr),
 		newHubCmd(stdout),
+		newGitopsCmd(),
 	)
 	return root
 }
