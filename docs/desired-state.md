@@ -184,8 +184,9 @@ Canonical examples:
 
 ## Secret Material
 
-`SecretRef.name` maps to files under `<gitups-home>/secrets` by default, where
-Gitups home is `GITUPS_HOME` or `~/.gitups`.
+`SecretRef.name` maps to files under `<gitups-user-dir>/secrets` by default,
+where the Gitups user directory is `GITUPS_USER_DIR` or `~/.gitups`. Override
+the secrets directory directly with `GITUPS_SECRETS_DIR` or `--secrets-dir`.
 
 ```text
 gitups secrets pull-secret set --name openshift-pull-secret --from-file ~/pull-secret.json

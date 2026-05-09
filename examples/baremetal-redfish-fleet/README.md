@@ -28,6 +28,6 @@ balancers.
 ## Commands
 
 ```text
-gitups validate -f examples/baremetal-redfish-fleet
-gitups plan -f examples/baremetal-redfish-fleet --state-dir .state
+gitups bastion check -f examples/baremetal-redfish-fleet
+gitups provider check -f examples/baremetal-redfish-fleet --state-dir .state --dry-run
 ```

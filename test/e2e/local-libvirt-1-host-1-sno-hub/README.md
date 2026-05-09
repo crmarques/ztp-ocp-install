@@ -64,14 +64,14 @@ make e2e CASE=local-libvirt-1-host-1-sno-hub
 Equivalent CLI flow:
 
 ```text
-gitups validate -f test/e2e/local-libvirt-1-host-1-sno-hub --check-host
-gitups plan     -f test/e2e/local-libvirt-1-host-1-sno-hub --state-dir /tmp/gitups-local-libvirt-1-host-1-sno-hub
-gitups apply infra -f test/e2e/local-libvirt-1-host-1-sno-hub --state-dir /tmp/gitups-local-libvirt-1-host-1-sno-hub --dry-run
-gitups apply clusters -f test/e2e/local-libvirt-1-host-1-sno-hub --state-dir /tmp/gitups-local-libvirt-1-host-1-sno-hub --dry-run
-gitups apply infra -f test/e2e/local-libvirt-1-host-1-sno-hub --state-dir /tmp/gitups-local-libvirt-1-host-1-sno-hub --yes
-gitups apply clusters -f test/e2e/local-libvirt-1-host-1-sno-hub --state-dir /tmp/gitups-local-libvirt-1-host-1-sno-hub --yes
-gitups status   -f test/e2e/local-libvirt-1-host-1-sno-hub --state-dir /tmp/gitups-local-libvirt-1-host-1-sno-hub --diff
-gitups destroy all -f test/e2e/local-libvirt-1-host-1-sno-hub --state-dir /tmp/gitups-local-libvirt-1-host-1-sno-hub --yes
+gitups bastion check -f test/e2e/local-libvirt-1-host-1-sno-hub
+gitups provider check -f test/e2e/local-libvirt-1-host-1-sno-hub --state-dir /tmp/gitups-local-libvirt-1-host-1-sno-hub --dry-run
+gitups provider apply -f test/e2e/local-libvirt-1-host-1-sno-hub --state-dir /tmp/gitups-local-libvirt-1-host-1-sno-hub --dry-run
+gitups clusters apply -f test/e2e/local-libvirt-1-host-1-sno-hub --state-dir /tmp/gitups-local-libvirt-1-host-1-sno-hub --dry-run
+gitups provider apply -f test/e2e/local-libvirt-1-host-1-sno-hub --state-dir /tmp/gitups-local-libvirt-1-host-1-sno-hub --yes
+gitups clusters apply -f test/e2e/local-libvirt-1-host-1-sno-hub --state-dir /tmp/gitups-local-libvirt-1-host-1-sno-hub --yes
+gitups clusters destroy -f test/e2e/local-libvirt-1-host-1-sno-hub --state-dir /tmp/gitups-local-libvirt-1-host-1-sno-hub --yes
+gitups provider destroy -f test/e2e/local-libvirt-1-host-1-sno-hub --state-dir /tmp/gitups-local-libvirt-1-host-1-sno-hub --yes
 ```
 
 ## External Prerequisites

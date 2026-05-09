@@ -38,47 +38,22 @@ var phases = map[string]Phase{
 	},
 }
 
-func workflowPhases(scope string) []Phase {
-	names := []string{}
-	switch strings.TrimSpace(scope) {
-	case "infra":
-		names = []string{"provider", "cluster"}
-	case "clusters":
-		names = []string{"clusters"}
-	case "all":
-		names = []string{"provider", "cluster", "clusters"}
-	}
-	out := make([]Phase, 0, len(names))
-	for _, name := range names {
-		out = append(out, phases[name])
-	}
-	return out
-}
-
-func phasesForApplyScope(scope string) ([]Phase, error) {
-	selected := workflowPhases(scope)
-	if len(selected) == 0 {
-		return nil, fmt.Errorf("unknown apply scope %q (known: infra, clusters)", scope)
-	}
-	return selected, nil
-}
-
-func phasesForDestroyScope(scope string) ([]Phase, error) {
-	selected := workflowPhases(scope)
-	if len(selected) == 0 {
-		return nil, fmt.Errorf("unknown destroy scope %q (known: infra, clusters, all)", scope)
-	}
-	return reversed(selected), nil
-}
-
 func selectPhases(name string) ([]Phase, error) {
 	if strings.TrimSpace(name) == "" {
-		return workflowPhases("all"), nil
+		return phasesByNames([]string{"provider", "cluster", "clusters"}), nil
 	}
 	if p, ok := phases[name]; ok {
 		return []Phase{p}, nil
 	}
 	return nil, fmt.Errorf("unknown phase %q (known: %s)", name, phaseNames())
+}
+
+func phasesByNames(names []string) []Phase {
+	out := make([]Phase, 0, len(names))
+	for _, name := range names {
+		out = append(out, phases[name])
+	}
+	return out
 }
 
 func reversed(in []Phase) []Phase {

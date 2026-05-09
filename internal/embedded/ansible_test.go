@@ -20,8 +20,8 @@ func TestExtractAnsibleBundleEitherSucceedsOrReportsEmpty(t *testing.T) {
 		AnsibleCfgRelPath,
 		filepath.Join("playbooks", "apply-infra.yml"),
 		filepath.Join("playbooks", "apply-clusters.yml"),
-		filepath.Join("playbooks", "destroy-all.yml"),
 		filepath.Join("playbooks", "destroy-infra.yml"),
+		filepath.Join("playbooks", "clusters-destroy.yml"),
 		filepath.Join("playbooks", "provider-prepare.yml"),
 		filepath.Join("playbooks", "cluster-prepare.yml"),
 	} {

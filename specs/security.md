@@ -6,7 +6,7 @@
   keys, or tokens. Generated examples must use placeholders only.
 - Desired-state YAML references secret material by `SecretRef.name`. The
   local resolver maps the name to one file under `<gitups-home>/secrets`,
-  where Gitups home is `GITUPS_HOME` or `~/.gitups` by default.
+  where the Gitups user directory is `GITUPS_USER_DIR` or `~/.gitups` by default, and the secrets directory may be overridden via `GITUPS_SECRETS_DIR`.
 - The secrets directory must be host-local, unversioned, mode `0700`, and
   individual files mode `0600`.
 - BMC credential files referenced by

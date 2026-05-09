@@ -322,30 +322,41 @@ The validator enforces:
 
 ## CLI Contract
 
-The user-facing CLI is:
+The user-facing CLI is organized into four scopes (`bastion`, `provider`,
+`clusters`, `hub`), each with `check`, `apply`, and `destroy` subcommands,
+plus the standalone `init` and `secrets` writers.
 
 | Command | Reads input? | Mutates? | Purpose |
 | --- | --- | --- | --- |
-| `doctor check` | yes | no | Controller prerequisite checks for the selected desired state. |
-| `doctor fix` | optional | yes | Installs pinned controller-local dependencies, defaulting to the user-owned Gitups-managed Ansible venv; system-package mode is explicit. |
 | `init --template <name> --out <dir>` | no | local only | Writes current validating desired-state templates. |
-| `validate` | yes | no | Strict schema, defaulting, and cross-reference validation. |
-| `preflight` | yes | no | Local checks plus read-only Ansible checks against provider and cluster hosts. |
-| `plan` | yes | no | Objective preview of generated files, phases, root-required work, and prerequisite risks. |
-| `apply <infra|clusters>` | yes | yes | Converges one explicit workflow scope. |
-| `destroy <infra|clusters|all>` | yes | yes | Reverses one explicit workflow scope. Requires `--yes` (or `--dry-run`). |
-| `status` | yes | no | Reports desired counts, rendered artifact presence, phase table, and drift against `--state-dir` (`--diff` for full drift output). |
-| `secrets` | optional | yes (writes secrets) | `generate`, `pull-secret set`, and credential writers — the only writers into `<gitups-home>/secrets`. |
+| `secrets` | optional | yes (writes secrets) | `generate`, `pull-secret set`, and credential writers — the only writers into `<gitups-user-dir>/secrets`. |
+| `bastion check` | optional | no | Controller prerequisite checks for the selected desired state. |
+| `bastion apply` | optional | yes | Installs pinned controller-local dependencies, defaulting to the user-owned Gitups-managed Ansible venv. |
+| `bastion destroy` | no | yes | Removes the Gitups-managed venv and CLI binaries on the controller. Requires `--yes` (or `--dry-run`). |
+| `provider <check\|apply>` | yes | check: no, apply: yes | Local + Ansible read-only checks (`check`) or convergence (`apply`) of `InfrastructureProvider` and `ClusterInfrastructure` (provider services and per-cluster substrate). |
+| `provider destroy` | yes | yes | Reverses provider+cluster substrate. Requires `--yes` (or `--dry-run`). |
+| `clusters <check\|apply>` | yes | check: no, apply: yes | Local + Ansible read-only checks (`check`) or `openshift-install agent` (`apply`) for every `OCPCluster`. |
+| `clusters destroy` | yes | yes | Reverses the `openshift-install` state. Requires `--yes` (or `--dry-run`). |
+| `hub <check\|apply\|destroy>` | yes | reserved | Reserved scope for clusters declaring `role: hub`. Not implemented yet; the commands print a reserved notice and exit 0. |
 
-Rendering has no public command; it is an internal step for `plan`, `preflight`,
-`apply`, and `status --diff`.
+Rendering has no public command; it is an internal step for `<scope> check`,
+`<scope> apply`, and `<scope> destroy`.
 
-Workflow scopes:
+Common flags accepted by every scope command:
 
-1. `infra` — provider infrastructure (hosts, VMs, BMC, LB, DNS).
-2. `clusters` — `openshift-install agent` against the cluster nodes.
+- `--file` / `-f` — desired-state YAML file or directory; may be repeated.
+- `--state-dir` — generated state directory (env: `GITUPS_STATE_DIR`).
+- `--secrets-dir` — local install secret material directory (env: `GITUPS_SECRETS_DIR`).
+
+Configuration env vars:
+
+- `GITUPS_USER_DIR` — overrides the default `~/.gitups` user directory.
+- `GITUPS_STATE_DIR` — overrides the default `<user-dir>/state`.
+- `GITUPS_SECRETS_DIR` — overrides the default `<user-dir>/secrets`.
 
 Multi-cluster fleet GitOps publication (one cluster running ACM/OpenShift
 GitOps to reconcile additional clusters) is forward-looking architecture and
 not implemented today; every `OCPCluster` in the desired state goes through
-the local `clusters` phase.
+the local `clusters` scope. The future `hub` scope is reserved for
+configuring those hub-cluster components on clusters that declare
+`role: hub`.

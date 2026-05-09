@@ -13,7 +13,7 @@ import (
 	"github.com/crmarques/ztp-ocp-install-lab/api/v1alpha1"
 )
 
-func collectDoctorChecks(state v1alpha1.State, hostStateDir string, deps preflightDeps) []preflightCheck {
+func collectBastionChecks(state v1alpha1.State, hostStateDir string, deps preflightDeps) []preflightCheck {
 	checks := []preflightCheck{
 		pythonVersionCheck(),
 		binaryCheck("ansible-playbook", []string{filepath.Join(ansibleVenvDir(), "bin")}, deps),
@@ -50,9 +50,9 @@ func pythonVersionCheck() preflightCheck {
 		if major > 3 || (major == 3 && minor >= 12) {
 			return preflightCheck{name: name, ok: true, detail: bin + " " + ver}
 		}
-		return preflightCheck{name: name, ok: false, detail: bin + " is " + ver + "; run `gitups doctor fix`"}
+		return preflightCheck{name: name, ok: false, detail: bin + " is " + ver + "; run `gitups bastion apply`"}
 	}
-	return preflightCheck{name: name, ok: false, detail: "python3 not found; run `gitups doctor fix`"}
+	return preflightCheck{name: name, ok: false, detail: "python3 not found; run `gitups bastion apply`"}
 }
 
 func parsePythonVersion(s string) (major, minor int, err error) {

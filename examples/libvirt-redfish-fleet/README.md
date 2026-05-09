@@ -24,8 +24,8 @@ the matching files under
 ## Commands
 
 ```text
-gitups validate -f examples/libvirt-redfish-fleet
-gitups plan -f examples/libvirt-redfish-fleet --state-dir .state
-gitups apply infra -f examples/libvirt-redfish-fleet --state-dir .state --dry-run
-gitups apply clusters -f examples/libvirt-redfish-fleet --state-dir .state --dry-run
+gitups bastion check -f examples/libvirt-redfish-fleet
+gitups provider check -f examples/libvirt-redfish-fleet --state-dir .state --dry-run
+gitups provider apply -f examples/libvirt-redfish-fleet --state-dir .state --dry-run
+gitups clusters apply -f examples/libvirt-redfish-fleet --state-dir .state --dry-run
 ```

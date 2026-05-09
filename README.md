@@ -45,21 +45,20 @@ until their provider roles land.
 ## CLI
 
 ```text
-gitups doctor check -f examples/libvirt-redfish-fleet --yes
-gitups doctor fix -f examples/libvirt-redfish-fleet --yes
 gitups init --template libvirt-redfish-hub --out desired-state
-gitups validate -f examples/libvirt-redfish-fleet
-gitups preflight -f examples/libvirt-redfish-fleet
-gitups plan -f examples/libvirt-redfish-fleet --out text
-gitups apply infra -f examples/libvirt-redfish-fleet --dry-run
-gitups apply clusters -f examples/libvirt-redfish-fleet --dry-run
-gitups status -f examples/libvirt-redfish-fleet --diff
+gitups bastion check -f examples/libvirt-redfish-fleet
+gitups bastion apply -f examples/libvirt-redfish-fleet --yes
+gitups provider check -f examples/libvirt-redfish-fleet --dry-run
+gitups provider apply -f examples/libvirt-redfish-fleet --dry-run
+gitups clusters check -f examples/libvirt-redfish-fleet --dry-run
+gitups clusters apply -f examples/libvirt-redfish-fleet --dry-run
+gitups clusters destroy -f examples/libvirt-redfish-fleet --dry-run
 ```
 
-Public verbs: `doctor check`, `doctor fix`, `init`, `validate`, `preflight`,
-`plan`, `apply <infra|ocp>`, `destroy <infra|ocp|all>`,
-`status`, and `secrets`.
-The formal CLI contract lives in
+Public scopes: `bastion`, `provider`, `clusters`, and `hub` (reserved for
+clusters declaring `role: hub`). Each scope exposes `check`, `apply`, and
+`destroy`. Standalone commands: `init` and `secrets`. The formal CLI
+contract lives in
 [specs/state-model.md](specs/state-model.md#cli-contract).
 
 ## Repository Layout

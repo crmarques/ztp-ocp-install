@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -11,66 +12,61 @@ import (
 	"github.com/crmarques/ztp-ocp-install-lab/internal/infra"
 )
 
-func newDoctorCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Command {
+func newBastionCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "doctor",
-		Short: "Check controller machine prerequisites",
-		Long: "Subcommands verify the controller machine dependencies\n" +
-			"gitups requires to run playbooks.\n\n" +
-			"`doctor check` reports the status of each dependency.\n" +
-			"`doctor fix` installs any missing dependencies.",
+		Use:   "bastion",
+		Short: "Install and configure the bastion (controller) machine",
+		Args:  cobra.NoArgs,
 	}
 	cmd.AddCommand(
-		newDoctorCheckCmd(stdout, stderr),
-		newDoctorFixCmd(stdin, stdout, stderr),
+		newBastionCheckCmd(stdout, stderr),
+		newBastionApplyCmd(stdin, stdout, stderr),
+		newBastionDestroyCmd(stdout, stderr),
 	)
 	showSubcommandFlagsInHelp(cmd)
 	return cmd
 }
 
-func newDoctorCheckCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
-	var (
-		hostStateDir string
-		yes          bool
-	)
-	hostStateDir = defaultHostStateDir
+func newBastionCheckCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
+	hostStateDir := defaultHostStateDir
 	cmd := &cobra.Command{
 		Use:   "check",
-		Short: "Verify controller dependencies are available",
+		Short: "Verify bastion (controller) dependencies are available",
 		Args:  cobra.NoArgs,
 	}
 	cf := addCommonFlags(cmd)
 	cmd.Flags().StringVar(&hostStateDir, "host-state-dir", hostStateDir, "root-managed host runtime state directory")
-	cmd.Flags().BoolVar(&yes, "yes", false, "accepted for command-line symmetry; doctor check never mutates")
-	_ = cmd.MarkFlagRequired("file")
 	cmd.RunE = func(_ *cobra.Command, _ []string) error {
-		state, err := infra.LoadNormalizeValidate(cf.files)
-		if err != nil {
-			return failErr(1, err)
+		var state v1alpha1.State
+		if len(cf.files) > 0 {
+			loaded, err := infra.LoadNormalizeValidate(cf.files)
+			if err != nil {
+				return failErr(1, err)
+			}
+			state = loaded
 		}
-		printTitle(stdout, "Doctor check")
-		checks := collectDoctorChecks(state, hostStateDir, defaultPreflightDeps)
+		printTitle(stdout, "bastion check")
+		checks := collectBastionChecks(state, hostStateDir, defaultPreflightDeps)
 		failed := 0
 		for _, c := range checks {
 			if c.ok {
 				printOK(stdout, c.name, c.detail)
-			} else {
-				printFail(stdout, c.name, c.detail)
-				failed++
+				continue
 			}
+			printFail(stdout, c.name, c.detail)
+			failed++
 		}
 		if failed > 0 {
-			fmt.Fprintf(stderr, "doctor check: %d required check(s) failed\n", failed)
+			fmt.Fprintf(stderr, "bastion check: %d required check(s) failed\n", failed)
 			return silentExit(1)
 		}
-		fmt.Fprintf(stdout, "doctor check: all %d check(s) passed\n", len(checks))
-		_ = yes
+		fmt.Fprintf(stdout, "bastion check: all %d check(s) passed\n", len(checks))
 		return nil
 	}
 	return cmd
 }
 
-func newDoctorFixCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Command {
+func newBastionApplyCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Command {
 	var (
 		dryRun     bool
 		yes        bool
@@ -78,14 +74,14 @@ func newDoctorFixCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra
 	)
 	secretsDir = defaultSecretsDir()
 	cmd := &cobra.Command{
-		Use:   "fix",
-		Short: "Install missing controller prerequisites",
+		Use:   "apply",
+		Short: "Install bastion (controller) prerequisites",
 		Args:  cobra.NoArgs,
 	}
 	cf := addCommonFlags(cmd)
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print bootstrap commands without executing them")
 	cmd.Flags().BoolVar(&yes, "yes", false, "skip the bootstrap confirmation prompt")
-	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material")
+	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material (env: GITUPS_SECRETS_DIR)")
 	cmd.RunE = func(c *cobra.Command, _ []string) error {
 		var state v1alpha1.State
 		if len(cf.files) > 0 {
@@ -105,7 +101,7 @@ func newDoctorFixCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra
 			return failErr(1, err)
 		}
 
-		printTitle(stdout, "Doctor fix")
+		printTitle(stdout, "bastion apply")
 		fmt.Fprintf(stdout, "ansible-core target: managed venv at %s\n", ansibleVenvDir())
 		if summary := proxySummary(proxyEnv); summary != "" {
 			fmt.Fprintf(stdout, "proxy: %s\n", summary)
@@ -137,7 +133,45 @@ func newDoctorFixCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra
 				return failErr(1, err)
 			}
 		}
-		printOK(stdout, "controller is ready", "")
+		printOK(stdout, "bastion is ready", "")
+		return nil
+	}
+	return cmd
+}
+
+func newBastionDestroyCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
+	var (
+		dryRun bool
+		yes    bool
+	)
+	cmd := &cobra.Command{
+		Use:   "destroy",
+		Short: "Remove bastion (controller) Gitups-managed venv and binaries",
+		Args:  cobra.NoArgs,
+	}
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the removal plan without removing anything")
+	cmd.Flags().BoolVar(&yes, "yes", false, "skip the destroy confirmation prompt")
+	cmd.RunE = func(_ *cobra.Command, _ []string) error {
+		if !dryRun && !yes {
+			return failErr(1, errors.New("destroy refused: pass --yes to confirm teardown, or --dry-run to preview"))
+		}
+		printTitle(stdout, "bastion destroy")
+		targets := []string{ansibleVenvDir(), defaultControllerCLIInstallDir()}
+		for _, target := range targets {
+			if dryRun {
+				fmt.Fprintf(stdout, "dry-run: would remove %s\n", target)
+				continue
+			}
+			if _, err := os.Stat(target); errors.Is(err, os.ErrNotExist) {
+				fmt.Fprintf(stdout, "skipped (absent): %s\n", target)
+				continue
+			}
+			if err := os.RemoveAll(target); err != nil {
+				fmt.Fprintf(stderr, "remove %s: %v\n", target, err)
+				return silentExit(1)
+			}
+			fmt.Fprintf(stdout, "removed %s\n", target)
+		}
 		return nil
 	}
 	return cmd

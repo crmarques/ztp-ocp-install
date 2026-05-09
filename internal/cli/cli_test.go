@@ -12,37 +12,11 @@ import (
 	"testing"
 )
 
-func TestValidateCommand(t *testing.T) {
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	code := Run(context.Background(), []string{"validate", "-f", "../../examples/libvirt-redfish-lab-fleet"}, nil, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
-	}
-	if got := stdout.String(); !strings.Contains(got, "validated 1 Environment, 3 InfrastructureProvider, 3 ClusterInfrastructure, 3 OCPCluster object(s)") {
-		t.Fatalf("unexpected stdout: %s", got)
-	}
-}
-
-func TestPlanCommandShowsInstallerAssets(t *testing.T) {
-	stateDir := t.TempDir()
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	code := Run(context.Background(), []string{"plan", "-f", "../../examples/libvirt-redfish-lab-fleet", "--state-dir", stateDir}, nil, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
-	}
-	output := stdout.String()
-	for _, expected := range []string{
-		"installer assets:",
-		"hub (agent):",
-		filepath.Join(stateDir, "clusters", "hub", "installer", "install-config.yaml"),
-		filepath.Join(stateDir, "clusters", "hub", "installer", "agent-config.yaml"),
-	} {
-		if !strings.Contains(output, expected) {
-			t.Fatalf("stdout missing %q\n%s", expected, output)
-		}
-	}
+func clearGitupsEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv(gitupsUserDirEnv, "")
+	t.Setenv(gitupsStateDirEnv, "")
+	t.Setenv(gitupsSecretsDirEnv, "")
 }
 
 func TestInitCommandGeneratesCurrentTemplate(t *testing.T) {
@@ -64,38 +38,34 @@ func TestInitCommandGeneratesCurrentTemplate(t *testing.T) {
 			t.Fatalf("stdout missing %q\n%s", expected, output)
 		}
 	}
-	var validateStdout bytes.Buffer
-	code = Run(context.Background(), []string{"validate", "-f", outDir}, nil, &validateStdout, &stderr)
-	if code != 0 {
-		t.Fatalf("generated template should validate, code=%d stderr=%s", code, stderr.String())
-	}
 }
 
-func TestGitupsHomeDefaultsToUserHome(t *testing.T) {
+func TestGitupsUserDirDefaultsToUserHome(t *testing.T) {
+	clearGitupsEnv(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("GITUPS_HOME", "")
 
-	gitupsHome := filepath.Join(home, ".gitups")
-	if got := defaultGitupsHome(); got != gitupsHome {
-		t.Fatalf("defaultGitupsHome got %q, want %q", got, gitupsHome)
+	userDir := filepath.Join(home, ".gitups")
+	if got := defaultGitupsUserDir(); got != userDir {
+		t.Fatalf("defaultGitupsUserDir got %q, want %q", got, userDir)
 	}
-	if got := defaultStateDir(); got != filepath.Join(gitupsHome, "state") {
+	if got := defaultStateDir(); got != filepath.Join(userDir, "state") {
 		t.Fatalf("defaultStateDir got %q", got)
 	}
-	if got := defaultSecretsDir(); got != filepath.Join(gitupsHome, "secrets") {
+	if got := defaultSecretsDir(); got != filepath.Join(userDir, "secrets") {
 		t.Fatalf("defaultSecretsDir got %q", got)
 	}
 }
 
-func TestGitupsHomeEnvOverridesUserHome(t *testing.T) {
+func TestGitupsUserDirEnvOverridesUserHome(t *testing.T) {
+	clearGitupsEnv(t)
 	home := t.TempDir()
 	override := filepath.Join(t.TempDir(), "custom-gitups")
 	t.Setenv("HOME", home)
-	t.Setenv("GITUPS_HOME", override)
+	t.Setenv(gitupsUserDirEnv, override)
 
-	if got := defaultGitupsHome(); got != override {
-		t.Fatalf("defaultGitupsHome got %q, want %q", got, override)
+	if got := defaultGitupsUserDir(); got != override {
+		t.Fatalf("defaultGitupsUserDir got %q, want %q", got, override)
 	}
 	if got := defaultStateDir(); got != filepath.Join(override, "state") {
 		t.Fatalf("defaultStateDir got %q", got)
@@ -105,7 +75,25 @@ func TestGitupsHomeEnvOverridesUserHome(t *testing.T) {
 	}
 }
 
-func TestApplyRejectsUnsupportedProvider(t *testing.T) {
+func TestGitupsStateDirEnvOverridesDefault(t *testing.T) {
+	clearGitupsEnv(t)
+	override := filepath.Join(t.TempDir(), "custom-state")
+	t.Setenv(gitupsStateDirEnv, override)
+	if got := defaultStateDir(); got != override {
+		t.Fatalf("defaultStateDir got %q, want %q", got, override)
+	}
+}
+
+func TestGitupsSecretsDirEnvOverridesDefault(t *testing.T) {
+	clearGitupsEnv(t)
+	override := filepath.Join(t.TempDir(), "custom-secrets")
+	t.Setenv(gitupsSecretsDirEnv, override)
+	if got := defaultSecretsDir(); got != override {
+		t.Fatalf("defaultSecretsDir got %q, want %q", got, override)
+	}
+}
+
+func TestProviderApplyRejectsUnsupportedProvider(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "vmware.yaml")
 	if err := os.WriteFile(path, []byte(`apiVersion: gitups.io/v1alpha1
@@ -188,7 +176,7 @@ spec:
 	}
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	code := Run(context.Background(), []string{"apply", "infra", "-f", path, "--dry-run"}, nil, &stdout, &stderr)
+	code := Run(context.Background(), []string{"provider", "apply", "-f", path, "--dry-run"}, nil, &stdout, &stderr)
 	if code == 0 {
 		t.Fatal("expected unsupported provider failure")
 	}
@@ -768,12 +756,12 @@ func TestSecretsBMCSetRejectsInvalidInputs(t *testing.T) {
 	}
 }
 
-func TestApplyDryRunRendersAndPrintsAnsibleCommandsForAllPhases(t *testing.T) {
+func TestProviderApplyDryRunRendersAndPrintsAnsibleCommandsForAllPhases(t *testing.T) {
 	stateDir := t.TempDir()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"apply", "infra",
+		"provider", "apply",
 		"-f", "../../examples/libvirt-redfish-lab-fleet",
 		"--state-dir", stateDir,
 		"--dry-run",
@@ -787,7 +775,7 @@ func TestApplyDryRunRendersAndPrintsAnsibleCommandsForAllPhases(t *testing.T) {
 		filepath.Join(stateDir, "ansible", "inventory.yaml"),
 		"- provider [root]",
 		"- cluster [root]",
-		"dry-run ansible command [workflow=infra]: ansible-playbook",
+		"dry-run ansible command [provider apply]: ansible-playbook",
 		"playbooks/apply-infra.yml",
 	} {
 		if !strings.Contains(output, expected) {
@@ -795,16 +783,16 @@ func TestApplyDryRunRendersAndPrintsAnsibleCommandsForAllPhases(t *testing.T) {
 		}
 	}
 	if got := strings.Count(output, "--ask-become-pass"); got != 1 {
-		t.Fatalf("infra apply should ask become once, got %d prompts\n%s", got, output)
+		t.Fatalf("provider apply should ask become once, got %d prompts\n%s", got, output)
 	}
 	for _, unexpected := range []string{"clusters-install.yml", "gitops-publish.yml"} {
 		if strings.Contains(output, unexpected) {
-			t.Fatalf("infra apply leaked %q\n%s", unexpected, output)
+			t.Fatalf("provider apply leaked %q\n%s", unexpected, output)
 		}
 	}
 }
 
-func TestApplyDryRunPassesStateSecretsAndHostStateDirs(t *testing.T) {
+func TestProviderApplyDryRunPassesStateSecretsAndHostStateDirs(t *testing.T) {
 	root := t.TempDir()
 	stateDir := filepath.Join(root, "state")
 	secretsDir := filepath.Join(root, "secrets")
@@ -812,7 +800,7 @@ func TestApplyDryRunPassesStateSecretsAndHostStateDirs(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"apply", "infra",
+		"provider", "apply",
 		"-f", "../../examples/libvirt-redfish-lab-fleet",
 		"--state-dir", stateDir,
 		"--secrets-dir", secretsDir,
@@ -859,12 +847,12 @@ func TestAnsibleUsesHostStateDirVariable(t *testing.T) {
 	}
 }
 
-func TestApplyHubDryRunOnlyRunsHubScope(t *testing.T) {
+func TestClustersApplyDryRunOnlyRunsClustersScope(t *testing.T) {
 	stateDir := t.TempDir()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"apply", "clusters",
+		"clusters", "apply",
 		"-f", "../../examples/libvirt-redfish-lab-fleet",
 		"--state-dir", stateDir,
 		"--dry-run",
@@ -878,17 +866,17 @@ func TestApplyHubDryRunOnlyRunsHubScope(t *testing.T) {
 	}
 	for _, leaked := range []string{"provider-prepare.yml", "cluster-prepare.yml", "clusters-install.yml", "gitops-publish.yml"} {
 		if strings.Contains(output, leaked) {
-			t.Fatalf("hub-scope apply leaked %s:\n%s", leaked, output)
+			t.Fatalf("clusters-scope apply leaked %s:\n%s", leaked, output)
 		}
 	}
 }
 
-func TestDestroyRequiresYesOrDryRun(t *testing.T) {
+func TestProviderDestroyRequiresYesOrDryRun(t *testing.T) {
 	stateDir := t.TempDir()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"destroy", "all",
+		"provider", "destroy",
 		"-f", "../../examples/libvirt-redfish-lab-fleet",
 		"--state-dir", stateDir,
 	}, nil, &stdout, &stderr)
@@ -900,12 +888,12 @@ func TestDestroyRequiresYesOrDryRun(t *testing.T) {
 	}
 }
 
-func TestDestroyDryRunPrintsPhasesInReverse(t *testing.T) {
+func TestProviderDestroyDryRunPrintsPhasesInReverse(t *testing.T) {
 	stateDir := t.TempDir()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"destroy", "all",
+		"provider", "destroy",
 		"-f", "../../examples/libvirt-redfish-lab-fleet",
 		"--state-dir", stateDir,
 		"--dry-run",
@@ -914,55 +902,16 @@ func TestDestroyDryRunPrintsPhasesInReverse(t *testing.T) {
 		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
 	}
 	output := stdout.String()
-	clustersIdx := strings.Index(output, "- clusters [root]")
 	clusterIdx := strings.Index(output, "- cluster [root]")
 	providerIdx := strings.Index(output, "- provider [root]")
-	if clustersIdx < 0 || clusterIdx < 0 || providerIdx < 0 {
+	if clusterIdx < 0 || providerIdx < 0 {
 		t.Fatalf("missing destroy phase entries:\n%s", output)
 	}
-	if !(clustersIdx < clusterIdx && clusterIdx < providerIdx) {
-		t.Fatalf("destroy phases not in reverse order (clusters=%d cluster=%d provider=%d)\n%s", clustersIdx, clusterIdx, providerIdx, output)
+	if !(clusterIdx < providerIdx) {
+		t.Fatalf("destroy phases not in reverse order (cluster=%d provider=%d)\n%s", clusterIdx, providerIdx, output)
 	}
 	for _, expected := range []string{
-		"dry-run ansible command [workflow=all destroy]: ansible-playbook",
-		"playbooks/destroy-all.yml",
-	} {
-		if !strings.Contains(output, expected) {
-			t.Fatalf("stdout missing %q\n%s", expected, output)
-		}
-	}
-	if got := strings.Count(output, "--ask-become-pass"); got != 1 {
-		t.Fatalf("destroy all should ask become once, got %d prompts\n%s", got, output)
-	}
-	if strings.Contains(output, "gitops-unpublish.yml") {
-		t.Fatalf("destroy all must not include unfinished gitops publication teardown:\n%s", output)
-	}
-	if !strings.Contains(output, "dry-run: would remove state-dir: "+stateDir) {
-		t.Fatalf("dry-run destroy must announce state-dir removal:\n%s", output)
-	}
-	if _, err := os.Stat(stateDir); err != nil {
-		t.Fatalf("dry-run destroy must not remove state-dir: %v", err)
-	}
-}
-
-func TestDestroyInfraDryRunUsesSingleWorkflowBecomePrompt(t *testing.T) {
-	stateDir := t.TempDir()
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	code := Run(context.Background(), []string{
-		"destroy", "infra",
-		"-f", "../../examples/libvirt-redfish-lab-fleet",
-		"--state-dir", stateDir,
-		"--dry-run",
-	}, nil, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
-	}
-	output := stdout.String()
-	for _, expected := range []string{
-		"- cluster [root]",
-		"- provider [root]",
-		"dry-run ansible command [workflow=infra destroy]: ansible-playbook",
+		"dry-run ansible command [provider destroy]: ansible-playbook",
 		"playbooks/destroy-infra.yml",
 	} {
 		if !strings.Contains(output, expected) {
@@ -970,113 +919,28 @@ func TestDestroyInfraDryRunUsesSingleWorkflowBecomePrompt(t *testing.T) {
 		}
 	}
 	if got := strings.Count(output, "--ask-become-pass"); got != 1 {
-		t.Fatalf("destroy infra should ask become once, got %d prompts\n%s", got, output)
+		t.Fatalf("provider destroy should ask become once, got %d prompts\n%s", got, output)
 	}
 }
 
-func TestDestroyRemovesStateDirOnSuccess(t *testing.T) {
-	if _, err := os.Stat("/bin/true"); err != nil {
-		t.Skip("/bin/true not available")
-	}
+func TestClustersDestroyDryRunUsesClustersWorkflow(t *testing.T) {
 	stateDir := t.TempDir()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"destroy", "all",
-		"-f", "../../examples/libvirt-redfish-lab-fleet",
-		"--state-dir", stateDir,
-		"--yes",
-		"--ansible-playbook", "/bin/true",
-	}, nil, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
-	}
-	if !strings.Contains(stdout.String(), "removed state-dir: "+stateDir) {
-		t.Fatalf("destroy must announce state-dir removal:\n%s", stdout.String())
-	}
-	if _, err := os.Stat(stateDir); !os.IsNotExist(err) {
-		t.Fatalf("state-dir should be removed, stat err=%v", err)
-	}
-}
-
-func TestDestroyScopedHubKeepsStateDir(t *testing.T) {
-	if _, err := os.Stat("/bin/true"); err != nil {
-		t.Skip("/bin/true not available")
-	}
-	stateDir := t.TempDir()
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	code := Run(context.Background(), []string{
-		"destroy", "clusters",
-		"-f", "../../examples/libvirt-redfish-lab-fleet",
-		"--state-dir", stateDir,
-		"--yes",
-		"--ansible-playbook", "/bin/true",
-	}, nil, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
-	}
-	if strings.Contains(stdout.String(), "removed state-dir") {
-		t.Fatalf("scoped destroy must not remove state-dir:\n%s", stdout.String())
-	}
-	if _, err := os.Stat(stateDir); err != nil {
-		t.Fatalf("state-dir should remain, stat err=%v", err)
-	}
-}
-
-func TestDestroyKeepStateDirFlagPreservesStateDir(t *testing.T) {
-	if _, err := os.Stat("/bin/true"); err != nil {
-		t.Skip("/bin/true not available")
-	}
-	stateDir := t.TempDir()
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	code := Run(context.Background(), []string{
-		"destroy", "all",
-		"-f", "../../examples/libvirt-redfish-lab-fleet",
-		"--state-dir", stateDir,
-		"--yes",
-		"--keep-state-dir",
-		"--ansible-playbook", "/bin/true",
-	}, nil, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
-	}
-	if strings.Contains(stdout.String(), "removed state-dir") {
-		t.Fatalf("--keep-state-dir must not remove state-dir:\n%s", stdout.String())
-	}
-	if _, err := os.Stat(stateDir); err != nil {
-		t.Fatalf("state-dir should remain, stat err=%v", err)
-	}
-}
-
-func TestStatusReportsRenderedPresence(t *testing.T) {
-	stateDir := t.TempDir()
-	if code := Run(context.Background(), []string{
-		"apply", "infra",
+		"clusters", "destroy",
 		"-f", "../../examples/libvirt-redfish-lab-fleet",
 		"--state-dir", stateDir,
 		"--dry-run",
-	}, nil, io.Discard, io.Discard); code != 0 {
-		t.Fatalf("render setup failed")
-	}
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	code := Run(context.Background(), []string{
-		"status",
-		"-f", "../../examples/libvirt-redfish-lab-fleet",
-		"--state-dir", stateDir,
 	}, nil, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
 	}
 	output := stdout.String()
 	for _, expected := range []string{
-		"desired:",
-		"phases:",
-		"- provider: apply=playbooks/provider-prepare.yml destroy=playbooks/provider-destroy.yml",
-		"- cluster: apply=playbooks/cluster-prepare.yml destroy=playbooks/cluster-destroy.yml",
-		"0 missing",
+		"- clusters [root]",
+		"dry-run ansible command [clusters destroy]: ansible-playbook",
+		"playbooks/clusters-destroy.yml",
 	} {
 		if !strings.Contains(output, expected) {
 			t.Fatalf("stdout missing %q\n%s", expected, output)
@@ -1084,71 +948,12 @@ func TestStatusReportsRenderedPresence(t *testing.T) {
 	}
 }
 
-func TestDiffReportsDriftWhenStateIsStale(t *testing.T) {
-	stateDir := t.TempDir()
-	if code := Run(context.Background(), []string{
-		"apply", "infra",
-		"-f", "../../examples/libvirt-redfish-lab-fleet",
-		"--state-dir", stateDir,
-		"--dry-run",
-	}, nil, io.Discard, io.Discard); code != 0 {
-		t.Fatalf("render setup failed")
-	}
-	inventory := filepath.Join(stateDir, "ansible", "inventory.yaml")
-	if err := os.WriteFile(inventory, []byte("tampered: true\n"), 0o644); err != nil {
-		t.Fatalf("tamper inventory: %v", err)
-	}
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	code := Run(context.Background(), []string{
-		"status",
-		"-f", "../../examples/libvirt-redfish-lab-fleet",
-		"--state-dir", stateDir,
-		"--diff",
-	}, nil, &stdout, &stderr)
-	if code != 1 {
-		t.Fatalf("expected drift exit=1, got %d, stdout: %s", code, stdout.String())
-	}
-	if !strings.Contains(stdout.String(), "drift detected") {
-		t.Fatalf("stdout missing drift marker: %s", stdout.String())
-	}
-	if !strings.Contains(stdout.String(), "ansible/inventory.yaml") {
-		t.Fatalf("stdout missing changed file: %s", stdout.String())
-	}
-}
-
-func TestDiffReportsNoDriftAfterFreshRender(t *testing.T) {
-	stateDir := t.TempDir()
-	if code := Run(context.Background(), []string{
-		"apply", "infra",
-		"-f", "../../examples/libvirt-redfish-lab-fleet",
-		"--state-dir", stateDir,
-		"--dry-run",
-	}, nil, io.Discard, io.Discard); code != 0 {
-		t.Fatalf("render setup failed")
-	}
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	code := Run(context.Background(), []string{
-		"status",
-		"-f", "../../examples/libvirt-redfish-lab-fleet",
-		"--state-dir", stateDir,
-		"--diff",
-	}, nil, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("expected no drift, got code=%d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
-	}
-	if !strings.Contains(stdout.String(), "no drift") {
-		t.Fatalf("stdout missing no-drift marker: %s", stdout.String())
-	}
-}
-
-func TestApplyDryRunUsesAnsibleBecomePrompt(t *testing.T) {
+func TestClustersApplyDryRunUsesAnsibleBecomePrompt(t *testing.T) {
 	stateDir := t.TempDir()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"apply", "clusters",
+		"clusters", "apply",
 		"-f", "../../test/e2e/libvirt-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 		"--dry-run",
@@ -1162,18 +967,18 @@ func TestApplyDryRunUsesAnsibleBecomePrompt(t *testing.T) {
 	if !strings.Contains(stdout.String(), "--ask-become-pass") {
 		t.Fatalf("stdout must include --ask-become-pass for remote become prompts\n%s", stdout.String())
 	}
-	if !strings.Contains(stdout.String(), "dry-run ansible command [workflow=clusters]: ansible-playbook") {
-		t.Fatalf("stdout must use the clusters workflow playbook\n%s", stdout.String())
+	if !strings.Contains(stdout.String(), "dry-run ansible command [clusters apply]: ansible-playbook") {
+		t.Fatalf("stdout must use the clusters scope playbook\n%s", stdout.String())
 	}
 	if !strings.Contains(stdout.String(), "playbooks/apply-clusters.yml") {
 		t.Fatalf("stdout missing apply-clusters wrapper playbook\n%s", stdout.String())
 	}
 	if strings.Contains(stdout.String(), "playbooks/clusters-install.yml") {
-		t.Fatalf("apply clusters should run through apply-clusters.yml, not directly through clusters-install.yml\n%s", stdout.String())
+		t.Fatalf("clusters apply should run through apply-clusters.yml, not directly through clusters-install.yml\n%s", stdout.String())
 	}
 }
 
-func TestApplyAsRootSkipsBecomePrompt(t *testing.T) {
+func TestClustersApplyAsRootSkipsBecomePrompt(t *testing.T) {
 	orig := askBecomePassDefault
 	askBecomePassDefault = func() bool { return false }
 	t.Cleanup(func() { askBecomePassDefault = orig })
@@ -1181,7 +986,7 @@ func TestApplyAsRootSkipsBecomePrompt(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"apply", "clusters",
+		"clusters", "apply",
 		"-f", "../../test/e2e/libvirt-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 		"--dry-run",
@@ -1194,12 +999,12 @@ func TestApplyAsRootSkipsBecomePrompt(t *testing.T) {
 	}
 }
 
-func TestApplyDryRunPrintsEscalationSummary(t *testing.T) {
+func TestClustersApplyDryRunPrintsEscalationSummary(t *testing.T) {
 	stateDir := t.TempDir()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"apply", "clusters",
+		"clusters", "apply",
 		"-f", "../../test/e2e/libvirt-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 		"--dry-run",
@@ -1243,13 +1048,13 @@ func stubPreflightAlwaysOK(t *testing.T) {
 	})
 }
 
-func TestApplyConfirmationDecline(t *testing.T) {
+func TestClustersApplyConfirmationDecline(t *testing.T) {
 	stubPreflightAlwaysOK(t)
 	stateDir := t.TempDir()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"apply", "clusters",
+		"clusters", "apply",
 		"-f", "../../test/e2e/libvirt-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 	}, strings.NewReader("n\n"), &stdout, &stderr)
@@ -1264,13 +1069,13 @@ func TestApplyConfirmationDecline(t *testing.T) {
 	}
 }
 
-func TestApplyYesSkipsConfirmationAndStopsBeforeAnsible(t *testing.T) {
+func TestClustersApplyYesSkipsConfirmationAndStopsBeforeAnsible(t *testing.T) {
 	stubPreflightAlwaysOK(t)
 	stateDir := t.TempDir()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"apply", "clusters",
+		"clusters", "apply",
 		"-f", "../../test/e2e/libvirt-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 		"--yes",
@@ -1286,3 +1091,21 @@ func TestApplyYesSkipsConfirmationAndStopsBeforeAnsible(t *testing.T) {
 		t.Fatalf("--yes should skip confirmation, stderr: %s", stderr.String())
 	}
 }
+
+func TestHubScopeStubReportsReserved(t *testing.T) {
+	for _, action := range []string{"check", "apply", "destroy"} {
+		t.Run(action, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			code := Run(context.Background(), []string{"hub", action}, nil, &stdout, &stderr)
+			if code != 0 {
+				t.Fatalf("hub %s code=%d stderr=%s", action, code, stderr.String())
+			}
+			if !strings.Contains(stdout.String(), "hub scope is reserved") {
+				t.Fatalf("hub %s missing reserved message:\n%s", action, stdout.String())
+			}
+		})
+	}
+}
+
+// keep io.Discard import live across tests for parity with prior file
+var _ = io.Discard

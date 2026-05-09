@@ -77,7 +77,7 @@
 
     - name: Report retained mirror registry data volume
       ansible.builtin.debug:
-        msg: "Retained mirror registry data volume at {{ gitups_host_state_dir }}/mirror-registry/{{ gitups_current_mirror_registry.name }}/data (gitups destroy --keep-mirrored-images)"
+        msg: "Retained mirror registry data volume at {{ gitups_host_state_dir }}/mirror-registry/{{ gitups_current_mirror_registry.name }}/data (gitups provider destroy --keep-mirrored-images)"
       when:
         - gitups_current_mirror_registry is not none
         - gitups_keep_mirrored_images | default(false) | bool

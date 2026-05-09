@@ -5,7 +5,7 @@
 **Root cause:** The gitups process has neither root privileges nor passwordless sudo. Ansible's per-task `become: true` fires a password prompt that stdin cannot satisfy when the process was launched non-interactively.
 
 **Fix / invariant:** `ensureSudoReady` (internal/cli/apply.go) enforces the rule before any ansible execution. Two invocation patterns are supported:
-1. Run as root: `sudo gitups apply`
+1. Run as root: `sudo gitups <scope> apply`
 2. NOPASSWD sudo configured for the invoking user
 
 Remote provider hosts are not probed from the controller — their sudo policy lives on the target box. The play surfaces the failure there if NOPASSWD is missing.

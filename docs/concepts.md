@@ -57,24 +57,30 @@ as fleet GitOps content. That publication path is not implemented today;
 every `OCPCluster` in the desired state is installed locally via the agent
 installer.
 
-## Phases
+## Scopes
 
-`gitups apply <scope>` runs idempotent phases through explicit workflow scopes:
+`gitups <scope> apply` runs idempotent phases through explicit scopes:
 
-1. `infra`: provider infrastructure, BMC emulation, load balancing, DNS or host
-   name resolution.
-2. `clusters`: openshift-install agent against the cluster nodes plus per-cluster
+1. `bastion`: controller-local dependencies (managed Ansible venv, OCP CLIs).
+2. `provider`: provider infrastructure plus per-cluster substrate
+   (`InfrastructureProvider` services and `ClusterInfrastructure` instances).
+3. `clusters`: openshift-install agent against the cluster nodes plus per-cluster
    install state.
+4. `hub` *(reserved)*: hub-cluster components for clusters declaring
+   `role: hub`. Not implemented yet.
+
+Each scope also exposes `<scope> check` (local + Ansible read-only checks)
+and `<scope> destroy` (reverse).
 
 ## Rendered Output
 
-Rendering is internal to `plan`, `preflight`, `apply`, and `status --diff`.
-Gitups writes deterministic output under `--state-dir`, including effective
-state, installer assets, Ansible inventory and variables, and the embedded
-Ansible bundle.
+Rendering is internal to every `<scope> check`, `<scope> apply`, and
+`<scope> destroy`. Gitups writes deterministic output under `--state-dir`,
+including effective state, installer assets, Ansible inventory and variables,
+and the embedded Ansible bundle.
 
 ## Secrets
 
 Desired state references secret names. Secret bytes live outside the repo under
-`<gitups-home>/secrets` by default. See
+`<gitups-user-dir>/secrets` by default. See
 [`/specs/security.md`](../specs/security.md).

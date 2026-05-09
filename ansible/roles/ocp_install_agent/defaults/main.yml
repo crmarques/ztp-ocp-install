@@ -1,5 +1,5 @@
 ---
-gitups_secrets_dir: "{{ (lookup('env', 'GITUPS_HOME') | default(lookup('env', 'HOME') ~ '/.gitups', true)) }}/secrets"
+gitups_secrets_dir: "{{ lookup('env', 'GITUPS_SECRETS_DIR') | default((lookup('env', 'GITUPS_USER_DIR') | default(lookup('env', 'HOME') ~ '/.gitups', true)) ~ '/secrets', true) }}"
 
 gitups_openshift_install: openshift-install
 

@@ -49,8 +49,8 @@ Compiles the CLI and syncs the embedded Ansible bundle into the binary.
 ### 2. Bootstrap the controller
 
 ```text
-bin/gitups doctor fix -f test/e2e/libvirt-1-host-1-sno-hub --yes
-bin/gitups doctor check -f test/e2e/libvirt-1-host-1-sno-hub --yes
+bin/gitups bastion apply -f test/e2e/libvirt-1-host-1-sno-hub --yes
+bin/gitups bastion check -f test/e2e/libvirt-1-host-1-sno-hub
 ```
 
 Installs a pinned Ansible venv and the OCP CLIs (`oc`, `kubectl`,
@@ -207,20 +207,21 @@ podman run --rm -it \
 ### 4. Drive the install from inside the container
 
 ```text
-gitups doctor check -f /gitups/test/e2e/libvirt-1-host-1-sno-hub/ --yes
-gitups doctor fix -f /gitups/test/e2e/libvirt-1-host-1-sno-hub/ --yes
+gitups bastion check -f /gitups/test/e2e/libvirt-1-host-1-sno-hub/
+gitups bastion apply -f /gitups/test/e2e/libvirt-1-host-1-sno-hub/ --yes
 
 gitups secrets generate -f /gitups/test/e2e/libvirt-1-host-1-sno-hub/
 
-gitups apply infra -f /gitups/test/e2e/libvirt-1-host-1-sno-hub/ --state-dir /tmp/gitups-libvirt-1-host-1-sno-hub --yes
+gitups provider apply -f /gitups/test/e2e/libvirt-1-host-1-sno-hub/ --state-dir /tmp/gitups-libvirt-1-host-1-sno-hub --yes
 
-gitups apply clusters -f /gitups/test/e2e/libvirt-1-host-1-sno-hub/ --state-dir /tmp/gitups-libvirt-1-host-1-sno-hub --yes
+gitups clusters apply -f /gitups/test/e2e/libvirt-1-host-1-sno-hub/ --state-dir /tmp/gitups-libvirt-1-host-1-sno-hub --yes
 ```
 
 ### 5. Tear down
 
 ```text
-gitups destroy all -f /gitups/test/e2e/libvirt-1-host-1-sno-hub/ --state-dir /tmp/gitups-libvirt-1-host-1-sno-hub --yes
+gitups clusters destroy -f /gitups/test/e2e/libvirt-1-host-1-sno-hub/ --state-dir /tmp/gitups-libvirt-1-host-1-sno-hub --yes
+gitups provider destroy -f /gitups/test/e2e/libvirt-1-host-1-sno-hub/ --state-dir /tmp/gitups-libvirt-1-host-1-sno-hub --yes
 ```
 
 ## Secrets used

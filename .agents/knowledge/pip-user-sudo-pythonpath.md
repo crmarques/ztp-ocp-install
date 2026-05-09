@@ -1,6 +1,6 @@
 # ansible not found under sudo (pip --user install)
 
-**Symptom:** `sudo gitups apply` fails with `ansible-playbook: command not found` or Python `ModuleNotFoundError` for ansible modules, even though ansible works for the non-root user.
+**Symptom:** `sudo gitups <scope> apply` fails with `ansible-playbook: command not found` or Python `ModuleNotFoundError` for ansible modules, even though ansible works for the non-root user.
 
 **Root cause:** The user installed ansible via `pip install --user`. That places it under `~/.local/lib/python*/site-packages/`, which is not in root's `sys.path`. When gitups runs ansible-playbook under sudo, the interpreter launched by the subprocess is root's python3, which cannot see the user's site-packages.
 

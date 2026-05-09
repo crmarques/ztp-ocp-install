@@ -63,14 +63,14 @@ make e2e CASE=libvirt-3-hosts-1-sno-hub-2-ocp-fleet
 Equivalent CLI flow:
 
 ```text
-gitups validate -f test/e2e/libvirt-3-hosts-1-sno-hub-2-ocp-fleet --check-host
-gitups plan     -f test/e2e/libvirt-3-hosts-1-sno-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-sno-hub-2-ocp-fleet
-gitups apply infra -f test/e2e/libvirt-3-hosts-1-sno-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-sno-hub-2-ocp-fleet --dry-run
-gitups apply clusters -f test/e2e/libvirt-3-hosts-1-sno-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-sno-hub-2-ocp-fleet --dry-run
-gitups apply infra -f test/e2e/libvirt-3-hosts-1-sno-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-sno-hub-2-ocp-fleet --yes
-gitups apply clusters -f test/e2e/libvirt-3-hosts-1-sno-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-sno-hub-2-ocp-fleet --yes
-gitups status   -f test/e2e/libvirt-3-hosts-1-sno-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-sno-hub-2-ocp-fleet --diff
-gitups destroy all -f test/e2e/libvirt-3-hosts-1-sno-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-sno-hub-2-ocp-fleet --yes
+gitups bastion check -f test/e2e/libvirt-3-hosts-1-sno-hub-2-ocp-fleet
+gitups provider check -f test/e2e/libvirt-3-hosts-1-sno-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-sno-hub-2-ocp-fleet --dry-run
+gitups provider apply -f test/e2e/libvirt-3-hosts-1-sno-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-sno-hub-2-ocp-fleet --dry-run
+gitups clusters apply -f test/e2e/libvirt-3-hosts-1-sno-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-sno-hub-2-ocp-fleet --dry-run
+gitups provider apply -f test/e2e/libvirt-3-hosts-1-sno-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-sno-hub-2-ocp-fleet --yes
+gitups clusters apply -f test/e2e/libvirt-3-hosts-1-sno-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-sno-hub-2-ocp-fleet --yes
+gitups clusters destroy -f test/e2e/libvirt-3-hosts-1-sno-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-sno-hub-2-ocp-fleet --yes
+gitups provider destroy -f test/e2e/libvirt-3-hosts-1-sno-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-sno-hub-2-ocp-fleet --yes
 ```
 
 ## External Prerequisites

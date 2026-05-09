@@ -1,6 +1,6 @@
 # Apply hangs at BMC wait-tasks: stale systemd units holding ports
 
-**Symptom:** `gitups apply infra` or `apply all` hangs indefinitely at provider BMC/wait-tasks. Preflight reports a port already in use.
+**Symptom:** `gitups provider apply` or `apply all` hangs indefinitely at provider BMC/wait-tasks. Preflight reports a port already in use.
 
 **Root cause:** `gitups-sushy-<name>`, `gitups-vmedia-<name>`, and `gitups-boot-artifacts-<name>` systemd units from a **prior provider name** (renamed or removed from the state file) are still running and holding the BMC/vmedia/boot-artifacts ports. The new provider phase tries to bind those ports and waits forever.
 

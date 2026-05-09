@@ -8,10 +8,11 @@ E2E_FIXTURE = $(E2E_DIR)/$(CASE)
 E2E_STATE_DIR ?= /tmp/gitups-$(CASE)
 ANSIBLE_PLAYBOOK ?= $(shell command -v ansible-playbook 2>/dev/null)
 E2E_ANSIBLE_FLAGS = $(if $(ANSIBLE_PLAYBOOK),--ansible-playbook $(ANSIBLE_PLAYBOOK),)
-E2E_APPLY_INFRA ?= $(BIN_DIR)/$(BINARY) apply infra --yes
-E2E_APPLY_CLUSTERS ?= $(BIN_DIR)/$(BINARY) apply clusters --yes
+E2E_APPLY_PROVIDER ?= $(BIN_DIR)/$(BINARY) provider apply --yes
+E2E_APPLY_CLUSTERS ?= $(BIN_DIR)/$(BINARY) clusters apply --yes
 E2E_APPLY_FLAGS ?=
-E2E_DESTROY ?= $(BIN_DIR)/$(BINARY) destroy all
+E2E_DESTROY_PROVIDER ?= $(BIN_DIR)/$(BINARY) provider destroy --yes
+E2E_DESTROY_CLUSTERS ?= $(BIN_DIR)/$(BINARY) clusters destroy --yes
 E2E_DESTROY_FLAGS ?=
 E2E_CLEAN ?= sudo rm -rf
 
@@ -27,7 +28,8 @@ ANSIBLE_SYNTAX_PLAYBOOKS = \
 	ansible/playbooks/preflight.yml \
 	ansible/playbooks/apply-infra.yml \
 	ansible/playbooks/apply-clusters.yml \
-	ansible/playbooks/destroy-all.yml \
+	ansible/playbooks/destroy-infra.yml \
+	ansible/playbooks/clusters-destroy.yml \
 	ansible/playbooks/provider-prepare.yml \
 	ansible/playbooks/setup-controller-clis.yml
 
@@ -93,10 +95,10 @@ provider-swap-check:
 	diff -u examples/libvirt-redfish-fleet/ocp-cluster-managed-01.yaml examples/baremetal-redfish-fleet/ocp-cluster-managed-01.yaml
 
 validate: build
-	$(BIN_DIR)/$(BINARY) validate -f examples/libvirt-redfish-fleet
+	$(BIN_DIR)/$(BINARY) provider check -f examples/libvirt-redfish-fleet --state-dir $(STATE_DIR) --dry-run
 
 plan: build
-	$(BIN_DIR)/$(BINARY) plan -f examples/libvirt-redfish-fleet --state-dir $(STATE_DIR)
+	$(BIN_DIR)/$(BINARY) provider apply -f examples/libvirt-redfish-fleet --state-dir $(STATE_DIR) --dry-run
 
 check-e2e-deps:
 	@test -n "$(ANSIBLE_PLAYBOOK)" || { printf '%s\n' 'ansible-playbook not found in PATH; install Ansible or set ANSIBLE_PLAYBOOK=/path/to/ansible-playbook'; exit 1; }
@@ -109,18 +111,20 @@ list-e2e-cases:
 	@printf '%s\n' 'Available e2e cases:' $(addprefix '  ',$(E2E_CASES))
 
 e2e-dry-run: check-e2e-case check-e2e-deps build
-	$(BIN_DIR)/$(BINARY) apply infra -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) --dry-run $(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
-	$(BIN_DIR)/$(BINARY) apply clusters -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) --dry-run $(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
+	$(BIN_DIR)/$(BINARY) provider apply -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) --dry-run $(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
+	$(BIN_DIR)/$(BINARY) clusters apply -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) --dry-run $(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
 
 e2e: check-e2e-case check-e2e-deps build
-	$(E2E_APPLY_INFRA) -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) $(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
+	$(E2E_APPLY_PROVIDER) -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) $(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
 	$(E2E_APPLY_CLUSTERS) -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) $(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
 
 e2e-destroy-dry-run: check-e2e-case check-e2e-deps build
-	$(BIN_DIR)/$(BINARY) destroy all -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) --dry-run $(E2E_ANSIBLE_FLAGS) $(E2E_DESTROY_FLAGS)
+	$(BIN_DIR)/$(BINARY) clusters destroy -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) --dry-run $(E2E_ANSIBLE_FLAGS) $(E2E_DESTROY_FLAGS)
+	$(BIN_DIR)/$(BINARY) provider destroy -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) --dry-run $(E2E_ANSIBLE_FLAGS) $(E2E_DESTROY_FLAGS)
 
 e2e-destroy: check-e2e-case check-e2e-deps build
-	$(E2E_DESTROY) -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) --yes $(E2E_ANSIBLE_FLAGS) $(E2E_DESTROY_FLAGS)
+	$(E2E_DESTROY_CLUSTERS) -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) $(E2E_ANSIBLE_FLAGS) $(E2E_DESTROY_FLAGS)
+	$(E2E_DESTROY_PROVIDER) -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) $(E2E_ANSIBLE_FLAGS) $(E2E_DESTROY_FLAGS)
 	$(E2E_CLEAN) $(E2E_STATE_DIR)
 
 clean:

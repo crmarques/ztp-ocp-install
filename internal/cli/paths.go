@@ -7,13 +7,16 @@ import (
 )
 
 const (
-	gitupsHomeEnv       = "GITUPS_HOME"
+	gitupsUserDirEnv    = "GITUPS_USER_DIR"
+	gitupsStateDirEnv   = "GITUPS_STATE_DIR"
+	gitupsSecretsDirEnv = "GITUPS_SECRETS_DIR"
+
 	defaultHostStateDir = "/var/lib/gitups"
 	ansibleVenvDirName  = "ansible-venv"
 )
 
-func defaultGitupsHome() string {
-	if value := strings.TrimSpace(os.Getenv(gitupsHomeEnv)); value != "" {
+func defaultGitupsUserDir() string {
+	if value := strings.TrimSpace(os.Getenv(gitupsUserDirEnv)); value != "" {
 		return filepath.Clean(value)
 	}
 	home, err := os.UserHomeDir()
@@ -24,11 +27,17 @@ func defaultGitupsHome() string {
 }
 
 func defaultStateDir() string {
-	return filepath.Join(defaultGitupsHome(), "state")
+	if value := strings.TrimSpace(os.Getenv(gitupsStateDirEnv)); value != "" {
+		return filepath.Clean(value)
+	}
+	return filepath.Join(defaultGitupsUserDir(), "state")
 }
 
 func defaultSecretsDir() string {
-	return filepath.Join(defaultGitupsHome(), "secrets")
+	if value := strings.TrimSpace(os.Getenv(gitupsSecretsDirEnv)); value != "" {
+		return filepath.Clean(value)
+	}
+	return filepath.Join(defaultGitupsUserDir(), "secrets")
 }
 
 func openshiftInstallSearchDirs(hostStateDir string) []string {
@@ -36,11 +45,11 @@ func openshiftInstallSearchDirs(hostStateDir string) []string {
 }
 
 func defaultControllerCLIInstallDir() string {
-	return filepath.Join(defaultGitupsHome(), "bin")
+	return filepath.Join(defaultGitupsUserDir(), "bin")
 }
 
 func ansibleVenvDir() string {
-	return filepath.Join(defaultGitupsHome(), ansibleVenvDirName)
+	return filepath.Join(defaultGitupsUserDir(), ansibleVenvDirName)
 }
 
 func ansibleVenvBin(name string) string {

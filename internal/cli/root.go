@@ -25,15 +25,12 @@ func newRootCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Comm
 	root.SetErr(stderr)
 
 	root.AddCommand(
-		newDoctorCmd(stdin, stdout, stderr),
 		newInitCmd(stdout),
-		newValidateCmd(stdout, stderr),
-		newPreflightCmd(stdout, stderr),
-		newPlanCmd(stdout),
-		newApplyCmd(stdin, stdout, stderr),
-		newDestroyCmd(stdin, stdout, stderr),
-		newStatusCmd(stdout),
 		newSecretsCmd(stdout, stderr),
+		newBastionCmd(stdin, stdout, stderr),
+		newScopeCmd(providerScope, stdin, stdout, stderr),
+		newScopeCmd(clustersScope, stdin, stdout, stderr),
+		newHubCmd(stdout),
 	)
 	return root
 }
@@ -44,10 +41,9 @@ type commonFlags struct {
 }
 
 func addCommonFlags(cmd *cobra.Command) *commonFlags {
-	stateDir := defaultStateDir()
-	cf := &commonFlags{stateDir: stateDir}
+	cf := &commonFlags{stateDir: defaultStateDir()}
 	cmd.Flags().StringArrayVarP(&cf.files, "file", "f", nil, "Gitups YAML file or directory; may be repeated")
-	cmd.Flags().StringVar(&cf.stateDir, "state-dir", stateDir, "generated state directory")
+	cmd.Flags().StringVar(&cf.stateDir, "state-dir", cf.stateDir, "generated state directory (env: GITUPS_STATE_DIR)")
 	return cf
 }
 

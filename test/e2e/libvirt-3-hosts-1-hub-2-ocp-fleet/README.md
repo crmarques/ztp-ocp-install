@@ -90,13 +90,13 @@ the three provider hosts (the addresses listed under `provider.yaml: spec.hosts.
 
 ## Bastion Prerequisites
 
-`gitups apply` runs on a bastion that SSHes to the three provider hosts. The
+`gitups provider apply` / `gitups clusters apply` runs on a bastion that SSHes to the three provider hosts. The
 bastion needs:
 
 - `ansible-playbook` on `PATH` and the embedded bundle (handled by `make build`).
 - Reachability to each `provider.yaml: spec.hosts.*.ssh.address:22` and to the
   proxy itself.
-- Proxy env exported in the shell that runs `gitups apply` (the runner
+- Proxy env exported in the shell that runs `gitups provider apply` / `gitups clusters apply` (the runner
   forwards `os.Environ()` to ansible-playbook). Use the values from
   `environment.yaml: spec.ocpInstall.restricted.proxy`:
 
@@ -120,12 +120,12 @@ make e2e CASE=libvirt-3-hosts-1-hub-2-ocp-fleet
 Equivalent CLI flow:
 
 ```text
-gitups validate -f test/e2e/libvirt-3-hosts-1-hub-2-ocp-fleet --check-host
-gitups plan     -f test/e2e/libvirt-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-hub-2-ocp-fleet
-gitups apply infra -f test/e2e/libvirt-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-hub-2-ocp-fleet --dry-run
-gitups apply clusters -f test/e2e/libvirt-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-hub-2-ocp-fleet --dry-run
-gitups apply infra -f test/e2e/libvirt-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-hub-2-ocp-fleet --yes
-gitups apply clusters -f test/e2e/libvirt-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-hub-2-ocp-fleet --yes
-gitups status   -f test/e2e/libvirt-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-hub-2-ocp-fleet --diff
-gitups destroy all -f test/e2e/libvirt-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-hub-2-ocp-fleet --yes
+gitups bastion check -f test/e2e/libvirt-3-hosts-1-hub-2-ocp-fleet
+gitups provider check -f test/e2e/libvirt-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-hub-2-ocp-fleet --dry-run
+gitups provider apply -f test/e2e/libvirt-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-hub-2-ocp-fleet --dry-run
+gitups clusters apply -f test/e2e/libvirt-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-hub-2-ocp-fleet --dry-run
+gitups provider apply -f test/e2e/libvirt-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-hub-2-ocp-fleet --yes
+gitups clusters apply -f test/e2e/libvirt-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-hub-2-ocp-fleet --yes
+gitups clusters destroy -f test/e2e/libvirt-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-hub-2-ocp-fleet --yes
+gitups provider destroy -f test/e2e/libvirt-3-hosts-1-hub-2-ocp-fleet --state-dir /tmp/gitups-libvirt-3-hosts-1-hub-2-ocp-fleet --yes
 ```
