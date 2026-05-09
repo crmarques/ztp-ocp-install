@@ -1,4 +1,4 @@
-module github.com/crmarques/ztp-ocp-install-lab
+module github.com/crmarques/gitups
 
 go 1.25.9
 

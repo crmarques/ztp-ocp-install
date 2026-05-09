@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/crmarques/ztp-ocp-install-lab/api/v1alpha1"
+	"github.com/crmarques/gitups/api/v1alpha1"
 	"go.yaml.in/yaml/v3"
 )
 

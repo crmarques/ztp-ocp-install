@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/crmarques/ztp-ocp-install-lab/api/v1alpha1"
+	"github.com/crmarques/gitups/api/v1alpha1"
 )
 
 func TestResolveProxyEnvNoEnvironmentsReturnsNil(t *testing.T) {

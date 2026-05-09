@@ -25,9 +25,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/crmarques/ztp-ocp-install-lab/api/v1alpha1"
-	"github.com/crmarques/ztp-ocp-install-lab/internal/infra"
-	"github.com/crmarques/ztp-ocp-install-lab/internal/secretref"
+	"github.com/crmarques/gitups/api/v1alpha1"
+	"github.com/crmarques/gitups/internal/infra"
+	"github.com/crmarques/gitups/internal/secretref"
 )
 
 type generatedSelfSignedRequest struct {

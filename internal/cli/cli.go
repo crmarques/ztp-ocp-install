@@ -9,9 +9,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/crmarques/ztp-ocp-install-lab/api/v1alpha1"
-	"github.com/crmarques/ztp-ocp-install-lab/internal/embedded"
-	"github.com/crmarques/ztp-ocp-install-lab/internal/render"
+	"github.com/crmarques/gitups/api/v1alpha1"
+	"github.com/crmarques/gitups/internal/embedded"
+	"github.com/crmarques/gitups/internal/render"
 )
 
 const ansibleBundleDirName = "ansible-bundle"

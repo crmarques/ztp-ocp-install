@@ -4,7 +4,7 @@ import (
 	"context"
 	"os"
 
-	"github.com/crmarques/ztp-ocp-install-lab/internal/cli"
+	"github.com/crmarques/gitups/internal/cli"
 )
 
 func main() {

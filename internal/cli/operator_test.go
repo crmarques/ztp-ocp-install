@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/crmarques/ztp-ocp-install-lab/internal/infra"
+	"github.com/crmarques/gitups/internal/infra"
 )
 
 func TestProviderCheckRunsAnsiblePreflight(t *testing.T) {

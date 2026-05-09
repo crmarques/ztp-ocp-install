@@ -11,11 +11,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/crmarques/ztp-ocp-install-lab/api/v1alpha1"
-	"github.com/crmarques/ztp-ocp-install-lab/internal/ansible"
-	"github.com/crmarques/ztp-ocp-install-lab/internal/embedded"
-	"github.com/crmarques/ztp-ocp-install-lab/internal/infra"
-	"github.com/crmarques/ztp-ocp-install-lab/internal/render"
+	"github.com/crmarques/gitups/api/v1alpha1"
+	"github.com/crmarques/gitups/internal/ansible"
+	"github.com/crmarques/gitups/internal/embedded"
+	"github.com/crmarques/gitups/internal/infra"
+	"github.com/crmarques/gitups/internal/render"
 )
 
 func newScopeCmd(scope scopeSpec, stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Command {
