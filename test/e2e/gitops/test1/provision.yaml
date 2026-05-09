@@ -1,0 +1,45 @@
+apiVersion: gitups.io/v1alpha1
+kind: GitOpsPackageSet
+metadata:
+  name: test1
+spec:
+  envKey: dev
+  controllers:
+    kubernetesResources:
+      repo: gitops-controllers
+      instance: argocd
+  sources:
+    - name: local
+      filesystem:
+        path: ../../../../../gitops-workspace/gitups-packages/packages
+
+  repositories:
+    - name: basic-infra
+      description: "Cluster-wide infra: nginx-ingress only (no LB / metallb in test1)."
+      type: kubernetes-resources
+      packages:
+        - template: local/nginx-ingress
+          installMethod: helm
+          values:
+            controller:
+              service:
+                type: ClusterIP
+
+    - name: basic-infra-{{.Env}}
+      description: "Env-scoped basic-infra overlay."
+      type: kubernetes-resources
+      repoRef:
+        name: basic-infra
+
+    - name: gitops-controllers
+      description: "GitOps controllers: argocd only."
+      type: kubernetes-resources
+      packages:
+        - template: local/argocd
+          installMethod: helm
+
+    - name: gitops-controllers-{{.Env}}
+      description: "Env-scoped argocd overlay."
+      type: kubernetes-resources
+      repoRef:
+        name: gitops-controllers
