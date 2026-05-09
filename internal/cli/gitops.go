@@ -1,13 +1,19 @@
-// Command gitups drives the workspace-oriented GitOps-bootstrap flow:
+// Command gitups drives the workspace-oriented GitOps-bootstrap flow.
+// Subcommands appear under `gitups gitops --help` in usage order:
 //
-//	gitups init     <name> [-d <dir>]                           scaffold Provision
-//	gitups expand   <name> [-d <dir>] [--force]                 Provision  -> FullProvision
-//	gitups check    <name> [-d <dir>]                           validate Provision and FullProvision
-//	gitups generate <name> [-d <dir>] [--context c] [--allow-placeholders]
+//	init     <name> [-d <dir>]                                  scaffold Provision
+//	expand   <name> [-d <dir>] [--force]                        Provision  -> FullProvision
+//	fill     <name> [-d <dir>] --set <instance>.<path>=<value>  fill placeholders in FullProvision
+//	check    <name> [-d <dir>]                                  validate Provision and FullProvision
+//	plan     <name> [-d <dir>] [--full]                         print apply plan without touching the cluster
+//	render   <name> [-d <dir>] [--context c] [--allow-placeholders]
 //	                                                            FullProvision -> repo tree
-//	gitups apply    <name> --to <ctx> [-d <dir>] [--dry-run] [--allow-placeholders] [--generate-secrets]
+//	push     <name> --provider <p> --base-url <url> [-d <dir>]  push rendered repos to git
+//	apply    <name> --to <ctx> [-d <dir>] [--dry-run] [--allow-placeholders] [--generate-secrets]
 //	                                                            apply each repo dir via the KRC-declared CLI
-//	gitups status   <name> [-d <dir>]                           drift report
+//	wait     <name> --to <ctx> [-d <dir>]                       wait for KRC handoff conditions
+//	status   <name> [-d <dir>]                                  drift report
+//	destroy  <name> --to <ctx> [-d <dir>]                       reverse apply
 //
 // Each <name> owns a workspace at <dir>/<name>/ holding provision.yaml,
 // full-provision.yaml, and the rendered repo subdirs as siblings.
@@ -62,18 +68,19 @@ func newGitopsCmd() *cobra.Command {
 			"deterministic repo trees with helm/kustomize/olm/raw; pushes them to a\n" +
 			"git provider; and bootstraps the cluster via the KRC's declared CLI.",
 	}
-	cmd.AddCommand(
-		newGitopsInitCmd(),
-		newGitopsExpandCmd(),
-		newGitopsCheckCmd(),
-		newGitopsRenderCmd(),
-		newGitopsPushCmd(),
-		newGitopsApplyCmd(),
-		newGitopsWaitCmd(),
-		newGitopsStatusCmd(),
-		newGitopsPlanCmd(),
-		newGitopsFillCmd(),
-		newGitopsDestroyCmd(),
+	cmd.AddGroup(&cobra.Group{ID: groupWorkflow, Title: "Workflow Commands:"})
+	addWorkflow(cmd,
+		newGitopsInitCmd(),    // 1. scaffold Provision
+		newGitopsExpandCmd(),  // 2. Provision -> FullProvision
+		newGitopsFillCmd(),    // 3. fill placeholders in FullProvision
+		newGitopsCheckCmd(),   // 4. validate Provision + FullProvision
+		newGitopsPlanCmd(),    // 5. print apply plan without touching the cluster
+		newGitopsRenderCmd(),  // 6. FullProvision -> repo tree
+		newGitopsPushCmd(),    // 7. push rendered repos to git
+		newGitopsApplyCmd(),   // 8. apply repo dirs via the KRC-declared CLI
+		newGitopsWaitCmd(),    // 9. wait for KRC handoff conditions
+		newGitopsStatusCmd(),  // 10. drift report
+		newGitopsDestroyCmd(), // 11. reverse apply
 	)
 	return cmd
 }
