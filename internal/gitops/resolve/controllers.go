@@ -1,8 +1,8 @@
 // Controllers phase: materializes KRC managed-repo units from
-// Provision.spec.controllers.kubernetesResources and rewires script-style
+// GitOpsPackageSet.spec.controllers.kubernetesResources and rewires script-style
 // resource units through the SRC's managed-script intent. Runs after
 // resolveBindings so every install/resource/binding unit is already in
-// the FullProvision before we synthesise controller-owned wrappers.
+// the expanded GitOpsPackageSet before we synthesise controller-owned wrappers.
 
 package resolve
 
@@ -22,7 +22,7 @@ func resolveControllers(
 	p *v1.GitOpsPackageSet,
 	cat *catalog.Catalog,
 	envKey string,
-	fp *v1.FullGitOpsPackageSet,
+	fp *v1.GitOpsPackageSet,
 	priorByInstance map[string]*v1.ResolvedPackage,
 	forceMode bool,
 ) ([]v1.Placeholder, error) {
@@ -120,7 +120,7 @@ func resolveControllers(
 				Template: template,
 				Intent:   intentManagedRepo,
 			}
-			fp.Spec.Packages = append(fp.Spec.Packages, rp)
+			fp.Spec.Resolved.Packages = append(fp.Spec.Resolved.Packages, rp)
 			allPhs = append(allPhs, phs...)
 		}
 	}
@@ -135,13 +135,13 @@ func resolveControllers(
 // a per-field basis. The render pipeline consumes the Controller pointer
 // at emit time and redirects the overlay lookup into the SRC package.
 //
-// Requires Provision.spec.controllers.serviceResources when any
+// Requires GitOpsPackageSet.spec.controllers.serviceResources when any
 // script-style unit is present; errors early otherwise so user mistakes
 // surface before render.
-func rewireManagedScripts(p *v1.GitOpsPackageSet, cat *catalog.Catalog, fp *v1.FullGitOpsPackageSet) error {
+func rewireManagedScripts(p *v1.GitOpsPackageSet, cat *catalog.Catalog, fp *v1.GitOpsPackageSet) error {
 	var scriptIdx []int
-	for i := range fp.Spec.Packages {
-		rp := &fp.Spec.Packages[i]
+	for i := range fp.Spec.Resolved.Packages {
+		rp := &fp.Spec.Resolved.Packages[i]
 		if rp.UnitType != v1.UnitTypeResource {
 			continue
 		}
@@ -179,7 +179,7 @@ func rewireManagedScripts(p *v1.GitOpsPackageSet, cat *catalog.Catalog, fp *v1.F
 	}
 
 	for _, i := range scriptIdx {
-		rp := &fp.Spec.Packages[i]
+		rp := &fp.Spec.Resolved.Packages[i]
 		rp.Controller = &v1.ControllerBinding{
 			Kind:     v1.RoleSRC,
 			Instance: srcInstance,
@@ -198,9 +198,9 @@ func rewireManagedScripts(p *v1.GitOpsPackageSet, cat *catalog.Catalog, fp *v1.F
 // immediate bootstrap sync so the in-cluster operator's readiness isn't
 // on the critical path" flow.
 //
-// No-op when the Provision declares no service-resources controller or
+// No-op when the GitOpsPackageSet declares no service-resources controller or
 // when the SRC declares no `spec.cli.intents`.
-func rewireSRCIntents(p *v1.GitOpsPackageSet, cat *catalog.Catalog, fp *v1.FullGitOpsPackageSet) error {
+func rewireSRCIntents(p *v1.GitOpsPackageSet, cat *catalog.Catalog, fp *v1.GitOpsPackageSet) error {
 	if p.Spec.Controllers == nil || p.Spec.Controllers.ServiceResources == nil {
 		return nil
 	}
@@ -212,8 +212,8 @@ func rewireSRCIntents(p *v1.GitOpsPackageSet, cat *catalog.Catalog, fp *v1.FullG
 		return nil
 	}
 	intents := srcEntry.Def.Spec.CLI.Intents
-	for i := range fp.Spec.Packages {
-		rp := &fp.Spec.Packages[i]
+	for i := range fp.Spec.Resolved.Packages {
+		rp := &fp.Spec.Resolved.Packages[i]
 		if rp.UnitType != v1.UnitTypeResource {
 			continue
 		}
@@ -252,5 +252,5 @@ func findControllerPackage(p *v1.GitOpsPackageSet, cat *catalog.Catalog, repoNam
 		}
 		return catalog.Entry{}, "", "", fmt.Errorf("instance %q not selected in generic repo %q", instance, repoName)
 	}
-	return catalog.Entry{}, "", "", fmt.Errorf("generic repo %q not declared in Provision", repoName)
+	return catalog.Entry{}, "", "", fmt.Errorf("generic repo %q not declared in GitOpsPackageSet", repoName)
 }

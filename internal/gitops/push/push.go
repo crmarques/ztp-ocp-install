@@ -44,7 +44,7 @@ func Push(ctx context.Context, cfg Config, opts Options, parsed ParsedBaseURL) (
 		cfg.Out = io.Discard
 	}
 	if len(cfg.RepoNames) == 0 {
-		return nil, fmt.Errorf("push: no rendered repos found under %s (run `gitups generate` first)", cfg.WorkspaceRoot)
+		return nil, fmt.Errorf("push: no rendered repos found under %s (render with `gitups render` first)", cfg.WorkspaceRoot)
 	}
 	names := append([]string(nil), cfg.RepoNames...)
 	sort.Strings(names)

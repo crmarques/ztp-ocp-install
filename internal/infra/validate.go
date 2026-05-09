@@ -543,7 +543,16 @@ func validateMachines(ci v1alpha1.ClusterInfrastructure, provider v1alpha1.Infra
 		if set != 1 {
 			errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s machines[%s] must set exactly one of {libvirt, baremetal, vsphere}", ci.Metadata.Name, name))
 		}
-		if machineKind := v1alpha1.MachineKind(machine); machineKind != "" && machineKind != providerKind {
+		machineKind := ""
+		switch {
+		case machine.Libvirt != nil:
+			machineKind = v1alpha1.MachineFlavorLibvirt
+		case machine.BareMetal != nil:
+			machineKind = v1alpha1.MachineFlavorBareMetal
+		case machine.VSphere != nil:
+			machineKind = v1alpha1.MachineFlavorVSphere
+		}
+		if machineKind != "" && machineKind != providerKind {
 			errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s machines[%s] kind %q does not match InfrastructureProvider/%s kind %q", ci.Metadata.Name, name, machineKind, provider.Metadata.Name, providerKind))
 		}
 		if machine.Libvirt != nil && provider.Spec.Machine != nil && provider.Spec.Machine.Libvirt != nil {

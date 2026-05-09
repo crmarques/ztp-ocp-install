@@ -18,8 +18,8 @@ bindings — this is the baseline.
 
 - `kind`, `kubectl`, `helm`, `kustomize`, `go`
 - `make build` has been run in the gitups repo so `./bin/gitups` exists
-- Sibling `gitops-workspace/gitups-packages` checkout (the provision's
-  `sources[0].path` resolves relative to this `provision.yaml`)
+- Sibling `gitops-workspace/gitups-packages` checkout (the package set's
+  `sources[0].path` resolves relative to this `gitops-package-set.yaml`)
 
 ## 1. Bring up kind
 
@@ -35,10 +35,10 @@ From the gitups repo root:
 ```bash
 OUT=$(mktemp -d /tmp/gitups-test1.XXXXXX)
 mkdir -p "$OUT/test1"
-cp tests/e2e/test1/provision.yaml "$OUT/test1/provision.yaml"
+cp tests/e2e/test1/gitops-package-set.yaml "$OUT/test1/gitops-package-set.yaml"
 ```
 
-`$OUT/test1/provision.yaml` is now the input for every subsequent
+`$OUT/test1/gitops-package-set.yaml` is now the input for every subsequent
 gitups command. Use `-d "$OUT"` to point the CLI at it.
 
 ## 3. Check + expand + fill argo KRC placeholders
@@ -48,7 +48,7 @@ gitups command. Use `-d "$OUT"` to point the CLI at it.
 ./bin/gitups expand test1 -d "$OUT" --force
 ```
 
-`expand` writes `$OUT/test1/full-provision.yaml`. The only placeholders
+`expand` writes `$OUT/test1/.gitups/expanded/gitops-package-set.yaml`. The only placeholders
 are the per-repo `repoURL` the argocd KRC needs for every managed output
 repo (it has to know where each rendered tree will be pushed). Fill
 them in-place — for a kind-only smoke run, any URL works because we
@@ -65,7 +65,7 @@ done
 ## 4. Generate rendered trees
 
 ```bash
-./bin/gitups generate test1 -d "$OUT" --context test1 --prune
+./bin/gitups render test1 -d "$OUT" --context test1 --prune
 ls "$OUT/test1/"
 # expected: basic-infra/  basic-infra-dev/  gitops-controllers/  gitops-controllers-dev/
 ```

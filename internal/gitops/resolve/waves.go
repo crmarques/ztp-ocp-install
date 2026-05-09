@@ -17,18 +17,18 @@ import (
 // computeApplyWaves walks every ResolvedPackage in fp, topo-sorts by
 // DependsOn (resolved through the same alias set as topoSort uses for refs),
 // and writes the resulting wave back onto each ResolvedPackage.
-func computeApplyWaves(fp *v1.FullGitOpsPackageSet) error {
-	n := len(fp.Spec.Packages)
+func computeApplyWaves(fp *v1.GitOpsPackageSet) error {
+	n := len(fp.Spec.Resolved.Packages)
 	if n == 0 {
 		return nil
 	}
 
-	byName := buildPackageAliasIndex(fp.Spec.Packages)
+	byName := buildPackageAliasIndex(fp.Spec.Resolved.Packages)
 
 	indeg := make([]int, n)
 	adj := make([][]int, n)
-	for i := range fp.Spec.Packages {
-		rp := &fp.Spec.Packages[i]
+	for i := range fp.Spec.Resolved.Packages {
+		rp := &fp.Spec.Resolved.Packages[i]
 		seenEdge := map[int]bool{}
 		for _, dep := range rp.DependsOn {
 			sources, ok := byName[dep]
@@ -74,13 +74,13 @@ func computeApplyWaves(fp *v1.FullGitOpsPackageSet) error {
 		var cyc []string
 		for i, d := range indeg {
 			if d > 0 {
-				cyc = append(cyc, fp.Spec.Packages[i].Instance)
+				cyc = append(cyc, fp.Spec.Resolved.Packages[i].Instance)
 			}
 		}
 		return fmt.Errorf("apply-wave: dependency cycle involving: %v", cyc)
 	}
-	for i := range fp.Spec.Packages {
-		fp.Spec.Packages[i].ApplyWave = waves[i]
+	for i := range fp.Spec.Resolved.Packages {
+		fp.Spec.Resolved.Packages[i].ApplyWave = waves[i]
 	}
 	return nil
 }

@@ -44,10 +44,10 @@ docker network inspect kind -f '{{(index .IPAM.Config 0).Subnet}}'   # should co
 ```bash
 OUT=$(mktemp -d /tmp/gitups-test3.XXXXXX)
 mkdir -p "$OUT/test3"
-cp tests/e2e/test3/provision.yaml "$OUT/test3/provision.yaml"
+cp tests/e2e/test3/gitops-package-set.yaml "$OUT/test3/gitops-package-set.yaml"
 ```
 
-## 3. Check, expand, fill, generate
+## 3. Check, expand, fill, render
 
 ```bash
 ./bin/gitups check    test3 -d "$OUT"
@@ -60,7 +60,7 @@ for r in basic-infra basic-infra-dev support-services support-services-dev \
 done
 
 ./bin/gitups check    test3 -d "$OUT"
-./bin/gitups generate test3 -d "$OUT" --context test3 --prune
+./bin/gitups render test3 -d "$OUT" --context test3 --prune
 ```
 
 Inspect the binding output:

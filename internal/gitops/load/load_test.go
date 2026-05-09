@@ -9,9 +9,9 @@ import (
 	"github.com/crmarques/gitups/internal/gitops/load"
 )
 
-func TestProvisionLoads(t *testing.T) {
+func TestGitOpsPackageSetLoads(t *testing.T) {
 	repoRoot, _ := filepath.Abs("..")
-	p, err := load.Provision(filepath.Join(repoRoot, "testdata/dsv/provision.yaml"))
+	p, err := load.PackageSet(filepath.Join(repoRoot, "testdata/dsv/gitops-package-set.yaml"))
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
@@ -23,20 +23,53 @@ func TestProvisionLoads(t *testing.T) {
 	}
 }
 
-func TestFullProvisionLoads(t *testing.T) {
-	repoRoot, _ := filepath.Abs("..")
-	fp, err := load.FullProvision(filepath.Join(repoRoot, "testdata/dsv/full-provision-filled.yaml"))
+func TestExpandedGitOpsPackageSetLoads(t *testing.T) {
+	path := writeFile(t, t.TempDir(), "gitops-package-set.yaml", `apiVersion: gitups.io/v1alpha1
+kind: GitOpsPackageSet
+metadata:
+  name: demo
+spec:
+  sources:
+    - name: local
+      filesystem:
+        path: ./packages
+  repositories:
+    - name: platform
+      type: kubernetes-resources
+      packages:
+        - template: local/metallb
+  resolved:
+    repository:
+      layout: split
+      outputPath: .gitups/render/demo
+    packages:
+      - template: local/metallb
+        unitType: install
+        domain: install
+        installMethod: helm
+        repository: platform
+        instance: metallb
+        role: workload
+        renderer: helm
+        resolvedValues: {}
+        renderedPaths:
+          repo: platform
+          dir: packages/metallb/install/helm
+        applyWave: 0
+    placeholders: []
+`)
+	fp, err := load.ExpandedPackageSet(path)
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	if fp.Spec.Repository.Layout != "split" {
-		t.Errorf("layout: got %q", fp.Spec.Repository.Layout)
+	if fp.Spec.Resolved.Repository.Layout != "split" {
+		t.Errorf("layout: got %q", fp.Spec.Resolved.Repository.Layout)
 	}
 }
 
 func TestDetectKind(t *testing.T) {
 	repoRoot, _ := filepath.Abs("..")
-	tm, err := load.DetectKind(filepath.Join(repoRoot, "testdata/dsv/provision.yaml"))
+	tm, err := load.DetectKind(filepath.Join(repoRoot, "testdata/dsv/gitops-package-set.yaml"))
 	if err != nil {
 		t.Fatalf("detect: %v", err)
 	}
@@ -45,13 +78,13 @@ func TestDetectKind(t *testing.T) {
 	}
 }
 
-// TestProvisionResolvedNoExtends exercises the back-compat path: a Provision
-// without spec.extends must load identically through Provision and
-// ProvisionResolved, with a nil ExtendedFrom trace.
-func TestProvisionResolvedNoExtends(t *testing.T) {
+// TestGitOpsPackageSetResolvedNoExtends exercises the back-compat path: a GitOpsPackageSet
+// without spec.extends must load identically through GitOpsPackageSet and
+// GitOpsPackageSetResolved, with a nil ExtendedFrom trace.
+func TestGitOpsPackageSetResolvedNoExtends(t *testing.T) {
 	repoRoot, _ := filepath.Abs("..")
-	path := filepath.Join(repoRoot, "testdata/dsv/provision.yaml")
-	p, extFrom, err := load.ProvisionResolved(path)
+	path := filepath.Join(repoRoot, "testdata/dsv/gitops-package-set.yaml")
+	p, extFrom, err := load.PackageSetResolved(path)
 	if err != nil {
 		t.Fatalf("resolved: %v", err)
 	}
@@ -78,12 +111,12 @@ func writeFile(t *testing.T, dir, name, body string) string {
 	return p
 }
 
-// TestProvisionResolvedExtendsMerge covers the core extends behavior: env
+// TestGitOpsPackageSetResolvedExtendsMerge covers the core extends behavior: env
 // picks up base sources and repositories, merges values on matching packages,
 // appends env-only packages, and records ExtendedFrom.
-func TestProvisionResolvedExtendsMerge(t *testing.T) {
+func TestGitOpsPackageSetResolvedExtendsMerge(t *testing.T) {
 	dir := t.TempDir()
-	writeFile(t, dir, "basic-infra/provision.yaml", `apiVersion: gitups.io/v1alpha1
+	writeFile(t, dir, "basic-infra/gitops-package-set.yaml", `apiVersion: gitups.io/v1alpha1
 kind: GitOpsPackageSet
 metadata:
   name: basic-infra
@@ -99,14 +132,14 @@ spec:
         - template: local/metallb
         - template: local/argocd
 `)
-	writeFile(t, dir, "basic-infra-dev/provision.yaml", `apiVersion: gitups.io/v1alpha1
+	writeFile(t, dir, "basic-infra-dev/gitops-package-set.yaml", `apiVersion: gitups.io/v1alpha1
 kind: GitOpsPackageSet
 metadata:
   name: basic-infra-dev
 spec:
   envKey: dev
   extends:
-    source: ../basic-infra/provision.yaml
+    source: ../basic-infra/gitops-package-set.yaml
     ref: v1.4.0
   repositories:
     - name: base-{{.Env}}
@@ -115,15 +148,15 @@ spec:
         name: base
         commit: v0.0.1
 `)
-	merged, extFrom, err := load.ProvisionResolved(filepath.Join(dir, "basic-infra-dev/provision.yaml"))
+	merged, extFrom, err := load.PackageSetResolved(filepath.Join(dir, "basic-infra-dev/gitops-package-set.yaml"))
 	if err != nil {
 		t.Fatalf("resolved: %v", err)
 	}
-	if extFrom == nil || extFrom.Source != "../basic-infra/provision.yaml" || extFrom.Ref != "v1.4.0" {
+	if extFrom == nil || extFrom.Source != "../basic-infra/gitops-package-set.yaml" || extFrom.Ref != "v1.4.0" {
 		t.Fatalf("ExtendedFrom: got %+v", extFrom)
 	}
 	if merged.Spec.Extends != nil {
-		t.Errorf("effective Provision must not carry spec.extends, got %+v", merged.Spec.Extends)
+		t.Errorf("effective GitOpsPackageSet must not carry spec.extends, got %+v", merged.Spec.Extends)
 	}
 	if merged.Metadata.Name != "basic-infra-dev" {
 		t.Errorf("metadata.name: got %q", merged.Metadata.Name)
@@ -142,12 +175,12 @@ spec:
 	}
 }
 
-// TestProvisionResolvedRejectsTransitiveExtends: a base Provision cannot
+// TestGitOpsPackageSetResolvedRejectsTransitiveExtends: a base GitOpsPackageSet cannot
 // itself declare spec.extends — we keep resolution to a single level so
 // state is easy to reason about.
-func TestProvisionResolvedRejectsTransitiveExtends(t *testing.T) {
+func TestGitOpsPackageSetResolvedRejectsTransitiveExtends(t *testing.T) {
 	dir := t.TempDir()
-	writeFile(t, dir, "a/provision.yaml", `apiVersion: gitups.io/v1alpha1
+	writeFile(t, dir, "a/gitops-package-set.yaml", `apiVersion: gitups.io/v1alpha1
 kind: GitOpsPackageSet
 metadata: {name: a}
 spec:
@@ -157,27 +190,27 @@ spec:
       type: kubernetes-resources
       packages: [{template: local/x}]
 `)
-	writeFile(t, dir, "b/provision.yaml", `apiVersion: gitups.io/v1alpha1
+	writeFile(t, dir, "b/gitops-package-set.yaml", `apiVersion: gitups.io/v1alpha1
 kind: GitOpsPackageSet
 metadata: {name: b}
 spec:
-  extends: {source: ../a/provision.yaml}
+  extends: {source: ../a/gitops-package-set.yaml}
   repositories:
     - name: env
       type: kubernetes-resources
       repoRef: {name: base}
 `)
-	writeFile(t, dir, "c/provision.yaml", `apiVersion: gitups.io/v1alpha1
+	writeFile(t, dir, "c/gitops-package-set.yaml", `apiVersion: gitups.io/v1alpha1
 kind: GitOpsPackageSet
 metadata: {name: c}
 spec:
-  extends: {source: ../b/provision.yaml}
+  extends: {source: ../b/gitops-package-set.yaml}
   repositories:
     - name: env2
       type: kubernetes-resources
       repoRef: {name: base}
 `)
-	_, _, err := load.ProvisionResolved(filepath.Join(dir, "c/provision.yaml"))
+	_, _, err := load.PackageSetResolved(filepath.Join(dir, "c/gitops-package-set.yaml"))
 	if err == nil {
 		t.Fatal("expected transitive extends to error")
 	}
@@ -186,20 +219,20 @@ spec:
 	}
 }
 
-// TestProvisionResolvedRejectsGitSource defers git+ source support to a
+// TestGitOpsPackageSetResolvedRejectsGitSource defers git+ source support to a
 // follow-up; today it must fail with a clear, user-facing error.
-func TestProvisionResolvedRejectsGitSource(t *testing.T) {
+func TestGitOpsPackageSetResolvedRejectsGitSource(t *testing.T) {
 	dir := t.TempDir()
-	writeFile(t, dir, "env/provision.yaml", `apiVersion: gitups.io/v1alpha1
+	writeFile(t, dir, "env/gitops-package-set.yaml", `apiVersion: gitups.io/v1alpha1
 kind: GitOpsPackageSet
 metadata: {name: env}
 spec:
   extends:
-    source: git+https://example.com/acme/gitops.git#basic-infra/provision.yaml
+    source: git+https://example.com/acme/gitops.git#basic-infra/gitops-package-set.yaml
     ref: v1.0.0
   repositories: []
 `)
-	_, _, err := load.ProvisionResolved(filepath.Join(dir, "env/provision.yaml"))
+	_, _, err := load.PackageSetResolved(filepath.Join(dir, "env/gitops-package-set.yaml"))
 	if err == nil {
 		t.Fatal("expected git+ source to be rejected")
 	}
@@ -208,12 +241,12 @@ spec:
 	}
 }
 
-// TestProvisionResolvedSourceConflict: a source name that appears in both
+// TestGitOpsPackageSetResolvedSourceConflict: a source name that appears in both
 // base and env is ambiguous and must error rather than silently preferring
 // one side's definition.
-func TestProvisionResolvedSourceConflict(t *testing.T) {
+func TestGitOpsPackageSetResolvedSourceConflict(t *testing.T) {
 	dir := t.TempDir()
-	writeFile(t, dir, "base/provision.yaml", `apiVersion: gitups.io/v1alpha1
+	writeFile(t, dir, "base/gitops-package-set.yaml", `apiVersion: gitups.io/v1alpha1
 kind: GitOpsPackageSet
 metadata: {name: base}
 spec:
@@ -223,15 +256,15 @@ spec:
       type: kubernetes-resources
       packages: [{template: local/x}]
 `)
-	writeFile(t, dir, "env/provision.yaml", `apiVersion: gitups.io/v1alpha1
+	writeFile(t, dir, "env/gitops-package-set.yaml", `apiVersion: gitups.io/v1alpha1
 kind: GitOpsPackageSet
 metadata: {name: env}
 spec:
-  extends: {source: ../base/provision.yaml}
+  extends: {source: ../base/gitops-package-set.yaml}
   sources: [{name: local, filesystem: {path: ./other}}]
   repositories: []
 `)
-	_, _, err := load.ProvisionResolved(filepath.Join(dir, "env/provision.yaml"))
+	_, _, err := load.PackageSetResolved(filepath.Join(dir, "env/gitops-package-set.yaml"))
 	if err == nil {
 		t.Fatal("expected source conflict to error")
 	}
@@ -240,20 +273,92 @@ spec:
 	}
 }
 
-func TestProvisionRejectsOldTopLevelPackages(t *testing.T) {
+func TestGitOpsPackageSetRejectsOldTopLevelPackages(t *testing.T) {
 	dir := t.TempDir()
-	path := writeFile(t, dir, "provision.yaml", `apiVersion: gitups.io/v1alpha1
+	path := writeFile(t, dir, "gitops-package-set.yaml", `apiVersion: gitups.io/v1alpha1
 kind: GitOpsPackageSet
 metadata: {name: dsv}
 spec:
   sources: [{name: local, filesystem: {path: ./pkgs}}]
   packages: [{template: local/old}]
 `)
-	_, err := load.Provision(path)
+	_, err := load.PackageSet(path)
 	if err == nil {
 		t.Fatal("expected old spec.packages to be rejected")
 	}
 	if !strings.Contains(err.Error(), "spec.packages") {
 		t.Errorf("error should mention spec.packages: %v", err)
+	}
+}
+
+func TestPackageSetRejectsUnknownFields(t *testing.T) {
+	path := writeFile(t, t.TempDir(), "gitops-package-set.yaml", `apiVersion: gitups.io/v1alpha1
+kind: GitOpsPackageSet
+metadata: {name: dsv}
+spec:
+  sources: []
+  repositories: []
+  typo: true
+`)
+	_, err := load.PackageSet(path)
+	if err == nil {
+		t.Fatal("expected unknown field to be rejected")
+	}
+	if !strings.Contains(err.Error(), "field typo not found") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestPackageSetRejectsUnsafeGitSourcePath(t *testing.T) {
+	path := writeFile(t, t.TempDir(), "gitops-package-set.yaml", `apiVersion: gitups.io/v1alpha1
+kind: GitOpsPackageSet
+metadata: {name: dsv}
+spec:
+  sources:
+    - name: local
+      git:
+        url: https://example.com/packages.git
+        ref: v0.1.0
+        path: ../packages
+  repositories: []
+`)
+	_, err := load.PackageSet(path)
+	if err == nil {
+		t.Fatal("expected unsafe git.path to be rejected")
+	}
+	if !strings.Contains(err.Error(), "git.path") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestExpandedPackageSetRejectsUnsafeRenderedPath(t *testing.T) {
+	path := writeFile(t, t.TempDir(), "gitops-package-set.yaml", `apiVersion: gitups.io/v1alpha1
+kind: GitOpsPackageSet
+metadata: {name: demo}
+spec:
+  resolved:
+    repository:
+      layout: split
+    packages:
+      - template: local/metallb
+        unitType: install
+        domain: install
+        installMethod: helm
+        repository: platform
+        instance: metallb
+        role: workload
+        renderer: helm
+        resolvedValues: {}
+        renderedPaths:
+          repo: platform
+          dir: ../outside
+        applyWave: 0
+`)
+	_, err := load.ExpandedPackageSet(path)
+	if err == nil {
+		t.Fatal("expected unsafe rendered path to be rejected")
+	}
+	if !strings.Contains(err.Error(), "renderedPaths.dir") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

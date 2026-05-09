@@ -45,13 +45,12 @@ func newRootCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Comm
 	root.SetCompletionCommandGroupID(groupGeneral)
 
 	addWorkflow(root,
-		newInitCmd(stdout),                            // 1. author desired state
-		newSecretsCmd(stdout, stderr),                 // 2. materialize secret refs
-		newBastionCmd(stdin, stdout, stderr),          // 3. bootstrap controller host
+		newInitCmd(stdout),                                // 1. author desired state
+		newSecretsCmd(stdout, stderr),                     // 2. materialize secret refs
+		newBastionCmd(stdin, stdout, stderr),              // 3. bootstrap controller host
 		newScopeCmd(providerScope, stdin, stdout, stderr), // 4. install provider + cluster infra
 		newScopeCmd(clustersScope, stdin, stdout, stderr), // 5. install OpenShift clusters
-		newHubCmd(stdout),                             // 6. configure hub-cluster components
-		newGitopsCmd(),                                // 7. render/push/bootstrap GitOps
+		newGitopsCmd(),                                    // 6. render/push/bootstrap GitOps
 	)
 	return root
 }

@@ -1,8 +1,8 @@
-// Package render implements stage 2 of gitups: consume a FullProvision and
+// Package render implements stage 2 of gitups: consume a GitOpsPackageSet and
 // write a split-layout output tree (one directory per logical repo).
 //
-// The renderer never reads Provision directly; it operates on the resolved
-// FullProvision produced by package resolve.
+// The renderer never reads GitOpsPackageSet directly; it operates on the resolved
+// GitOpsPackageSet produced by package resolve.
 package render
 
 import (
@@ -19,6 +19,7 @@ import (
 	v1 "github.com/crmarques/gitups/api/v1alpha1"
 	"github.com/crmarques/gitups/internal/gitops/catalog"
 	"github.com/crmarques/gitups/internal/gitops/placeholders"
+	"github.com/crmarques/gitups/internal/gitops/safepath"
 )
 
 // managedScriptTemplateValues builds the template context the SRC's
@@ -93,29 +94,32 @@ type Options struct {
 	Helm              HelmRunner
 	Kustomize         KustomizeRunner
 	Hooks             HookRunner
-	SourceFullProv    string // optional path to the input FullProvision for traceability copy
-	// SuppressFullProvision disables writing full-provision.yaml at the top of
+	SourcePackageSet  string // optional path to the input GitOpsPackageSet for traceability copy
+	// SuppressPackageSetCopy disables writing gitops-package-set.yaml at the top of
 	// OutputPath. Set by the workspace-layout CLI where the authoritative
-	// FullProvision lives one level up and re-writing it here would clobber
+	// GitOpsPackageSet lives one level up and re-writing it here would clobber
 	// the user's formatting/comments.
-	SuppressFullProvision bool
+	SuppressPackageSetCopy bool
 	// PreserveExtras, when true, keeps existing top-level entries in OutputPath
-	// that the renderer did not produce (e.g. sibling provision.yaml /
-	// full-provision.yaml managed by the CLI workspace). Only entries matching
+	// that the renderer did not produce (e.g. sibling gitops-package-set.yaml /
+	// gitops-package-set.yaml managed by the CLI workspace). Only entries matching
 	// a rendered repo dir or trace file are replaced. Defaults to false, which
 	// preserves legacy nuke-and-rename behavior for callers that own the whole
 	// tree.
 	PreserveExtras bool
 	// Prune, used together with PreserveExtras, removes top-level directories
 	// in OutputPath that are not one of the repos emitted by this render pass.
-	// Workspace-managed files (provision.yaml / full-provision.yaml) are
+	// Workspace-managed files (gitops-package-set.yaml / gitops-package-set.yaml) are
 	// always preserved. No effect when PreserveExtras is false.
 	Prune bool
 }
 
 // Render writes the full output tree for fp under opts.OutputPath. It renders
 // into a temporary sibling directory first and swaps it into place atomically.
-func Render(ctx context.Context, fp *v1.FullGitOpsPackageSet, cat *catalog.Catalog, opts Options) error {
+func Render(ctx context.Context, fp *v1.GitOpsPackageSet, cat *catalog.Catalog, opts Options) error {
+	if fp.Spec.Resolved == nil {
+		return fmt.Errorf("spec.resolved is required")
+	}
 	if !opts.AllowPlaceholders {
 		if err := failOnPlaceholders(fp); err != nil {
 			return err
@@ -131,10 +135,10 @@ func Render(ctx context.Context, fp *v1.FullGitOpsPackageSet, cat *catalog.Catal
 		opts.Hooks = NewExecHookRunner()
 	}
 	if opts.OutputPath == "" {
-		opts.OutputPath = fp.Spec.Repository.OutputPath
+		opts.OutputPath = fp.Spec.Resolved.Repository.OutputPath
 	}
 	if opts.OutputPath == "" {
-		return fmt.Errorf("outputPath is empty; set --out or spec.repository.outputPath")
+		return fmt.Errorf("outputPath is empty; set --out or spec.resolved.repository.outputPath")
 	}
 
 	// Collect per-repo package sets so we can write top-level kustomization
@@ -152,20 +156,24 @@ func Render(ctx context.Context, fp *v1.FullGitOpsPackageSet, cat *catalog.Catal
 		}
 	}()
 
-	for i := range fp.Spec.Packages {
-		rp := &fp.Spec.Packages[i]
+	for i := range fp.Spec.Resolved.Packages {
+		rp := &fp.Spec.Resolved.Packages[i]
 		entry, ok := cat.Lookup(rp.Template)
 		if !ok {
 			return fmt.Errorf("package %s: template %q not in catalog", rp.Instance, rp.Template)
 		}
-		pkgDir := filepath.Join(tempDir, rp.RenderedPaths.Repo, rp.RenderedPaths.Dir)
+		repo, dir, err := validateRenderedPath(rp)
+		if err != nil {
+			return fmt.Errorf("package %s: %w", rp.Instance, err)
+		}
+		pkgDir := filepath.Join(tempDir, repo, dir)
 		if err := os.MkdirAll(pkgDir, 0o755); err != nil {
 			return fmt.Errorf("package %s: mkdir %s: %w", rp.Instance, pkgDir, err)
 		}
 		if err := renderPackage(ctx, rp, entry, cat, pkgDir, fp, opts); err != nil {
 			return fmt.Errorf("package %s: %w", rp.Instance, err)
 		}
-		byRepo[rp.RenderedPaths.Repo] = append(byRepo[rp.RenderedPaths.Repo], rp)
+		byRepo[repo] = append(byRepo[repo], rp)
 	}
 
 	if err := writeRepoToplevel(tempDir, byRepo, fp); err != nil {
@@ -176,10 +184,13 @@ func Render(ctx context.Context, fp *v1.FullGitOpsPackageSet, cat *catalog.Catal
 	// byRepo has no entry for them; emit the skeleton manually
 	// (README.md + empty kustomization.yaml). The pruning pass later
 	// needs to know these repos exist.
-	for i := range fp.Spec.Repositories {
-		r := &fp.Spec.Repositories[i]
+	for i := range fp.Spec.Resolved.Repositories {
+		r := &fp.Spec.Resolved.Repositories[i]
 		if r.Type != v1.RepoTypeServiceResources {
 			continue
+		}
+		if err := safepath.Name("spec.resolved.repositories[].name", r.Name); err != nil {
+			return fmt.Errorf("service-resources repo %s: %w", r.Name, err)
 		}
 		repoDir := filepath.Join(tempDir, r.Name)
 		if err := os.MkdirAll(repoDir, 0o755); err != nil {
@@ -197,22 +208,22 @@ func Render(ctx context.Context, fp *v1.FullGitOpsPackageSet, cat *catalog.Catal
 		}
 	}
 
-	if !opts.SuppressFullProvision {
-		if opts.SourceFullProv != "" {
-			src, err := os.ReadFile(opts.SourceFullProv)
+	if !opts.SuppressPackageSetCopy {
+		if opts.SourcePackageSet != "" {
+			src, err := os.ReadFile(opts.SourcePackageSet)
 			if err != nil {
-				return fmt.Errorf("copy full-provision: %w", err)
+				return fmt.Errorf("copy package set: %w", err)
 			}
-			if err := os.WriteFile(filepath.Join(tempDir, "full-provision.yaml"), src, 0o644); err != nil {
-				return fmt.Errorf("write full-provision copy: %w", err)
+			if err := os.WriteFile(filepath.Join(tempDir, "gitops-package-set.yaml"), src, 0o644); err != nil {
+				return fmt.Errorf("write package set copy: %w", err)
 			}
 		} else {
 			out, err := yaml.Marshal(fp)
 			if err != nil {
-				return fmt.Errorf("marshal full-provision: %w", err)
+				return fmt.Errorf("marshal package set: %w", err)
 			}
-			if err := os.WriteFile(filepath.Join(tempDir, "full-provision.yaml"), out, 0o644); err != nil {
-				return fmt.Errorf("write full-provision: %w", err)
+			if err := os.WriteFile(filepath.Join(tempDir, "gitops-package-set.yaml"), out, 0o644); err != nil {
+				return fmt.Errorf("write package set: %w", err)
 			}
 		}
 	}
@@ -283,7 +294,7 @@ func swapEntries(src, dst string) error {
 }
 
 // pruneOrphanDirs removes top-level directories under dst whose names are not
-// in keep. Files (provision.yaml / full-provision.yaml) are always left alone.
+// in keep. Files (gitops-package-set.yaml / gitops-package-set.yaml) are always left alone.
 func pruneOrphanDirs(dst string, keep map[string]bool) error {
 	entries, err := os.ReadDir(dst)
 	if err != nil {
@@ -314,10 +325,10 @@ func absOrCwd(p string) string {
 	return abs
 }
 
-func failOnPlaceholders(fp *v1.FullGitOpsPackageSet) error {
+func failOnPlaceholders(fp *v1.GitOpsPackageSet) error {
 	var paths []string
-	for i := range fp.Spec.Packages {
-		rp := &fp.Spec.Packages[i]
+	for i := range fp.Spec.Resolved.Packages {
+		rp := &fp.Spec.Resolved.Packages[i]
 		if placeholders.Contains(rp.ResolvedValues) {
 			paths = append(paths, rp.Instance)
 		}
@@ -327,6 +338,21 @@ func failOnPlaceholders(fp *v1.FullGitOpsPackageSet) error {
 		return fmt.Errorf("unfilled placeholders in: %s (re-run with --allow-placeholders to force)", strings.Join(paths, ", "))
 	}
 	return nil
+}
+
+func validateRenderedPath(rp *v1.ResolvedPackage) (string, string, error) {
+	repo, err := safepath.Relative("renderedPaths.repo", rp.RenderedPaths.Repo)
+	if err != nil {
+		return "", "", err
+	}
+	if strings.ContainsAny(repo, `/\`) {
+		return "", "", fmt.Errorf("renderedPaths.repo %q must be a single path segment", rp.RenderedPaths.Repo)
+	}
+	dir, err := safepath.Relative("renderedPaths.dir", rp.RenderedPaths.Dir)
+	if err != nil {
+		return "", "", err
+	}
+	return repo, dir, nil
 }
 
 type renderUnit struct {
@@ -473,7 +499,7 @@ func renderUnitFor(rp *v1.ResolvedPackage, entry catalog.Entry, cat *catalog.Cat
 }
 
 // renderPackage dispatches on renderer type, runs hooks, and writes overlays.
-func renderPackage(ctx context.Context, rp *v1.ResolvedPackage, entry catalog.Entry, cat *catalog.Catalog, pkgDir string, fp *v1.FullGitOpsPackageSet, opts Options) error {
+func renderPackage(ctx context.Context, rp *v1.ResolvedPackage, entry catalog.Entry, cat *catalog.Catalog, pkgDir string, fp *v1.GitOpsPackageSet, opts Options) error {
 	unit, err := renderUnitFor(rp, entry, cat)
 	if err != nil {
 		return err
@@ -537,7 +563,7 @@ func renderPackage(ctx context.Context, rp *v1.ResolvedPackage, entry catalog.En
 	return runHook(ctx, unit, "post-render", pkgDir, rp.ResolvedValues, opts.Hooks)
 }
 
-func writeRepoToplevel(tempDir string, byRepo map[string][]*v1.ResolvedPackage, fp *v1.FullGitOpsPackageSet) error {
+func writeRepoToplevel(tempDir string, byRepo map[string][]*v1.ResolvedPackage, fp *v1.GitOpsPackageSet) error {
 	repos := make([]string, 0, len(byRepo))
 	for r := range byRepo {
 		repos = append(repos, r)
@@ -582,16 +608,16 @@ func writeRepoToplevel(tempDir string, byRepo map[string][]*v1.ResolvedPackage, 
 
 		// README
 		var b strings.Builder
-		fmt.Fprintf(&b, "# %s\n\nRepo rendered by gitups from FullProvision %q.\n\n",
+		fmt.Fprintf(&b, "# %s\n\nRepo rendered by gitups from GitOpsPackageSet %q.\n\n",
 			repo, fp.Metadata.Name)
 		fmt.Fprintf(&b, "## Packages\n\n")
 		for _, rp := range pkgs {
 			fmt.Fprintf(&b, "- **%s** (%s, %s, renderer=%s, role=%s) -> `%s`\n",
 				rp.Instance, rp.Template, rp.UnitType, rp.Renderer, rp.Role, rp.RenderedPaths.Dir)
 		}
-		if len(fp.Spec.Placeholders) > 0 {
+		if len(fp.Spec.Resolved.Placeholders) > 0 {
 			fmt.Fprintf(&b, "\n## Unfilled placeholders at render time\n\n")
-			for _, ph := range fp.Spec.Placeholders {
+			for _, ph := range fp.Spec.Resolved.Placeholders {
 				fmt.Fprintf(&b, "- `%s` — %s\n", ph.Path, ph.Reason)
 			}
 		}
@@ -715,10 +741,10 @@ func encodeReadiness(checks []v1.ReadinessCheck) (string, error) {
 // skeleton service-resources repo. Declarest authors payload files
 // here (e.g. `orgs/acme.json`, `repos/acme/gitops.json`) matching the
 // bundle's logical path layout; gitups does not author those payloads.
-func writeServiceResourcesREADME(dir string, r *v1.ResolvedRepository, fp *v1.FullGitOpsPackageSet) error {
+func writeServiceResourcesREADME(dir string, r *v1.ResolvedRepository, fp *v1.GitOpsPackageSet) error {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# %s\n\n", r.Name)
-	fmt.Fprintf(&b, "Declarest service-resources repository rendered by gitups from FullProvision %q.\n\n",
+	fmt.Fprintf(&b, "Declarest service-resources repository rendered by gitups from GitOpsPackageSet %q.\n\n",
 		fp.Metadata.Name)
 	if r.ManagedServiceRef != nil {
 		fmt.Fprintf(&b, "Reconciled by declarest against the `ManagedService/%s` CR declared in repo `%s`.\n\n",

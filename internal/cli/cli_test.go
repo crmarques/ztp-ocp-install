@@ -40,6 +40,29 @@ func TestInitCommandGeneratesCurrentTemplate(t *testing.T) {
 	}
 }
 
+func TestGitopsInitScaffoldPassesCheck(t *testing.T) {
+	outDir := filepath.Join(t.TempDir(), "gitops")
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Run(context.Background(), []string{"gitops", "init", "demo", "-d", outDir}, nil, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("init code got %d, stderr: %s", code, stderr.String())
+	}
+	path := filepath.Join(outDir, "demo", "gitops-package-set.yaml")
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("scaffold missing: %v", err)
+	}
+	stdout.Reset()
+	stderr.Reset()
+	code = Run(context.Background(), []string{"gitops", "check", "demo", "-d", outDir}, nil, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("check code got %d, stderr: %s", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "init scaffold") {
+		t.Fatalf("check should identify scaffold, stderr: %s", stderr.String())
+	}
+}
+
 func TestGitupsUserDirDefaultsToUserHome(t *testing.T) {
 	clearGitupsEnv(t)
 	home := t.TempDir()
@@ -1089,21 +1112,6 @@ func TestClustersApplyYesSkipsConfirmationAndStopsBeforeAnsible(t *testing.T) {
 	}
 	if strings.Contains(stderr.String(), "apply aborted") {
 		t.Fatalf("--yes should skip confirmation, stderr: %s", stderr.String())
-	}
-}
-
-func TestHubScopeStubReportsReserved(t *testing.T) {
-	for _, action := range []string{"check", "apply", "destroy"} {
-		t.Run(action, func(t *testing.T) {
-			var stdout, stderr bytes.Buffer
-			code := Run(context.Background(), []string{"hub", action}, nil, &stdout, &stderr)
-			if code != 0 {
-				t.Fatalf("hub %s code=%d stderr=%s", action, code, stderr.String())
-			}
-			if !strings.Contains(stdout.String(), "hub scope is reserved") {
-				t.Fatalf("hub %s missing reserved message:\n%s", action, stdout.String())
-			}
-		})
 	}
 }
 

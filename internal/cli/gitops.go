@@ -1,25 +1,25 @@
 // Command gitups drives the workspace-oriented GitOps-bootstrap flow.
 // Subcommands appear under `gitups gitops --help` in usage order:
 //
-//	init     <name> [-d <dir>]                                  scaffold Provision
-//	expand   <name> [-d <dir>] [--force]                        Provision  -> FullProvision
-//	fill     <name> [-d <dir>] --set <instance>.<path>=<value>  fill placeholders in FullProvision
-//	check    <name> [-d <dir>]                                  validate Provision and FullProvision
+//	init     <name> [-d <dir>]                                  scaffold GitOpsPackageSet
+//	expand   <name> [-d <dir>] [--force]                        GitOpsPackageSet  -> expanded GitOpsPackageSet
+//	fill     <name> [-d <dir>] --set <instance>.<path>=<value>  fill placeholders in expanded GitOpsPackageSet
+//	check    <name> [-d <dir>]                                  validate GitOpsPackageSet and expanded GitOpsPackageSet
 //	plan     <name> [-d <dir>] [--full]                         print apply plan without touching the cluster
 //	render   <name> [-d <dir>] [--context c] [--allow-placeholders]
-//	                                                            FullProvision -> repo tree
+//	                                                            expanded GitOpsPackageSet -> repo tree
 //	push     <name> --provider <p> --base-url <url> [-d <dir>]  push rendered repos to git
-//	apply    <name> --to <ctx> [-d <dir>] [--dry-run] [--allow-placeholders] [--generate-secrets]
+//	apply    <name> --to <ctx> [-d <dir>] [--dry-run] [--allow-placeholders]
 //	                                                            apply each repo dir via the KRC-declared CLI
 //	wait     <name> --to <ctx> [-d <dir>]                       wait for KRC handoff conditions
 //	status   <name> [-d <dir>]                                  drift report
 //	destroy  <name> --to <ctx> [-d <dir>]                       reverse apply
 //
-// Each <name> owns a workspace at <dir>/<name>/ holding provision.yaml,
-// full-provision.yaml, and the rendered repo subdirs as siblings.
+// Each <name> owns a workspace at <dir>/<name>/ with user-authored
+// gitops-package-set.yaml and generated state under .gitups/.
 //
 // Apply and wait never hard-code a cluster binary. The selected KRC
-// package (via Provision.spec.controllers.kubernetesResources) declares
+// package (via GitOpsPackageSet.spec.controllers.kubernetesResources) declares
 // spec.cli.binary and spec.cli.intents.<name>.args; gitups executes the
 // declared binary with the rendered args for each needed intent
 // (v1.IntentApply, v1.IntentGetJSON, v1.IntentWaitCondition, …).
@@ -49,7 +49,6 @@ import (
 	"github.com/crmarques/gitups/internal/gitops/push"
 	"github.com/crmarques/gitups/internal/gitops/render"
 	"github.com/crmarques/gitups/internal/gitops/resolve"
-	"github.com/crmarques/gitups/internal/gitops/secrets"
 )
 
 const defaultGitopsWorkspace = "./gitops-workspaces"
@@ -64,18 +63,18 @@ func newGitopsCmd() *cobra.Command {
 		Short: "Render, publish, and bootstrap GitOpsPackageSet compositions",
 		Long: "Gitops takes a user-authored GitOpsPackageSet describing catalog\n" +
 			"sources, output repositories, package selections, and KRC/SRC\n" +
-			"controllers; expands it into a reviewable FullGitOpsPackageSet; renders\n" +
+			"controllers; expands it into a reviewable GitOpsPackageSet; renders\n" +
 			"deterministic repo trees with helm/kustomize/olm/raw; pushes them to a\n" +
 			"git provider; and bootstraps the cluster via the KRC's declared CLI.",
 	}
 	cmd.AddGroup(&cobra.Group{ID: groupWorkflow, Title: "Workflow Commands:"})
 	addWorkflow(cmd,
-		newGitopsInitCmd(),    // 1. scaffold Provision
-		newGitopsExpandCmd(),  // 2. Provision -> FullProvision
-		newGitopsFillCmd(),    // 3. fill placeholders in FullProvision
-		newGitopsCheckCmd(),   // 4. validate Provision + FullProvision
+		newGitopsInitCmd(),    // 1. scaffold GitOpsPackageSet
+		newGitopsExpandCmd(),  // 2. GitOpsPackageSet -> expanded GitOpsPackageSet
+		newGitopsFillCmd(),    // 3. fill placeholders in expanded GitOpsPackageSet
+		newGitopsCheckCmd(),   // 4. validate GitOpsPackageSet + expanded GitOpsPackageSet
 		newGitopsPlanCmd(),    // 5. print apply plan without touching the cluster
-		newGitopsRenderCmd(),  // 6. FullProvision -> repo tree
+		newGitopsRenderCmd(),  // 6. expanded GitOpsPackageSet -> repo tree
 		newGitopsPushCmd(),    // 7. push rendered repos to git
 		newGitopsApplyCmd(),   // 8. apply repo dirs via the KRC-declared CLI
 		newGitopsWaitCmd(),    // 9. wait for KRC handoff conditions
@@ -87,10 +86,11 @@ func newGitopsCmd() *cobra.Command {
 
 // workspace holds the resolved filesystem paths for a named environment.
 type workspace struct {
-	Name          string
-	Root          string // <output-dir>/<name>
-	Provision     string // <root>/provision.yaml
-	FullProvision string // <root>/full-provision.yaml
+	Name               string
+	Root               string
+	PackageSet         string
+	ExpandedPackageSet string
+	RenderRoot         string
 }
 
 func newWorkspace(outputDir, name string) (workspace, error) {
@@ -105,10 +105,11 @@ func newWorkspace(outputDir, name string) (workspace, error) {
 	}
 	root := filepath.Join(outputDir, name)
 	return workspace{
-		Name:          name,
-		Root:          root,
-		Provision:     filepath.Join(root, "provision.yaml"),
-		FullProvision: filepath.Join(root, "full-provision.yaml"),
+		Name:               name,
+		Root:               root,
+		PackageSet:         filepath.Join(root, "gitops-package-set.yaml"),
+		ExpandedPackageSet: filepath.Join(root, ".gitups", "expanded", "gitops-package-set.yaml"),
+		RenderRoot:         filepath.Join(root, ".gitups", "render"),
 	}, nil
 }
 
@@ -124,30 +125,30 @@ func newGitopsInitCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "init <name>",
-		Short: "Scaffold an empty Provision for <name>",
+		Short: "Scaffold an empty GitOpsPackageSet for <name>",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ws, err := newWorkspace(outputDir, args[0])
 			if err != nil {
 				return err
 			}
-			if _, err := os.Stat(ws.Provision); err == nil && !force {
-				return fmt.Errorf("%s already exists (pass --force to overwrite)", ws.Provision)
+			if _, err := os.Stat(ws.PackageSet); err == nil && !force {
+				return fmt.Errorf("%s already exists (pass --force to overwrite)", ws.PackageSet)
 			}
 			if err := os.MkdirAll(ws.Root, 0o755); err != nil {
 				return fmt.Errorf("mkdir %s: %w", ws.Root, err)
 			}
-			if err := os.WriteFile(ws.Provision, []byte(scaffoldProvision(ws.Name)), 0o644); err != nil {
-				return fmt.Errorf("write %s: %w", ws.Provision, err)
+			if err := os.WriteFile(ws.PackageSet, []byte(scaffoldGitOpsPackageSet(ws.Name)), 0o644); err != nil {
+				return fmt.Errorf("write %s: %w", ws.PackageSet, err)
 			}
 			fmt.Fprintf(cmd.ErrOrStderr(),
 				"gitups: scaffolded %s\n  next: edit spec.sources and spec.repositories, then `gitups expand %s`\n",
-				ws.Provision, ws.Name)
+				ws.PackageSet, ws.Name)
 			return nil
 		},
 	}
 	addOutputDirFlag(cmd, &outputDir)
-	cmd.Flags().BoolVar(&force, "force", false, "overwrite an existing provision.yaml")
+	cmd.Flags().BoolVar(&force, "force", false, "overwrite an existing gitops-package-set.yaml")
 	return cmd
 }
 
@@ -158,46 +159,46 @@ func newGitopsExpandCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "expand <name>",
-		Short: "Expand Provision <name> into a FullProvision",
+		Short: "Expand GitOpsPackageSet <name> into spec.resolved",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ws, err := newWorkspace(outputDir, args[0])
 			if err != nil {
 				return err
 			}
-			if _, err := os.Stat(ws.Provision); err != nil {
-				return fmt.Errorf("%s not found (run `gitups init %s` first)", ws.Provision, ws.Name)
+			if _, err := os.Stat(ws.PackageSet); err != nil {
+				return fmt.Errorf("%s not found (run `gitups init %s` first)", ws.PackageSet, ws.Name)
 			}
-			prov, extFrom, err := load.ProvisionResolved(ws.Provision)
+			prov, extFrom, err := load.PackageSetResolved(ws.PackageSet)
 			if err != nil {
 				return err
 			}
 			if prov.Metadata.Name != ws.Name {
 				return fmt.Errorf("%s has metadata.name %q but workspace is %q",
-					ws.Provision, prov.Metadata.Name, ws.Name)
+					ws.PackageSet, prov.Metadata.Name, ws.Name)
 			}
 			if load.IsScaffold(prov) {
 				return fmt.Errorf("%s is still the init scaffold; fill in spec.sources and spec.repositories before `gitups expand %s`",
-					ws.Provision, ws.Name)
+					ws.PackageSet, ws.Name)
 			}
 			if len(prov.Spec.Sources) == 0 {
-				return fmt.Errorf("%s: spec.sources is empty", ws.Provision)
+				return fmt.Errorf("%s: spec.sources is empty", ws.PackageSet)
 			}
 			if len(prov.Spec.Repositories) == 0 {
-				return fmt.Errorf("%s: spec.repositories is empty", ws.Provision)
+				return fmt.Errorf("%s: spec.repositories is empty", ws.PackageSet)
 			}
-			baseDir := filepath.Dir(absPath(ws.Provision))
+			baseDir := filepath.Dir(absPath(ws.PackageSet))
 			registerGitopsSourceResolvers(prov.Spec.Sources, packageNamesByTemplate(prov))
 			cat, err := catalog.Build(prov.Spec.Sources, baseDir)
 			if err != nil {
 				return err
 			}
-			var prior *v1.FullGitOpsPackageSet
+			var prior *v1.GitOpsPackageSet
 			if !force {
-				if _, statErr := os.Stat(ws.FullProvision); statErr == nil {
-					prior, err = load.FullProvision(ws.FullProvision)
+				if _, statErr := os.Stat(ws.ExpandedPackageSet); statErr == nil {
+					prior, err = load.ExpandedPackageSet(ws.ExpandedPackageSet)
 					if err != nil {
-						return fmt.Errorf("load prior full-provision for idempotent expand: %w", err)
+						return fmt.Errorf("load prior package-set for idempotent expand: %w", err)
 					}
 				}
 			}
@@ -213,16 +214,19 @@ func newGitopsExpandCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := os.WriteFile(ws.FullProvision, body, 0o644); err != nil {
+			if err := os.MkdirAll(filepath.Dir(ws.ExpandedPackageSet), 0o755); err != nil {
+				return fmt.Errorf("mkdir %s: %w", filepath.Dir(ws.ExpandedPackageSet), err)
+			}
+			if err := os.WriteFile(ws.ExpandedPackageSet, body, 0o644); err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.ErrOrStderr(), "gitups: wrote %s\n", ws.FullProvision)
+			fmt.Fprintf(cmd.ErrOrStderr(), "gitups: wrote %s\n", ws.ExpandedPackageSet)
 			printPlaceholderSummary(cmd.ErrOrStderr(), fp)
 			return nil
 		},
 	}
 	addOutputDirFlag(cmd, &outputDir)
-	cmd.Flags().BoolVar(&force, "force", false, "discard existing FullProvision and regenerate from scratch")
+	cmd.Flags().BoolVar(&force, "force", false, "discard existing expanded GitOpsPackageSet and regenerate from scratch")
 	return cmd
 }
 
@@ -230,7 +234,7 @@ func newGitopsCheckCmd() *cobra.Command {
 	var outputDir string
 	cmd := &cobra.Command{
 		Use:   "check <name>",
-		Short: "Validate Provision and FullProvision for <name>",
+		Short: "Validate GitOpsPackageSet and expanded GitOpsPackageSet for <name>",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ws, err := newWorkspace(outputDir, args[0])
@@ -238,32 +242,32 @@ func newGitopsCheckCmd() *cobra.Command {
 				return err
 			}
 			out := cmd.ErrOrStderr()
-			if _, err := os.Stat(ws.Provision); err != nil {
-				return fmt.Errorf("%s not found (run `gitups init %s`)", ws.Provision, ws.Name)
+			if _, err := os.Stat(ws.PackageSet); err != nil {
+				return fmt.Errorf("%s not found (run `gitups init %s`)", ws.PackageSet, ws.Name)
 			}
-			prov, extFrom, err := load.ProvisionResolved(ws.Provision)
+			prov, extFrom, err := load.PackageSetResolved(ws.PackageSet)
 			if err != nil {
-				return fmt.Errorf("provision invalid: %w", err)
+				return fmt.Errorf("package set invalid: %w", err)
 			}
 			if prov.Metadata.Name != ws.Name {
 				return fmt.Errorf("%s has metadata.name %q but workspace is %q",
-					ws.Provision, prov.Metadata.Name, ws.Name)
+					ws.PackageSet, prov.Metadata.Name, ws.Name)
 			}
 			if load.IsScaffold(prov) {
-				fmt.Fprintf(out, "gitups: %s is the init scaffold (empty sources/repositories) — fill it in, then re-run check\n", ws.Provision)
+				fmt.Fprintf(out, "gitups: %s is the init scaffold (empty sources/repositories) — fill it in, then re-run check\n", ws.PackageSet)
 				return nil
 			}
 			if extFrom != nil {
-				fmt.Fprintf(out, "gitups: %s extends %s\n", ws.Provision, extFrom.Source)
+				fmt.Fprintf(out, "gitups: %s extends %s\n", ws.PackageSet, extFrom.Source)
 			}
 			fmt.Fprintf(out, "gitups: %s ok (%d source(s), %d repositories)\n",
-				ws.Provision, len(prov.Spec.Sources), len(prov.Spec.Repositories))
+				ws.PackageSet, len(prov.Spec.Sources), len(prov.Spec.Repositories))
 
-			// Dry-expand the provision so catalog/resolve errors surface at
+			// Dry-expand the package set so catalog/resolve errors surface at
 			// `check` time rather than first appearing in `expand`. We pass
 			// nil prior so this is a pure validity probe, never touching the
-			// on-disk FullProvision.
-			baseDir := filepath.Dir(absPath(ws.Provision))
+			// on-disk expanded GitOpsPackageSet.
+			baseDir := filepath.Dir(absPath(ws.PackageSet))
 			registerGitopsSourceResolvers(prov.Spec.Sources, packageNamesByTemplate(prov))
 			cat, err := catalog.Build(prov.Spec.Sources, baseDir)
 			if err != nil {
@@ -274,21 +278,21 @@ func newGitopsCheckCmd() *cobra.Command {
 			}
 			fmt.Fprintf(out, "gitups: dry expand ok\n")
 
-			if _, err := os.Stat(ws.FullProvision); err != nil {
+			if _, err := os.Stat(ws.ExpandedPackageSet); err != nil {
 				fmt.Fprintf(out, "gitups: %s not present — run `gitups expand %s`\n",
-					ws.FullProvision, ws.Name)
+					ws.ExpandedPackageSet, ws.Name)
 				return nil
 			}
-			fp, err := load.FullProvision(ws.FullProvision)
+			fp, err := load.ExpandedPackageSet(ws.ExpandedPackageSet)
 			if err != nil {
-				return fmt.Errorf("full-provision invalid: %w", err)
+				return fmt.Errorf("package-set invalid: %w", err)
 			}
 			if fp.Metadata.Name != ws.Name {
 				return fmt.Errorf("%s has metadata.name %q but workspace is %q",
-					ws.FullProvision, fp.Metadata.Name, ws.Name)
+					ws.ExpandedPackageSet, fp.Metadata.Name, ws.Name)
 			}
 			fmt.Fprintf(out, "gitups: %s ok (%d package(s))\n",
-				ws.FullProvision, len(fp.Spec.Packages))
+				ws.ExpandedPackageSet, len(fp.Spec.Resolved.Packages))
 			printPlaceholderSummary(out, fp)
 			return nil
 		},
@@ -307,27 +311,27 @@ func newGitopsRenderCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "render <name>",
-		Short: "Render repo directories from FullGitOpsPackageSet <name>",
+		Short: "Render repo directories from GitOpsPackageSet <name>",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ws, err := newWorkspace(outputDir, args[0])
 			if err != nil {
 				return err
 			}
-			if _, err := os.Stat(ws.FullProvision); err != nil {
+			if _, err := os.Stat(ws.ExpandedPackageSet); err != nil {
 				return fmt.Errorf("%s not found (run `gitups expand %s` first)",
-					ws.FullProvision, ws.Name)
+					ws.ExpandedPackageSet, ws.Name)
 			}
-			fp, err := load.FullProvision(ws.FullProvision)
+			fp, err := load.ExpandedPackageSet(ws.ExpandedPackageSet)
 			if err != nil {
 				return err
 			}
 			if fp.Metadata.Name != ws.Name {
 				return fmt.Errorf("%s has metadata.name %q but workspace is %q",
-					ws.FullProvision, fp.Metadata.Name, ws.Name)
+					ws.ExpandedPackageSet, fp.Metadata.Name, ws.Name)
 			}
-			baseDir := filepath.Dir(absPath(ws.FullProvision))
-			registerGitopsSourceResolvers(fp.Spec.Sources, packageNamesFromFullProvision(fp))
+			baseDir := ws.Root
+			registerGitopsSourceResolvers(fp.Spec.Sources, packageNamesFromExpandedPackageSet(fp))
 			cat, err := catalog.Build(fp.Spec.Sources, baseDir)
 			if err != nil {
 				return err
@@ -340,12 +344,12 @@ func newGitopsRenderCmd() *cobra.Command {
 				ctx = currentKubectlContext()
 			}
 			opts := render.Options{
-				OutputPath:            ws.Root,
-				KubectlContext:        ctx,
-				AllowPlaceholders:     allowPlaceholders,
-				SuppressFullProvision: true,
-				PreserveExtras:        true,
-				Prune:                 prune,
+				OutputPath:             ws.RenderRoot,
+				KubectlContext:         ctx,
+				AllowPlaceholders:      allowPlaceholders,
+				SuppressPackageSetCopy: true,
+				PreserveExtras:         true,
+				Prune:                  prune,
 			}
 			if err := render.Render(cmd.Context(), fp, cat, opts); err != nil {
 				return err
@@ -358,19 +362,19 @@ func newGitopsRenderCmd() *cobra.Command {
 	}
 	addOutputDirFlag(cmd, &outputDir)
 	cmd.Flags().StringVar(&kubeContext, "context", "", "cluster context label stamped into the rendered overlay (advisory)")
-	cmd.Flags().BoolVar(&allowPlaceholders, "allow-placeholders", false, "generate even when placeholders remain")
+	cmd.Flags().BoolVar(&allowPlaceholders, "allow-placeholders", false, "render even when placeholders remain")
 	cmd.Flags().BoolVar(&prune, "prune", false, "remove top-level directories not produced by this render pass")
 	cmd.Flags().BoolVar(&skipDetCheck, "skip-determinism-check", false, "skip the second render pass that verifies byte-identical output")
 	cmd.SetContext(context.Background())
 	return cmd
 }
 
-// verifyDeterminism re-renders the same FullProvision into a scratch
+// verifyDeterminism re-renders the same expanded GitOpsPackageSet into a scratch
 // dir and compares against the workspace. Catches chart-side
 // non-determinism (auto-generated TLS certs, random IDs, timestamps)
-// inline at `generate` time instead of deferring to `status`. Writes
+// inline at `render` time instead of deferring to `status`. Writes
 // a compact drift summary and returns an error so CI fails.
-func verifyDeterminism(ctx context.Context, fp *v1.FullGitOpsPackageSet, cat *catalog.Catalog, first render.Options, ws workspace, out writer) error {
+func verifyDeterminism(ctx context.Context, fp *v1.GitOpsPackageSet, cat *catalog.Catalog, first render.Options, ws workspace, out writer) error {
 	scratchRoot, err := os.MkdirTemp("", "gitups-det-")
 	if err != nil {
 		return fmt.Errorf("create determinism scratch: %w", err)
@@ -384,7 +388,7 @@ func verifyDeterminism(ctx context.Context, fp *v1.FullGitOpsPackageSet, cat *ca
 	if err := render.Render(ctx, fp, cat, second); err != nil {
 		return fmt.Errorf("determinism re-render: %w", err)
 	}
-	drifts, err := diffWorkspace(ws.Root, scratchOut)
+	drifts, err := diffWorkspace(ws.RenderRoot, scratchOut)
 	if err != nil {
 		return fmt.Errorf("determinism diff: %w", err)
 	}
@@ -432,16 +436,16 @@ func newGitopsPushCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if _, err := os.Stat(ws.FullProvision); err != nil {
-				return fmt.Errorf("%s not found (run `gitups generate %s` first)", ws.FullProvision, ws.Name)
+			if _, err := os.Stat(ws.ExpandedPackageSet); err != nil {
+				return fmt.Errorf("%s not found (run `gitups expand %s` first)", ws.ExpandedPackageSet, ws.Name)
 			}
-			fp, err := load.FullProvision(ws.FullProvision)
+			fp, err := load.ExpandedPackageSet(ws.ExpandedPackageSet)
 			if err != nil {
 				return err
 			}
 			if fp.Metadata.Name != ws.Name {
 				return fmt.Errorf("%s has metadata.name %q but workspace is %q",
-					ws.FullProvision, fp.Metadata.Name, ws.Name)
+					ws.ExpandedPackageSet, fp.Metadata.Name, ws.Name)
 			}
 			if _, err := exec.LookPath("git"); err != nil {
 				return fmt.Errorf("required binary %q not found in PATH", "git")
@@ -468,11 +472,11 @@ func newGitopsPushCmd() *cobra.Command {
 			out := cmd.ErrOrStderr()
 			repos := renderedRepoNames(fp)
 			if len(repos) == 0 {
-				return fmt.Errorf("no rendered repos referenced by %s", ws.FullProvision)
+				return fmt.Errorf("no rendered repos referenced by %s", ws.ExpandedPackageSet)
 			}
 
 			_, err = push.Push(cmd.Context(), push.Config{
-				WorkspaceRoot: ws.Root,
+				WorkspaceRoot: ws.RenderRoot,
 				RepoNames:     repos,
 				Provider:      prov,
 				Git:           push.DefaultGitRunner{Stderr: out},
@@ -536,11 +540,11 @@ func resolvePushToken(flag, provider string) string {
 // renderedRepoNames returns the distinct set of rendered repo dirs
 // referenced by fp, in first-appearance order. Matches the apply-time
 // ordering so a `push` followed by `apply` walks the same list.
-func renderedRepoNames(fp *v1.FullGitOpsPackageSet) []string {
+func renderedRepoNames(fp *v1.GitOpsPackageSet) []string {
 	seen := map[string]bool{}
 	var out []string
-	for i := range fp.Spec.Packages {
-		r := fp.Spec.Packages[i].RenderedPaths.Repo
+	for i := range fp.Spec.Resolved.Packages {
+		r := fp.Spec.Resolved.Packages[i].RenderedPaths.Repo
 		if r == "" || seen[r] {
 			continue
 		}
@@ -556,7 +560,6 @@ func newGitopsApplyCmd() *cobra.Command {
 		toContext         string
 		dryRun            bool
 		allowPlaceholders bool
-		generateSecrets   bool
 		waitCRDs          bool
 		full              bool
 		waitTimeout       time.Duration
@@ -573,47 +576,42 @@ func newGitopsApplyCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if _, err := os.Stat(ws.FullProvision); err != nil {
-				return fmt.Errorf("%s not found (run `gitups expand %s` and `gitups generate %s` first)",
-					ws.FullProvision, ws.Name, ws.Name)
+			if _, err := os.Stat(ws.ExpandedPackageSet); err != nil {
+				return fmt.Errorf("%s not found (run `gitups expand %s` and `gitups render %s` first)",
+					ws.ExpandedPackageSet, ws.Name, ws.Name)
 			}
-			fp, err := load.FullProvision(ws.FullProvision)
+			fp, err := load.ExpandedPackageSet(ws.ExpandedPackageSet)
 			if err != nil {
 				return err
 			}
 			if fp.Metadata.Name != ws.Name {
 				return fmt.Errorf("%s has metadata.name %q but workspace is %q",
-					ws.FullProvision, fp.Metadata.Name, ws.Name)
+					ws.ExpandedPackageSet, fp.Metadata.Name, ws.Name)
 			}
-			if generateSecrets {
-				if err := fillGeneratedSecrets(fp, ws.FullProvision, cmd.ErrOrStderr()); err != nil {
-					return err
-				}
-			}
-			if !allowPlaceholders && len(fp.Spec.Placeholders) > 0 {
+			if !allowPlaceholders && len(fp.Spec.Resolved.Placeholders) > 0 {
 				return fmt.Errorf("%d unfilled placeholder(s) in %s (re-run with --allow-placeholders to force)",
-					len(fp.Spec.Placeholders), ws.FullProvision)
+					len(fp.Spec.Resolved.Placeholders), ws.ExpandedPackageSet)
 			}
 
 			out := cmd.ErrOrStderr()
 
-			// Load the Provision: apply uses it to locate the KRC
+			// Load the GitOpsPackageSet: apply uses it to locate the KRC
 			// package (whose spec.cli declaration defines the cluster
 			// binary) and the SRC package.
-			provPath := filepath.Join(ws.Root, "provision.yaml")
-			prov, err := load.Provision(provPath)
+			provPath := filepath.Join(ws.Root, "gitops-package-set.yaml")
+			prov, err := load.PackageSet(provPath)
 			if err != nil {
-				return fmt.Errorf("load provision %s: %w", provPath, err)
+				return fmt.Errorf("load package set %s: %w", provPath, err)
 			}
 			if prov.Spec.Controllers == nil || prov.Spec.Controllers.KubernetesResources == nil {
 				return fmt.Errorf("apply requires spec.controllers.kubernetesResources in %s — the KRC declares the cluster binary gitups uses", provPath)
 			}
 
-			cat, err := buildProvisionCatalog(prov, ws)
+			cat, err := buildGitOpsPackageSetCatalog(prov, ws)
 			if err != nil {
 				return err
 			}
-			kubeClient, err := newKubeClientFromProvision(prov, cat, toContext)
+			kubeClient, err := newKubeClientFromGitOpsPackageSet(prov, cat, toContext)
 			if err != nil {
 				return err
 			}
@@ -633,8 +631,7 @@ func newGitopsApplyCmd() *cobra.Command {
 	addOutputDirFlag(cmd, &outputDir)
 	cmd.Flags().StringVar(&toContext, "to", "", "cluster context to apply into (required)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "invoke the KRC's apply-dry-run intent; no cluster state changes")
-	cmd.Flags().BoolVar(&allowPlaceholders, "allow-placeholders", false, "apply even when placeholders remain in FullProvision")
-	cmd.Flags().BoolVar(&generateSecrets, "generate-secrets", false, "before applying, fill placeholders whose input declared a generator and rewrite FullProvision in place")
+	cmd.Flags().BoolVar(&allowPlaceholders, "allow-placeholders", false, "apply even when placeholders remain in expanded GitOpsPackageSet")
 	cmd.Flags().BoolVar(&waitCRDs, "wait-crds", false, "after each repo, wait for its OLM subscriptions to Succeed before the next repo")
 	cmd.Flags().BoolVar(&full, "full", false, "apply the whole rendered tree even when spec.controllers declares a KRC/SRC (for SRC-less setups or disaster recovery)")
 	cmd.Flags().DurationVar(&waitTimeout, "wait-timeout", 10*time.Minute, "per-repo wait budget when --wait-crds is set")
@@ -642,45 +639,18 @@ func newGitopsApplyCmd() *cobra.Command {
 	return cmd
 }
 
-// fillGeneratedSecrets fills every Placeholder whose Generator is set,
-// rewrites FullProvision in place using the same yaml.Marshal pattern
-// expand uses, and prints one line per fill (path + kind, never the
-// value). No-op when nothing has a Generator.
-func fillGeneratedSecrets(fp *v1.FullGitOpsPackageSet, fpPath string, out writer) error {
-	results, err := secrets.Fill(fp)
-	if err != nil {
-		return err
-	}
-	if len(results) == 0 {
-		fmt.Fprintf(out, "gitups: --generate-secrets: no generator-bearing placeholders to fill\n")
-		return nil
-	}
-	body, err := yaml.Marshal(fp)
-	if err != nil {
-		return fmt.Errorf("marshal full-provision: %w", err)
-	}
-	if err := os.WriteFile(fpPath, body, 0o644); err != nil {
-		return fmt.Errorf("write %s: %w", fpPath, err)
-	}
-	for _, r := range results {
-		fmt.Fprintf(out, "gitups: generated %s for %s\n", r.Kind, r.Path)
-	}
-	fmt.Fprintf(out, "gitups: --generate-secrets: filled %d placeholder(s); rewrote %s\n", len(results), fpPath)
-	return nil
-}
-
-// applyFullTree applies each rendered repo in FullProvision ordering
+// applyFullTree applies each rendered repo in expanded GitOpsPackageSet ordering
 // via the KRC-declared apply intent. Used when no SRC is declared or
 // when --full is passed. Dependency ordering is implicit in
-// fp.Spec.Packages' topo sort, so first-appearance per repo gives a
+// fp.Spec.Resolved.Packages' topo sort, so first-appearance per repo gives a
 // safe apply order. Service-resources repos (declarest payload
 // skeletons) are skipped — they are not K8s manifest trees.
-func applyFullTree(cmd *cobra.Command, fp *v1.FullGitOpsPackageSet, ws workspace, kc *cluster.KubeClient, dryRun, waitCRDs bool, waitTimeout time.Duration, out writer) error {
+func applyFullTree(cmd *cobra.Command, fp *v1.GitOpsPackageSet, ws workspace, kc *cluster.KubeClient, dryRun, waitCRDs bool, waitTimeout time.Duration, out writer) error {
 	skip := serviceResourcesRepoSet(fp)
 	seen := map[string]bool{}
 	var repoOrder []string
-	for i := range fp.Spec.Packages {
-		repo := fp.Spec.Packages[i].RenderedPaths.Repo
+	for i := range fp.Spec.Resolved.Packages {
+		repo := fp.Spec.Resolved.Packages[i].RenderedPaths.Repo
 		if skip[repo] {
 			continue
 		}
@@ -692,15 +662,15 @@ func applyFullTree(cmd *cobra.Command, fp *v1.FullGitOpsPackageSet, ws workspace
 	fmt.Fprintf(out, "gitups: applying %d repo(s) via %s (dry-run=%v, mode=full)\n",
 		len(repoOrder), kc.Binary(), dryRun)
 	for _, repo := range repoOrder {
-		repoDir := filepath.Join(ws.Root, repo)
+		repoDir := filepath.Join(ws.RenderRoot, repo)
 		if _, err := os.Stat(repoDir); err != nil {
-			return fmt.Errorf("%s not rendered (run `gitups generate %s` first): %w", repo, ws.Name, err)
+			return fmt.Errorf("%s not rendered (render with `gitups render %s` first): %w", repo, ws.Name, err)
 		}
 		if err := applyUnitDir(cmd.Context(), kc, repoDir, dryRun, out); err != nil {
 			return err
 		}
 		if waitCRDs && !dryRun {
-			subs := cluster.SubscriptionsForRepo(fp.Spec.Packages, repo)
+			subs := cluster.SubscriptionsForRepo(fp.Spec.Resolved.Packages, repo)
 			if len(subs) > 0 {
 				fmt.Fprintf(out, "gitups: waiting on %d subscription(s) from %s before next repo\n", len(subs), repo)
 				if err := cluster.WaitForSubscriptions(cmd.Context(), kc, subs, cluster.WaitOptions{Timeout: waitTimeout, Out: stdioWriter{w: out}}); err != nil {
@@ -729,7 +699,7 @@ func applyFullTree(cmd *cobra.Command, fp *v1.FullGitOpsPackageSet, ws workspace
 // declared readiness checks via the KRC's wait-condition intent so
 // "configure gitea repo" can't fire before the gitea Deployment is
 // Available.
-func applyBootstrapOnly(cmd *cobra.Command, fp *v1.FullGitOpsPackageSet, prov *v1.GitOpsPackageSet, cat *catalog.Catalog, ws workspace, kc *cluster.KubeClient, dryRun, waitCRDs bool, waitTimeout time.Duration, out writer) error {
+func applyBootstrapOnly(cmd *cobra.Command, fp *v1.GitOpsPackageSet, prov *v1.GitOpsPackageSet, cat *catalog.Catalog, ws workspace, kc *cluster.KubeClient, dryRun, waitCRDs bool, waitTimeout time.Duration, out writer) error {
 	planned := bootstrapSubset(fp)
 	if len(planned) == 0 {
 		return fmt.Errorf("bootstrap subset is empty; nothing to apply")
@@ -776,9 +746,9 @@ func applyBootstrapOnly(cmd *cobra.Command, fp *v1.FullGitOpsPackageSet, prov *v
 			waveReady = nil
 			currentWave = rp.ApplyWave
 		}
-		unitDir := filepath.Join(ws.Root, rp.RenderedPaths.Repo, rp.RenderedPaths.Dir)
+		unitDir := filepath.Join(ws.RenderRoot, rp.RenderedPaths.Repo, rp.RenderedPaths.Dir)
 		if _, err := os.Stat(unitDir); err != nil {
-			return fmt.Errorf("unit %s not rendered at %s (run `gitups generate %s` first): %w", rp.Instance, unitDir, ws.Name, err)
+			return fmt.Errorf("unit %s not rendered at %s (render with `gitups render %s` first): %w", rp.Instance, unitDir, ws.Name, err)
 		}
 		if rp.Controller != nil && rp.Controller.Kind == v1.RoleSRC {
 			intent := rp.Controller.Intent
@@ -859,9 +829,9 @@ func applyUnitDir(ctx context.Context, kc *cluster.KubeClient, dir string, dryRu
 // declared type is service-resources. Those repos carry declarest
 // resource-payload skeletons, not K8s manifests, so applyFullTree
 // skips them.
-func serviceResourcesRepoSet(fp *v1.FullGitOpsPackageSet) map[string]bool {
+func serviceResourcesRepoSet(fp *v1.GitOpsPackageSet) map[string]bool {
 	out := map[string]bool{}
-	for _, r := range fp.Spec.Repositories {
+	for _, r := range fp.Spec.Resolved.Repositories {
 		if r.Type == v1.RepoTypeServiceResources {
 			out[r.Name] = true
 		}
@@ -945,12 +915,12 @@ func waitForReadiness(ctx context.Context, kc *cluster.KubeClient, targets []rea
 	return nil
 }
 
-// newKubeClientFromProvision resolves the Provision's KRC assignment to
+// newKubeClientFromGitOpsPackageSet resolves the GitOpsPackageSet's KRC assignment to
 // the KRC's spec.cli block and returns a cluster.KubeClient bound to
 // toContext. Returns a clear error when the KRC package has no
 // spec.cli or any needed intent is missing — surfaced early so apply
 // fails cleanly before touching the cluster.
-func newKubeClientFromProvision(prov *v1.GitOpsPackageSet, cat *catalog.Catalog, toContext string) (*cluster.KubeClient, error) {
+func newKubeClientFromGitOpsPackageSet(prov *v1.GitOpsPackageSet, cat *catalog.Catalog, toContext string) (*cluster.KubeClient, error) {
 	if prov.Spec.Controllers == nil || prov.Spec.Controllers.KubernetesResources == nil {
 		return nil, fmt.Errorf("spec.controllers.kubernetesResources is required — the KRC declares the cluster binary gitups uses")
 	}
@@ -1135,8 +1105,8 @@ func parseMajorMinor(s string) (maj, min int) {
 // units plus an indented list of the direct set in apply order, so the
 // user can see up-front what gitups owns before handoff. Large plans
 // (>30) are truncated; re-run with `gitups plan` for a full listing.
-func writeBootstrapPlan(out writer, fp *v1.FullGitOpsPackageSet, planned []*v1.ResolvedPackage) {
-	total := len(fp.Spec.Packages)
+func writeBootstrapPlan(out writer, fp *v1.GitOpsPackageSet, planned []*v1.ResolvedPackage) {
+	total := len(fp.Spec.Resolved.Packages)
 	deferred := total - len(planned)
 	fmt.Fprintf(out, "gitups: plan — %d direct, %d deferred to KRC (total %d); handoff after direct set succeeds\n",
 		len(planned), deferred, total)
@@ -1173,10 +1143,10 @@ func planUnitTag(rp *v1.ResolvedPackage) string {
 // bootstrapSubset picks every ResolvedPackage gitups apply must own
 // directly: installs, controller-owned (KRC/SRC-synthesised or rewired)
 // units, and the KRC/SRC packages' own resources.
-func bootstrapSubset(fp *v1.FullGitOpsPackageSet) []*v1.ResolvedPackage {
+func bootstrapSubset(fp *v1.GitOpsPackageSet) []*v1.ResolvedPackage {
 	var out []*v1.ResolvedPackage
-	for i := range fp.Spec.Packages {
-		rp := &fp.Spec.Packages[i]
+	for i := range fp.Spec.Resolved.Packages {
+		rp := &fp.Spec.Resolved.Packages[i]
 		switch {
 		case rp.UnitType == v1.UnitTypeInstall:
 			out = append(out, rp)
@@ -1239,10 +1209,10 @@ func srcCLIForPlan(cat *catalog.Catalog, prov *v1.GitOpsPackageSet, plan []*v1.R
 	return srcCLIBundle{}, "", fmt.Errorf("SRC instance %q not found in repo %q", a.Instance, a.Repo)
 }
 
-// buildProvisionCatalog resolves the catalog for the given provision
+// buildGitOpsPackageSetCatalog resolves the catalog for the given package set
 // relative to the workspace root. Mirrors the same interpretation of
 // relative source paths used by `gitups expand`.
-func buildProvisionCatalog(prov *v1.GitOpsPackageSet, ws workspace) (*catalog.Catalog, error) {
+func buildGitOpsPackageSetCatalog(prov *v1.GitOpsPackageSet, ws workspace) (*catalog.Catalog, error) {
 	registerGitopsSourceResolvers(prov.Spec.Sources, packageNamesByTemplate(prov))
 	return catalog.Build(prov.Spec.Sources, ws.Root)
 }
@@ -1275,12 +1245,12 @@ func registerGitopsSourceResolvers(sources []v1.PackageSource, names map[string]
 	}
 }
 
-// packageNamesFromFullProvision extracts the package basenames referenced
-// per-source from a FullGitOpsPackageSet. Same shape rules as the
-// Provision-input form.
-func packageNamesFromFullProvision(fp *v1.FullGitOpsPackageSet) map[string][]string {
+// packageNamesFromExpandedPackageSet extracts the package basenames referenced
+// per-source from a GitOpsPackageSet. Same shape rules as the
+// GitOpsPackageSet-input form.
+func packageNamesFromExpandedPackageSet(fp *v1.GitOpsPackageSet) map[string][]string {
 	out := map[string]map[string]struct{}{}
-	for _, pkg := range fp.Spec.Packages {
+	for _, pkg := range fp.Spec.Resolved.Packages {
 		parts := strings.SplitN(pkg.Template, "/", 2)
 		if len(parts) != 2 {
 			continue
@@ -1375,29 +1345,29 @@ func newGitopsWaitCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if _, err := os.Stat(ws.FullProvision); err != nil {
-				return fmt.Errorf("%s not found (run `gitups expand %s` first)", ws.FullProvision, ws.Name)
+			if _, err := os.Stat(ws.ExpandedPackageSet); err != nil {
+				return fmt.Errorf("%s not found (run `gitups expand %s` first)", ws.ExpandedPackageSet, ws.Name)
 			}
-			fp, err := load.FullProvision(ws.FullProvision)
+			fp, err := load.ExpandedPackageSet(ws.ExpandedPackageSet)
 			if err != nil {
 				return err
 			}
 			if fp.Metadata.Name != ws.Name {
 				return fmt.Errorf("%s has metadata.name %q but workspace is %q",
-					ws.FullProvision, fp.Metadata.Name, ws.Name)
+					ws.ExpandedPackageSet, fp.Metadata.Name, ws.Name)
 			}
-			// Load Provision to resolve the KRC (whose spec.cli is
+			// Load GitOpsPackageSet to resolve the KRC (whose spec.cli is
 			// the cluster binary gitups talks to).
-			provPath := filepath.Join(ws.Root, "provision.yaml")
-			prov, err := load.Provision(provPath)
+			provPath := filepath.Join(ws.Root, "gitops-package-set.yaml")
+			prov, err := load.PackageSet(provPath)
 			if err != nil {
-				return fmt.Errorf("load provision %s: %w", provPath, err)
+				return fmt.Errorf("load package set %s: %w", provPath, err)
 			}
-			cat, err := buildProvisionCatalog(prov, ws)
+			cat, err := buildGitOpsPackageSetCatalog(prov, ws)
 			if err != nil {
 				return err
 			}
-			kc, err := newKubeClientFromProvision(prov, cat, toContext)
+			kc, err := newKubeClientFromGitOpsPackageSet(prov, cat, toContext)
 			if err != nil {
 				return err
 			}
@@ -1405,10 +1375,10 @@ func newGitopsWaitCmd() *cobra.Command {
 				return fmt.Errorf("KRC %q: required binary %q not found in PATH",
 					kc.KRCName(), kc.Binary())
 			}
-			subs := cluster.SubscriptionsFromPackages(fp.Spec.Packages)
+			subs := cluster.SubscriptionsFromPackages(fp.Spec.Resolved.Packages)
 			out := cmd.ErrOrStderr()
 			if len(subs) == 0 {
-				fmt.Fprintf(out, "gitups: no OLM subscriptions in %s\n", ws.FullProvision)
+				fmt.Fprintf(out, "gitups: no OLM subscriptions in %s\n", ws.ExpandedPackageSet)
 				return nil
 			}
 			fmt.Fprintf(out, "gitups: waiting on %d subscription(s) via %s (timeout %s)\n",
@@ -1434,27 +1404,27 @@ func newGitopsStatusCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "status <name>",
-		Short: "Report drift between rendered repos and FullProvision <name>",
+		Short: "Report drift between rendered repos and expanded GitOpsPackageSet <name>",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ws, err := newWorkspace(outputDir, args[0])
 			if err != nil {
 				return err
 			}
-			if _, err := os.Stat(ws.FullProvision); err != nil {
+			if _, err := os.Stat(ws.ExpandedPackageSet); err != nil {
 				return fmt.Errorf("%s not found (run `gitups expand %s` first)",
-					ws.FullProvision, ws.Name)
+					ws.ExpandedPackageSet, ws.Name)
 			}
-			fp, err := load.FullProvision(ws.FullProvision)
+			fp, err := load.ExpandedPackageSet(ws.ExpandedPackageSet)
 			if err != nil {
 				return err
 			}
 			if fp.Metadata.Name != ws.Name {
 				return fmt.Errorf("%s has metadata.name %q but workspace is %q",
-					ws.FullProvision, fp.Metadata.Name, ws.Name)
+					ws.ExpandedPackageSet, fp.Metadata.Name, ws.Name)
 			}
-			baseDir := filepath.Dir(absPath(ws.FullProvision))
-			registerGitopsSourceResolvers(fp.Spec.Sources, packageNamesFromFullProvision(fp))
+			baseDir := ws.Root
+			registerGitopsSourceResolvers(fp.Spec.Sources, packageNamesFromExpandedPackageSet(fp))
 			cat, err := catalog.Build(fp.Spec.Sources, baseDir)
 			if err != nil {
 				return err
@@ -1463,7 +1433,7 @@ func newGitopsStatusCmd() *cobra.Command {
 				return err
 			}
 			// Render into a scratch sibling dir so status never mutates the
-			// workspace. AllowPlaceholders so a half-filled FullProvision still
+			// workspace. AllowPlaceholders so a half-filled expanded GitOpsPackageSet still
 			// produces a diff — status is a read-only probe.
 			scratchRoot, err := os.MkdirTemp("", "gitups-status-")
 			if err != nil {
@@ -1472,31 +1442,31 @@ func newGitopsStatusCmd() *cobra.Command {
 			defer os.RemoveAll(scratchRoot)
 			scratchOut := filepath.Join(scratchRoot, ws.Name)
 			if err := render.Render(cmd.Context(), fp, cat, render.Options{
-				OutputPath:            scratchOut,
-				KubectlContext:        currentKubectlContext(),
-				AllowPlaceholders:     true,
-				SuppressFullProvision: true,
+				OutputPath:             scratchOut,
+				KubectlContext:         currentKubectlContext(),
+				AllowPlaceholders:      true,
+				SuppressPackageSetCopy: true,
 			}); err != nil {
 				return fmt.Errorf("dry render: %w", err)
 			}
-			drifts, err := diffWorkspace(ws.Root, scratchOut)
+			drifts, err := diffWorkspace(ws.RenderRoot, scratchOut)
 			if err != nil {
 				return err
 			}
 			out := cmd.ErrOrStderr()
 			if len(drifts) == 0 {
-				fmt.Fprintf(out, "gitups: %s is up to date with %s\n", ws.Root, ws.FullProvision)
+				fmt.Fprintf(out, "gitups: %s is up to date with %s\n", ws.RenderRoot, ws.ExpandedPackageSet)
 				return nil
 			}
 			fmt.Fprintf(out, "gitups: %d drift(s) between %s and %s:\n",
-				len(drifts), ws.Root, ws.FullProvision)
+				len(drifts), ws.RenderRoot, ws.ExpandedPackageSet)
 			for _, d := range drifts {
 				fmt.Fprintf(out, "  %-12s %s\n", d.Kind, d.Path)
 				if showDiff && d.Kind == "modified" {
-					writeDriftDiff(out, filepath.Join(scratchOut, d.Path), filepath.Join(ws.Root, d.Path), diffLines)
+					writeDriftDiff(out, filepath.Join(scratchOut, d.Path), filepath.Join(ws.RenderRoot, d.Path), diffLines)
 				}
 			}
-			return fmt.Errorf("drift detected; re-run `gitups generate %s` to reconcile", ws.Name)
+			return fmt.Errorf("drift detected; re-render with `gitups render %s` to reconcile", ws.Name)
 		},
 	}
 	addOutputDirFlag(cmd, &outputDir)
@@ -1557,8 +1527,8 @@ type drift struct {
 }
 
 // diffWorkspace compares a freshly-rendered tree against the workspace's
-// rendered repo siblings. Top-level workspace files (provision.yaml,
-// full-provision.yaml) are ignored by construction — only directory siblings
+// rendered repo siblings. Top-level workspace files are ignored by
+// construction — only directory siblings
 // are walked.
 func diffWorkspace(wsRoot, rendered string) ([]drift, error) {
 	rEntries, err := os.ReadDir(rendered)
@@ -1657,20 +1627,19 @@ func compareRepoTree(rendered, workspace, prefix string, drifts *[]drift) error 
 	})
 }
 
-// scaffoldProvision produces a minimal Provision YAML carrying only metadata,
+// scaffoldGitOpsPackageSet produces a minimal GitOpsPackageSet YAML carrying only metadata,
 // with commented-out examples to guide the user's first edit.
-func scaffoldProvision(name string) string {
-	return fmt.Sprintf(`apiVersion: gitups/v1alpha1
-kind: Provision
+func scaffoldGitOpsPackageSet(name string) string {
+	return fmt.Sprintf(`apiVersion: gitups.io/v1alpha1
+kind: GitOpsPackageSet
 metadata:
   name: %s
 spec:
   # Package sources: where gitups looks up package definitions.
-  # v0.1 supports "filesystem" sources only. Path is relative to this file.
   sources: []
   # - name: local
-  #   type: filesystem
-  #   path: ../../../gitups-packages/packages
+  #   filesystem:
+  #     path: ./packages
 
   # Repositories select package installs and environment resources.
   repositories: []
@@ -1688,14 +1657,14 @@ spec:
 `, name)
 }
 
-func printPlaceholderSummary(w interface{ Write([]byte) (int, error) }, fp *v1.FullGitOpsPackageSet) {
-	if len(fp.Spec.Placeholders) == 0 {
-		fmt.Fprintf(stdioWriter{w}, "gitups: no placeholders; ready to generate.\n")
+func printPlaceholderSummary(w interface{ Write([]byte) (int, error) }, fp *v1.GitOpsPackageSet) {
+	if len(fp.Spec.Resolved.Placeholders) == 0 {
+		fmt.Fprintf(stdioWriter{w}, "gitups: no placeholders; ready to render.\n")
 		return
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "gitups: %d placeholder(s) require user input:\n", len(fp.Spec.Placeholders))
-	for _, ph := range fp.Spec.Placeholders {
+	fmt.Fprintf(&b, "gitups: %d placeholder(s) require user input:\n", len(fp.Spec.Resolved.Placeholders))
+	for _, ph := range fp.Spec.Resolved.Placeholders {
 		tag := ""
 		if ph.Sensitive {
 			tag = " [sensitive]"
@@ -1754,21 +1723,21 @@ func newGitopsPlanCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if _, err := os.Stat(ws.FullProvision); err != nil {
-				return fmt.Errorf("%s not found (run `gitups expand %s` first)", ws.FullProvision, ws.Name)
+			if _, err := os.Stat(ws.ExpandedPackageSet); err != nil {
+				return fmt.Errorf("%s not found (run `gitups expand %s` first)", ws.ExpandedPackageSet, ws.Name)
 			}
-			fp, err := load.FullProvision(ws.FullProvision)
+			fp, err := load.ExpandedPackageSet(ws.ExpandedPackageSet)
 			if err != nil {
 				return err
 			}
 			if fp.Metadata.Name != ws.Name {
 				return fmt.Errorf("%s has metadata.name %q but workspace is %q",
-					ws.FullProvision, fp.Metadata.Name, ws.Name)
+					ws.ExpandedPackageSet, fp.Metadata.Name, ws.Name)
 			}
 			var prov *v1.GitOpsPackageSet
-			provPath := filepath.Join(ws.Root, "provision.yaml")
+			provPath := filepath.Join(ws.Root, "gitops-package-set.yaml")
 			if _, err := os.Stat(provPath); err == nil {
-				prov, _ = load.Provision(provPath)
+				prov, _ = load.PackageSet(provPath)
 			}
 			hasControllers := prov != nil && prov.Spec.Controllers != nil &&
 				(prov.Spec.Controllers.KubernetesResources != nil || prov.Spec.Controllers.ServiceResources != nil)
@@ -1777,18 +1746,18 @@ func newGitopsPlanCmd() *cobra.Command {
 			if full || !hasControllers {
 				seen := map[string]bool{}
 				var repos []string
-				for i := range fp.Spec.Packages {
-					r := fp.Spec.Packages[i].RenderedPaths.Repo
+				for i := range fp.Spec.Resolved.Packages {
+					r := fp.Spec.Resolved.Packages[i].RenderedPaths.Repo
 					if !seen[r] {
 						seen[r] = true
 						repos = append(repos, r)
 					}
 				}
-				fmt.Fprintf(out, "gitups: mode=full; %d repo(s), %d unit(s)\n", len(repos), len(fp.Spec.Packages))
+				fmt.Fprintf(out, "gitups: mode=full; %d repo(s), %d unit(s)\n", len(repos), len(fp.Spec.Resolved.Packages))
 				for _, r := range repos {
 					fmt.Fprintf(out, "  repo %s\n", r)
-					for i := range fp.Spec.Packages {
-						rp := &fp.Spec.Packages[i]
+					for i := range fp.Spec.Resolved.Packages {
+						rp := &fp.Spec.Resolved.Packages[i]
 						if rp.RenderedPaths.Repo != r {
 							continue
 						}
@@ -1805,7 +1774,7 @@ func newGitopsPlanCmd() *cobra.Command {
 				return planned[i].Instance < planned[j].Instance
 			})
 			fmt.Fprintf(out, "gitups: mode=bootstrap; %d direct, %d deferred to KRC (total %d)\n",
-				len(planned), len(fp.Spec.Packages)-len(planned), len(fp.Spec.Packages))
+				len(planned), len(fp.Spec.Resolved.Packages)-len(planned), len(fp.Spec.Resolved.Packages))
 			for _, rp := range planned {
 				fmt.Fprintf(out, "  [wave %d] %-48s (%s) → %s\n", rp.ApplyWave, rp.Instance, planUnitTag(rp), rp.RenderedPaths.Repo)
 			}
@@ -1815,8 +1784,8 @@ func newGitopsPlanCmd() *cobra.Command {
 				inPlan[rp.Instance] = true
 			}
 			deferred := 0
-			for i := range fp.Spec.Packages {
-				if !inPlan[fp.Spec.Packages[i].Instance] {
+			for i := range fp.Spec.Resolved.Packages {
+				if !inPlan[fp.Spec.Resolved.Packages[i].Instance] {
 					deferred++
 				}
 			}
@@ -1834,7 +1803,7 @@ func newGitopsPlanCmd() *cobra.Command {
 
 // newGitopsFillCmd implements CLI-native placeholder filling. Accepts
 // repeated --set <instance>.<dotted.path>=<value> pairs; rewrites
-// full-provision.yaml in place with the supplied values dropped into
+// .gitups/expanded/gitops-package-set.yaml in place with the supplied values dropped into
 // each package's resolvedValues. Clears the placeholders list when all
 // sentinels are resolved; leaves unfilled entries alone so `expand`
 // can re-emit them on the next pass.
@@ -1845,27 +1814,27 @@ func newGitopsFillCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "fill <name>",
-		Short: "Fill placeholders in FullProvision <name> via --set args",
+		Short: "Fill placeholders in expanded GitOpsPackageSet <name> via --set args",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ws, err := newWorkspace(outputDir, args[0])
 			if err != nil {
 				return err
 			}
-			if _, err := os.Stat(ws.FullProvision); err != nil {
-				return fmt.Errorf("%s not found (run `gitups expand %s` first)", ws.FullProvision, ws.Name)
+			if _, err := os.Stat(ws.ExpandedPackageSet); err != nil {
+				return fmt.Errorf("%s not found (run `gitups expand %s` first)", ws.ExpandedPackageSet, ws.Name)
 			}
-			fp, err := load.FullProvision(ws.FullProvision)
+			fp, err := load.ExpandedPackageSet(ws.ExpandedPackageSet)
 			if err != nil {
 				return err
 			}
 			if fp.Metadata.Name != ws.Name {
 				return fmt.Errorf("%s has metadata.name %q but workspace is %q",
-					ws.FullProvision, fp.Metadata.Name, ws.Name)
+					ws.ExpandedPackageSet, fp.Metadata.Name, ws.Name)
 			}
 			byInstance := map[string]*v1.ResolvedPackage{}
-			for i := range fp.Spec.Packages {
-				byInstance[fp.Spec.Packages[i].Instance] = &fp.Spec.Packages[i]
+			for i := range fp.Spec.Resolved.Packages {
+				byInstance[fp.Spec.Resolved.Packages[i].Instance] = &fp.Spec.Resolved.Packages[i]
 			}
 			out := cmd.ErrOrStderr()
 			for _, s := range sets {
@@ -1875,7 +1844,7 @@ func newGitopsFillCmd() *cobra.Command {
 				}
 				rp, ok := byInstance[inst]
 				if !ok {
-					return fmt.Errorf("--set %q: instance %q not found in %s", s, inst, ws.FullProvision)
+					return fmt.Errorf("--set %q: instance %q not found in %s", s, inst, ws.ExpandedPackageSet)
 				}
 				if rp.ResolvedValues == nil {
 					rp.ResolvedValues = map[string]any{}
@@ -1887,26 +1856,26 @@ func newGitopsFillCmd() *cobra.Command {
 			}
 			// Re-scan placeholders so the summary reflects user fills.
 			var remaining []v1.Placeholder
-			for i := range fp.Spec.Packages {
-				rp := &fp.Spec.Packages[i]
+			for i := range fp.Spec.Resolved.Packages {
+				rp := &fp.Spec.Resolved.Packages[i]
 				if placeholders.Contains(rp.ResolvedValues) {
 					// Keep only the entries whose leaf is still a sentinel.
-					for _, ph := range fp.Spec.Placeholders {
-						if strings.HasPrefix(ph.Path, fmt.Sprintf("spec.packages[%s].", rp.Instance)) {
+					for _, ph := range fp.Spec.Resolved.Placeholders {
+						if strings.HasPrefix(ph.Path, fmt.Sprintf("spec.resolved.packages[%s].", rp.Instance)) {
 							remaining = append(remaining, ph)
 						}
 					}
 				}
 			}
-			fp.Spec.Placeholders = remaining
+			fp.Spec.Resolved.Placeholders = remaining
 			body, err := yaml.Marshal(fp)
 			if err != nil {
-				return fmt.Errorf("marshal full-provision: %w", err)
+				return fmt.Errorf("marshal package-set: %w", err)
 			}
-			if err := os.WriteFile(ws.FullProvision, body, 0o644); err != nil {
-				return fmt.Errorf("write %s: %w", ws.FullProvision, err)
+			if err := os.WriteFile(ws.ExpandedPackageSet, body, 0o644); err != nil {
+				return fmt.Errorf("write %s: %w", ws.ExpandedPackageSet, err)
 			}
-			fmt.Fprintf(out, "gitups: wrote %s (%d placeholder(s) remaining)\n", ws.FullProvision, len(remaining))
+			fmt.Fprintf(out, "gitups: wrote %s (%d placeholder(s) remaining)\n", ws.ExpandedPackageSet, len(remaining))
 			return nil
 		},
 	}
@@ -1921,7 +1890,7 @@ func newGitopsFillCmd() *cobra.Command {
 // rest is a string value. Integer / bool coercion is deliberately
 // NOT done here — descriptors declare types, and misaligned types in
 // resolvedValues would be silently wrong. Users who need a number can
-// edit full-provision.yaml directly.
+// edit .gitups/expanded/gitops-package-set.yaml directly.
 func parseFillSet(s string) (instance, path, value string, err error) {
 	eq := strings.IndexByte(s, '=')
 	if eq < 0 {
@@ -1998,7 +1967,7 @@ func newGitopsDestroyCmd() *cobra.Command {
 			fmt.Fprintf(cmd.OutOrStdout(),
 				"gitops destroy is currently advisory: rendered tree at %s\n"+
 					"  kubectl --context %s delete -f <repo-dir> --recursive  (per repo, reverse apply order)\n",
-				ws.Root, kubeContext)
+				ws.RenderRoot, kubeContext)
 			if archiveRepos {
 				fmt.Fprintln(cmd.OutOrStdout(),
 					"--archive-repos: not implemented; deprecate or delete repos via your git provider's UI/API.")

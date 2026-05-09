@@ -22,13 +22,13 @@ func resolveBindings(
 	p *v1.GitOpsPackageSet,
 	cat *catalog.Catalog,
 	envKey string,
-	fp *v1.FullGitOpsPackageSet,
+	fp *v1.GitOpsPackageSet,
 	priorByInstance map[string]*v1.ResolvedPackage,
 	forceMode bool,
 ) ([]v1.Placeholder, error) {
 	installByInstance := map[string]*v1.ResolvedPackage{}
-	for i := range fp.Spec.Packages {
-		rp := &fp.Spec.Packages[i]
+	for i := range fp.Spec.Resolved.Packages {
+		rp := &fp.Spec.Resolved.Packages[i]
 		if rp.UnitType == v1.UnitTypeInstall {
 			installByInstance[rp.Instance] = rp
 		}
@@ -197,7 +197,7 @@ func resolveBindings(
 						return nil, fmt.Errorf("%s (%s) provider: %w", loc, b.Name, err)
 					}
 
-					fp.Spec.Packages = append(fp.Spec.Packages, rpConsumer, rpProvider)
+					fp.Spec.Resolved.Packages = append(fp.Spec.Resolved.Packages, rpConsumer, rpProvider)
 					allPhs = append(allPhs, consumerPhs...)
 					allPhs = append(allPhs, providerPhs...)
 				}
@@ -213,7 +213,7 @@ func validateBinding(b v1.BindingRef, loc string, seenBinding map[string]bool) e
 		return fmt.Errorf("%s: name is required", loc)
 	}
 	if seenBinding[b.Name] {
-		return fmt.Errorf("%s (%s): duplicate binding name across Provision", loc, b.Name)
+		return fmt.Errorf("%s (%s): duplicate binding name across GitOpsPackageSet", loc, b.Name)
 	}
 	if b.Capability == "" {
 		return fmt.Errorf("%s (%s): capability is required", loc, b.Name)
@@ -261,7 +261,7 @@ func findProvider(p *v1.GitOpsPackageSet, cat *catalog.Catalog, repoName, instan
 		}
 		return catalog.Entry{}, "", "", fmt.Errorf("provider instance %q not found in generic repo %q", instance, repoName)
 	}
-	return catalog.Entry{}, "", "", fmt.Errorf("generic repo %q not declared in Provision", repoName)
+	return catalog.Entry{}, "", "", fmt.Errorf("generic repo %q not declared in GitOpsPackageSet", repoName)
 }
 
 // fullyQualifiedTemplate returns the consumer's template string as written

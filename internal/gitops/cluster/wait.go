@@ -22,8 +22,8 @@ type SubscriptionRef struct {
 	Name      string // Subscription name (the gitups instance)
 }
 
-// SubscriptionsFromPackages returns the OLM subscription refs a FullProvision
-// installs. Ordering matches fp.Spec.Packages. Packages with renderer != olm
+// SubscriptionsFromPackages returns the OLM subscription refs a GitOpsPackageSet
+// installs. Ordering matches fp.Spec.Resolved.Packages. Packages with renderer != olm
 // or missing resolvedValues.namespace are skipped silently.
 func SubscriptionsFromPackages(pkgs []v1.ResolvedPackage) []SubscriptionRef {
 	var out []SubscriptionRef

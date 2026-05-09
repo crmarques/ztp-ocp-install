@@ -52,17 +52,17 @@ Alternative: skip `extraPortMappings` and use
 ```bash
 OUT=$(mktemp -d /tmp/gitups-test2.XXXXXX)
 mkdir -p "$OUT/test2"
-cp tests/e2e/test2/provision.yaml "$OUT/test2/provision.yaml"
+cp tests/e2e/test2/gitops-package-set.yaml "$OUT/test2/gitops-package-set.yaml"
 ```
 
-## 3. Check, expand, fill, generate
+## 3. Check, expand, fill, render
 
 ```bash
 ./bin/gitups check    test2 -d "$OUT"
 ./bin/gitups expand   test2 -d "$OUT" --force
 ```
 
-The keycloak helm values are seeded from `provision.yaml`'s `values`
+The keycloak helm values are seeded from `gitops-package-set.yaml`'s `values`
 block, so the only remaining placeholders are the per-repo `repoURL`
 entries the argocd KRC needs for each managed output repo:
 
@@ -73,7 +73,7 @@ for r in basic-infra basic-infra-dev support-services support-services-dev \
     --set "argocd-managed-repo-${r}.repoURL=https://example.invalid/gitops/${r}.git"
 done
 ./bin/gitups check    test2 -d "$OUT"
-./bin/gitups generate test2 -d "$OUT" --context test2 --prune
+./bin/gitups render test2 -d "$OUT" --context test2 --prune
 ```
 
 ## 4. Apply to kind
@@ -102,7 +102,7 @@ curl  -I http://keycloak.test2.local:8080/
 ```
 
 Then open `http://keycloak.test2.local:8080/` and log in with
-`admin` / `admin-dev-password` (from `provision.yaml`).
+`admin` / `admin-dev-password` (from `gitops-package-set.yaml`).
 
 ## 6. Tear down
 

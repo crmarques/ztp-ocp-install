@@ -9,7 +9,7 @@ import (
 )
 
 // withBinding attaches an argocd ↔ gitea binding to the argocd entry in the
-// dsv provision. Reused by every binding test so the wiring is authored in
+// dsv package set. Reused by every binding test so the wiring is authored in
 // one place.
 func withBinding(prov *v1.GitOpsPackageSet, bindingName string) {
 	for ri := range prov.Spec.Repositories {
@@ -35,9 +35,9 @@ func withBinding(prov *v1.GitOpsPackageSet, bindingName string) {
 // findBindingUnits returns the consumer and all provider ResolvedPackages for
 // bindingName, indexed by their instance. Consumer entries get the
 // "consumer" side key, providers are keyed by instance.
-func findBindingUnits(fp *v1.FullGitOpsPackageSet, bindingName string) (consumer *v1.ResolvedPackage, providers []*v1.ResolvedPackage) {
-	for i := range fp.Spec.Packages {
-		rp := &fp.Spec.Packages[i]
+func findBindingUnits(fp *v1.GitOpsPackageSet, bindingName string) (consumer *v1.ResolvedPackage, providers []*v1.ResolvedPackage) {
+	for i := range fp.Spec.Resolved.Packages {
+		rp := &fp.Spec.Resolved.Packages[i]
 		if rp.Binding == nil || rp.Binding.Name != bindingName {
 			continue
 		}

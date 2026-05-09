@@ -1,6 +1,6 @@
 # controllers-dev
 
-Repo rendered by gitups from FullProvision "test5".
+Repo rendered by gitups from expanded GitOpsPackageSet "test5".
 
 ## Packages
 

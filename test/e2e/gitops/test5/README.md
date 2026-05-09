@@ -1,14 +1,14 @@
 # test5 — haproxy fronting nginx fronting gitea, with declarest managing per-service git repos
 
 End-to-end smoke that exercises **every major test5-era contract change** in one
-Provision:
+GitOpsPackageSet:
 
-- **Lean Provision, fat FullProvision.** The `provision.yaml` carries only
+- **Minimal GitOpsPackageSet, expanded spec.resolved.** The `gitops-package-set.yaml` carries only
   what's declarative intent: which packages, which renderer, which repo each
   package lands in, and which provider/consumer binding wires metallb to
   nginx-ingress. Concrete IPs (`172.18.255.200-172.18.255.249`), service
   hostnames (`http://gitea-http.gitea.svc.cluster.local:3000`), and bundle
-  references (`gitea:0.0.1`) are filled into `full-provision.yaml`
+  references (`gitea:0.0.1`) are filled into `.gitups/expanded/gitops-package-set.yaml`
   *after* expand, via `gitups fill --set`.
 - **KRC-declared kubectl.** Gitups core carries no hard-coded cluster binary.
   The argocd package's `spec.cli` (see
@@ -100,7 +100,7 @@ The metallb CIDR `172.18.255.200-172.18.255.249` should be inside the
 kind docker network (usually `172.18.0.0/16`). Check with
 `docker network inspect kind | grep Subnet`.
 
-## 2. Check, expand, fill, generate — in-tree
+## 2. Check, expand, fill, render — in-tree
 
 ```bash
 ./bin/gitups check    test5 -d tests/e2e
@@ -124,7 +124,7 @@ done
   --set "declarest-managed-service-haproxy.metadata.bundle=haproxy:0.0.1"
 
 ./bin/gitups check    test5 -d tests/e2e
-./bin/gitups generate test5 -d tests/e2e --context test5 --prune
+./bin/gitups render test5 -d tests/e2e --context test5 --prune
 ```
 
 Inspect the rendered CRs:
@@ -149,7 +149,7 @@ cat tests/e2e/test5/gitea-dsv/README.md
 
 Under the hood:
 
-- Gitups loads `Provision`, resolves the KRC
+- Gitups loads `GitOpsPackageSet`, resolves the KRC
   (`controllers/argocd`), loads its `spec.cli.intents` from the
   argocd package, and builds a `cluster.KubeClient`. Every cluster op
   from here on runs `kubectl …` only because argocd declares it.
@@ -162,7 +162,7 @@ Under the hood:
   for an immediate reconciliation pass. `declarest` must be on
   `$PATH` (see [declarest/README](https://github.com/crmarques/declarest#install)).
 
-## 4. Provision declarest-side secrets
+## 4. GitOpsPackageSet declarest-side secrets
 
 The rendered CRs reference several K8s Secrets that declarest reads at
 reconcile time; gitups does not write real secret values into rendered
@@ -214,5 +214,5 @@ curl -sS -H "Host: gitea.dsv.local" "http://${LB_IP}/"
 
 ```bash
 kind delete cluster --name test5
-rm -rf tests/e2e/test5/{basic-infra,basic-infra-dev,support-services,support-services-dev,controllers,controllers-dev,gitea-dsv,haproxy-dsv,full-provision.yaml}
+rm -rf tests/e2e/test5/{basic-infra,basic-infra-dev,support-services,support-services-dev,controllers,controllers-dev,gitea-dsv,haproxy-dsv,.gitups/expanded/gitops-package-set.yaml}
 ```

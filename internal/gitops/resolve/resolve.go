@@ -1,5 +1,5 @@
-// Package resolve implements stage 1 of gitups: expand a Provision into a
-// FullProvision. It merges descriptor defaults with user overrides,
+// Package resolve expands a GitOpsPackageSet into the same object with
+// spec.resolved populated. It merges descriptor defaults with user overrides,
 // topologically sorts by dependsOn, scans for unfilled placeholders, and
 // preserves user edits on re-expand.
 package resolve
@@ -16,21 +16,21 @@ import (
 
 // Options controls Expand behavior.
 type Options struct {
-	// Prior is an optional previously-generated FullProvision whose user edits
+	// Prior is an optional previously-expanded GitOpsPackageSet whose user edits
 	// should be preserved on re-expand. Nil on first run.
-	Prior *v1.FullGitOpsPackageSet
+	Prior *v1.GitOpsPackageSet
 	// Force re-derives defaults from the catalog, but still preserves
 	// user-authored fills at paths that are placeholders in the fresh expansion.
 	Force bool
-	// OutputPath seeds spec.repository.outputPath. If Prior is set, its value
+	// OutputPath seeds spec.resolved.repository.outputPath. If Prior is set, its value
 	// wins unless empty.
 	OutputPath string
-	// ExtendedFrom is written advisorily into FullProvision.spec.
+	// ExtendedFrom is written advisorily into spec.resolved.
 	ExtendedFrom *v1.ExtendedFrom
 }
 
-// Expand produces a FullProvision from a Provision and a loaded Catalog.
-func Expand(p *v1.GitOpsPackageSet, cat *catalog.Catalog, opts Options) (*v1.FullGitOpsPackageSet, error) {
+// Expand returns a GitOpsPackageSet with spec.resolved populated.
+func Expand(p *v1.GitOpsPackageSet, cat *catalog.Catalog, opts Options) (*v1.GitOpsPackageSet, error) {
 	envKey := p.Spec.EnvKey
 	if envKey == "" {
 		envKey = p.Metadata.Name
@@ -49,34 +49,39 @@ func Expand(p *v1.GitOpsPackageSet, cat *catalog.Catalog, opts Options) (*v1.Ful
 		return nil, err
 	}
 
-	fp := &v1.FullGitOpsPackageSet{
+	fp := &v1.GitOpsPackageSet{
 		APIVersion: v1.APIVersion,
-		Kind:       v1.KindFullGitOpsPackageSet,
+		Kind:       v1.KindGitOpsPackageSet,
 		Metadata:   v1.Metadata{Name: p.Metadata.Name},
-		Spec: v1.FullGitOpsPackageSetSpec{
-			SourcePackageSetRef: v1.Metadata{Name: p.Metadata.Name},
-			ExtendedFrom:        opts.ExtendedFrom,
-			Sources:             p.Spec.Sources,
-			Repository:          v1.RepositoryBlock{Layout: "split", OutputPath: opts.OutputPath},
-			Repositories:        repos,
+		Spec: v1.GitOpsPackageSetSpec{
+			EnvKey:       p.Spec.EnvKey,
+			Controllers:  p.Spec.Controllers,
+			Sources:      p.Spec.Sources,
+			Repositories: p.Spec.Repositories,
+			Resolved: &v1.ResolvedGitOps{
+				SourcePackageSetRef: v1.Metadata{Name: p.Metadata.Name},
+				ExtendedFrom:        opts.ExtendedFrom,
+				Repository:          v1.RepositoryBlock{Layout: "split", OutputPath: opts.OutputPath},
+				Repositories:        repos,
+			},
 		},
 	}
-	if opts.Prior != nil && !opts.Force {
-		if opts.Prior.Spec.Repository.Layout != "" {
-			fp.Spec.Repository.Layout = opts.Prior.Spec.Repository.Layout
+	if opts.Prior != nil && opts.Prior.Spec.Resolved != nil && !opts.Force {
+		if opts.Prior.Spec.Resolved.Repository.Layout != "" {
+			fp.Spec.Resolved.Repository.Layout = opts.Prior.Spec.Resolved.Repository.Layout
 		}
-		if opts.Prior.Spec.Repository.OutputPath != "" {
-			fp.Spec.Repository.OutputPath = opts.Prior.Spec.Repository.OutputPath
+		if opts.Prior.Spec.Resolved.Repository.OutputPath != "" {
+			fp.Spec.Resolved.Repository.OutputPath = opts.Prior.Spec.Resolved.Repository.OutputPath
 		}
 	}
-	if fp.Spec.Repository.OutputPath == "" {
-		fp.Spec.Repository.OutputPath = "./out/" + p.Metadata.Name
+	if fp.Spec.Resolved.Repository.OutputPath == "" {
+		fp.Spec.Resolved.Repository.OutputPath = "./out/" + p.Metadata.Name
 	}
 
 	priorByInstance := map[string]*v1.ResolvedPackage{}
-	if opts.Prior != nil {
-		for i := range opts.Prior.Spec.Packages {
-			rp := &opts.Prior.Spec.Packages[i]
+	if opts.Prior != nil && opts.Prior.Spec.Resolved != nil {
+		for i := range opts.Prior.Spec.Resolved.Packages {
+			rp := &opts.Prior.Spec.Resolved.Packages[i]
 			priorByInstance[rp.Instance] = rp
 		}
 	}
@@ -87,7 +92,7 @@ func Expand(p *v1.GitOpsPackageSet, cat *catalog.Catalog, opts Options) (*v1.Ful
 		if err != nil {
 			return nil, err
 		}
-		fp.Spec.Packages = append(fp.Spec.Packages, rp)
+		fp.Spec.Resolved.Packages = append(fp.Spec.Resolved.Packages, rp)
 		placeholderList = append(placeholderList, phs...)
 	}
 
@@ -108,7 +113,7 @@ func Expand(p *v1.GitOpsPackageSet, cat *catalog.Catalog, opts Options) (*v1.Ful
 	}
 
 	sort.SliceStable(placeholderList, func(i, j int) bool { return placeholderList[i].Path < placeholderList[j].Path })
-	fp.Spec.Placeholders = placeholderList
+	fp.Spec.Resolved.Placeholders = placeholderList
 	return fp, nil
 }
 

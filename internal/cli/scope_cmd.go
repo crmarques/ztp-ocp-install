@@ -150,7 +150,7 @@ func newScopeApplyCmd(scope scopeSpec, stdin io.Reader, stdout io.Writer, stderr
 		}
 		printApplySummary(stdout, selected, askBecomePass, dryRun)
 		if !dryRun && !yes {
-			if !confirm(stdin, stdout, "Continue with apply? [y/N]: ") {
+			if !confirm(stdin, stdout, "Continue with apply? [y/N] (default: no): ") {
 				return failErr(1, errors.New("apply aborted"))
 			}
 		}
@@ -247,7 +247,7 @@ func newScopeDestroyCmd(scope scopeSpec, stdout io.Writer, stderr io.Writer) *co
 			return failErr(1, err)
 		}
 		if !dryRun && !yes {
-			return failErr(1, errors.New("destroy refused: pass --yes to confirm teardown, or --dry-run to preview"))
+			return failErr(1, errors.New("destroy refused: pass --yes to execute the teardown, or --dry-run to preview without changes (default is to abort)"))
 		}
 		selected := reversed(scope.phases())
 		printTitle(stdout, scope.name+" destroy")

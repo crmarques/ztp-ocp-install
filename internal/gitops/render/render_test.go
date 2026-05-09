@@ -9,6 +9,7 @@ import (
 	"github.com/crmarques/gitups/internal/gitops/catalog"
 	"github.com/crmarques/gitups/internal/gitops/load"
 	"github.com/crmarques/gitups/internal/gitops/render"
+	"github.com/crmarques/gitups/internal/gitops/resolve"
 )
 
 // stubHelmRunner returns a canned install.yaml per chart so tests don't shell
@@ -35,37 +36,40 @@ func (stubHelmRunner) Template(ctx context.Context, req render.HelmTemplateReque
 	return header + body, nil
 }
 
-// TestRenderRuns drives Render end-to-end against the pinned
-// internal/testdata/dsv/full-provision-filled.yaml fixture and the sibling
-// gitups-packages catalog. It asserts only that render completes; output
-// shape is covered by per-renderer unit tests so the fixture doesn't have
-// to track every chart stub byte-for-byte.
+// TestRenderRuns drives expand and render end-to-end against the pinned
+// internal/testdata/dsv/gitops-package-set.yaml fixture and the sibling
+// gitups-packages catalog.
 func TestRenderRuns(t *testing.T) {
 	repoRoot, err := filepath.Abs("..")
 	if err != nil {
 		t.Fatal(err)
 	}
-	fullProvPath := filepath.Join(repoRoot, "testdata/dsv/full-provision-filled.yaml")
-	fp, err := load.FullProvision(fullProvPath)
+	packageSetPath := filepath.Join(repoRoot, "testdata/dsv/gitops-package-set.yaml")
+	p, err := load.PackageSet(packageSetPath)
 	if err != nil {
-		t.Fatalf("load full-provision: %v", err)
+		t.Fatalf("load package set: %v", err)
 	}
 	// baseDir stays at tests/e2e so the fixture's relative source path
 	// (../../../gitups-packages/packages) resolves to the sibling catalog; the
 	// fixture itself lives one level deeper but is byte-identical to the
 	// workspace copy that e2e runs against.
 	baseDir := filepath.Join(repoRoot, "tests/e2e")
-	cat, err := catalog.Build(fp.Spec.Sources, baseDir)
+	cat, err := catalog.Build(p.Spec.Sources, baseDir)
 	if err != nil {
 		t.Fatalf("build catalog: %v", err)
+	}
+	fp, err := resolve.Expand(p, cat, resolve.Options{})
+	if err != nil {
+		t.Fatalf("expand: %v", err)
 	}
 
 	outDir := filepath.Join(t.TempDir(), "dsv")
 	err = render.Render(context.Background(), fp, cat, render.Options{
-		OutputPath:     outDir,
-		KubectlContext: "dsv",
-		Helm:           stubHelmRunner{},
-		SourceFullProv: fullProvPath,
+		OutputPath:        outDir,
+		KubectlContext:    "dsv",
+		Helm:              stubHelmRunner{},
+		SourcePackageSet:  packageSetPath,
+		AllowPlaceholders: true,
 	})
 	if err != nil {
 		t.Fatalf("render: %v", err)

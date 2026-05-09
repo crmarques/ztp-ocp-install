@@ -543,19 +543,6 @@ func MachineFlavor(provider InfrastructureProvider) string {
 	}
 }
 
-func MachineKind(machine MachineSpec) string {
-	switch {
-	case machine.Libvirt != nil:
-		return MachineFlavorLibvirt
-	case machine.BareMetal != nil:
-		return MachineFlavorBareMetal
-	case machine.VSphere != nil:
-		return MachineFlavorVSphere
-	default:
-		return ""
-	}
-}
-
 func ProviderMachineLibvirt(provider InfrastructureProvider) *MachineProviderLibvirtSpec {
 	if provider.Spec.Machine == nil {
 		return nil

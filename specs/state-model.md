@@ -361,16 +361,15 @@ the local `clusters` scope. The future `hub` scope is reserved for
 configuring those hub-cluster components on clusters that declare
 `role: hub`.
 
-## Gitops authoring artifacts (peer kinds)
+## Gitops authoring artifacts (peer kind)
 
-`GitOpsPackageSet` and `FullGitOpsPackageSet` are gitops authoring artifacts.
-They are **not** members of the cluster-infra `State` aggregate above; they
-are loaded by a separate path (`internal/gitops/load`) and consumed by the
-`gitups gitops *` command group. Their ownership rules, the two-stage flow
-(`GitOpsPackageSet` -> `FullGitOpsPackageSet` -> rendered trees), the catalog
-source drivers (`filesystem`, `oci`, `git`), and the renderer priority are
-specified in [gitops.md](gitops.md).
+`GitOpsPackageSet` is a gitops authoring artifact. It is **not** a member of
+the cluster-infra `State` aggregate above; it is loaded by a separate path
+(`internal/gitops/load`) and consumed by the `gitups gitops *` command group.
+Its ownership rules, minimal and expanded profiles, catalog source drivers
+(`filesystem`, `oci`, `git`), and renderer priority are specified in
+[gitops.md](gitops.md).
 
-The two loaders are disjoint: `infra.LoadNormalizeValidate` continues to
-fail on unknown kinds, and `gitops.LoadGitOpsPackageSet` rejects cluster-infra
+The two loaders are disjoint: `infra.LoadNormalizeValidate` continues to fail
+on unknown kinds, and `internal/gitops/load.PackageSet` accepts only GitOps
 kinds. A user-authored YAML carries either set, never both.

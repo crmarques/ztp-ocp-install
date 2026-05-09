@@ -1,6 +1,6 @@
 # haproxy-dsv
 
-Declarest service-resources repository rendered by gitups from FullProvision "test5".
+Declarest service-resources repository rendered by gitups from expanded GitOpsPackageSet "test5".
 
 Reconciled by declarest against the `ManagedService/haproxy` CR declared in repo `controllers-dev`.
 

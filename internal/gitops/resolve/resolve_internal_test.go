@@ -63,10 +63,10 @@ func TestResolveOneCarriesGeneratorOnPlaceholder(t *testing.T) {
 	for _, ph := range phs {
 		got[ph.Path] = ph.Generator
 	}
-	if g := got["spec.packages[demo].resolvedValues.adminPassword"]; g != gen {
+	if g := got["spec.resolved.packages[demo].resolvedValues.adminPassword"]; g != gen {
 		t.Errorf("adminPassword should carry generator; got %+v", g)
 	}
-	if g := got["spec.packages[demo].resolvedValues.manualToken"]; g != nil {
+	if g := got["spec.resolved.packages[demo].resolvedValues.manualToken"]; g != nil {
 		t.Errorf("manualToken should have nil generator; got %+v", g)
 	}
 }

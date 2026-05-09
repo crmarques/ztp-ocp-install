@@ -122,7 +122,7 @@ func newBastionApplyCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *co
 		if dryRun {
 			return nil
 		}
-		if !yes && !confirm(stdin, stdout, "Continue with bootstrap? [y/N]: ") {
+		if !yes && !confirm(stdin, stdout, "Continue with bootstrap? [y/N] (default: no): ") {
 			return failErr(1, errors.New("bootstrap aborted"))
 		}
 		if err := runBootstrapPlan(c.Context(), stdin, stdout, stderr, plan, proxyEnv); err != nil {
@@ -153,7 +153,7 @@ func newBastionDestroyCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 	cmd.Flags().BoolVar(&yes, "yes", false, "skip the destroy confirmation prompt")
 	cmd.RunE = func(_ *cobra.Command, _ []string) error {
 		if !dryRun && !yes {
-			return failErr(1, errors.New("destroy refused: pass --yes to confirm teardown, or --dry-run to preview"))
+			return failErr(1, errors.New("destroy refused: pass --yes to execute the teardown, or --dry-run to preview without changes (default is to abort)"))
 		}
 		printTitle(stdout, "bastion destroy")
 		targets := []string{ansibleVenvDir(), defaultControllerCLIInstallDir()}

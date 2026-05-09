@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	v1 "github.com/crmarques/gitups/api/v1alpha1"
+	"github.com/crmarques/gitups/internal/gitops/safepath"
 )
 
 // GitResolver materializes a git package source by shallow-cloning the
@@ -48,11 +49,18 @@ func (r *GitResolver) Resolve(s v1.PackageSource, _ string) (string, error) {
 			return "", fmt.Errorf("source %q: clone %s: %w", s.Name, s.Git.URL, err)
 		}
 	}
+	if err := verifyImmutableRef(cloneDir, s.Git.Ref); err != nil {
+		return "", fmt.Errorf("source %q: %w", s.Name, err)
+	}
 	pkgPath := s.Git.Path
 	if pkgPath == "" {
 		pkgPath = "packages"
 	}
-	root := filepath.Join(cloneDir, pkgPath)
+	cleanPath, err := safepath.Relative("git.path", pkgPath)
+	if err != nil {
+		return "", fmt.Errorf("source %q: %w", s.Name, err)
+	}
+	root := filepath.Join(cloneDir, cleanPath)
 	if _, err := os.Stat(root); err != nil {
 		return "", fmt.Errorf("source %q: %s missing in clone: %w", s.Name, pkgPath, err)
 	}
@@ -96,10 +104,32 @@ func rejectBranchRef(ref string) error {
 	if commitSHARe.MatchString(ref) {
 		return nil
 	}
-	if strings.HasPrefix(ref, "v") || strings.Contains(ref, "/") {
+	if ref == "HEAD" || strings.HasPrefix(ref, "refs/heads/") {
+		return fmt.Errorf("ref %q must be a tag or commit SHA; branches are rejected", ref)
+	}
+	switch ref {
+	case "main", "master", "develop", "development", "trunk":
+		return fmt.Errorf("ref %q must be a tag or commit SHA; branches are rejected", ref)
+	}
+	if strings.HasPrefix(ref, "v") || strings.Contains(ref, "/") || strings.HasPrefix(ref, "refs/tags/") {
 		return nil
 	}
 	return fmt.Errorf("ref %q must be a tag or commit SHA; branches are rejected", ref)
+}
+
+func verifyImmutableRef(repoDir, ref string) error {
+	if commitSHARe.MatchString(ref) {
+		return nil
+	}
+	tagRef := "refs/tags/" + strings.TrimPrefix(ref, "refs/tags/")
+	if exec.Command("git", "-C", repoDir, "show-ref", "--verify", "--quiet", tagRef).Run() == nil {
+		return nil
+	}
+	branchRef := "refs/remotes/origin/" + strings.TrimPrefix(ref, "refs/heads/")
+	if exec.Command("git", "-C", repoDir, "show-ref", "--verify", "--quiet", branchRef).Run() == nil {
+		return fmt.Errorf("ref %q resolves to a branch; use a tag or commit SHA", ref)
+	}
+	return fmt.Errorf("ref %q must resolve to a local tag or commit SHA", ref)
 }
 
 func encodeGitURL(u string) string {

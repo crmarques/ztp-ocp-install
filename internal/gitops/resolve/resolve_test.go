@@ -13,9 +13,9 @@ import (
 func loadFixtures(t *testing.T) (*v1.GitOpsPackageSet, *catalog.Catalog) {
 	t.Helper()
 	repoRoot, _ := filepath.Abs("..")
-	prov, err := load.Provision(filepath.Join(repoRoot, "testdata/dsv/provision.yaml"))
+	prov, err := load.PackageSet(filepath.Join(repoRoot, "testdata/dsv/gitops-package-set.yaml"))
 	if err != nil {
-		t.Fatalf("load provision: %v", err)
+		t.Fatalf("load package set: %v", err)
 	}
 	// baseDir points at tests/e2e so the fixture's relative source path
 	// (../../../gitups-packages/packages) still resolves to the sibling
@@ -37,12 +37,12 @@ func TestExpandTopoOrder(t *testing.T) {
 	}
 
 	pos := map[string]int{}
-	for i, rp := range fp.Spec.Packages {
+	for i, rp := range fp.Spec.Resolved.Packages {
 		pos[rp.Instance] = i
 	}
 	for _, name := range []string{"olm", "metallb", "nginx-ingress", "metallb-config-default"} {
 		if _, ok := pos[name]; !ok {
-			t.Fatalf("missing %s in expanded packages: %+v", name, fp.Spec.Packages)
+			t.Fatalf("missing %s in expanded packages: %+v", name, fp.Spec.Resolved.Packages)
 		}
 	}
 	if pos["metallb"] >= pos["nginx-ingress"] {
@@ -60,7 +60,7 @@ func TestExpandDerivesEnvResourcesFromRepoRef(t *testing.T) {
 		t.Fatalf("expand: %v", err)
 	}
 	got := map[string]string{}
-	for _, rp := range fp.Spec.Packages {
+	for _, rp := range fp.Spec.Resolved.Packages {
 		got[rp.Instance] = rp.RenderedPaths.Repo + "/" + rp.RenderedPaths.Dir
 	}
 	if got["metallb"] != "basic-infra/packages/metallb/install/helm" {
@@ -88,15 +88,15 @@ func TestExpandPlaceholders(t *testing.T) {
 	// the fixture produces one per output repo except gitops-controllers
 	// itself (the KRC's own generic).
 	want := map[string]bool{
-		"spec.packages[argocd-managed-repo-basic-infra].resolvedValues.repoURL":            false,
-		"spec.packages[argocd-managed-repo-basic-infra-dsv].resolvedValues.repoURL":        false,
-		"spec.packages[argocd-managed-repo-support-services].resolvedValues.repoURL":       false,
-		"spec.packages[argocd-managed-repo-support-services-dsv].resolvedValues.repoURL":   false,
-		"spec.packages[argocd-managed-repo-gitops-controllers-dsv].resolvedValues.repoURL": false,
-		"spec.packages[metallb-config-default].resolvedValues.addressPools[0].cidrs[0]":    false,
-		"spec.packages[vault].resolvedValues.server.dev.devRootToken":                      false,
+		"spec.resolved.packages[argocd-managed-repo-basic-infra].resolvedValues.repoURL":            false,
+		"spec.resolved.packages[argocd-managed-repo-basic-infra-dsv].resolvedValues.repoURL":        false,
+		"spec.resolved.packages[argocd-managed-repo-support-services].resolvedValues.repoURL":       false,
+		"spec.resolved.packages[argocd-managed-repo-support-services-dsv].resolvedValues.repoURL":   false,
+		"spec.resolved.packages[argocd-managed-repo-gitops-controllers-dsv].resolvedValues.repoURL": false,
+		"spec.resolved.packages[metallb-config-default].resolvedValues.addressPools[0].cidrs[0]":    false,
+		"spec.resolved.packages[vault].resolvedValues.server.dev.devRootToken":                      false,
 	}
-	for _, ph := range fp.Spec.Placeholders {
+	for _, ph := range fp.Spec.Resolved.Placeholders {
 		if _, ok := want[ph.Path]; ok {
 			want[ph.Path] = true
 		}
@@ -115,8 +115,8 @@ func TestExpandIdempotentPreservesUserEdits(t *testing.T) {
 		t.Fatalf("first expand: %v", err)
 	}
 
-	for i := range first.Spec.Packages {
-		rp := &first.Spec.Packages[i]
+	for i := range first.Spec.Resolved.Packages {
+		rp := &first.Spec.Resolved.Packages[i]
 		switch {
 		case rp.Domain == v1.DomainKRC && rp.ResourceTemplate == "managed-repo":
 			rp.ResolvedValues["repoURL"] = "https://git.example.com/" + rp.ResourceName + ".git"
@@ -136,7 +136,7 @@ func TestExpandIdempotentPreservesUserEdits(t *testing.T) {
 		t.Fatalf("re-expand: %v", err)
 	}
 
-	for _, rp := range second.Spec.Packages {
+	for _, rp := range second.Spec.Resolved.Packages {
 		switch {
 		case rp.Instance == "argocd-managed-repo-basic-infra":
 			want := "https://git.example.com/basic-infra.git"
@@ -151,8 +151,8 @@ func TestExpandIdempotentPreservesUserEdits(t *testing.T) {
 			}
 		}
 	}
-	if len(second.Spec.Placeholders) != 0 {
-		t.Errorf("expected empty placeholders after user edits, got %+v", second.Spec.Placeholders)
+	if len(second.Spec.Resolved.Placeholders) != 0 {
+		t.Errorf("expected empty placeholders after user edits, got %+v", second.Spec.Resolved.Placeholders)
 	}
 }
 
@@ -162,16 +162,16 @@ func TestExpandForcePreservesPlaceholderFills(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expand: %v", err)
 	}
-	for i := range first.Spec.Packages {
-		if first.Spec.Packages[i].Instance == "argocd-managed-repo-basic-infra" {
-			first.Spec.Packages[i].ResolvedValues["repoURL"] = "https://user-edit.example.com/"
+	for i := range first.Spec.Resolved.Packages {
+		if first.Spec.Resolved.Packages[i].Instance == "argocd-managed-repo-basic-infra" {
+			first.Spec.Resolved.Packages[i].ResolvedValues["repoURL"] = "https://user-edit.example.com/"
 		}
 	}
 	second, err := resolve.Expand(prov, cat, resolve.Options{Prior: first, Force: true})
 	if err != nil {
 		t.Fatalf("force expand: %v", err)
 	}
-	for _, rp := range second.Spec.Packages {
+	for _, rp := range second.Spec.Resolved.Packages {
 		if rp.Instance != "argocd-managed-repo-basic-infra" {
 			continue
 		}
@@ -230,7 +230,7 @@ func TestExpandRepeatedExplicitResources(t *testing.T) {
 		t.Fatalf("expand: %v", err)
 	}
 	got := map[string]string{}
-	for _, rp := range fp.Spec.Packages {
+	for _, rp := range fp.Spec.Resolved.Packages {
 		got[rp.Instance] = rp.RenderedPaths.Dir
 	}
 	if got["metallb-config-pool-a"] != "packages/metallb/resources/config/pool-a" {
@@ -268,7 +268,7 @@ func TestExpandEnvKeyOverridesMetadataName(t *testing.T) {
 		t.Fatalf("expand: %v", err)
 	}
 	var seen string
-	for _, rp := range fp.Spec.Packages {
+	for _, rp := range fp.Spec.Resolved.Packages {
 		if rp.Instance == "metallb-config-default" {
 			seen = rp.Repository
 			break
@@ -281,12 +281,12 @@ func TestExpandEnvKeyOverridesMetadataName(t *testing.T) {
 
 func TestExpandRecordsExtendedFrom(t *testing.T) {
 	prov, cat := loadFixtures(t)
-	ef := &v1.ExtendedFrom{Source: "../basic-infra/provision.yaml", Ref: "v1.4.0"}
+	ef := &v1.ExtendedFrom{Source: "../basic-infra/gitops-package-set.yaml", Ref: "v1.4.0"}
 	fp, err := resolve.Expand(prov, cat, resolve.Options{ExtendedFrom: ef})
 	if err != nil {
 		t.Fatalf("expand: %v", err)
 	}
-	if fp.Spec.ExtendedFrom == nil || fp.Spec.ExtendedFrom.Source != ef.Source || fp.Spec.ExtendedFrom.Ref != ef.Ref {
-		t.Errorf("ExtendedFrom not persisted: %+v", fp.Spec.ExtendedFrom)
+	if fp.Spec.Resolved.ExtendedFrom == nil || fp.Spec.Resolved.ExtendedFrom.Source != ef.Source || fp.Spec.Resolved.ExtendedFrom.Ref != ef.Ref {
+		t.Errorf("ExtendedFrom not persisted: %+v", fp.Spec.Resolved.ExtendedFrom)
 	}
 }

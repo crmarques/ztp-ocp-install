@@ -1,16 +1,18 @@
 // Package load handles YAML decoding and schema-level validation of on-disk
-// gitups documents (Provision, FullProvision, PackageDefinition).
+// gitups documents.
 package load
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"sigs.k8s.io/yaml"
+	"go.yaml.in/yaml/v3"
 
 	v1 "github.com/crmarques/gitups/api/v1alpha1"
+	"github.com/crmarques/gitups/internal/gitops/safepath"
 )
 
 // DetectKind reads a file and returns its TypeMeta without full unmarshal.
@@ -26,40 +28,39 @@ func DetectKind(path string) (v1.TypeMeta, error) {
 	return tm, nil
 }
 
-// Provision loads and validates a Provision file as it lies on disk, without
-// resolving spec.extends. Callers that want the merged effective Provision
-// should use ProvisionResolved.
-func Provision(path string) (*v1.GitOpsPackageSet, error) {
+// PackageSet loads and validates a GitOpsPackageSet as it lies on disk,
+// without resolving spec.extends.
+func PackageSet(path string) (*v1.GitOpsPackageSet, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
-	if err := rejectOldProvisionFields(raw); err != nil {
+	if err := rejectOldGitOpsPackageSetFields(raw); err != nil {
 		return nil, fmt.Errorf("validate %s: %w", path, err)
 	}
 	var p v1.GitOpsPackageSet
-	if err := yaml.Unmarshal(raw, &p); err != nil {
+	if err := decodeKnown(raw, &p); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
-	if err := ValidateProvision(&p); err != nil {
+	if err := ValidatePackageSet(&p); err != nil {
 		return nil, fmt.Errorf("validate %s: %w", path, err)
 	}
 	return &p, nil
 }
 
-// ProvisionResolved loads a Provision and, if it declares spec.extends, merges
-// it with its base Provision so expand/render see a single effective object.
-// The returned Provision never carries spec.extends; the advisory trace is
-// returned separately for persistence in FullProvision.
+// PackageSetResolved loads a GitOpsPackageSet and, if it declares
+// spec.extends, merges it with its base object so expand/render see a single
+// effective object. The returned package set never carries spec.extends; the advisory trace is
+// returned separately for persistence in expanded GitOpsPackageSet.
 //
 // Rules:
 //   - Only one level of extends is allowed (base must not itself have extends).
 //   - sources merge by appending base entries not present in env; duplicate
 //     source names error.
 //   - repositories merge by name, with env entries replacing base entries.
-//   - metadata and spec.envKey always come from the env Provision.
-func ProvisionResolved(path string) (*v1.GitOpsPackageSet, *v1.ExtendedFrom, error) {
-	env, err := Provision(path)
+//   - metadata and spec.envKey always come from the env GitOpsPackageSet.
+func PackageSetResolved(path string) (*v1.GitOpsPackageSet, *v1.ExtendedFrom, error) {
+	env, err := PackageSet(path)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -82,25 +83,25 @@ func ProvisionResolved(path string) (*v1.GitOpsPackageSet, *v1.ExtendedFrom, err
 	if !filepath.IsAbs(basePath) {
 		basePath = filepath.Join(filepath.Dir(path), basePath)
 	}
-	base, err := Provision(basePath)
+	base, err := PackageSet(basePath)
 	if err != nil {
-		return nil, nil, fmt.Errorf("load base provision %s: %w", basePath, err)
+		return nil, nil, fmt.Errorf("load base package set %s: %w", basePath, err)
 	}
 	if base.Spec.Extends != nil {
-		return nil, nil, fmt.Errorf("%s: base provision %s also declares spec.extends; only one level of extends is supported",
+		return nil, nil, fmt.Errorf("%s: base package set %s also declares spec.extends; only one level of extends is supported",
 			path, basePath)
 	}
-	merged, err := mergeProvisions(base, env)
+	merged, err := mergeGitOpsPackageSets(base, env)
 	if err != nil {
 		return nil, nil, fmt.Errorf("%s: merge with base %s: %w", path, basePath, err)
 	}
 	return merged, &v1.ExtendedFrom{Source: ext.Source, Ref: ext.Ref}, nil
 }
 
-// mergeProvisions returns a new effective Provision: env metadata + envKey,
+// mergeGitOpsPackageSets returns a new effective GitOpsPackageSet: env metadata + envKey,
 // sources = base ++ env (by name, no collisions), repositories replaced by
 // name with env entries appending after inherited base entries.
-func mergeProvisions(base, env *v1.GitOpsPackageSet) (*v1.GitOpsPackageSet, error) {
+func mergeGitOpsPackageSets(base, env *v1.GitOpsPackageSet) (*v1.GitOpsPackageSet, error) {
 	out := &v1.GitOpsPackageSet{
 		APIVersion: env.APIVersion,
 		Kind:       env.Kind,
@@ -182,7 +183,7 @@ func cloneAny(v any) any {
 	}
 }
 
-func rejectOldProvisionFields(raw []byte) error {
+func rejectOldGitOpsPackageSetFields(raw []byte) error {
 	doc, err := decodeMap(raw)
 	if err != nil {
 		return err
@@ -272,17 +273,17 @@ func childMap(m map[string]any, key string) map[string]any {
 	return child
 }
 
-// FullProvision loads and validates a FullProvision file.
-func FullProvision(path string) (*v1.FullGitOpsPackageSet, error) {
+// ExpandedPackageSet loads and validates an expanded GitOpsPackageSet.
+func ExpandedPackageSet(path string) (*v1.GitOpsPackageSet, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
-	var fp v1.FullGitOpsPackageSet
-	if err := yaml.Unmarshal(raw, &fp); err != nil {
+	var fp v1.GitOpsPackageSet
+	if err := decodeKnown(raw, &fp); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
-	if err := ValidateFullProvision(&fp); err != nil {
+	if err := ValidateExpandedPackageSet(&fp); err != nil {
 		return nil, fmt.Errorf("validate %s: %w", path, err)
 	}
 	return &fp, nil
@@ -298,7 +299,7 @@ func PackageDefinition(path string) (*v1.PackageDefinition, error) {
 		return nil, fmt.Errorf("validate %s: %w", path, err)
 	}
 	var pd v1.PackageDefinition
-	if err := yaml.Unmarshal(raw, &pd); err != nil {
+	if err := decodeKnown(raw, &pd); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 	if err := ValidatePackageDefinition(&pd); err != nil {
@@ -317,7 +318,7 @@ func PackageDescriptor(path string) (*v1.PackageDescriptor, error) {
 		return nil, fmt.Errorf("validate %s: %w", path, err)
 	}
 	var d v1.PackageDescriptor
-	if err := yaml.Unmarshal(raw, &d); err != nil {
+	if err := decodeKnown(raw, &d); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 	if err := ValidatePackageDescriptor(&d); err != nil {
@@ -326,7 +327,13 @@ func PackageDescriptor(path string) (*v1.PackageDescriptor, error) {
 	return &d, nil
 }
 
-func ValidateProvision(p *v1.GitOpsPackageSet) error {
+func decodeKnown(raw []byte, out any) error {
+	decoder := yaml.NewDecoder(bytes.NewReader(raw))
+	decoder.KnownFields(true)
+	return decoder.Decode(out)
+}
+
+func ValidatePackageSet(p *v1.GitOpsPackageSet) error {
 	if p.APIVersion != v1.APIVersion {
 		return fmt.Errorf("unsupported apiVersion %q; want %q", p.APIVersion, v1.APIVersion)
 	}
@@ -343,6 +350,9 @@ func ValidateProvision(p *v1.GitOpsPackageSet) error {
 	for i, s := range p.Spec.Sources {
 		if s.Name == "" {
 			return fmt.Errorf("spec.sources[%d].name is required", i)
+		}
+		if err := safepath.Name(fmt.Sprintf("spec.sources[%d].name", i), s.Name); err != nil {
+			return err
 		}
 		if names[s.Name] {
 			return fmt.Errorf("duplicate source name %q", s.Name)
@@ -371,6 +381,11 @@ func ValidateProvision(p *v1.GitOpsPackageSet) error {
 			}
 			if s.Git.Ref == "" {
 				return fmt.Errorf("spec.sources[%d].git.ref is required (tag or commit SHA; branches rejected)", i)
+			}
+			if s.Git.Path != "" {
+				if _, err := safepath.Relative(fmt.Sprintf("spec.sources[%d].git.path", i), s.Git.Path); err != nil {
+					return err
+				}
 			}
 		}
 		if set != 1 {
@@ -488,6 +503,9 @@ func validateRepositoryPackages(prefix string, packages []v1.PackageRef, envRepo
 		if pr.Template == "" {
 			return fmt.Errorf("%s.template is required", pp)
 		}
+		if _, err := safepath.Relative(pp+".template", pr.Template); err != nil {
+			return err
+		}
 		if pr.InstallMethod != "" && !validRenderer(pr.InstallMethod) {
 			return fmt.Errorf("%s.installMethod %q invalid (olm | kustomize | helm | raw)", pp, pr.InstallMethod)
 		}
@@ -502,8 +520,14 @@ func validateRepositoryPackages(prefix string, packages []v1.PackageRef, envRepo
 			if r.Template == "" {
 				return fmt.Errorf("%s.template is required", rp)
 			}
+			if _, err := safepath.Relative(rp+".template", r.Template); err != nil {
+				return err
+			}
 			if r.Name == "" {
 				return fmt.Errorf("%s.name is required", rp)
+			}
+			if err := safepath.Name(rp+".name", r.Name); err != nil {
+				return err
 			}
 		}
 	}
@@ -572,35 +596,38 @@ func validateCompatibility(pd *v1.PackageDefinition) error {
 	return nil
 }
 
-// IsScaffold reports whether a Provision still carries the init-time empty
+// IsScaffold reports whether a GitOpsPackageSet still carries the init-time empty
 // sources/repositories. Used by `expand` to refuse rendering and by `check`
 // to distinguish scaffold state from a malformed file.
 func IsScaffold(p *v1.GitOpsPackageSet) bool {
 	return len(p.Spec.Sources) == 0 && len(p.Spec.Repositories) == 0
 }
 
-func ValidateFullProvision(fp *v1.FullGitOpsPackageSet) error {
+func ValidateExpandedPackageSet(fp *v1.GitOpsPackageSet) error {
 	if fp.APIVersion != v1.APIVersion {
 		return fmt.Errorf("unsupported apiVersion %q; want %q", fp.APIVersion, v1.APIVersion)
 	}
-	if fp.Kind != v1.KindFullGitOpsPackageSet {
-		return fmt.Errorf("kind %q; want %q", fp.Kind, v1.KindFullGitOpsPackageSet)
+	if fp.Kind != v1.KindGitOpsPackageSet {
+		return fmt.Errorf("kind %q; want %q", fp.Kind, v1.KindGitOpsPackageSet)
 	}
 	if fp.Metadata.Name == "" {
 		return fmt.Errorf("metadata.name is required")
 	}
-	if fp.Spec.Repository.Layout == "" {
-		return fmt.Errorf("spec.repository.layout is required")
+	if fp.Spec.Resolved == nil {
+		return fmt.Errorf("spec.resolved is required")
 	}
-	if fp.Spec.Repository.Layout != "split" {
-		return fmt.Errorf("spec.repository.layout %q unsupported (v0.1: split only)", fp.Spec.Repository.Layout)
+	if fp.Spec.Resolved.Repository.Layout == "" {
+		return fmt.Errorf("spec.resolved.repository.layout is required")
 	}
-	if len(fp.Spec.Packages) == 0 {
-		return fmt.Errorf("spec.packages must contain at least one package")
+	if fp.Spec.Resolved.Repository.Layout != "split" {
+		return fmt.Errorf("spec.resolved.repository.layout %q unsupported (v0.1: split only)", fp.Spec.Resolved.Repository.Layout)
+	}
+	if len(fp.Spec.Resolved.Packages) == 0 {
+		return fmt.Errorf("spec.resolved.packages must contain at least one package")
 	}
 	seen := map[string]bool{}
-	for i, rp := range fp.Spec.Packages {
-		prefix := fmt.Sprintf("spec.packages[%d]", i)
+	for i, rp := range fp.Spec.Resolved.Packages {
+		prefix := fmt.Sprintf("spec.resolved.packages[%d]", i)
 		if rp.Instance == "" {
 			return fmt.Errorf("%s.instance is required", prefix)
 		}
@@ -631,6 +658,12 @@ func ValidateFullProvision(fp *v1.FullGitOpsPackageSet) error {
 		}
 		if rp.RenderedPaths.Repo == "" || rp.RenderedPaths.Dir == "" {
 			return fmt.Errorf("%s.renderedPaths.repo and renderedPaths.dir are required", prefix)
+		}
+		if err := safepath.Name(prefix+".renderedPaths.repo", rp.RenderedPaths.Repo); err != nil {
+			return err
+		}
+		if _, err := safepath.Relative(prefix+".renderedPaths.dir", rp.RenderedPaths.Dir); err != nil {
+			return err
 		}
 	}
 	return nil

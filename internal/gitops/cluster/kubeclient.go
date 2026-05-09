@@ -36,7 +36,7 @@ type KubeClient struct {
 }
 
 // NewKubeClient builds a client from a KRC's spec.cli block. Callers
-// look up the KRC via the Provision's spec.controllers.kubernetesResources
+// look up the KRC via the GitOpsPackageSet's spec.controllers.kubernetesResources
 // assignment and the package catalog. kubeContext is the --to flag
 // value; runner is injectable for tests.
 func NewKubeClient(cli *v1.ControllerCLI, krcName, kubeContext string, runner CLIRunner) (*KubeClient, error) {

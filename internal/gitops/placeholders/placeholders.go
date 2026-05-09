@@ -37,10 +37,10 @@ func Contains(v any) bool {
 
 // Scan walks resolvedValues for an instance and appends a Placeholder entry
 // for every sentinel string found. Paths use the shape
-// `spec.packages[<instance>].resolvedValues.<dotted.path>`; array indices are
+// `spec.resolved.packages[<instance>].resolvedValues.<dotted.path>`; array indices are
 // appended as `[n]`. Output is sorted by path for determinism.
 func Scan(instance string, values map[string]any, reasons map[string]string, sensitive map[string]bool, generators map[string]*v1.Generator) []v1.Placeholder {
-	root := fmt.Sprintf("spec.packages[%s].resolvedValues", instance)
+	root := fmt.Sprintf("spec.resolved.packages[%s].resolvedValues", instance)
 	var out []v1.Placeholder
 	walk(root, values, &out, reasons, sensitive, generators)
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Path < out[j].Path })

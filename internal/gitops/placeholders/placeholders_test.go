@@ -84,13 +84,13 @@ func TestScanCarriesGenerator(t *testing.T) {
 	for _, ph := range phs {
 		got[ph.Path] = ph.Generator
 	}
-	if g := got["spec.packages[argocd].resolvedValues.adminPassword"]; g != gen {
+	if g := got["spec.resolved.packages[argocd].resolvedValues.adminPassword"]; g != gen {
 		t.Errorf("adminPassword generator not carried; got %+v", g)
 	}
-	if g := got["spec.packages[argocd].resolvedValues.chart.apiKey"]; g != chartGen {
+	if g := got["spec.resolved.packages[argocd].resolvedValues.chart.apiKey"]; g != chartGen {
 		t.Errorf("chart.apiKey did not inherit chart's generator; got %+v", g)
 	}
-	if g := got["spec.packages[argocd].resolvedValues.manualToken"]; g != nil {
+	if g := got["spec.resolved.packages[argocd].resolvedValues.manualToken"]; g != nil {
 		t.Errorf("manualToken should have no generator; got %+v", g)
 	}
 }

@@ -38,16 +38,17 @@ source drivers (filesystem, OCI, git URL).
 ### Schemas
 
 - New kinds at `apiVersion: gitups.io/v1alpha1`:
-  - `GitOpsPackageSet` (was `Provision`).
-  - `FullGitOpsPackageSet` (was `FullProvision`).
+  - `GitOpsPackageSet` (the only package-set object).
   - `PackageDefinition` (consumer-side struct; authored in the
     autonomous catalog repo).
+- `GitOpsPackageSet` has two profiles: minimal user-authored intent and
+  expanded execution state in `spec.resolved`.
 - `GitOpsPackageSet.spec.sources[]` discriminates by **structural**
   sub-block (`filesystem`/`oci`/`git`) instead of the upstream
   `type: <string>` discriminator. This matches the authoritative R3 rule
   on structural-only discriminators.
-- The two gitops kinds are **peer authoring artifacts**, not members of
-  the cluster-infra `State` aggregate. Loaders are split:
+- GitOps kinds are **peer authoring artifacts**, not members of the
+  cluster-infra `State` aggregate. Loaders are split:
   `internal/infra/LoadNormalizeValidate` for cluster-infra kinds;
   `internal/gitops/load` for gitops kinds.
 
@@ -69,10 +70,10 @@ source drivers (filesystem, OCI, git URL).
 
 ### Workspace + state-dir model
 
-- Authored YAML (`gitops-package-set.yaml`, `full-gitops-package-set.yaml`)
-  lives in the user's workspace, side-by-side, both git-tracked.
-- Caches (OCI/git source pulls, rendered repo trees, apply intent logs)
-  live under `<state-dir>/gitops/...` and are wipeable.
+- Authored YAML (`gitops-package-set.yaml`) lives in the user's workspace.
+- Expanded and rendered artifacts live under `<workspace>/<name>/.gitups/`.
+- Caches (OCI/git source pulls, apply intent logs) live under
+  `<state-dir>/gitops/...` and are wipeable.
 
 ### Catalog source drivers
 

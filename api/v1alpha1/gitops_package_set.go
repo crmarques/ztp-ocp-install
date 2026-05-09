@@ -1,10 +1,9 @@
 package v1alpha1
 
 const (
-	KindGitOpsPackageSet     = "GitOpsPackageSet"
-	KindFullGitOpsPackageSet = "FullGitOpsPackageSet"
-	KindPackageDefinition    = "PackageDefinition"
-	KindPackageDescriptor    = "PackageDescriptor"
+	KindGitOpsPackageSet  = "GitOpsPackageSet"
+	KindPackageDefinition = "PackageDefinition"
+	KindPackageDescriptor = "PackageDescriptor"
 
 	PlaceholderSentinel = "__GITUPS_PLACEHOLDER__"
 
@@ -66,6 +65,7 @@ type GitOpsPackageSetSpec struct {
 	Controllers  *Controllers     `yaml:"controllers,omitempty" json:"controllers,omitempty"`
 	Sources      []PackageSource  `yaml:"sources" json:"sources"`
 	Repositories []RepositoryDecl `yaml:"repositories,omitempty" json:"repositories,omitempty"`
+	Resolved     *ResolvedGitOps  `yaml:"resolved,omitempty" json:"resolved,omitempty"`
 }
 
 type Controllers struct {
@@ -161,17 +161,9 @@ type RepositoryRef struct {
 	Commit string `yaml:"commit,omitempty" json:"commit,omitempty"`
 }
 
-type FullGitOpsPackageSet struct {
-	APIVersion string                   `yaml:"apiVersion" json:"apiVersion"`
-	Kind       string                   `yaml:"kind" json:"kind"`
-	Metadata   Metadata                 `yaml:"metadata" json:"metadata"`
-	Spec       FullGitOpsPackageSetSpec `yaml:"spec" json:"spec"`
-}
-
-type FullGitOpsPackageSetSpec struct {
+type ResolvedGitOps struct {
 	SourcePackageSetRef Metadata             `yaml:"sourcePackageSetRef" json:"sourcePackageSetRef"`
 	ExtendedFrom        *ExtendedFrom        `yaml:"extendedFrom,omitempty" json:"extendedFrom,omitempty"`
-	Sources             []PackageSource      `yaml:"sources" json:"sources"`
 	Repository          RepositoryBlock      `yaml:"repository" json:"repository"`
 	Repositories        []ResolvedRepository `yaml:"repositories,omitempty" json:"repositories,omitempty"`
 	Packages            []ResolvedPackage    `yaml:"packages" json:"packages"`
