@@ -55,10 +55,10 @@ func Expand(p *v1.GitOpsPackageSet, cat *catalog.Catalog, opts Options) (*v1.Ful
 		Metadata:   v1.Metadata{Name: p.Metadata.Name},
 		Spec: v1.FullGitOpsPackageSetSpec{
 			SourcePackageSetRef: v1.Metadata{Name: p.Metadata.Name},
-			ExtendedFrom:       opts.ExtendedFrom,
-			Sources:            p.Spec.Sources,
-			Repository:         v1.RepositoryBlock{Layout: "split", OutputPath: opts.OutputPath},
-			Repositories:       repos,
+			ExtendedFrom:        opts.ExtendedFrom,
+			Sources:             p.Spec.Sources,
+			Repository:          v1.RepositoryBlock{Layout: "split", OutputPath: opts.OutputPath},
+			Repositories:        repos,
 		},
 	}
 	if opts.Prior != nil && !opts.Force {

@@ -33,9 +33,12 @@ ANSIBLE_SYNTAX_PLAYBOOKS = \
 	ansible/playbooks/provider-prepare.yml \
 	ansible/playbooks/setup-controller-clis.yml
 
-E2E_CASES = $(notdir $(patsubst %/,%,$(wildcard $(E2E_DIR)/*/)))
+E2E_CASES = $(filter-out gitops,$(notdir $(patsubst %/,%,$(wildcard $(E2E_DIR)/*/))))
 
-.PHONY: all build sync-bundle test validate plan check check-gofmt ansible-syntax-check stale-term-check provider-swap-check check-e2e-deps check-e2e-case list-e2e-cases e2e-dry-run e2e e2e-destroy-dry-run e2e-destroy clean clean-e2e-state help
+GITOPS_E2E_DIR ?= $(E2E_DIR)/gitops
+GITOPS_E2E_CASES = $(notdir $(patsubst %/,%,$(wildcard $(GITOPS_E2E_DIR)/*/)))
+
+.PHONY: all build sync-bundle test validate plan check check-gofmt ansible-syntax-check stale-term-check provider-swap-check check-e2e-deps check-e2e-case list-e2e-cases e2e-dry-run e2e e2e-destroy-dry-run e2e-destroy e2e-gitops list-e2e-gitops-cases clean clean-e2e-state help
 
 all: build
 
@@ -127,6 +130,19 @@ e2e-destroy: check-e2e-case check-e2e-deps build
 	$(E2E_DESTROY_PROVIDER) -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) $(E2E_ANSIBLE_FLAGS) $(E2E_DESTROY_FLAGS)
 	$(E2E_CLEAN) $(E2E_STATE_DIR)
 
+list-e2e-gitops-cases:
+	@printf '%s\n' 'Available gitops e2e cases:' $(addprefix '  ',$(GITOPS_E2E_CASES))
+
+# e2e-gitops runs `gitops check`, `gitops expand`, and `gitops render` against
+# a fixture under test/e2e/gitops/<case>/. It is read-only against the cluster
+# (no apply/push) — the goal is to validate the merged tool's gitops pipeline
+# without touching a remote git provider or a kind cluster.
+e2e-gitops: build
+	@test -n "$(CASE)" || { printf '%s\n' 'CASE is required; pass CASE=<name>, e.g. make e2e-gitops CASE=test1' 'Available cases:' $(addprefix '  ',$(GITOPS_E2E_CASES)); exit 1; }
+	$(BIN_DIR)/$(BINARY) gitops check $(CASE) -d $(GITOPS_E2E_DIR)
+	$(BIN_DIR)/$(BINARY) gitops expand $(CASE) -d $(GITOPS_E2E_DIR) --force
+	$(BIN_DIR)/$(BINARY) gitops render $(CASE) -d $(GITOPS_E2E_DIR) --allow-placeholders
+
 clean:
 	rm -rf $(BIN_DIR) $(STATE_DIR) dist build out rendered tmp
 	@find $(EMBED_BUNDLE_DIR) -mindepth 1 -maxdepth 1 \
@@ -150,5 +166,7 @@ help:
 		'  e2e                 Run an e2e fixture with sudo (requires CASE=<name>)' \
 		'  e2e-destroy-dry-run Render the destroy plan and print Ansible command (requires CASE=<name>)' \
 		'  e2e-destroy         Tear down an e2e fixture and remove local state with sudo (requires CASE=<name>)' \
+		'  list-e2e-gitops-cases  List available gitops e2e cases under test/e2e/gitops' \
+		'  e2e-gitops          Run gitops check/expand/render against a fixture (requires CASE=<name>)' \
 		'  clean               Remove workspace-local generated outputs' \
 		'  clean-e2e-state     Remove generated e2e CLI state with sudo (requires CASE=<name>)'

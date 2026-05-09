@@ -1,14 +1,25 @@
 # Gitups
 
-Gitups is a desired-state orchestrator for OpenShift cluster fleets. You
-author versioned YAML, Gitups validates it, renders deterministic inputs for
-OpenShift, Ansible, and GitOps, then converges the environment in ordered
-phases.
+Gitups is a desired-state orchestrator that takes a fleet from bare hardware
+to an autonomous, GitOps-managed system. You author versioned YAML, Gitups
+validates it, renders deterministic inputs for OpenShift, Ansible, and
+GitOps, then converges the environment in ordered phases.
 
-Today the CLI installs OpenShift clusters end-to-end via the agent installer.
-Forward-looking architecture leaves room for a future hub cluster running
-ACM and OpenShift GitOps to reconcile additional managed clusters from
-declared fleet state, but that GitOps publication path is not implemented yet.
+The CLI covers the full pipeline:
+
+```text
+gitups init                              author desired state
+gitups provider apply                    install/configure infra (libvirt, bare metal, …)
+gitups clusters apply                    install OpenShift via openshift-install agent
+gitups gitops apply <package-set>        render package compositions, push to git, bootstrap KRC/SRC
+```
+
+The `gitops` group consumes a user-authored
+`apiVersion: gitups.io/v1alpha1, kind: GitOpsPackageSet` that names catalog
+sources (filesystem path / OCI artifact / git URL), output repositories,
+package selections, and the KRC/SRC controllers that own ongoing
+reconciliation. Packages are sourced from the autonomous `gitops-packages`
+catalog repo via the filesystem, OCI, or git driver.
 
 ## Start Here
 
@@ -53,13 +64,23 @@ gitups provider apply -f examples/libvirt-redfish-fleet --dry-run
 gitups clusters check -f examples/libvirt-redfish-fleet --dry-run
 gitups clusters apply -f examples/libvirt-redfish-fleet --dry-run
 gitups clusters destroy -f examples/libvirt-redfish-fleet --dry-run
+
+gitups gitops init dev
+gitups gitops expand dev
+gitups gitops check dev
+gitups gitops render dev
+gitups gitops push dev --base-url https://github.com/myorg
+gitups gitops apply dev --to <kubectl-context>
 ```
 
 Public scopes: `bastion`, `provider`, `clusters`, and `hub` (reserved for
 clusters declaring `role: hub`). Each scope exposes `check`, `apply`, and
-`destroy`. Standalone commands: `init` and `secrets`. The formal CLI
-contract lives in
-[specs/state-model.md](specs/state-model.md#cli-contract).
+`destroy`. The `gitops` group is a peer of `provider`/`clusters` and
+exposes `init`, `expand`, `check`, `render`, `fill`, `plan`, `push`,
+`apply`, `wait`, `status`, and `destroy`. Standalone commands: `init` and
+`secrets`. The formal CLI contract lives in
+[specs/state-model.md](specs/state-model.md#cli-contract); the gitops
+contract lives in [specs/gitops.md](specs/gitops.md).
 
 ## Repository Layout
 
