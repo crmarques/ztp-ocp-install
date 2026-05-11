@@ -1,0 +1,45 @@
+apiVersion: gitups.io/v1alpha1
+kind: ClusterInfrastructure
+metadata:
+  name: local-libvirt-sno-hub
+spec:
+  providerRefs:
+    - name: local-libvirt-sno-hub-provider
+  networks:
+    primary:
+      cidr: 192.168.131.0/24
+      gateway: 192.168.131.1
+      dnsServers:
+        - 192.168.131.1
+      libvirt:
+        bridge: vbr-l-sno-gitea
+  machines:
+    master-0:
+      resources:
+        cpu: 9
+        memoryMiB: 19456
+        diskGiB: 120
+      rootDeviceHints:
+        deviceName: /dev/vda
+      interfaces:
+        enp1s0:
+          networkRef:
+            name: primary
+          ipAddress: 192.168.131.20
+          macAddress: 52:54:00:31:11:10
+      libvirt:
+        hostRef:
+          name: local-libvirt-host
+  endpoints:
+    api:
+      address: 192.168.131.10
+    apiInt:
+      address: 192.168.131.10
+    ingress:
+      address: 192.168.131.11
+  loadBalancers:
+    lb-local-libvirt-sno-hub:
+      endpoints:
+        - api
+        - apiInt
+        - ingress

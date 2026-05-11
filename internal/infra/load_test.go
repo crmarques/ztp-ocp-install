@@ -61,7 +61,7 @@ func TestLoadNormalizeValidateExamples(t *testing.T) {
 }
 
 func TestLoadNormalizeValidateOneHostSample(t *testing.T) {
-	state, err := LoadNormalizeValidate([]string{"../../test/e2e/local-libvirt-1-host-1-sno-hub"})
+	state, err := LoadNormalizeValidate([]string{"../../test/e2e/local-libvirt-sno-hub-gitea"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
@@ -342,7 +342,7 @@ func TestValidationRejectsAgentConfigMinimalISOOverride(t *testing.T) {
 }
 
 func TestDisconnectedDefaultsImageSourcesToNeverContactSource(t *testing.T) {
-	state, err := LoadNormalizeValidate([]string{"../../test/e2e/local-libvirt-1-host-1-sno-hub"})
+	state, err := LoadNormalizeValidate([]string{"../../examples/libvirt-redfish-hub"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}

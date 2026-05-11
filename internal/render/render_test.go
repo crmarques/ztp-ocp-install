@@ -147,7 +147,7 @@ func TestRenderAllProducesGeneratedAnsibleArtifacts(t *testing.T) {
 }
 
 func TestRenderEmitsBMCAuthCredentialRefWhenSet(t *testing.T) {
-	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/libvirt-1-host-1-sno-hub"})
+	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/old/libvirt-1-host-1-sno-hub"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
@@ -334,7 +334,7 @@ func TestRenderedArtifactsStayUnderStateDir(t *testing.T) {
 }
 
 func TestRenderMirrorRegistryRunVars(t *testing.T) {
-	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/local-libvirt-1-host-1-sno-hub"})
+	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/old/local-libvirt-1-host-1-sno-hub"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
@@ -371,7 +371,7 @@ func TestRenderMirrorRegistryRunVars(t *testing.T) {
 }
 
 func TestRenderOneHostTreatsLocalhostAsProviderHost(t *testing.T) {
-	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/local-libvirt-1-host-1-sno-hub"})
+	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/old/local-libvirt-1-host-1-sno-hub"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
@@ -400,7 +400,7 @@ func TestRenderOneHostTreatsLocalhostAsProviderHost(t *testing.T) {
 }
 
 func TestRenderVarsExposeOCPInstallMetadata(t *testing.T) {
-	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/local-libvirt-1-host-1-sno-hub"})
+	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/old/local-libvirt-1-host-1-sno-hub"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
@@ -679,10 +679,10 @@ spec:
 
 func TestRenderManagedNetworkDetails(t *testing.T) {
 	state, err := infra.LoadNormalizeValidate([]string{
-		"../../test/e2e/libvirt-1-host-1-sno-hub/cluster-infrastructure-hub.yaml",
-		"../../test/e2e/libvirt-1-host-1-sno-hub/ocp-cluster-hub.yaml",
-		"../../test/e2e/libvirt-1-host-1-sno-hub/provider.yaml",
-		"../../test/e2e/libvirt-1-host-1-sno-hub/environment.yaml",
+		"../../test/e2e/old/libvirt-1-host-1-sno-hub/cluster-infrastructure-hub.yaml",
+		"../../test/e2e/old/libvirt-1-host-1-sno-hub/ocp-cluster-hub.yaml",
+		"../../test/e2e/old/libvirt-1-host-1-sno-hub/provider.yaml",
+		"../../test/e2e/old/libvirt-1-host-1-sno-hub/environment.yaml",
 	})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
@@ -714,7 +714,7 @@ func TestRenderManagedNetworkDetails(t *testing.T) {
 }
 
 func TestRenderBareMetalProjectsPerMachineBMC(t *testing.T) {
-	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/baremetal-redfish-fleet"})
+	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/old/baremetal-redfish-fleet"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}

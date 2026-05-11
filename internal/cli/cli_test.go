@@ -977,7 +977,7 @@ func TestClustersApplyDryRunUsesAnsibleBecomePrompt(t *testing.T) {
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
 		"clusters", "apply",
-		"-f", "../../test/e2e/libvirt-1-host-1-sno-hub",
+		"-f", "../../test/e2e/old/libvirt-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 		"--dry-run",
 	}, nil, &stdout, &stderr)
@@ -1010,7 +1010,7 @@ func TestClustersApplyAsRootSkipsBecomePrompt(t *testing.T) {
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
 		"clusters", "apply",
-		"-f", "../../test/e2e/libvirt-1-host-1-sno-hub",
+		"-f", "../../test/e2e/old/libvirt-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 		"--dry-run",
 	}, nil, &stdout, &stderr)
@@ -1028,7 +1028,7 @@ func TestClustersApplyDryRunPrintsEscalationSummary(t *testing.T) {
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
 		"clusters", "apply",
-		"-f", "../../test/e2e/libvirt-1-host-1-sno-hub",
+		"-f", "../../test/e2e/old/libvirt-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 		"--dry-run",
 	}, nil, &stdout, &stderr)
@@ -1078,7 +1078,7 @@ func TestClustersApplyConfirmationDecline(t *testing.T) {
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
 		"clusters", "apply",
-		"-f", "../../test/e2e/libvirt-1-host-1-sno-hub",
+		"-f", "../../test/e2e/old/libvirt-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 	}, strings.NewReader("n\n"), &stdout, &stderr)
 	if code != 1 {
@@ -1099,7 +1099,7 @@ func TestClustersApplyYesSkipsConfirmationAndStopsBeforeAnsible(t *testing.T) {
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
 		"clusters", "apply",
-		"-f", "../../test/e2e/libvirt-1-host-1-sno-hub",
+		"-f", "../../test/e2e/old/libvirt-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 		"--yes",
 		"--ansible-playbook", "/nonexistent/ansible-playbook",

@@ -68,7 +68,7 @@ func TestBastionCheckAcceptsState(t *testing.T) {
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
 		"bastion", "check",
-		"-f", "../../test/e2e/libvirt-1-host-1-sno-hub",
+		"-f", "../../test/e2e/old/libvirt-1-host-1-sno-hub",
 	}, nil, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("expected ok, got %d, stderr=%s", code, stderr.String())
@@ -190,7 +190,7 @@ func TestBastionApplyDryRunPlansCLIsFromState(t *testing.T) {
 	stateDir := t.TempDir()
 	code := Run(context.Background(), []string{
 		"bastion", "apply",
-		"-f", "../../test/e2e/libvirt-1-host-1-sno-hub",
+		"-f", "../../test/e2e/old/libvirt-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 		"--dry-run",
 	}, nil, &stdout, &stderr)
@@ -245,7 +245,7 @@ func TestBastionDestroyRequiresYesOrDryRun(t *testing.T) {
 }
 
 func TestStateOpenshiftReleaseVersionPicksFirstNonEmpty(t *testing.T) {
-	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/libvirt-1-host-1-sno-hub"})
+	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/old/libvirt-1-host-1-sno-hub"})
 	if err != nil {
 		t.Fatalf("load fixture: %v", err)
 	}

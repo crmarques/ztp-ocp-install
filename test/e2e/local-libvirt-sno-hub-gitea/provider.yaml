@@ -1,0 +1,41 @@
+apiVersion: gitups.io/v1alpha1
+kind: InfrastructureProvider
+metadata:
+  name: local-libvirt-sno-hub-provider
+spec:
+  hosts:
+    local-libvirt-host:
+      ssh:
+        address: localhost
+        keyRef:
+          name: local-libvirt-host-admin-key
+      libvirtURI: qemu:///system
+      capabilities:
+        - libvirt
+        - container-runtime
+        - hosts-file
+
+  machine:
+    libvirt:
+      hostRefs:
+        - name: local-libvirt-host
+      bmcEmulation:
+        port: 8000
+        auth:
+          credentialRef:
+            name: local-libvirt-sno-hub-bmc-credentials
+
+  loadBalancer:
+    haProxy:
+      hostRef:
+        name: local-libvirt-host
+
+  nameResolution:
+    hostsFile:
+      hostRefs:
+        - name: local-libvirt-host
+      additionalIngressHosts:
+        - console-openshift-console.apps.local-libvirt-sno-hub.gitups.test
+        - oauth-openshift.apps.local-libvirt-sno-hub.gitups.test
+        - gitea.apps.local-libvirt-sno-hub.gitups.test
+        - argocd.apps.local-libvirt-sno-hub.gitups.test

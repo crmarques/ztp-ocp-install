@@ -1,0 +1,41 @@
+apiVersion: gitups.io/v1alpha1
+kind: GitOpsPackageSet
+metadata:
+  name: local-libvirt-sno-hub-gitea
+spec:
+  envKey: dev
+  controllers:
+    kubernetesResources:
+      repo: gitops-controllers
+      instance: argocd
+  sources:
+    - name: local
+      filesystem:
+        path: ../../../../../gitops-workspace/gitups-packages/packages
+
+  repositories:
+    - name: gitops-controllers
+      description: "Argo CD KRC for the hub. Helm-installed upstream argo-cd chart."
+      type: kubernetes-resources
+      packages:
+        - template: local/argocd
+          installMethod: helm
+
+    - name: gitops-controllers-{{.Env}}
+      description: "Env overlay for argocd."
+      type: kubernetes-resources
+      repoRef:
+        name: gitops-controllers
+
+    - name: workloads
+      description: "Workloads bootstrapped on the hub. Just gitea today."
+      type: kubernetes-resources
+      packages:
+        - template: local/gitea
+          installMethod: helm
+
+    - name: workloads-{{.Env}}
+      description: "Env overlay for workloads (defaults from the generic repo are sufficient)."
+      type: kubernetes-resources
+      repoRef:
+        name: workloads
