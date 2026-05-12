@@ -231,6 +231,52 @@ Materialize the secret with `gitups secret set` (file-backed form) or `gitups
 secret generate` (generated form) in the next section before
 `gitups apply bastion -f "$WORKSPACE"` runs.
 
+### Provision The Proxy With Gitups
+
+Skip this subsection if you already have an externally-hosted proxy. The
+preceding `proxy:` block on its own assumes the proxy URL is already
+reachable.
+
+To have Gitups stand up an authenticated Squid proxy on the provider host
+instead, declare it on `provider.yaml`:
+
+```yaml
+spec:
+  hosts:
+    lab-host:
+      capabilities:
+        - libvirt
+        - container-runtime
+        - hosts-file
+        - proxy
+  proxy:
+    squid:
+      hostRef:
+        name: lab-host
+      # port: 3128       # default
+      # runtime: podman  # default
+```
+
+Requirements when `spec.proxy.squid` is set:
+
+- The referenced host must carry the `proxy` capability and an `ssh` block.
+- `environment.yaml` `spec.proxy.http` and `spec.proxy.https` must be bare
+  `http://` URLs and include the same port as `spec.proxy.squid.port`
+  (default `3128`).
+- `environment.yaml` `spec.proxy.auth.proxyAuthRef` is mandatory — managed
+  Squid is always authenticated. Use either the file-backed or generated
+  form shown above; declare the corresponding `spec.secrets` entry.
+- For libvirt clusters, the libvirt machine `hostRef` must match
+  `spec.proxy.squid.hostRef` (v1 keeps the proxy and the VMs on the same
+  host so isolated networks remain reachable). The primary machine network
+  must declare a `gateway` so VMs route egress through the managed proxy.
+
+Bastion bootstrap (`gitups apply bastion`) runs *before* the managed proxy
+exists, so Gitups deliberately ignores `environment.yaml` `spec.proxy` for
+that step. Once `gitups apply infra` provisions Squid, every subsequent
+phase (provider-host package/image pulls, install-config rendering, agent
+install) routes through it.
+
 ## Save And Generate Secrets
 
 Secret material the workspace consumes:

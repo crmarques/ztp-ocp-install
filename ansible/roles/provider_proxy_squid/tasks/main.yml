@@ -10,15 +10,15 @@
   ansible.builtin.file:
     path: "{{ item.path }}"
     state: directory
-    owner: root
-    group: root
+    owner: "{{ item.owner | default('root') }}"
+    group: "{{ item.group | default('root') }}"
     mode: "{{ item.mode }}"
   loop:
     - { path: "{{ gitups_forward_proxy_root }}", mode: "0755" }
     - { path: "{{ gitups_forward_proxy_config_dir }}", mode: "0755" }
-    - { path: "{{ gitups_forward_proxy_auth_dir }}", mode: "0700" }
-    - { path: "{{ gitups_forward_proxy_cache_dir }}", mode: "0755" }
-    - { path: "{{ gitups_forward_proxy_logs_dir }}", mode: "0755" }
+    - { path: "{{ gitups_forward_proxy_auth_dir }}", mode: "0700", owner: "{{ gitups_forward_proxy_runtime_uid }}", group: "{{ gitups_forward_proxy_runtime_gid }}" }
+    - { path: "{{ gitups_forward_proxy_cache_dir }}", mode: "0755", owner: "{{ gitups_forward_proxy_runtime_uid }}", group: "{{ gitups_forward_proxy_runtime_gid }}" }
+    - { path: "{{ gitups_forward_proxy_logs_dir }}", mode: "0755", owner: "{{ gitups_forward_proxy_runtime_uid }}", group: "{{ gitups_forward_proxy_runtime_gid }}" }
 
 - name: Persist managed Squid requirements snapshot
   ansible.builtin.copy:
@@ -80,8 +80,8 @@
 - name: Write managed Squid htpasswd file
   ansible.builtin.copy:
     dest: "{{ gitups_forward_proxy_auth_dir }}/htpasswd"
-    owner: root
-    group: root
+    owner: "{{ gitups_forward_proxy_runtime_uid }}"
+    group: "{{ gitups_forward_proxy_runtime_gid }}"
     mode: "0600"
     content: "{{ gitups_forward_proxy_htpasswd_generate.stdout }}\n"
   register: gitups_forward_proxy_htpasswd_create
@@ -103,7 +103,7 @@
       visible_hostname gitups-managed-forward-proxy
       http_port 0.0.0.0:{{ gitups_current_forward_proxy.port }}
 
-      auth_param basic program /usr/lib64/squid/basic_ncsa_auth /etc/squid/auth/htpasswd
+      auth_param basic program /usr/local/squid/libexec/basic_ncsa_auth /etc/squid/auth/htpasswd
       auth_param basic realm gitups-forward-proxy
       acl authenticated proxy_auth REQUIRED
 
@@ -195,7 +195,7 @@
           ~ '|htpasswd=' ~ (gitups_forward_proxy_htpasswd_stat.stat.checksum | default(''))
           ~ '|run-image=' ~ gitups_forward_proxy_run_image
           ~ '|port=' ~ gitups_current_forward_proxy.port | string
-          ~ '|run-args=v1:user=0:0,net=host,restart=unless-stopped'
+          ~ '|run-args=v2:user=' ~ gitups_forward_proxy_runtime_uid ~ ':' ~ gitups_forward_proxy_runtime_gid ~ ',net=host,restart=unless-stopped'
          ) | hash('sha1') }}
   changed_when: false
 
@@ -222,7 +222,7 @@
     state: started
     recreate: "{{ gitups_forward_proxy_recreate | bool }}"
     network: host
-    user: "0:0"
+    user: "{{ gitups_forward_proxy_runtime_uid }}:{{ gitups_forward_proxy_runtime_gid }}"
     restart_policy: unless-stopped
     pull: never
     command: "squid -N -f /etc/squid/squid.conf"
@@ -316,3 +316,34 @@
     permanent: true
     immediate: true
   when: gitups_forward_proxy_firewalld_state.rc == 0
+
+# Squid runs on this host with --network host, so 127.0.0.1 reaches it.
+# If host_proxy will persist HTTP(S)_PROXY pointing at this Squid via a
+# hostname (not an IP) — e.g. env.spec.proxy.http uses a made-up DNS
+# name — provider-host tasks (pip, dnf) will fail to resolve it. Pin the
+# hostname to 127.0.0.1 in /etc/hosts, but only when that's actually the
+# case: skip when no host-level proxy is configured, when the Squid URL
+# uses an IP literal, or when the configured proxy points at a different
+# host than this Squid.
+- name: Resolve hostnames for /etc/hosts pin gating
+  ansible.builtin.set_fact:
+    gitups_forward_proxy_url_host: "{{ gitups_current_forward_proxy.url | urlsplit('hostname') | default('', true) }}"
+    gitups_forward_proxy_host_http_host: "{{ (gitups_ocp_install.proxy | default({})).http | default('') | urlsplit('hostname') | default('', true) }}"
+    gitups_forward_proxy_host_https_host: "{{ (gitups_ocp_install.proxy | default({})).https | default('') | urlsplit('hostname') | default('', true) }}"
+  changed_when: false
+
+- name: Pin managed Squid proxy hostname to loopback on provider host
+  ansible.builtin.blockinfile:
+    path: /etc/hosts
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+    marker: "# {mark} GITUPS managed-forward-proxy {{ gitups_current_forward_proxy.name }}"
+    block: |
+      127.0.0.1 {{ gitups_forward_proxy_url_host }}
+  when:
+    - gitups_forward_proxy_url_host | length > 0
+    - gitups_forward_proxy_url_host is not match('^(\d{1,3}\.){3}\d{1,3}$')
+    - "':' not in gitups_forward_proxy_url_host"
+    - gitups_forward_proxy_url_host in [gitups_forward_proxy_host_http_host, gitups_forward_proxy_host_https_host]

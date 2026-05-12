@@ -207,6 +207,14 @@
       when: gitups_current_forward_proxy is not none
       failed_when: false
 
+    - name: Remove managed Squid /etc/hosts pin
+      ansible.builtin.blockinfile:
+        path: /etc/hosts
+        marker: "# {mark} GITUPS managed-forward-proxy {{ gitups_current_forward_proxy.name }}"
+        state: absent
+      when: gitups_current_forward_proxy is not none
+      failed_when: false
+
     - name: Check firewalld state before closing managed Squid port
       ansible.builtin.command:
         argv:

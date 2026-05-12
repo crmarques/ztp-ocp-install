@@ -89,23 +89,25 @@
           proxy = {{ gitups_proxy_primary }}
       no_log: "{{ (gitups_proxy_credentials_ref | length) > 0 }}"
 
-    - name: Ensure containers config directory
+    - name: Ensure containers.conf.d drop-in directory
       ansible.builtin.file:
-        path: /etc/containers
+        path: /etc/containers/containers.conf.d
         state: directory
         owner: root
         group: root
         mode: "0755"
 
-    - name: Render /etc/containers/containers.conf proxy block
-      ansible.builtin.blockinfile:
-        path: /etc/containers/containers.conf
-        create: true
+    # Use a containers.conf.d drop-in instead of editing the main
+    # containers.conf — the distro file already ships an [engine]
+    # table on Fedora/RHEL, and TOML rejects duplicate tables in a
+    # single file. Drop-ins are merged by podman automatically.
+    - name: Render containers.conf proxy drop-in
+      ansible.builtin.copy:
+        dest: /etc/containers/containers.conf.d/10-gitups-proxy.conf
         owner: root
         group: root
         mode: "{{ '0600' if (gitups_proxy_credentials_ref | length) > 0 else '0644' }}"
-        marker: "# {mark} ANSIBLE MANAGED BLOCK gitups-proxy"
-        block: |
+        content: |
           [engine]
           env = [
             "HTTP_PROXY={{ gitups_proxy_http_effective }}",
@@ -113,6 +115,31 @@
             "NO_PROXY={{ gitups_proxy_no }}",
           ]
       no_log: "{{ (gitups_proxy_credentials_ref | length) > 0 }}"
+
+    - name: Stat legacy containers.conf for cleanup
+      ansible.builtin.stat:
+        path: /etc/containers/containers.conf
+      register: gitups_proxy_legacy_containers_conf
+
+    - name: Remove legacy proxy block from /etc/containers/containers.conf
+      ansible.builtin.blockinfile:
+        path: /etc/containers/containers.conf
+        marker: "# {mark} ANSIBLE MANAGED BLOCK gitups-proxy"
+        state: absent
+      when: gitups_proxy_legacy_containers_conf.stat.exists
+      failed_when: false
+
+    # The legacy task locked the main file to 0600 to hide credentials.
+    # Now the secrets live in the 0600 drop-in, so the main file goes
+    # back to the distro default (0644) — otherwise regular users lose
+    # the ability to run `podman info`.
+    - name: Restore distro mode on /etc/containers/containers.conf
+      ansible.builtin.file:
+        path: /etc/containers/containers.conf
+        owner: root
+        group: root
+        mode: "0644"
+      when: gitups_proxy_legacy_containers_conf.stat.exists
 
     - name: Ensure systemd system.conf.d directory
       ansible.builtin.file:
