@@ -90,6 +90,7 @@ kind: OCPCluster
 metadata:
   name: hub
 spec:
+  role: hub
   topology: single-node
   infrastructureRef:
     name: hub

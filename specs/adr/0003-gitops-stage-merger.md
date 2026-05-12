@@ -10,7 +10,7 @@ Until this change, three repositories cooperated to deliver an OpenShift
 fleet that ends up gitops-managed:
 
 - `ztp-ocp-install-lab` (this repo) — provisioned clusters from declarative
-  YAML via the `provider` and `clusters` scopes.
+  YAML via infra and cluster workflows.
 - `gitops-workspace/gitups` — a CLI binary (also named `gitups`) that
   rendered package compositions, pushed them to a git provider, and
   bootstrapped a KRC/SRC. apiVersion `gitups/v1alpha1`.
@@ -54,7 +54,7 @@ source drivers (filesystem, OCI, git URL).
 
 ### CLI surface
 
-- New top-level group `gitups gitops` peer to `provider`/`clusters`.
+- New top-level group `gitups gitops` peer to the provisioning workflow.
 - Verbs preserve the upstream gitops vocabulary
   (`init`, `expand`, `check`, `fill`, `plan`, `push`, `apply`, `wait`,
   `status`) with one rename and one addition:
@@ -94,8 +94,8 @@ release pipeline (`pkg/<name>/v<version>` tags → GHCR) is unchanged.
 
 ## Consequences
 
-- One binary `gitups` covers the full pipeline: `init` → `provider apply`
-  → `clusters apply` → `gitops apply`.
+- One binary `gitups` covers the full pipeline: `init-repo` → `apply infra`
+  → `apply clusters` → `apply hub` → `gitops apply`.
 - The autonomous catalog repo continues its independent per-package
   release lifecycle.
 - The merge introduces no compatibility shims, consistent with the

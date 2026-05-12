@@ -14,24 +14,8 @@ import (
 	"github.com/crmarques/gitups/api/v1alpha1"
 	"github.com/crmarques/gitups/internal/ansible"
 	"github.com/crmarques/gitups/internal/embedded"
-	"github.com/crmarques/gitups/internal/infra"
 	"github.com/crmarques/gitups/internal/render"
 )
-
-func newScopeCmd(scope scopeSpec, stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   scope.name,
-		Short: scope.short,
-		Args:  cobra.NoArgs,
-	}
-	cmd.AddCommand(
-		newScopeCheckCmd(scope, stdout, stderr),
-		newScopeApplyCmd(scope, stdin, stdout, stderr),
-		newScopeDestroyCmd(scope, stdout, stderr),
-	)
-	showSubcommandFlagsInHelp(cmd)
-	return cmd
-}
 
 func newScopeCheckCmd(scope scopeSpec, stdout io.Writer, stderr io.Writer) *cobra.Command {
 	var (
@@ -39,6 +23,7 @@ func newScopeCheckCmd(scope scopeSpec, stdout io.Writer, stderr io.Writer) *cobr
 		secretsDir   string
 		hostStateDir string
 		dryRun       bool
+		clusterScope string
 	)
 	secretsDir = defaultSecretsDir()
 	hostStateDir = defaultHostStateDir
@@ -52,8 +37,15 @@ func newScopeCheckCmd(scope scopeSpec, stdout io.Writer, stderr io.Writer) *cobr
 	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material (env: GITUPS_SECRETS_DIR)")
 	cmd.Flags().StringVar(&hostStateDir, "host-state-dir", hostStateDir, "root-managed host runtime state directory")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "render artifacts and print the Ansible preflight command without executing it")
+	if scope.name == "clusters" {
+		cmd.Flags().StringVar(&clusterScope, "scope", "", "comma-separated OCPCluster names to check")
+	}
 	cmd.RunE = func(c *cobra.Command, _ []string) error {
-		state, err := infra.LoadNormalizeValidate(cf.files)
+		state, err := loadDesiredState(cf)
+		if err != nil {
+			return failErr(1, err)
+		}
+		state, err = scopeState(state, scope.name, clusterScope)
 		if err != nil {
 			return failErr(1, err)
 		}
@@ -89,6 +81,7 @@ func newScopeCheckCmd(scope scopeSpec, stdout io.Writer, stderr io.Writer) *cobr
 			FilterPluginsPath: filepath.Join(bundleDir, embedded.FilterPluginsRelPath),
 			Inventory:         result.InventoryPath,
 			Playbook:          filepath.Join(bundleDir, "playbooks/preflight.yml"),
+			Limit:             ansibleLimitForScope(scope.name),
 			ExtraVars:         result.VarsPath,
 			ExtraVarPairs: []string{
 				"gitups_state_dir=" + stateDirAbs,
@@ -117,6 +110,7 @@ func newScopeApplyCmd(scope scopeSpec, stdin io.Reader, stdout io.Writer, stderr
 		executable    string
 		secretsDir    string
 		hostStateDir  string
+		clusterScope  string
 	)
 	secretsDir = defaultSecretsDir()
 	hostStateDir = defaultHostStateDir
@@ -133,8 +127,15 @@ func newScopeApplyCmd(scope scopeSpec, stdin io.Reader, stdout io.Writer, stderr
 	cmd.Flags().StringVar(&executable, "ansible-playbook", resolveAnsiblePlaybook(), "ansible-playbook executable to run (defaults to the gitups-managed venv when present)")
 	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material (env: GITUPS_SECRETS_DIR)")
 	cmd.Flags().StringVar(&hostStateDir, "host-state-dir", hostStateDir, "root-managed host runtime state directory")
+	if scope.name == "clusters" {
+		cmd.Flags().StringVar(&clusterScope, "scope", "", "comma-separated OCPCluster names to apply")
+	}
 	cmd.RunE = func(c *cobra.Command, _ []string) error {
-		state, err := infra.LoadNormalizeValidate(cf.files)
+		state, err := loadDesiredState(cf)
+		if err != nil {
+			return failErr(1, err)
+		}
+		state, err = scopeState(state, scope.name, clusterScope)
 		if err != nil {
 			return failErr(1, err)
 		}
@@ -143,6 +144,11 @@ func newScopeApplyCmd(scope scopeSpec, stdin io.Reader, stdout io.Writer, stderr
 		}
 		selected := scope.phases()
 		printTitle(stdout, scope.name+" apply")
+		if scope.applyHubComponents {
+			if err := runHubCheck(stdout, state); err != nil {
+				return err
+			}
+		}
 		if !dryRun {
 			if err := runApplyHostCheck(stdout, stderr, state, selected, secretsDir, hostStateDir); err != nil {
 				return err
@@ -191,6 +197,7 @@ func newScopeApplyCmd(scope scopeSpec, stdin io.Reader, stdout io.Writer, stderr
 			FilterPluginsPath: filepath.Join(bundleDir, embedded.FilterPluginsRelPath),
 			Inventory:         result.InventoryPath,
 			Playbook:          filepath.Join(bundleDir, scope.applyPlaybook),
+			Limit:             ansibleLimitForScope(scope.name),
 			ExtraVars:         result.VarsPath,
 			ExtraVarPairs:     pairs,
 			ArtifactsDir:      filepath.Join(result.ArtifactsDir, scope.artifactsBaseName),
@@ -200,110 +207,17 @@ func newScopeApplyCmd(scope scopeSpec, stdin io.Reader, stdout io.Writer, stderr
 		command := runner.Command(spec)
 		if dryRun {
 			fmt.Fprintf(stdout, "dry-run ansible command [%s apply]: %s\n", scope.name, shellQuote(command))
+			if scope.applyHubComponents {
+				printHubComponentsPlan(stdout, true)
+			}
 			return nil
 		}
 		printWorkflowStart(stdout, scope.name, selected, askBecomePass)
 		if err := runner.Run(c.Context(), spec); err != nil {
 			return failErr(1, err)
 		}
-		return nil
-	}
-	return cmd
-}
-
-func newScopeDestroyCmd(scope scopeSpec, stdout io.Writer, stderr io.Writer) *cobra.Command {
-	var (
-		dryRun             bool
-		askBecomePass      bool
-		yes                bool
-		executable         string
-		secretsDir         string
-		hostStateDir       string
-		keepMirroredImages bool
-	)
-	secretsDir = defaultSecretsDir()
-	hostStateDir = defaultHostStateDir
-	cmd := &cobra.Command{
-		Use:   "destroy",
-		Short: "Reverse the " + scope.name + " scope",
-		Args:  cobra.NoArgs,
-	}
-	cf := addCommonFlags(cmd)
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the Ansible commands without executing them")
-	cmd.Flags().BoolVar(&askBecomePass, "ask-become-pass", askBecomePassDefault(), "prompt for the Ansible become password; defaults to false when gitups runs as root, true otherwise")
-	cmd.Flags().BoolVar(&yes, "yes", false, "skip the destroy confirmation prompt")
-	cmd.Flags().StringVar(&executable, "ansible-playbook", resolveAnsiblePlaybook(), "ansible-playbook executable to run (defaults to the gitups-managed venv when present)")
-	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material (env: GITUPS_SECRETS_DIR)")
-	cmd.Flags().StringVar(&hostStateDir, "host-state-dir", hostStateDir, "root-managed host runtime state directory")
-	if scope.name == "provider" {
-		cmd.Flags().BoolVar(&keepMirroredImages, "keep-mirrored-images", false, "keep the mirror-registry data volume on the provider host so the next apply does not have to re-pull from public registries")
-	}
-	cmd.RunE = func(c *cobra.Command, _ []string) error {
-		state, err := infra.LoadNormalizeValidate(cf.files)
-		if err != nil {
-			return failErr(1, err)
-		}
-		if err := ensureApplySupported(state); err != nil {
-			return failErr(1, err)
-		}
-		if !dryRun && !yes {
-			return failErr(1, errors.New("destroy refused: pass --yes to execute the teardown, or --dry-run to preview without changes (default is to abort)"))
-		}
-		selected := reversed(scope.phases())
-		printTitle(stdout, scope.name+" destroy")
-		printDestroySummary(stdout, selected, askBecomePass, dryRun)
-		result, err := render.All(cf.stateDir, secretsDir, state)
-		if err != nil {
-			return failErr(1, err)
-		}
-		bundleDir, err := extractBundle(cf.stateDir)
-		if err != nil {
-			return failErr(1, err)
-		}
-		printRenderResult(stdout, result)
-		fmt.Fprintf(stdout, "ansible bundle: %s\n", bundleDir)
-		stateDirAbs, err := filepath.Abs(cf.stateDir)
-		if err != nil {
-			return failErr(1, err)
-		}
-		secretsDirAbs, err := filepath.Abs(secretsDir)
-		if err != nil {
-			return failErr(1, err)
-		}
-		hostStateDirAbs, err := filepath.Abs(hostStateDir)
-		if err != nil {
-			return failErr(1, err)
-		}
-		pairs := []string{
-			"gitups_state_dir=" + stateDirAbs,
-			"gitups_secrets_dir=" + secretsDirAbs,
-			"gitups_host_state_dir=" + hostStateDirAbs,
-		}
-		if keepMirroredImages {
-			pairs = append(pairs, "gitups_keep_mirrored_images=true")
-		}
-		runner := ansible.CommandRunner{Stdout: stdout, Stderr: stderr}
-		spec := ansible.RunSpec{
-			Executable:        executable,
-			AnsibleCfg:        filepath.Join(bundleDir, embedded.AnsibleCfgRelPath),
-			RolesPath:         filepath.Join(bundleDir, embedded.RolesRelPath),
-			CollectionsPath:   filepath.Join(bundleDir, embedded.CollectionsRelPath),
-			FilterPluginsPath: filepath.Join(bundleDir, embedded.FilterPluginsRelPath),
-			Inventory:         result.InventoryPath,
-			Playbook:          filepath.Join(bundleDir, scope.destroyPlaybook),
-			ExtraVars:         result.VarsPath,
-			ExtraVarPairs:     pairs,
-			ArtifactsDir:      filepath.Join(result.ArtifactsDir, scope.artifactsBaseName+"-destroy"),
-			AskBecomePass:     askBecomePass,
-		}
-		command := runner.Command(spec)
-		if dryRun {
-			fmt.Fprintf(stdout, "dry-run ansible command [%s destroy]: %s\n", scope.name, shellQuote(command))
-			return nil
-		}
-		printWorkflowStart(stdout, scope.name, selected, askBecomePass)
-		if err := runner.Run(c.Context(), spec); err != nil {
-			return failErr(1, err)
+		if scope.applyHubComponents {
+			printHubComponentsPlan(stdout, false)
 		}
 		return nil
 	}
@@ -334,6 +248,17 @@ func runApplyHostCheck(stdout io.Writer, stderr io.Writer, state v1alpha1.State,
 	return nil
 }
 
+func ansibleLimitForScope(name string) string {
+	switch name {
+	case "infra":
+		return "gitups_provider_hosts:gitups_infra_hosts"
+	case "clusters":
+		return "gitups_ocp_hosts"
+	default:
+		return ""
+	}
+}
+
 func resolvedOCPBinaryPairs(selected []Phase, hostStateDir string) []string {
 	clustersSelected := false
 	for _, p := range selected {
@@ -354,10 +279,6 @@ func resolvedOCPBinaryPairs(selected []Phase, hostStateDir string) []string {
 
 func printApplySummary(w io.Writer, selected []Phase, askBecomePass bool, dryRun bool) {
 	printWorkflowSummary(w, "apply plan:", selected, askBecomePass, dryRun)
-}
-
-func printDestroySummary(w io.Writer, selected []Phase, askBecomePass bool, dryRun bool) {
-	printWorkflowSummary(w, "destroy plan:", selected, askBecomePass, dryRun)
 }
 
 func printWorkflowSummary(w io.Writer, title string, selected []Phase, askBecomePass bool, dryRun bool) {

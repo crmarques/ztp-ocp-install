@@ -139,6 +139,13 @@ func generateMAC(parts ...string) string {
 }
 
 func normalizeOCPCluster(ocp *v1alpha1.OCPCluster, env *v1alpha1.Environment, ci *v1alpha1.ClusterInfrastructure) {
+	if ocp.Spec.Role == "" {
+		if isHubName(ocp.Metadata.Name) {
+			ocp.Spec.Role = v1alpha1.OCPClusterRoleHub
+		} else {
+			ocp.Spec.Role = v1alpha1.OCPClusterRoleManaged
+		}
+	}
 	if ocp.Spec.Topology == "" {
 		if len(ocp.Spec.Nodes) <= 1 {
 			ocp.Spec.Topology = v1alpha1.OCPTopologySingleNode
@@ -158,6 +165,10 @@ func normalizeOCPCluster(ocp *v1alpha1.OCPCluster, env *v1alpha1.Environment, ci
 		}
 		ocp.Spec.Nodes[nodeName] = node
 	}
+}
+
+func isHubName(name string) bool {
+	return name == v1alpha1.OCPClusterRoleHub || strings.HasSuffix(name, "-hub")
 }
 
 func applyEnvironmentInstallDefaults(ocp *v1alpha1.OCPCluster, env *v1alpha1.Environment) {

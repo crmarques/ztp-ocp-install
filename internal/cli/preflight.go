@@ -50,9 +50,9 @@ func pythonVersionCheck() preflightCheck {
 		if major > 3 || (major == 3 && minor >= 12) {
 			return preflightCheck{name: name, ok: true, detail: bin + " " + ver}
 		}
-		return preflightCheck{name: name, ok: false, detail: bin + " is " + ver + "; run `gitups bastion apply`"}
+		return preflightCheck{name: name, ok: false, detail: bin + " is " + ver + "; run `gitups apply bastion`"}
 	}
-	return preflightCheck{name: name, ok: false, detail: "python3 not found; run `gitups bastion apply`"}
+	return preflightCheck{name: name, ok: false, detail: "python3 not found; run `gitups apply bastion`"}
 }
 
 func parsePythonVersion(s string) (major, minor int, err error) {

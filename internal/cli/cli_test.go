@@ -19,23 +19,68 @@ func clearGitupsEnv(t *testing.T) {
 	t.Setenv(gitupsSecretsDirEnv, "")
 }
 
-func TestInitCommandGeneratesCurrentTemplate(t *testing.T) {
-	outDir := filepath.Join(t.TempDir(), "desired-state")
+func TestInitRepoCommandGeneratesBootstrapRepo(t *testing.T) {
+	stateDir := t.TempDir()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	code := Run(context.Background(), []string{"init", "--template", "libvirt-redfish-hub", "--out", outDir}, nil, &stdout, &stderr)
+	code := Run(context.Background(), []string{
+		"init-repo",
+		"--cluster-name", "ocp-bm-01",
+		"--provider", "emulated-bare-metal",
+		"--state-dir", stateDir,
+	}, nil, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
 	}
 	output := stdout.String()
+	clusterDir := filepath.Join(stateDir, "clusters-bootstrap.git", "ocp-bm-01")
 	for _, expected := range []string{
-		filepath.Join(outDir, "environment.yaml"),
-		filepath.Join(outDir, "provider.yaml"),
-		filepath.Join(outDir, "cluster-infrastructure-hub.yaml"),
-		filepath.Join(outDir, "ocp-cluster-hub.yaml"),
+		filepath.Join(clusterDir, "gitups", "environment.yaml"),
+		filepath.Join(clusterDir, "gitups", "provider.yaml"),
+		filepath.Join(clusterDir, "gitups", "infra.yaml"),
+		filepath.Join(clusterDir, "gitups", "cluster.yaml"),
+		filepath.Join(clusterDir, "openshift"),
 	} {
 		if !strings.Contains(output, expected) {
 			t.Fatalf("stdout missing %q\n%s", expected, output)
+		}
+		if _, err := os.Stat(expected); err != nil {
+			t.Fatalf("expected %s: %v", expected, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(stateDir, "clusters-bootstrap.git", ".git")); err != nil {
+		t.Fatalf("expected initialized git repo: %v", err)
+	}
+}
+
+func TestRenderClusterInstallFilesUsesBootstrapRepoByDefault(t *testing.T) {
+	stateDir := t.TempDir()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Run(context.Background(), []string{
+		"init-repo",
+		"--cluster-name", "ocp-bm-01",
+		"--provider", "emulated-bare-metal",
+		"--state-dir", stateDir,
+	}, nil, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("init-repo code got %d, stderr: %s", code, stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = Run(context.Background(), []string{
+		"render", "cluster-install-files",
+		"--state-dir", stateDir,
+		"--scope", "ocp-bm-01",
+	}, nil, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("render code got %d, stderr: %s", code, stderr.String())
+	}
+	for _, name := range []string{"install-config.yaml", "agent-config.yaml"} {
+		path := filepath.Join(stateDir, "clusters-bootstrap.git", "ocp-bm-01", "openshift", name)
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("expected rendered %s: %v", path, err)
 		}
 	}
 }
@@ -199,7 +244,7 @@ spec:
 	}
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	code := Run(context.Background(), []string{"provider", "apply", "-f", path, "--dry-run"}, nil, &stdout, &stderr)
+	code := Run(context.Background(), []string{"apply", "infra", "-f", path, "--dry-run"}, nil, &stdout, &stderr)
 	if code == 0 {
 		t.Fatal("expected unsupported provider failure")
 	}
@@ -784,7 +829,7 @@ func TestProviderApplyDryRunRendersAndPrintsAnsibleCommandsForAllPhases(t *testi
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"provider", "apply",
+		"apply", "infra",
 		"-f", "../../examples/libvirt-redfish-lab-fleet",
 		"--state-dir", stateDir,
 		"--dry-run",
@@ -798,7 +843,7 @@ func TestProviderApplyDryRunRendersAndPrintsAnsibleCommandsForAllPhases(t *testi
 		filepath.Join(stateDir, "ansible", "inventory.yaml"),
 		"- provider [root]",
 		"- cluster [root]",
-		"dry-run ansible command [provider apply]: ansible-playbook",
+		"dry-run ansible command [infra apply]: ansible-playbook",
 		"playbooks/apply-infra.yml",
 	} {
 		if !strings.Contains(output, expected) {
@@ -806,7 +851,7 @@ func TestProviderApplyDryRunRendersAndPrintsAnsibleCommandsForAllPhases(t *testi
 		}
 	}
 	if got := strings.Count(output, "--ask-become-pass"); got != 1 {
-		t.Fatalf("provider apply should ask become once, got %d prompts\n%s", got, output)
+		t.Fatalf("infra apply should ask become once, got %d prompts\n%s", got, output)
 	}
 	for _, unexpected := range []string{"clusters-install.yml", "gitops-publish.yml"} {
 		if strings.Contains(output, unexpected) {
@@ -823,7 +868,7 @@ func TestProviderApplyDryRunPassesStateSecretsAndHostStateDirs(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"provider", "apply",
+		"apply", "infra",
 		"-f", "../../examples/libvirt-redfish-lab-fleet",
 		"--state-dir", stateDir,
 		"--secrets-dir", secretsDir,
@@ -875,7 +920,7 @@ func TestClustersApplyDryRunOnlyRunsClustersScope(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"clusters", "apply",
+		"apply", "clusters",
 		"-f", "../../examples/libvirt-redfish-lab-fleet",
 		"--state-dir", stateDir,
 		"--dry-run",
@@ -887,6 +932,12 @@ func TestClustersApplyDryRunOnlyRunsClustersScope(t *testing.T) {
 	if !strings.Contains(output, "playbooks/apply-clusters.yml") {
 		t.Fatalf("stdout missing apply-clusters.yml: %s", output)
 	}
+	for _, cluster := range []string{"hub", "managed-01", "managed-02"} {
+		path := filepath.Join("clusters-bootstrap.git", cluster, "openshift", "install-config.yaml")
+		if !strings.Contains(output, path) {
+			t.Fatalf("clusters apply must render %s installer assets:\n%s", cluster, output)
+		}
+	}
 	for _, leaked := range []string{"provider-prepare.yml", "cluster-prepare.yml", "clusters-install.yml", "gitops-publish.yml"} {
 		if strings.Contains(output, leaked) {
 			t.Fatalf("clusters-scope apply leaked %s:\n%s", leaked, output)
@@ -894,30 +945,38 @@ func TestClustersApplyDryRunOnlyRunsClustersScope(t *testing.T) {
 	}
 }
 
-func TestProviderDestroyRequiresYesOrDryRun(t *testing.T) {
+func TestRenderClusterInstallFilesRespectsScope(t *testing.T) {
 	stateDir := t.TempDir()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"provider", "destroy",
+		"render", "cluster-install-files",
 		"-f", "../../examples/libvirt-redfish-lab-fleet",
 		"--state-dir", stateDir,
+		"--scope", "managed-01",
 	}, nil, &stdout, &stderr)
-	if code == 0 {
-		t.Fatal("expected destroy without --yes/--dry-run to fail")
+	if code != 0 {
+		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
 	}
-	if !strings.Contains(stderr.String(), "destroy refused") {
-		t.Fatalf("unexpected stderr: %s", stderr.String())
+	selected := filepath.Join(stateDir, "clusters-bootstrap.git", "managed-01", "openshift", "install-config.yaml")
+	if _, err := os.Stat(selected); err != nil {
+		t.Fatalf("expected selected installer file %s: %v", selected, err)
+	}
+	for _, skipped := range []string{"hub", "managed-02"} {
+		path := filepath.Join(stateDir, "clusters-bootstrap.git", skipped, "openshift", "install-config.yaml")
+		if _, err := os.Stat(path); err == nil {
+			t.Fatalf("unexpected installer file for unselected cluster %s", skipped)
+		}
 	}
 }
 
-func TestProviderDestroyDryRunPrintsPhasesInReverse(t *testing.T) {
+func TestHubApplySelectsHubClusterWithoutClusterInstall(t *testing.T) {
 	stateDir := t.TempDir()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"provider", "destroy",
-		"-f", "../../examples/libvirt-redfish-lab-fleet",
+		"apply", "hub",
+		"-f", "../../test/e2e/old/libvirt-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 		"--dry-run",
 	}, nil, &stdout, &stderr)
@@ -925,33 +984,28 @@ func TestProviderDestroyDryRunPrintsPhasesInReverse(t *testing.T) {
 		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
 	}
 	output := stdout.String()
-	clusterIdx := strings.Index(output, "- cluster [root]")
-	providerIdx := strings.Index(output, "- provider [root]")
-	if clusterIdx < 0 || providerIdx < 0 {
-		t.Fatalf("missing destroy phase entries:\n%s", output)
-	}
-	if !(clusterIdx < providerIdx) {
-		t.Fatalf("destroy phases not in reverse order (cluster=%d provider=%d)\n%s", clusterIdx, providerIdx, output)
-	}
 	for _, expected := range []string{
-		"dry-run ansible command [provider destroy]: ansible-playbook",
-		"playbooks/destroy-infra.yml",
+		"hub apply",
+		"hub cluster",
+		"no declarative hub component schema is implemented yet",
 	} {
 		if !strings.Contains(output, expected) {
 			t.Fatalf("stdout missing %q\n%s", expected, output)
 		}
 	}
-	if got := strings.Count(output, "--ask-become-pass"); got != 1 {
-		t.Fatalf("provider destroy should ask become once, got %d prompts\n%s", got, output)
+	for _, leaked := range []string{"rendered:", "playbooks/apply-clusters.yml", "dry-run ansible command"} {
+		if strings.Contains(output, leaked) {
+			t.Fatalf("hub component apply should not run cluster installation today; leaked %q\n%s", leaked, output)
+		}
 	}
 }
 
-func TestClustersDestroyDryRunUsesClustersWorkflow(t *testing.T) {
+func TestApplyAllDryRunIncludesReservedHubStep(t *testing.T) {
 	stateDir := t.TempDir()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"clusters", "destroy",
+		"apply", "all",
 		"-f", "../../examples/libvirt-redfish-lab-fleet",
 		"--state-dir", stateDir,
 		"--dry-run",
@@ -961,9 +1015,10 @@ func TestClustersDestroyDryRunUsesClustersWorkflow(t *testing.T) {
 	}
 	output := stdout.String()
 	for _, expected := range []string{
-		"- clusters [root]",
-		"dry-run ansible command [clusters destroy]: ansible-playbook",
-		"playbooks/clusters-destroy.yml",
+		"all apply",
+		"hub cluster",
+		"playbooks/apply-all.yml",
+		"no declarative hub component schema is implemented yet",
 	} {
 		if !strings.Contains(output, expected) {
 			t.Fatalf("stdout missing %q\n%s", expected, output)
@@ -976,7 +1031,7 @@ func TestClustersApplyDryRunUsesAnsibleBecomePrompt(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"clusters", "apply",
+		"apply", "clusters",
 		"-f", "../../test/e2e/old/libvirt-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 		"--dry-run",
@@ -1009,7 +1064,7 @@ func TestClustersApplyAsRootSkipsBecomePrompt(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"clusters", "apply",
+		"apply", "clusters",
 		"-f", "../../test/e2e/old/libvirt-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 		"--dry-run",
@@ -1027,7 +1082,7 @@ func TestClustersApplyDryRunPrintsEscalationSummary(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"clusters", "apply",
+		"apply", "clusters",
 		"-f", "../../test/e2e/old/libvirt-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 		"--dry-run",
@@ -1077,7 +1132,7 @@ func TestClustersApplyConfirmationDecline(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"clusters", "apply",
+		"apply", "clusters",
 		"-f", "../../test/e2e/old/libvirt-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 	}, strings.NewReader("n\n"), &stdout, &stderr)
@@ -1098,7 +1153,7 @@ func TestClustersApplyYesSkipsConfirmationAndStopsBeforeAnsible(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"clusters", "apply",
+		"apply", "clusters",
 		"-f", "../../test/e2e/old/libvirt-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 		"--yes",

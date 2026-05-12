@@ -22,6 +22,7 @@ type RunSpec struct {
 	FilterPluginsPath string
 	Inventory         string
 	Playbook          string
+	Limit             string
 	ExtraVars         string
 	ExtraVarPairs     []string
 	ArtifactsDir      string
@@ -52,6 +53,9 @@ func (r CommandRunner) Command(spec RunSpec) []string {
 	}
 	for _, pair := range spec.ExtraVarPairs {
 		args = append(args, "-e", pair)
+	}
+	if spec.Limit != "" {
+		args = append(args, "--limit", spec.Limit)
 	}
 	if spec.Check {
 		args = append(args, "--check")

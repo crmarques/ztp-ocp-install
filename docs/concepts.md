@@ -57,27 +57,29 @@ as fleet GitOps content. That publication path is not implemented today;
 every `OCPCluster` in the desired state is installed locally via the agent
 installer.
 
-## Scopes
+## Workflow Targets
 
-`gitups <scope> apply` runs idempotent phases through explicit scopes:
+Provisioning commands are verb-first. `gitups apply <target>` runs
+idempotent phases through explicit targets:
 
 1. `bastion`: controller-local dependencies (managed Ansible venv, OCP CLIs).
-2. `provider`: provider infrastructure plus per-cluster substrate
+2. `infra`: provider infrastructure plus per-cluster substrate
    (`InfrastructureProvider` services and `ClusterInfrastructure` instances).
 3. `clusters`: openshift-install agent against the cluster nodes plus per-cluster
    install state.
 4. `hub` *(reserved)*: hub-cluster components for clusters declaring
    `role: hub`. Not implemented yet.
+5. `all`: infra, clusters, and the reserved hub component step.
 
-Each scope also exposes `<scope> check` (local + Ansible read-only checks)
-and `<scope> destroy` (reverse).
+`gitups check <target>` exposes the matching read-only checks. Cluster
+targets accept `--scope` to select named `OCPCluster` definitions.
 
 ## Rendered Output
 
-Rendering is internal to every `<scope> check`, `<scope> apply`, and
-`<scope> destroy`. Gitups writes deterministic output under `--state-dir`,
-including effective state, installer assets, Ansible inventory and variables,
-and the embedded Ansible bundle.
+Rendering is internal to mutating targets, and can be requested explicitly with
+`gitups render cluster-install-files`. Gitups writes deterministic output under
+`--state-dir`, including effective state, installer assets, Ansible inventory
+and variables, and the embedded Ansible bundle.
 
 ## Secrets
 

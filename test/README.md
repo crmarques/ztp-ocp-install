@@ -39,21 +39,17 @@ make build
 make list-e2e-cases
 make e2e-dry-run CASE=libvirt-1-host-1-sno-hub
 make e2e         CASE=libvirt-1-host-1-sno-hub
-make e2e-destroy CASE=libvirt-1-host-1-sno-hub
+make clean-e2e-state CASE=libvirt-1-host-1-sno-hub
 ```
 
 The user-facing equivalent is plain `gitups`:
 
 ```text
-gitups bastion check -f test/e2e/<case>
-gitups provider check -f test/e2e/<case> --state-dir /tmp/gitups-<case> --dry-run
-gitups clusters check -f test/e2e/<case> --state-dir /tmp/gitups-<case> --dry-run
-gitups provider apply -f test/e2e/<case> --state-dir /tmp/gitups-<case> --dry-run
-gitups clusters apply -f test/e2e/<case> --state-dir /tmp/gitups-<case> --dry-run
-gitups provider apply -f test/e2e/<case> --state-dir /tmp/gitups-<case> --yes
-gitups clusters apply -f test/e2e/<case> --state-dir /tmp/gitups-<case> --yes
-gitups clusters destroy -f test/e2e/<case> --state-dir /tmp/gitups-<case> --yes
-gitups provider destroy -f test/e2e/<case> --state-dir /tmp/gitups-<case> --yes
+gitups check bastion -f test/e2e/<case>
+gitups check infra -f test/e2e/<case> --state-dir /tmp/gitups-<case> --dry-run
+gitups check all -f test/e2e/<case> --state-dir /tmp/gitups-<case> --dry-run
+gitups apply all -f test/e2e/<case> --state-dir /tmp/gitups-<case> --dry-run
+gitups apply all -f test/e2e/<case> --state-dir /tmp/gitups-<case> --yes
 ```
 
 ## Common Prerequisites

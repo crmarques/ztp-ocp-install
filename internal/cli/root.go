@@ -45,12 +45,12 @@ func newRootCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Comm
 	root.SetCompletionCommandGroupID(groupGeneral)
 
 	addWorkflow(root,
-		newInitCmd(stdout),                                // 1. author desired state
-		newSecretsCmd(stdout, stderr),                     // 2. materialize secret refs
-		newBastionCmd(stdin, stdout, stderr),              // 3. bootstrap controller host
-		newScopeCmd(providerScope, stdin, stdout, stderr), // 4. install provider + cluster infra
-		newScopeCmd(clustersScope, stdin, stdout, stderr), // 5. install OpenShift clusters
-		newGitopsCmd(),                                    // 6. render/push/bootstrap GitOps
+		newInitRepoCmd(stdout),        // 1. author bootstrap repository
+		newSecretsCmd(stdout, stderr), // 2. materialize secret refs
+		newCheckCmd(stdout, stderr),   // 3. validate prerequisites and desired state
+		newRenderCmd(stdout, stderr),  // 4. render generated install files
+		newApplyCmd(stdin, stdout, stderr),
+		newGitopsCmd(),
 	)
 	return root
 }
@@ -71,7 +71,7 @@ type commonFlags struct {
 
 func addCommonFlags(cmd *cobra.Command) *commonFlags {
 	cf := &commonFlags{stateDir: defaultStateDir()}
-	cmd.Flags().StringArrayVarP(&cf.files, "file", "f", nil, "Gitups YAML file or directory; may be repeated")
+	cmd.Flags().StringArrayVarP(&cf.files, "file", "f", nil, "Gitups YAML file or directory; may be repeated (default: <state-dir>/clusters-bootstrap.git/*/gitups)")
 	cmd.Flags().StringVar(&cf.stateDir, "state-dir", cf.stateDir, "generated state directory (env: GITUPS_STATE_DIR)")
 	return cf
 }

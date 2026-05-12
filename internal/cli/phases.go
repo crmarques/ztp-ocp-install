@@ -7,34 +7,30 @@ import (
 )
 
 type Phase struct {
-	Name            string
-	ApplyPlaybook   string
-	DestroyPlaybook string
-	NeedsRoot       bool
-	Description     string
+	Name          string
+	ApplyPlaybook string
+	NeedsRoot     bool
+	Description   string
 }
 
 var phases = map[string]Phase{
 	"provider": {
-		Name:            "provider",
-		ApplyPlaybook:   "playbooks/provider-prepare.yml",
-		DestroyPlaybook: "playbooks/provider-destroy.yml",
-		NeedsRoot:       true,
-		Description:     "provision provider-scoped services (BMC emulator, boot-artifacts HTTP, mirror registry, managed HAProxy) and host runtime state",
+		Name:          "provider",
+		ApplyPlaybook: "playbooks/provider-prepare.yml",
+		NeedsRoot:     true,
+		Description:   "provision provider-scoped services (BMC emulator, boot-artifacts HTTP, mirror registry, managed HAProxy) and host runtime state",
 	},
 	"cluster": {
-		Name:            "cluster",
-		ApplyPlaybook:   "playbooks/cluster-prepare.yml",
-		DestroyPlaybook: "playbooks/cluster-destroy.yml",
-		NeedsRoot:       true,
-		Description:     "provision per-cluster substrate (libvirt domains and networks, managed name resolution, /etc/hosts records, VIP plumbing)",
+		Name:          "cluster",
+		ApplyPlaybook: "playbooks/cluster-prepare.yml",
+		NeedsRoot:     true,
+		Description:   "provision per-cluster substrate (libvirt domains and networks, managed name resolution, /etc/hosts records, VIP plumbing)",
 	},
 	"clusters": {
-		Name:            "clusters",
-		ApplyPlaybook:   "playbooks/clusters-install.yml",
-		DestroyPlaybook: "playbooks/clusters-destroy.yml",
-		NeedsRoot:       true,
-		Description:     "run openshift-install agent against the cluster nodes (boots via Redfish, manages the libvirt domain, writes per-cluster install state)",
+		Name:          "clusters",
+		ApplyPlaybook: "playbooks/clusters-install.yml",
+		NeedsRoot:     true,
+		Description:   "run openshift-install agent against the cluster nodes (boots via Redfish, manages the libvirt domain, writes per-cluster install state)",
 	},
 }
 
@@ -52,14 +48,6 @@ func phasesByNames(names []string) []Phase {
 	out := make([]Phase, 0, len(names))
 	for _, name := range names {
 		out = append(out, phases[name])
-	}
-	return out
-}
-
-func reversed(in []Phase) []Phase {
-	out := make([]Phase, len(in))
-	for i, p := range in {
-		out[len(in)-1-i] = p
 	}
 	return out
 }

@@ -8,10 +8,13 @@ GitOps, then converges the environment in ordered phases.
 The CLI covers the full pipeline:
 
 ```text
-gitups init                              author desired state
-gitups provider apply                    install/configure infra (libvirt, bare metal, …)
-gitups clusters apply                    install OpenShift via openshift-install agent
-gitups gitops apply <package-set>        render package compositions, push to git, bootstrap KRC/SRC
+gitups init-repo --cluster-name ocp-bm-01 --provider bare-metal
+                                          author bootstrap repo desired state
+gitups apply infra                         install/configure infra (libvirt, bare metal, …)
+gitups render cluster-install-files        render OpenShift install files
+gitups apply clusters --scope ocp-bm-01    install clusters via openshift-install agent
+gitups apply hub                           validate/apply hub components for the hub-role cluster
+gitups gitops apply <package-set>          render package compositions, push to git, bootstrap KRC/SRC
 ```
 
 The `gitops` group consumes a user-authored
@@ -56,14 +59,14 @@ until their provider roles land.
 ## CLI
 
 ```text
-gitups init --template libvirt-redfish-hub --out desired-state
-gitups bastion check -f examples/libvirt-redfish-fleet
-gitups bastion apply -f examples/libvirt-redfish-fleet --yes
-gitups provider check -f examples/libvirt-redfish-fleet --dry-run
-gitups provider apply -f examples/libvirt-redfish-fleet --dry-run
-gitups clusters check -f examples/libvirt-redfish-fleet --dry-run
-gitups clusters apply -f examples/libvirt-redfish-fleet --dry-run
-gitups clusters destroy -f examples/libvirt-redfish-fleet --dry-run
+gitups init-repo --cluster-name managed-01 --provider emulated-bare-metal
+gitups check bastion -f examples/libvirt-redfish-fleet
+gitups apply bastion -f examples/libvirt-redfish-fleet --yes
+gitups check infra -f examples/libvirt-redfish-fleet --dry-run
+gitups apply infra -f examples/libvirt-redfish-fleet --dry-run
+gitups render cluster-install-files -f examples/libvirt-redfish-fleet --scope managed-01
+gitups apply clusters -f examples/libvirt-redfish-fleet --scope managed-01 --dry-run
+gitups apply all -f examples/libvirt-redfish-fleet --dry-run
 
 gitups gitops init dev
 gitups gitops expand dev
@@ -73,12 +76,11 @@ gitups gitops push dev --base-url https://github.com/myorg
 gitups gitops apply dev --to <kubectl-context>
 ```
 
-Public scopes: `bastion`, `provider`, `clusters`, and `hub` (reserved for
-clusters declaring `role: hub`). Each scope exposes `check`, `apply`, and
-`destroy`. The `gitops` group is a peer of `provider`/`clusters` and
-exposes `init`, `expand`, `check`, `render`, `fill`, `plan`, `push`,
-`apply`, `wait`, `status`, and `destroy`. Standalone commands: `init` and
-`secrets`. The formal CLI contract lives in
+Provisioning commands are verb-first: `check`, `render`, and `apply`
+operate on targets such as `bastion`, `infra`, `clusters`, `hub`, and `all`.
+The `gitops` group still exposes `init`, `expand`, `check`, `render`, `fill`,
+`plan`, `push`, `apply`, `wait`, `status`, and `destroy`. Standalone commands:
+`init-repo` and `secrets`. The formal CLI contract lives in
 [specs/state-model.md](specs/state-model.md#cli-contract); the gitops
 contract lives in [specs/gitops.md](specs/gitops.md).
 

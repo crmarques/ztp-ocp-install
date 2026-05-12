@@ -61,7 +61,7 @@ byte-identical across the swap. CI asserts this invariant by diffing the
 
 `OCPCluster` is a thin wrapper around generated installer assets. Gitups
 renders complete installer files under
-`<state-dir>/clusters/<cluster>/installer/`. Gitups-owned fields are derived
+`<state-dir>/clusters-bootstrap.git/<cluster>/openshift/`. Gitups-owned fields are derived
 from `Environment`, `InfrastructureProvider`, and `ClusterInfrastructure` —
 that includes cluster name, base domain, VIPs, machine networks, host roles,
 host interfaces, per-host NMState, root device hints, image digest mirrors,

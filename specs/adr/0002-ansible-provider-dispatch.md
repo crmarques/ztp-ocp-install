@@ -34,7 +34,7 @@ host_*           # provider-agnostic OS prep / proxy / kvm packages
 network_*        # provider-agnostic networking (DNS, LB, validation)
 cluster_*        # per-cluster, runs on gitups_infra_hosts
 provider_*       # provider-scoped, runs on gitups_provider_hosts
-hub_*            # hub-cluster install / boot / destroy
+ocp_*            # openshift-install agent install / boot / destroy
 ```
 
 Within `cluster_substrate_*`, `provider_bmc_*`, and `ocp_boot_*`, the

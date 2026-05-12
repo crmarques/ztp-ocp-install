@@ -18,6 +18,7 @@ func TestExtractAnsibleBundleEitherSucceedsOrReportsEmpty(t *testing.T) {
 	}
 	for _, rel := range []string{
 		AnsibleCfgRelPath,
+		filepath.Join("playbooks", "apply-all.yml"),
 		filepath.Join("playbooks", "apply-infra.yml"),
 		filepath.Join("playbooks", "apply-clusters.yml"),
 		filepath.Join("playbooks", "destroy-infra.yml"),

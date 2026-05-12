@@ -21,7 +21,7 @@ type InstallerAsset struct {
 func InstallerAssets(stateDir string, state v1alpha1.State) []InstallerAsset {
 	assets := make([]InstallerAsset, 0, len(state.OCPClusters))
 	for _, ocp := range state.OCPClusters {
-		dir := filepath.Join(stateDir, "clusters", ocp.Metadata.Name, "installer")
+		dir := filepath.Join(stateDir, "clusters-bootstrap.git", ocp.Metadata.Name, "openshift")
 		assets = append(assets, InstallerAsset{
 			ClusterName:       ocp.Metadata.Name,
 			Method:            ocp.Spec.Install.Method,

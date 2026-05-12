@@ -4,177 +4,141 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
 )
 
-type initTemplate struct {
-	files map[string]string
-}
+const (
+	initProviderVSphere           = "vsphere"
+	initProviderBareMetal         = "bare-metal"
+	initProviderEmulatedBareMetal = "emulated-bare-metal"
+)
 
-func newInitCmd(stdout io.Writer) *cobra.Command {
+func newInitRepoCmd(stdout io.Writer) *cobra.Command {
 	var (
-		templateName string
-		outDir       string
+		clusterName string
+		provider    string
+		stateDir    string
+		force       bool
 	)
+	stateDir = defaultStateDir()
 	cmd := &cobra.Command{
-		Use:   "init --template <name> --out <dir>",
-		Short: "Generate current validating desired-state templates",
+		Use:   "init-repo --cluster-name <name> --provider <provider>",
+		Short: "Create a clusters-bootstrap.git repository with Gitups input files",
 		Args:  cobra.NoArgs,
 	}
-	cmd.Flags().StringVar(&templateName, "template", "", "template name ("+strings.Join(initTemplateNames(), ", ")+")")
-	cmd.Flags().StringVar(&outDir, "out", "", "directory to create desired-state YAML files in")
+	cmd.Flags().StringVar(&clusterName, "cluster-name", "", "cluster name to scaffold")
+	cmd.Flags().StringVar(&provider, "provider", "", "provider scaffold: vsphere|bare-metal|emulated-bare-metal")
+	cmd.Flags().StringVar(&stateDir, "state-dir", stateDir, "generated state directory (env: GITUPS_STATE_DIR)")
+	cmd.Flags().BoolVar(&force, "force", false, "overwrite existing scaffold files for the cluster")
 	cmd.RunE = func(_ *cobra.Command, _ []string) error {
-		templateName = strings.TrimSpace(templateName)
-		outDir = strings.TrimSpace(outDir)
-		if templateName == "" {
-			return failf(2, "--template is required")
+		clusterName = strings.TrimSpace(clusterName)
+		provider = strings.TrimSpace(provider)
+		if clusterName == "" {
+			return failf(2, "--cluster-name is required")
 		}
-		if outDir == "" {
-			return failf(2, "--out is required")
+		if provider == "" {
+			return failf(2, "--provider is required")
 		}
-		template, ok := initTemplates[templateName]
-		if !ok {
-			return failf(2, "unknown template %q (known: %s)", templateName, strings.Join(initTemplateNames(), ", "))
+		files, err := initRepoFiles(clusterName, provider)
+		if err != nil {
+			return failErr(2, err)
 		}
-		if err := os.MkdirAll(outDir, 0o700); err != nil {
-			return failErr(1, fmt.Errorf("create %s: %w", outDir, err))
+
+		repo := bootstrapRepoDir(stateDir)
+		gitupsDir := filepath.Join(repo, clusterName, "gitups")
+		openshiftDir := filepath.Join(repo, clusterName, "openshift")
+		for _, dir := range []string{gitupsDir, openshiftDir} {
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				return failErr(1, fmt.Errorf("create %s: %w", dir, err))
+			}
 		}
-		names := make([]string, 0, len(template.files))
-		for name := range template.files {
-			names = append(names, name)
+		if err := initGitRepo(repo); err != nil {
+			return failErr(1, err)
 		}
-		sort.Strings(names)
-		printTitle(stdout, "Init")
-		for _, name := range names {
-			path := filepath.Join(outDir, name)
-			if _, err := os.Stat(path); err == nil {
+
+		printTitle(stdout, "init-repo")
+		for _, item := range files {
+			path := filepath.Join(gitupsDir, item.name)
+			if _, err := os.Stat(path); err == nil && !force {
 				return failf(1, "%s already exists", path)
-			} else if !os.IsNotExist(err) {
+			} else if err != nil && !os.IsNotExist(err) {
 				return failErr(1, fmt.Errorf("stat %s: %w", path, err))
 			}
-			if err := os.WriteFile(path, []byte(template.files[name]), 0o644); err != nil {
+			if err := os.WriteFile(path, []byte(item.body), 0o644); err != nil {
 				return failErr(1, fmt.Errorf("write %s: %w", path, err))
 			}
 			fmt.Fprintf(stdout, "- %s\n", path)
 		}
+		fmt.Fprintf(stdout, "- %s\n", openshiftDir)
 		return nil
 	}
 	return cmd
 }
 
-func initTemplateNames() []string {
-	names := make([]string, 0, len(initTemplates))
-	for name := range initTemplates {
-		names = append(names, name)
+type initRepoFile struct {
+	name string
+	body string
+}
+
+func initRepoFiles(clusterName, provider string) ([]initRepoFile, error) {
+	switch provider {
+	case initProviderEmulatedBareMetal:
+		return emulatedBareMetalInitRepoFiles(clusterName), nil
+	case initProviderBareMetal:
+		return bareMetalInitRepoFiles(clusterName), nil
+	case initProviderVSphere:
+		return vSphereInitRepoFiles(clusterName), nil
+	default:
+		return nil, fmt.Errorf("unknown provider %q (known: vsphere, bare-metal, emulated-bare-metal)", provider)
 	}
-	sort.Strings(names)
-	return names
 }
 
-var initTemplates = map[string]initTemplate{
-	"libvirt-redfish-hub": {
-		files: map[string]string{
-			"environment.yaml":                libvirtRedfishHubEnvironmentYAML,
-			"provider.yaml":                   libvirtRedfishHubProviderYAML,
-			"cluster-infrastructure-hub.yaml": libvirtRedfishHubClusterInfrastructureYAML,
-			"ocp-cluster-hub.yaml":            libvirtRedfishHubOCPClusterYAML,
-		},
-	},
+func initGitRepo(repo string) error {
+	if _, err := os.Stat(filepath.Join(repo, ".git")); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("stat %s: %w", filepath.Join(repo, ".git"), err)
+	}
+	cmd := exec.Command("git", "init", repo)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("git init %s: %w\n%s", repo, err, strings.TrimSpace(string(out)))
+	}
+	return nil
 }
 
-const libvirtRedfishHubEnvironmentYAML = `apiVersion: gitups.io/v1alpha1
-kind: Environment
-metadata:
-  name: disconnected-hub
-spec:
-  baseDomain: disconnected.example.test
-  ocpInstall:
-    disconnected:
-      proxy:
-        httpProxy: http://proxy.disconnected.example.test:3128
-        httpsProxy: http://proxy.disconnected.example.test:3128
-        noProxy:
-          - .disconnected.example.test
-          - 192.168.130.0/24
-      registries:
-        mirror:
-          url: registry.disconnected.example.test:5000
-          credentialsRef:
-            name: disconnected-hub-registry
-          trustBundleRef:
-            name: disconnected-hub-registry-ca
-        imageDigestSources:
-          - source: quay.io/openshift-release-dev/ocp-release
-            mirrors:
-              - registry.disconnected.example.test:5000/openshift/release-images
-          - source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
-            mirrors:
-              - registry.disconnected.example.test:5000/openshift/release-images
-  secrets:
-    pullSecretRef:
-      name: openshift-pull-secret
-    clusterSSHKeyRef:
-      name: cluster-admin-key
-  keys:
-    libvirt-host-ssh:
-      file: ~/.ssh/id_rsa
-    cluster-admin-key:
-      file: ~/.ssh/id_rsa.pub
-    openshift-pull-secret:
-      file: ./pull-secret.json
-    disconnected-hub-registry-ca:
-      generated:
-        selfSignedCertificate:
-          commonName: registry.disconnected.example.test
-    disconnected-hub-registry:
-      generated:
-        credentials:
-          username: admin
-    libvirt-redfish-bmc:
-      generated:
-        credentials:
-          username: admin
-  openshift:
-    release:
-      channel: stable-4.21
-      version: 4.21.12
-  componentImages:
-    load-balancer:
-      haproxy:
-        local: registry.disconnected.example.test:5000/library/haproxy:3.3.8
-        public: docker.io/library/haproxy:3.3.8@sha256:f14a1788b56894e7ec7b5cb0ca09dbb959b674cf3c980f92139ec008167d4a91
-`
-
-const libvirtRedfishHubProviderYAML = `apiVersion: gitups.io/v1alpha1
+func emulatedBareMetalInitRepoFiles(clusterName string) []initRepoFile {
+	providerName := clusterName + "-emulated-bare-metal"
+	return []initRepoFile{
+		{name: "environment.yaml", body: connectedEnvironmentYAML(clusterName, providerHostSSHKeyYAML()+bmcCredentialsKeyYAML())},
+		{name: "provider.yaml", body: fmt.Sprintf(`apiVersion: gitups.io/v1alpha1
 kind: InfrastructureProvider
 metadata:
-  name: libvirt-redfish-provider
+  name: %[1]s
 spec:
   hosts:
-    libvirt-host:
+    lab-host:
       ssh:
         address: 192.168.10.11
         user: gitups
         keyRef:
-          name: libvirt-host-ssh
+          name: provider-host-ssh
       capabilities:
         - libvirt
         - hosts-file
-        - mirror-registry
   machine:
     libvirt:
       hostRefs:
-        - name: libvirt-host
+        - name: lab-host
       bmcEmulation:
         enabled: true
         protocol: redfish
         auth:
           credentialRef:
-            name: libvirt-redfish-bmc
+            name: bmc-credentials
       machineProfiles:
         sno:
           cpu: 8
@@ -183,25 +147,19 @@ spec:
   loadBalancer:
     haProxy:
       hostRef:
-        name: libvirt-host
+        name: lab-host
   nameResolution:
     hostsFile:
       hostRefs:
-        - name: libvirt-host
-  registry:
-    mirrorRegistry:
-      hostRef:
-        name: libvirt-host
-      port: 5000
-`
-
-const libvirtRedfishHubClusterInfrastructureYAML = `apiVersion: gitups.io/v1alpha1
+        - name: lab-host
+`, providerName)},
+		{name: "infra.yaml", body: fmt.Sprintf(`apiVersion: gitups.io/v1alpha1
 kind: ClusterInfrastructure
 metadata:
-  name: hub
+  name: %[1]s
 spec:
   providerRefs:
-    - name: libvirt-redfish-provider
+    - name: %[2]s
   networks:
     primary:
       cidr: 192.168.130.0/24
@@ -209,7 +167,7 @@ spec:
       dnsServers:
         - 192.168.130.1
       libvirt:
-        bridge: vbr-hub
+        bridge: vbr-%[1]s
   machines:
     master-0:
       profileRef:
@@ -219,12 +177,11 @@ spec:
           networkRef:
             name: primary
           ipAddress: 192.168.130.20
-          macAddress: 52:54:00:21:11:10
       rootDeviceHints:
         deviceName: /dev/vda
       libvirt:
         hostRef:
-          name: libvirt-host
+          name: lab-host
   endpoints:
     api:
       address: 192.168.130.10
@@ -238,16 +195,179 @@ spec:
         - api
         - apiInt
         - ingress
-`
+`, clusterName, providerName)},
+		{name: "cluster.yaml", body: ocpClusterYAML(clusterName)},
+	}
+}
 
-const libvirtRedfishHubOCPClusterYAML = `apiVersion: gitups.io/v1alpha1
+func bareMetalInitRepoFiles(clusterName string) []initRepoFile {
+	providerName := clusterName + "-bare-metal"
+	return []initRepoFile{
+		{name: "environment.yaml", body: connectedEnvironmentYAML(clusterName, bmcCredentialsKeyYAML())},
+		{name: "provider.yaml", body: fmt.Sprintf(`apiVersion: gitups.io/v1alpha1
+kind: InfrastructureProvider
+metadata:
+  name: %[1]s
+spec:
+  machine:
+    baremetal:
+      bmcProtocol: redfish
+`, providerName)},
+		{name: "infra.yaml", body: fmt.Sprintf(`apiVersion: gitups.io/v1alpha1
+kind: ClusterInfrastructure
+metadata:
+  name: %[1]s
+spec:
+  providerRefs:
+    - name: %[2]s
+  networks:
+    primary:
+      cidr: 192.168.130.0/24
+      gateway: 192.168.130.1
+      dnsServers:
+        - 192.168.130.1
+  machines:
+    master-0:
+      interfaces:
+        primary:
+          networkRef:
+            name: primary
+          ipAddress: 192.168.130.20
+          macAddress: 52:54:00:21:11:10
+      rootDeviceHints:
+        deviceName: /dev/sda
+      baremetal:
+        bmc:
+          address: redfish-virtualmedia+https://bmc-%[1]s-0.example.test/redfish/v1/Systems/1
+          credentialRef:
+            name: bmc-credentials
+          disableCertificateVerification: true
+  endpoints:
+    api:
+      address: 192.168.130.10
+    apiInt:
+      address: 192.168.130.10
+    ingress:
+      address: 192.168.130.11
+`, clusterName, providerName)},
+		{name: "cluster.yaml", body: ocpClusterYAML(clusterName)},
+	}
+}
+
+func vSphereInitRepoFiles(clusterName string) []initRepoFile {
+	providerName := clusterName + "-vsphere"
+	return []initRepoFile{
+		{name: "environment.yaml", body: connectedEnvironmentYAML(clusterName, vCenterCredentialsKeyYAML())},
+		{name: "provider.yaml", body: fmt.Sprintf(`apiVersion: gitups.io/v1alpha1
+kind: InfrastructureProvider
+metadata:
+  name: %[1]s
+spec:
+  machine:
+    vsphere:
+      vCenterRef:
+        name: vcenter-credentials
+      datacenter: dc1
+      cluster: cluster1
+`, providerName)},
+		{name: "infra.yaml", body: fmt.Sprintf(`apiVersion: gitups.io/v1alpha1
+kind: ClusterInfrastructure
+metadata:
+  name: %[1]s
+spec:
+  providerRefs:
+    - name: %[2]s
+  networks:
+    primary:
+      cidr: 192.168.130.0/24
+      gateway: 192.168.130.1
+      dnsServers:
+        - 192.168.130.1
+      vsphere:
+        portgroup: ocp-install
+  machines:
+    master-0:
+      interfaces:
+        primary:
+          networkRef:
+            name: primary
+          ipAddress: 192.168.130.20
+          macAddress: 52:54:00:21:11:10
+      rootDeviceHints:
+        deviceName: /dev/sda
+      vsphere:
+        datastore: datastore1
+        folder: /Gitups/%[1]s
+        template: rhcos
+  endpoints:
+    api:
+      address: 192.168.130.10
+    apiInt:
+      address: 192.168.130.10
+    ingress:
+      address: 192.168.130.11
+`, clusterName, providerName)},
+		{name: "cluster.yaml", body: ocpClusterYAML(clusterName)},
+	}
+}
+
+func connectedEnvironmentYAML(name string, extraKeys string) string {
+	return fmt.Sprintf(`apiVersion: gitups.io/v1alpha1
+kind: Environment
+metadata:
+  name: %[1]s
+spec:
+  baseDomain: example.test
+  ocpInstall:
+    connected: {}
+  secrets:
+    pullSecretRef:
+      name: openshift-pull-secret
+    clusterSSHKeyRef:
+      name: cluster-admin-key
+  keys:
+    cluster-admin-key:
+      file: ~/.ssh/id_rsa.pub
+    openshift-pull-secret:
+      file: ./pull-secret.json
+%s
+  openshift:
+    release:
+      channel: stable-4.21
+      version: 4.21.12
+`, name, extraKeys)
+}
+
+func providerHostSSHKeyYAML() string {
+	return `    provider-host-ssh:
+      file: ~/.ssh/id_rsa
+`
+}
+
+func bmcCredentialsKeyYAML() string {
+	return `    bmc-credentials:
+      generated:
+        credentials:
+          username: admin
+`
+}
+
+func vCenterCredentialsKeyYAML() string {
+	return `    vcenter-credentials:
+      file: ./vcenter-credentials
+`
+}
+
+func ocpClusterYAML(clusterName string) string {
+	return fmt.Sprintf(`apiVersion: gitups.io/v1alpha1
 kind: OCPCluster
 metadata:
-  name: hub
+  name: %[1]s
 spec:
+  role: managed
   topology: single-node
   infrastructureRef:
-    name: hub
+    name: %[1]s
   install:
     method: agent
   networking:
@@ -259,4 +379,5 @@ spec:
   nodes:
     master-0:
       role: control-plane
-`
+`, clusterName)
+}

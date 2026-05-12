@@ -244,6 +244,7 @@ kind: OCPCluster
 metadata:
   name: hub
 spec:
+  role: hub
   topology: single-node
   infrastructureRef:
     name: hub
@@ -264,6 +265,9 @@ Rules:
 
 - Must not contain VIPs, load-balancer refs, DNS placement, BMC settings,
   MAC addresses, or any provider-typed sub-block.
+- `role` is `hub` or `managed`. When omitted, the normalizer treats clusters
+  named `hub` or ending in `-hub` as `hub`, and every other cluster as
+  `managed`.
 - `nodes.<name>.machineRef` defaults to `<name>`; specify it only when the
   OCP node name differs from the machine name.
 - Release and install defaults inherit from `Environment`; per-cluster
@@ -322,31 +326,34 @@ The validator enforces:
 
 ## CLI Contract
 
-The user-facing CLI is organized into four scopes (`bastion`, `provider`,
-`clusters`, `hub`), each with `check`, `apply`, and `destroy` subcommands,
-plus the standalone `init` and `secrets` writers.
+The user-facing CLI is organized by verb. Provisioning targets are `bastion`,
+`infra`, `clusters`, `hub`, and `all`. The GitOps authoring group remains
+`gitups gitops *` until the GitOps command shape is redesigned.
 
 | Command | Reads input? | Mutates? | Purpose |
 | --- | --- | --- | --- |
-| `init --template <name> --out <dir>` | no | local only | Writes current validating desired-state templates. |
+| `init-repo --cluster-name <name> --provider <provider>` | no | local only | Creates `<state-dir>/clusters-bootstrap.git/<cluster>/{gitups,openshift}` and scaffolds `environment.yaml`, `provider.yaml`, `infra.yaml`, and `cluster.yaml` under `gitups/`. Providers: `vsphere`, `bare-metal`, `emulated-bare-metal`. |
 | `secrets` | optional | yes (writes secrets) | `generate`, `pull-secret set`, and credential writers — the only writers into `<gitups-user-dir>/secrets`. |
-| `bastion check` | optional | no | Controller prerequisite checks for the selected desired state. |
-| `bastion apply` | optional | yes | Installs pinned controller-local dependencies, defaulting to the user-owned Gitups-managed Ansible venv. |
-| `bastion destroy` | no | yes | Removes the Gitups-managed venv and CLI binaries on the controller. Requires `--yes` (or `--dry-run`). |
-| `provider <check\|apply>` | yes | check: no, apply: yes | Local + Ansible read-only checks (`check`) or convergence (`apply`) of `InfrastructureProvider` and `ClusterInfrastructure` (provider services and per-cluster substrate). |
-| `provider destroy` | yes | yes | Reverses provider+cluster substrate. Requires `--yes` (or `--dry-run`). |
-| `clusters <check\|apply>` | yes | check: no, apply: yes | Local + Ansible read-only checks (`check`) or `openshift-install agent` (`apply`) for every `OCPCluster`. |
-| `clusters destroy` | yes | yes | Reverses the `openshift-install` state. Requires `--yes` (or `--dry-run`). |
-| `hub <check\|apply\|destroy>` | yes | reserved | Reserved scope for clusters declaring `role: hub`. Not implemented yet; the commands print a reserved notice and exit 0. |
+| `check bastion` | optional | no | Controller prerequisite checks for the selected desired state. |
+| `check infra` | yes | no | Local + Ansible read-only checks for provider hosts and per-cluster substrate. |
+| `check clusters [--scope a,b]` | yes | no | Local + Ansible read-only checks for OpenShift cluster installation. |
+| `check hub` | yes | no | Validates that exactly one cluster is selected for the hub role. Hub component readiness is reserved until the hub component schema lands. |
+| `check all` | yes | no | Runs bastion, infra, cluster, and hub selection checks. |
+| `render cluster-install-files [--scope a,b]` | yes | local only | Renders installer assets under `<state-dir>/clusters-bootstrap.git/<cluster>/openshift/`. |
+| `apply bastion [--dry-run]` | optional | yes | Installs pinned controller-local dependencies, defaulting to the user-owned Gitups-managed Ansible venv. |
+| `apply infra [--dry-run]` | yes | yes | Converges `InfrastructureProvider` and `ClusterInfrastructure`: provider services plus per-cluster substrate. |
+| `apply clusters [--scope a,b] [--dry-run]` | yes | yes | Runs `openshift-install agent` for selected clusters. |
+| `apply hub [--dry-run]` | yes | reserved | Reserved for hub components installed onto the cluster declaring `role: hub`; today it validates the hub selection and reports no component schema. |
+| `apply all [--dry-run]` | yes | yes | Runs `apply infra`, cluster installation, and the reserved hub component step. |
 
-Rendering has no public command; it is an internal step for `<scope> check`,
-`<scope> apply`, and `<scope> destroy`.
-
-Common flags accepted by every scope command:
+Common flags accepted by provisioning target commands:
 
 - `--file` / `-f` — desired-state YAML file or directory; may be repeated.
+  Defaults to `<state-dir>/clusters-bootstrap.git/*/gitups`.
 - `--state-dir` — generated state directory (env: `GITUPS_STATE_DIR`).
 - `--secrets-dir` — local install secret material directory (env: `GITUPS_SECRETS_DIR`).
+- `--scope` — comma-separated `OCPCluster.metadata.name` list, accepted by
+  `clusters` and `cluster-install-files` targets.
 
 Configuration env vars:
 
@@ -356,10 +363,10 @@ Configuration env vars:
 
 Multi-cluster fleet GitOps publication (one cluster running ACM/OpenShift
 GitOps to reconcile additional clusters) is forward-looking architecture and
-not implemented today; every `OCPCluster` in the desired state goes through
-the local `clusters` scope. The future `hub` scope is reserved for
-configuring those hub-cluster components on clusters that declare
-`role: hub`.
+not implemented today. `apply clusters` installs every selected cluster,
+including the cluster declaring `role: hub`. `apply hub` is reserved for
+post-provisioning hub components and currently only validates that exactly one
+hub cluster is selected.
 
 ## Gitops authoring artifacts (peer kind)
 

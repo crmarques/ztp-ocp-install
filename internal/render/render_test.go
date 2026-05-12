@@ -178,7 +178,7 @@ func TestRenderInstallerAssets(t *testing.T) {
 		t.Fatalf("render All returned error: %v", err)
 	}
 	asset := result.InstallerAssets[0]
-	if got, want := asset.InstallConfigPath, filepath.Join(stateDir, "clusters", "hub", "installer", "install-config.yaml"); got != want {
+	if got, want := asset.InstallConfigPath, filepath.Join(stateDir, "clusters-bootstrap.git", "hub", "openshift", "install-config.yaml"); got != want {
 		t.Fatalf("install-config path got %q, want %q", got, want)
 	}
 	installConfig := readFile(t, asset.InstallConfigPath)
@@ -425,9 +425,9 @@ func TestRenderVarsExposeOCPInstallMetadata(t *testing.T) {
 		"additionalTrustBundleRef: mirror-registry-ca",
 		"version: 4.21.12",
 		"channel: stable-4.21",
-		"relativeDir: clusters/local-libvirt-1-host-hub/installer",
-		"relativeInstallConfigPath: clusters/local-libvirt-1-host-hub/installer/install-config.yaml",
-		"relativeAgentConfigPath: clusters/local-libvirt-1-host-hub/installer/agent-config.yaml",
+		"relativeDir: clusters-bootstrap.git/local-libvirt-1-host-hub/openshift",
+		"relativeInstallConfigPath: clusters-bootstrap.git/local-libvirt-1-host-hub/openshift/install-config.yaml",
+		"relativeAgentConfigPath: clusters-bootstrap.git/local-libvirt-1-host-hub/openshift/agent-config.yaml",
 		"name: openshift-install",
 		"machineRef: master-0",
 		"localRegistry:",

@@ -17,7 +17,7 @@ func TestProviderCheckRunsAnsiblePreflight(t *testing.T) {
 	var stderr bytes.Buffer
 	stateDir := t.TempDir()
 	code := Run(context.Background(), []string{
-		"provider", "check",
+		"check", "infra",
 		"-f", "../../examples/libvirt-redfish-lab-fleet",
 		"--state-dir", stateDir,
 		"--dry-run",
@@ -28,7 +28,7 @@ func TestProviderCheckRunsAnsiblePreflight(t *testing.T) {
 	out := stdout.String()
 	for _, expected := range []string{
 		"playbooks/preflight.yml",
-		"dry-run ansible command [provider check]:",
+		"dry-run ansible command [infra check]:",
 	} {
 		if !strings.Contains(out, expected) {
 			t.Fatalf("provider check missing %q\n%s", expected, out)
@@ -43,7 +43,7 @@ func TestClustersCheckRunsAnsiblePreflightWithOpenshiftCLIs(t *testing.T) {
 	var stderr bytes.Buffer
 	stateDir := t.TempDir()
 	code := Run(context.Background(), []string{
-		"clusters", "check",
+		"check", "clusters",
 		"-f", "../../examples/libvirt-redfish-lab-fleet",
 		"--state-dir", stateDir,
 		"--dry-run",
@@ -67,7 +67,7 @@ func TestBastionCheckAcceptsState(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"bastion", "check",
+		"check", "bastion",
 		"-f", "../../test/e2e/old/libvirt-1-host-1-sno-hub",
 	}, nil, &stdout, &stderr)
 	if code != 0 {
@@ -150,7 +150,7 @@ func TestBastionApplyDryRunPrintsPlanAndDoesNotExecute(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	code := Run(context.Background(), []string{"bastion", "apply", "--dry-run"}, nil, &stdout, &stderr)
+	code := Run(context.Background(), []string{"apply", "bastion", "--dry-run"}, nil, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("expected ok, got %d, stderr=%s", code, stderr.String())
 	}
@@ -171,7 +171,7 @@ func TestBastionApplyDryRunSkipsCLIsWithoutState(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	code := Run(context.Background(), []string{"bastion", "apply", "--dry-run"}, nil, &stdout, &stderr)
+	code := Run(context.Background(), []string{"apply", "bastion", "--dry-run"}, nil, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("expected ok, got %d, stderr=%s", code, stderr.String())
 	}
@@ -189,7 +189,7 @@ func TestBastionApplyDryRunPlansCLIsFromState(t *testing.T) {
 	var stderr bytes.Buffer
 	stateDir := t.TempDir()
 	code := Run(context.Background(), []string{
-		"bastion", "apply",
+		"apply", "bastion",
 		"-f", "../../test/e2e/old/libvirt-1-host-1-sno-hub",
 		"--state-dir", stateDir,
 		"--dry-run",
@@ -212,35 +212,6 @@ func TestBastionApplyDryRunPlansCLIsFromState(t *testing.T) {
 		if strings.Contains(out, " "+leak) {
 			t.Fatalf("controller dry-run leaked provider package %q\n%s", leak, out)
 		}
-	}
-}
-
-func TestBastionDestroyDryRunPrintsTargets(t *testing.T) {
-	clearGitupsEnv(t)
-	t.Setenv("HOME", t.TempDir())
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	code := Run(context.Background(), []string{"bastion", "destroy", "--dry-run"}, nil, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("expected ok, got %d, stderr=%s", code, stderr.String())
-	}
-	out := stdout.String()
-	if !strings.Contains(out, "dry-run: would remove") {
-		t.Fatalf("bastion destroy dry-run must announce removal targets:\n%s", out)
-	}
-}
-
-func TestBastionDestroyRequiresYesOrDryRun(t *testing.T) {
-	clearGitupsEnv(t)
-	t.Setenv("HOME", t.TempDir())
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	code := Run(context.Background(), []string{"bastion", "destroy"}, nil, &stdout, &stderr)
-	if code == 0 {
-		t.Fatal("expected destroy without --yes/--dry-run to fail")
-	}
-	if !strings.Contains(stderr.String(), "destroy refused") {
-		t.Fatalf("unexpected stderr: %s", stderr.String())
 	}
 }
 

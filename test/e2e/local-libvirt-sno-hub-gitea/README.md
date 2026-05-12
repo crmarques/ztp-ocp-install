@@ -63,12 +63,13 @@ make e2e         CASE=local-libvirt-sno-hub-gitea
 Equivalent CLI flow:
 
 ```text
-gitups bastion  check  -f test/e2e/local-libvirt-sno-hub-gitea
-gitups provider apply  -f test/e2e/local-libvirt-sno-hub-gitea --state-dir /tmp/gitups-local-libvirt-sno-hub-gitea --yes
-gitups clusters apply  -f test/e2e/local-libvirt-sno-hub-gitea --state-dir /tmp/gitups-local-libvirt-sno-hub-gitea --yes
+gitups check bastion -f test/e2e/local-libvirt-sno-hub-gitea
+gitups apply infra -f test/e2e/local-libvirt-sno-hub-gitea --state-dir /tmp/gitups-local-libvirt-sno-hub-gitea --yes
+gitups apply clusters -f test/e2e/local-libvirt-sno-hub-gitea --state-dir /tmp/gitups-local-libvirt-sno-hub-gitea --yes
+gitups apply hub -f test/e2e/local-libvirt-sno-hub-gitea --state-dir /tmp/gitups-local-libvirt-sno-hub-gitea
 ```
 
-When `clusters apply` finishes, the kubeadmin kubeconfig lands in the state
+When `apply clusters` finishes, the kubeadmin kubeconfig lands in the state
 directory:
 
 ```text
@@ -134,15 +135,14 @@ for current values and overrides).
 ## 4. Tear down
 
 ```text
-make e2e-destroy CASE=local-libvirt-sno-hub-gitea
+make clean-e2e-state CASE=local-libvirt-sno-hub-gitea
 ```
 
 Or step-by-step:
 
 ```text
 gitups gitops   destroy local-libvirt-sno-hub-gitea -d test/e2e/gitops --to "$KUBE_CONTEXT" --yes
-gitups clusters destroy -f test/e2e/local-libvirt-sno-hub-gitea --state-dir /tmp/gitups-local-libvirt-sno-hub-gitea --yes
-gitups provider destroy -f test/e2e/local-libvirt-sno-hub-gitea --state-dir /tmp/gitups-local-libvirt-sno-hub-gitea --yes
+sudo rm -rf /tmp/gitups-local-libvirt-sno-hub-gitea
 ```
 
 ## Prerequisites on the laptop

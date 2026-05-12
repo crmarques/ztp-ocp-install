@@ -23,6 +23,8 @@ const (
 
 	OCPTopologySingleNode     = "single-node"
 	OCPTopologyMultiNode      = "multi-node"
+	OCPClusterRoleHub         = "hub"
+	OCPClusterRoleManaged     = "managed"
 	OCPInstallMethodAgent     = "agent"
 	NodeRoleControlPlane      = "control-plane"
 	NodeRoleWorker            = "worker"
@@ -472,6 +474,7 @@ type OCPCluster struct {
 }
 
 type OCPClusterSpec struct {
+	Role              string                 `yaml:"role,omitempty" json:"role,omitempty"`
 	Topology          string                 `yaml:"topology,omitempty" json:"topology,omitempty"`
 	InfrastructureRef LocalObjectReference   `yaml:"infrastructureRef" json:"infrastructureRef"`
 	Install           OCPInstallSpec         `yaml:"install,omitempty" json:"install,omitempty"`

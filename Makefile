@@ -8,12 +8,8 @@ E2E_FIXTURE = $(E2E_DIR)/$(CASE)
 E2E_STATE_DIR ?= /tmp/gitups-$(CASE)
 ANSIBLE_PLAYBOOK ?= $(shell command -v ansible-playbook 2>/dev/null)
 E2E_ANSIBLE_FLAGS = $(if $(ANSIBLE_PLAYBOOK),--ansible-playbook $(ANSIBLE_PLAYBOOK),)
-E2E_APPLY_PROVIDER ?= $(BIN_DIR)/$(BINARY) provider apply --yes
-E2E_APPLY_CLUSTERS ?= $(BIN_DIR)/$(BINARY) clusters apply --yes
+E2E_APPLY_ALL ?= $(BIN_DIR)/$(BINARY) apply all --yes
 E2E_APPLY_FLAGS ?=
-E2E_DESTROY_PROVIDER ?= $(BIN_DIR)/$(BINARY) provider destroy --yes
-E2E_DESTROY_CLUSTERS ?= $(BIN_DIR)/$(BINARY) clusters destroy --yes
-E2E_DESTROY_FLAGS ?=
 E2E_CLEAN ?= sudo rm -rf
 
 ANSIBLE_SRC_DIR = ansible
@@ -26,6 +22,7 @@ GOFMT_FILES = $(shell find . -path './internal/embedded/bundle' -prune -o -name 
 ANSIBLE_SYNTAX_ENV = ANSIBLE_LOCAL_TEMP=/tmp/gitups-ansible-local ANSIBLE_REMOTE_TEMP=/tmp/gitups-ansible-remote ANSIBLE_ROLES_PATH=ansible/roles ANSIBLE_COLLECTIONS_PATH=internal/embedded/bundle/collections ANSIBLE_FILTER_PLUGINS=ansible/filter_plugins
 ANSIBLE_SYNTAX_PLAYBOOKS = \
 	ansible/playbooks/preflight.yml \
+	ansible/playbooks/apply-all.yml \
 	ansible/playbooks/apply-infra.yml \
 	ansible/playbooks/apply-clusters.yml \
 	ansible/playbooks/destroy-infra.yml \
@@ -38,7 +35,7 @@ E2E_CASES = $(filter-out gitops,$(notdir $(patsubst %/,%,$(wildcard $(E2E_DIR)/*
 GITOPS_E2E_DIR ?= $(E2E_DIR)/gitops
 GITOPS_E2E_CASES = $(notdir $(patsubst %/,%,$(wildcard $(GITOPS_E2E_DIR)/*/)))
 
-.PHONY: all build sync-bundle test validate plan check check-gofmt ansible-syntax-check stale-term-check provider-swap-check check-e2e-deps check-e2e-case list-e2e-cases e2e-dry-run e2e e2e-destroy-dry-run e2e-destroy e2e-gitops list-e2e-gitops-cases clean clean-e2e-state help
+.PHONY: all build sync-bundle test validate plan check check-gofmt ansible-syntax-check stale-term-check provider-swap-check check-e2e-deps check-e2e-case list-e2e-cases e2e-dry-run e2e e2e-gitops list-e2e-gitops-cases clean clean-e2e-state help
 
 all: build
 
@@ -98,37 +95,26 @@ provider-swap-check:
 	diff -u examples/libvirt-redfish-fleet/ocp-cluster-managed-01.yaml examples/baremetal-redfish-fleet/ocp-cluster-managed-01.yaml
 
 validate: build
-	$(BIN_DIR)/$(BINARY) provider check -f examples/libvirt-redfish-fleet --state-dir $(STATE_DIR) --dry-run
+	$(BIN_DIR)/$(BINARY) check all -f examples/libvirt-redfish-fleet --state-dir $(STATE_DIR) --dry-run
 
 plan: build
-	$(BIN_DIR)/$(BINARY) provider apply -f examples/libvirt-redfish-fleet --state-dir $(STATE_DIR) --dry-run
+	$(BIN_DIR)/$(BINARY) apply all -f examples/libvirt-redfish-fleet --state-dir $(STATE_DIR) --dry-run
 
 check-e2e-deps:
 	@test -n "$(ANSIBLE_PLAYBOOK)" || { printf '%s\n' 'ansible-playbook not found in PATH; install Ansible or set ANSIBLE_PLAYBOOK=/path/to/ansible-playbook'; exit 1; }
 
 check-e2e-case:
-	@test -n "$(CASE)" || { printf '%s\n' 'CASE is required; pass CASE=<name>, e.g. make e2e CASE=libvirt-1-host-1-sno-hub' 'Available cases:' $(addprefix '  ',$(E2E_CASES)); exit 1; }
+	@test -n "$(CASE)" || { printf '%s\n' 'CASE is required; pass CASE=<name>, e.g. make e2e CASE=local-libvirt-sno-hub-gitea' 'Available cases:' $(addprefix '  ',$(E2E_CASES)); exit 1; }
 	@test -d "$(E2E_FIXTURE)" || { printf '%s\n' 'CASE "$(CASE)" not found at $(E2E_FIXTURE)' 'Available cases:' $(addprefix '  ',$(E2E_CASES)); exit 1; }
 
 list-e2e-cases:
 	@printf '%s\n' 'Available e2e cases:' $(addprefix '  ',$(E2E_CASES))
 
 e2e-dry-run: check-e2e-case check-e2e-deps build
-	$(BIN_DIR)/$(BINARY) provider apply -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) --dry-run $(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
-	$(BIN_DIR)/$(BINARY) clusters apply -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) --dry-run $(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
+	$(BIN_DIR)/$(BINARY) apply all -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) --dry-run $(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
 
 e2e: check-e2e-case check-e2e-deps build
-	$(E2E_APPLY_PROVIDER) -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) $(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
-	$(E2E_APPLY_CLUSTERS) -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) $(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
-
-e2e-destroy-dry-run: check-e2e-case check-e2e-deps build
-	$(BIN_DIR)/$(BINARY) clusters destroy -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) --dry-run $(E2E_ANSIBLE_FLAGS) $(E2E_DESTROY_FLAGS)
-	$(BIN_DIR)/$(BINARY) provider destroy -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) --dry-run $(E2E_ANSIBLE_FLAGS) $(E2E_DESTROY_FLAGS)
-
-e2e-destroy: check-e2e-case check-e2e-deps build
-	$(E2E_DESTROY_CLUSTERS) -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) $(E2E_ANSIBLE_FLAGS) $(E2E_DESTROY_FLAGS)
-	$(E2E_DESTROY_PROVIDER) -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) $(E2E_ANSIBLE_FLAGS) $(E2E_DESTROY_FLAGS)
-	$(E2E_CLEAN) $(E2E_STATE_DIR)
+	$(E2E_APPLY_ALL) -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) $(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
 
 list-e2e-gitops-cases:
 	@printf '%s\n' 'Available gitops e2e cases:' $(addprefix '  ',$(GITOPS_E2E_CASES))
@@ -164,8 +150,6 @@ help:
 		'  check-e2e-deps   Check local e2e dependencies' \
 		'  e2e-dry-run         Render an e2e fixture and print Ansible command (requires CASE=<name>)' \
 		'  e2e                 Run an e2e fixture with sudo (requires CASE=<name>)' \
-		'  e2e-destroy-dry-run Render the destroy plan and print Ansible command (requires CASE=<name>)' \
-		'  e2e-destroy         Tear down an e2e fixture and remove local state with sudo (requires CASE=<name>)' \
 		'  list-e2e-gitops-cases  List available gitops e2e cases under test/e2e/gitops' \
 		'  e2e-gitops          Run gitops check/expand/render against a fixture (requires CASE=<name>)' \
 		'  clean               Remove workspace-local generated outputs' \

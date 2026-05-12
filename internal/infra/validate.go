@@ -709,6 +709,11 @@ func validateOCPClusters(state v1alpha1.State) []string {
 			errs = append(errs, fmt.Sprintf("duplicate OCPCluster %q", ocp.Metadata.Name))
 		}
 		seen[ocp.Metadata.Name] = true
+		switch ocp.Spec.Role {
+		case "", v1alpha1.OCPClusterRoleHub, v1alpha1.OCPClusterRoleManaged:
+		default:
+			errs = append(errs, fmt.Sprintf("OCPCluster/%s spec.role %q must be hub or managed", ocp.Metadata.Name, ocp.Spec.Role))
+		}
 		switch ocp.Spec.Topology {
 		case "", v1alpha1.OCPTopologySingleNode, v1alpha1.OCPTopologyMultiNode:
 		default:

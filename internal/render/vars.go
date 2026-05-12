@@ -563,7 +563,7 @@ func ocpInstallerVars(clusterName string) OCPInstallerVars {
 }
 
 func installerRelativeDir(clusterName string) string {
-	return "clusters/" + clusterName + "/installer"
+	return "clusters-bootstrap.git/" + clusterName + "/openshift"
 }
 
 func ocpClusterNodes(item v1alpha1.ClusterInfrastructure, ocp v1alpha1.OCPCluster, env *v1alpha1.Environment, secretsDir string) []OCPClusterNodeVars {
