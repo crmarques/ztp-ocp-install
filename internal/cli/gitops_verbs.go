@@ -1,6 +1,10 @@
 package cli
 
-import "github.com/spf13/cobra"
+import (
+	"io"
+
+	"github.com/spf13/cobra"
+)
 
 // These top-level verb parents host gitops-only operations as `gitops <name>`
 // children. Each parent exists so the verb sits at the top of `--help`
@@ -62,13 +66,17 @@ func newWaitCmd() *cobra.Command {
 	return cmd
 }
 
-func newDestroyCmd() *cobra.Command {
+func newDestroyCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "destroy <target>",
 		Short: "Tear down a previously applied target",
 		Args:  cobra.NoArgs,
 	}
-	cmd.AddCommand(newGitopsDestroyCmd())
+	cmd.AddCommand(
+		retargetCommand(newScopeDestroyCmd(infraScope, stdin, stdout, stderr), "infra", "Tear down infrastructure hosts and substrate"),
+		retargetCommand(newScopeDestroyCmd(clustersScope, stdin, stdout, stderr), "clusters", "Tear down OpenShift cluster install state"),
+		newGitopsDestroyCmd(),
+	)
 	showSubcommandFlagsInHelp(cmd)
 	return cmd
 }

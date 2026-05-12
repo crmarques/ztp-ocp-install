@@ -97,8 +97,11 @@
   ansible.builtin.set_fact:
     gitups_ocp_install_env: >-
       {{
-        {'OPENSHIFT_INSTALL_RELEASE_IMAGE_OVERRIDE': gitups_ocp_release_image_override}
-        if (gitups_ocp_release_image_override | length) > 0
-        else {}
+        (gitups_proxy_env | default({}))
+        | combine(
+            {'OPENSHIFT_INSTALL_RELEASE_IMAGE_OVERRIDE': gitups_ocp_release_image_override}
+            if (gitups_ocp_release_image_override | length) > 0
+            else {}
+          )
       }}
   changed_when: false

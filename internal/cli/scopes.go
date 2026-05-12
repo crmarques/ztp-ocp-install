@@ -5,6 +5,7 @@ type scopeSpec struct {
 	short              string
 	phaseNames         []string
 	applyPlaybook      string
+	destroyPlaybook    string
 	artifactsBaseName  string
 	applyHubComponents bool
 }
@@ -14,6 +15,7 @@ var infraScope = scopeSpec{
 	short:             "Install and configure InfrastructureProvider and ClusterInfrastructure",
 	phaseNames:        []string{"provider", "cluster"},
 	applyPlaybook:     "playbooks/apply-infra.yml",
+	destroyPlaybook:   "playbooks/destroy-infra.yml",
 	artifactsBaseName: "infra",
 }
 
@@ -22,6 +24,7 @@ var clustersScope = scopeSpec{
 	short:             "Install and configure managed OpenShift clusters via openshift-install agent",
 	phaseNames:        []string{"clusters"},
 	applyPlaybook:     "playbooks/apply-clusters.yml",
+	destroyPlaybook:   "playbooks/clusters-destroy.yml",
 	artifactsBaseName: "clusters",
 }
 

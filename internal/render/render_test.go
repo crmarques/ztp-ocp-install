@@ -8,6 +8,7 @@ import (
 
 	"github.com/crmarques/gitups/api/v1alpha1"
 	"github.com/crmarques/gitups/internal/infra"
+	"go.yaml.in/yaml/v3"
 )
 
 func TestRenderResolvesFileBasedSecretsToSourcePath(t *testing.T) {
@@ -923,6 +924,94 @@ func TestLoadInstallerSecretsBakesProxyCredentialsIntoURLs(t *testing.T) {
 	}
 }
 
+func TestE2EProxyInputRendersIntoOpenShiftInstallerFiles(t *testing.T) {
+	fixtureDir := t.TempDir()
+	copyYAMLFixture(t, "../../test/e2e/container-bastion-local-libvirt-sno", fixtureDir)
+
+	envPath := filepath.Join(fixtureDir, "environment.yaml")
+	envBody := readFile(t, envPath)
+	envBody = replaceOnce(t, envBody, "  ocpInstall:\n    connected: {}\n", `  ocpInstall:
+    restricted:
+      proxy:
+        httpProxy: http://proxy.gitups.test:3128
+        httpsProxy: https://secure-proxy.gitups.test:8443
+        credentialsRef:
+          name: proxy-credentials
+        noProxy:
+          - localhost
+          - 127.0.0.1
+          - .gitups.test
+          - 192.168.132.0/24
+          - 10.128.0.0/14
+          - 172.30.0.0/16
+`)
+	envBody = replaceOnce(t, envBody, "      file: ~/.ssh/gitups-ssh-key.pub\n", "      file: secrets/cluster-admin-key\n")
+	envBody = replaceOnce(t, envBody, "      file: ~/.gitups/secrets/openshift-pull-secret\n", "      file: secrets/openshift-pull-secret\n")
+	envBody = replaceOnce(t, envBody, "    bmc-credentials:\n", "    proxy-credentials:\n      file: secrets/proxy-credentials\n    bmc-credentials:\n")
+	if err := os.WriteFile(envPath, []byte(envBody), 0o644); err != nil {
+		t.Fatalf("write environment with proxy: %v", err)
+	}
+
+	secretsDir := filepath.Join(fixtureDir, "secrets")
+	if err := os.MkdirAll(secretsDir, 0o700); err != nil {
+		t.Fatalf("create secrets dir: %v", err)
+	}
+	for _, item := range []struct {
+		name    string
+		content string
+	}{
+		{name: "openshift-pull-secret", content: `{"auths":{"quay.io":{"auth":"cmVkaGF0OnNlY3JldA=="}}}`},
+		{name: "cluster-admin-key", content: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFake gitups-test"},
+		{name: "proxy-credentials", content: "proxy user:pass/word"},
+	} {
+		if err := os.WriteFile(filepath.Join(secretsDir, item.name), []byte(item.content), 0o600); err != nil {
+			t.Fatalf("write %s: %v", item.name, err)
+		}
+	}
+
+	state, err := infra.LoadNormalizeValidate([]string{fixtureDir})
+	if err != nil {
+		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
+	}
+	stateDir := t.TempDir()
+	result, err := All(stateDir, secretsDir, state)
+	if err != nil {
+		t.Fatalf("render All returned error: %v", err)
+	}
+	asset := installerAssetFor(result.InstallerAssets, "container-bastion-local-libvirt-sno")
+	noProxy := "localhost,127.0.0.1,.gitups.test,192.168.132.0/24,10.128.0.0/14,172.30.0.0/16"
+	assertInstallConfigProxy(t, asset.InstallConfigPath, "http://proxy.gitups.test:3128", "https://secure-proxy.gitups.test:8443", noProxy)
+	if safeConfig := readFile(t, asset.InstallConfigPath); strings.Contains(safeConfig, "proxy%20user") || strings.Contains(safeConfig, "pass%2Fword") {
+		t.Fatalf("safe install-config must not contain proxy credentials\n%s", safeConfig)
+	}
+
+	resolved, err := ResolveInstaller(stateDir, secretsDir, state)
+	if err != nil {
+		t.Fatalf("ResolveInstaller returned error: %v", err)
+	}
+	resolvedAsset := installerAssetFor(resolved.InstallerAssets, "container-bastion-local-libvirt-sno")
+	assertInstallConfigProxy(
+		t,
+		resolvedAsset.EffectiveInstallConfigPath,
+		"http://proxy%20user:pass%2Fword@proxy.gitups.test:3128",
+		"https://proxy%20user:pass%2Fword@secure-proxy.gitups.test:8443",
+		noProxy,
+	)
+}
+
+func TestOCPInstallCommandEnvironmentIncludesProxyEnv(t *testing.T) {
+	effectiveConfig := readFile(t, "../../ansible/roles/ocp_install_agent/tasks/effective-config.yml")
+	for _, expected := range []string{
+		"gitups_proxy_env | default({})",
+		"| combine(",
+		"OPENSHIFT_INSTALL_RELEASE_IMAGE_OVERRIDE",
+	} {
+		if !strings.Contains(effectiveConfig, expected) {
+			t.Fatalf("effective-config.yml missing %q\n%s", expected, effectiveConfig)
+		}
+	}
+}
+
 func TestResolveInstallerFailsWhenSecretFileMissing(t *testing.T) {
 	secretsDir := t.TempDir()
 	state := v1alpha1.State{
@@ -992,4 +1081,57 @@ func readFile(t *testing.T, path string) string {
 		t.Fatalf("read %s: %v", path, err)
 	}
 	return string(data)
+}
+
+func copyYAMLFixture(t *testing.T, src, dst string) {
+	t.Helper()
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		t.Fatalf("read fixture dir %s: %v", src, err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".yaml" {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(src, entry.Name()))
+		if err != nil {
+			t.Fatalf("read fixture %s: %v", entry.Name(), err)
+		}
+		if err := os.WriteFile(filepath.Join(dst, entry.Name()), data, 0o644); err != nil {
+			t.Fatalf("write fixture %s: %v", entry.Name(), err)
+		}
+	}
+}
+
+func replaceOnce(t *testing.T, input, old, new string) string {
+	t.Helper()
+	if !strings.Contains(input, old) {
+		t.Fatalf("missing fixture fragment %q", old)
+	}
+	return strings.Replace(input, old, new, 1)
+}
+
+func assertInstallConfigProxy(t *testing.T, path, httpProxy, httpsProxy, noProxy string) {
+	t.Helper()
+	var doc map[string]any
+	if err := yaml.Unmarshal([]byte(readFile(t, path)), &doc); err != nil {
+		t.Fatalf("unmarshal install-config %s: %v", path, err)
+	}
+	proxy, ok := doc["proxy"].(map[string]any)
+	if !ok {
+		t.Fatalf("install-config %s missing proxy block: %#v", path, doc["proxy"])
+	}
+	for _, item := range []struct {
+		key  string
+		want string
+	}{
+		{key: "httpProxy", want: httpProxy},
+		{key: "httpsProxy", want: httpsProxy},
+		{key: "noProxy", want: noProxy},
+	} {
+		got, ok := proxy[item.key].(string)
+		if !ok || got != item.want {
+			t.Fatalf("install-config %s proxy.%s got %#v, want %q", path, item.key, proxy[item.key], item.want)
+		}
+	}
 }

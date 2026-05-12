@@ -1,9 +1,9 @@
 # Container Bastion + Local Libvirt SNO
 
-This case provisions one connected OpenShift SNO cluster on the local libvirt
-host while the Gitups controller runs inside a UBI9 container. The bastion
-container runs as the same non-root user as the host account and uses Ansible
-become when Gitups needs root privileges.
+This case provisions one OpenShift SNO cluster on the local libvirt host while
+the Gitups controller runs inside a UBI9 container. The default input is a
+direct connected install; the same case can run through an explicit forward
+proxy by declaring it in Gitups desired state.
 
 Gitups owns dependency convergence for the bastion runtime and the provider
 host.
@@ -16,7 +16,7 @@ host.
 | Provider host | Same machine, reached by SSH as `localhost` through `--network host` |
 | Cluster | SNO on libvirt bridge `vbr-cb-sno` |
 | Network | `192.168.132.0/24`, API/API-int `.10`, Ingress `.11`, node `.20` |
-| Install mode | Connected OpenShift install |
+| Install mode | Connected direct by default; restricted when `Environment.spec.ocpInstall.restricted.proxy` is set |
 
 ## Operator Inputs
 
@@ -55,6 +55,29 @@ test -x bin/gitups
 If one of these checks fails, fix that host capability or secret first. Host
 package selection for the provider stack is intentionally left to Gitups.
 
+## Optional Proxy Setup
+
+Leave this section unset for direct internet access.
+
+The container build and the first `gitups apply bastion` run before any Gitups
+desired state exists, so they use the standard process proxy environment.
+
+```bash
+export HTTP_PROXY=http://proxy.example.test:3128
+export HTTPS_PROXY=http://proxy.example.test:3128
+export NO_PROXY=localhost,127.0.0.1,::1,.gitups.test,192.168.132.0/24,10.128.0.0/14,172.30.0.0/16
+export http_proxy="$HTTP_PROXY"
+export https_proxy="$HTTPS_PROXY"
+export no_proxy="$NO_PROXY"
+```
+
+After the workspace exists, Gitups uses
+`Environment.spec.ocpInstall.restricted.proxy` for bastion CLI downloads,
+provider-host package/image pulls, generated `install-config.yaml`, and
+`openshift-install`. Use bare proxy URLs there. If the proxy requires
+authentication, set `credentialsRef.name` and write the credentials with
+`gitups secret set`; do not embed credentials in the URL.
+
 ## Start A Fresh Bastion
 
 Run these commands from the repository root on the host.
@@ -65,6 +88,17 @@ BASTION_IMAGE=gitups-bastion:$CASE
 BASTION_NAME=gitups-bastion-$CASE
 BASTION_HOME="/home/$(id -un)"
 E2E_USER_DIR="/tmp/.gitups-e2e/$CASE"
+PROXY_RUN_ARGS=()
+if [ -n "${HTTP_PROXY:-}${HTTPS_PROXY:-}${NO_PROXY:-}${http_proxy:-}${https_proxy:-}${no_proxy:-}" ]; then
+  PROXY_RUN_ARGS=(
+    --env "HTTP_PROXY=${HTTP_PROXY:-}"
+    --env "HTTPS_PROXY=${HTTPS_PROXY:-}"
+    --env "NO_PROXY=${NO_PROXY:-}"
+    --env "http_proxy=${http_proxy:-}"
+    --env "https_proxy=${https_proxy:-}"
+    --env "no_proxy=${no_proxy:-}"
+  )
+fi
 
 podman rm -f "$BASTION_NAME" 2>/dev/null || true
 rm -rf "$E2E_USER_DIR"
@@ -75,11 +109,18 @@ podman build -t "$BASTION_IMAGE" \
   --build-arg UID="$(id -u)" \
   --build-arg GID="$(id -g)" \
   --build-arg USER="$(id -un)" \
+  --build-arg HTTP_PROXY="${HTTP_PROXY:-}" \
+  --build-arg HTTPS_PROXY="${HTTPS_PROXY:-}" \
+  --build-arg NO_PROXY="${NO_PROXY:-}" \
+  --build-arg http_proxy="${http_proxy:-}" \
+  --build-arg https_proxy="${https_proxy:-}" \
+  --build-arg no_proxy="${no_proxy:-}" \
   .
 
 podman run -dit --name "$BASTION_NAME" \
   --network host \
   --userns=keep-id \
+  "${PROXY_RUN_ARGS[@]}" \
   -v "$HOME/.ssh:$BASTION_HOME/.ssh:Z" \
   -v "$E2E_USER_DIR:$BASTION_HOME/.gitups:Z" \
   -v "$HOME/.gitups/secrets/openshift-pull-secret:$BASTION_HOME/pull-secret.json:ro,Z" \
@@ -134,13 +175,54 @@ Review these user-specific fields before continuing:
 
 | File | Field |
 | --- | --- |
-| `environment.yaml` | `spec.baseDomain`, OpenShift release, and key paths under `spec.keys` |
+| `environment.yaml` | `spec.baseDomain`, OpenShift release, optional proxy, and key paths under `spec.keys` |
 | `provider.yaml` | `spec.hosts.lab-host.ssh.address`, optional `ssh.user`, `libvirtURI`, BMC port |
 | `infra.yaml` | CIDR, bridge name, VIPs, node IP, and MAC address |
 
 For the standard local-container path, leave `provider.yaml` with
 `ssh.address: localhost` and no `ssh.user`; Gitups defaults the SSH user to the
 current bastion user, which matches the host user created in the image.
+
+For a proxied OpenShift install, change `environment.yaml` from
+`ocpInstall.connected` to `ocpInstall.restricted.proxy`:
+
+```yaml
+ocpInstall:
+  restricted:
+    proxy:
+      httpProxy: http://proxy.example.test:3128
+      httpsProxy: http://proxy.example.test:3128
+      noProxy:
+        - localhost
+        - 127.0.0.1
+        - ::1
+        - .gitups.test
+        - 192.168.132.0/24
+        - 10.128.0.0/14
+        - 172.30.0.0/16
+```
+
+If the proxy requires authentication, add a credential reference to that block
+and add the key under `spec.keys`:
+
+```yaml
+      credentialsRef:
+        name: proxy-credentials
+keys:
+  proxy-credentials:
+    file: ~/.gitups/secrets/proxy-credentials
+```
+
+If `environment.yaml` references `proxy-credentials`, write it before the next
+`gitups apply bastion -f "$WORKSPACE"` command so Gitups can derive the
+credentialed proxy environment for its own CLI downloads:
+
+```bash
+gitups secret set proxy-credentials \
+  --username <proxy-user> \
+  --password-stdin \
+  --secrets-dir "$GITUPS_SECRETS_DIR"
+```
 
 Now install the release-specific OpenShift CLIs declared by the workspace:
 
@@ -175,6 +257,9 @@ Expected generated/saved files:
 bmc-credentials
 openshift-pull-secret
 ```
+
+If `environment.yaml` references `proxy-credentials`, that file is also
+expected.
 
 ## Check The Local Libvirt Provider
 
@@ -220,6 +305,11 @@ with secret material inlined (mode `0600`) — that is the form
 
 ```bash
 gitups render installer -f "$WORKSPACE" --scope "$CASE" --resolve-secrets
+
+if grep -q '^proxy:' "$GITUPS_STATE_DIR/clusters-bootstrap.git/$CASE/openshift/install-config.yaml"; then
+  grep -A6 '^proxy:' "$GITUPS_STATE_DIR/clusters-bootstrap.git/$CASE/openshift/install-config.yaml"
+  grep -A6 '^proxy:' "$GITUPS_STATE_DIR/clusters-bootstrap.git/$CASE/openshift/work/install-config.yaml"
+fi
 ```
 
 ```bash
