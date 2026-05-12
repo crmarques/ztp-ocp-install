@@ -16,8 +16,15 @@ import (
 // derived from the first environment that defines spec.proxy. Credentials
 // referenced by spec.proxy.auth.proxyAuthRef are read from the resolved
 // secret path and url-encoded into the proxy URLs. Returns nil when no
-// environment declares a proxy.
+// environment declares a proxy, or when the proxy is Gitups-managed: the
+// bastion orchestrates managed-proxy provisioning, so it cannot route its
+// own bootstrap through a proxy that does not yet exist. External proxies
+// (no InfrastructureProvider supplies spec.proxy.squid) are already up and
+// are honoured.
 func resolveProxyEnv(state v1alpha1.State, secretsDir string) (map[string]string, error) {
+	if proxy.IsManaged(state) {
+		return nil, nil
+	}
 	for i := range state.Environments {
 		env := state.Environments[i]
 		eff := proxy.Resolve(state, &env)

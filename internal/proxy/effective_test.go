@@ -121,6 +121,48 @@ func TestResolveReadsAuthRef(t *testing.T) {
 	}
 }
 
+func TestIsManagedDetectsSquidProvider(t *testing.T) {
+	state := v1alpha1.State{
+		InfrastructureProviders: []v1alpha1.InfrastructureProvider{
+			{Spec: v1alpha1.InfrastructureProviderSpec{
+				Hosts: map[string]v1alpha1.ProviderHostSpec{
+					"host-01": {SSH: &v1alpha1.ProviderHostSSHSpec{Address: "10.0.0.1"}},
+				},
+			}},
+			{Spec: v1alpha1.InfrastructureProviderSpec{
+				Proxy: &v1alpha1.ProxyCapabilitySpec{
+					Squid: &v1alpha1.ProxySquidSpec{
+						HostRef: v1alpha1.LocalObjectReference{Name: "host-01"},
+					},
+				},
+			}},
+		},
+	}
+	if !IsManaged(state) {
+		t.Fatal("expected IsManaged=true when a provider supplies spec.proxy.squid")
+	}
+}
+
+func TestIsManagedFalseForExternalProxy(t *testing.T) {
+	state := v1alpha1.State{
+		Environments: []v1alpha1.Environment{{
+			Spec: v1alpha1.EnvironmentSpec{
+				Proxy: &v1alpha1.EnvironmentProxySpec{HTTP: "http://proxy.example.test:3128"},
+			},
+		}},
+		InfrastructureProviders: []v1alpha1.InfrastructureProvider{{
+			Spec: v1alpha1.InfrastructureProviderSpec{
+				Hosts: map[string]v1alpha1.ProviderHostSpec{
+					"host-01": {SSH: &v1alpha1.ProviderHostSSHSpec{Address: "10.0.0.1"}},
+				},
+			},
+		}},
+	}
+	if IsManaged(state) {
+		t.Fatal("expected IsManaged=false when no provider supplies spec.proxy.squid")
+	}
+}
+
 func TestMirrorHostStripsPort(t *testing.T) {
 	cases := map[string]string{
 		"mirror.example.test:5000": "mirror.example.test",

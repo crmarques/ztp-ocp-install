@@ -105,6 +105,36 @@ func TestResolveProxyEnvMissingCredentialsFails(t *testing.T) {
 	}
 }
 
+func TestResolveProxyEnvSkipsManagedProxy(t *testing.T) {
+	state := v1alpha1.State{
+		Environments: []v1alpha1.Environment{{
+			Spec: v1alpha1.EnvironmentSpec{
+				OCPInstallType: v1alpha1.OCPInstallKindConnected,
+				Proxy: &v1alpha1.EnvironmentProxySpec{
+					HTTP:  "http://192.168.130.1:3128",
+					HTTPS: "http://192.168.130.1:3128",
+				},
+			},
+		}},
+		InfrastructureProviders: []v1alpha1.InfrastructureProvider{{
+			Spec: v1alpha1.InfrastructureProviderSpec{
+				Proxy: &v1alpha1.ProxyCapabilitySpec{
+					Squid: &v1alpha1.ProxySquidSpec{
+						HostRef: v1alpha1.LocalObjectReference{Name: "host-01"},
+					},
+				},
+			},
+		}},
+	}
+	got, err := resolveProxyEnv(state, t.TempDir())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("expected nil for managed proxy (bastion provisions it), got %+v", got)
+	}
+}
+
 func TestResolveProxyEnvSkipsEmptyProxy(t *testing.T) {
 	state := v1alpha1.State{
 		Environments: []v1alpha1.Environment{{

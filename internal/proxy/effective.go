@@ -18,6 +18,21 @@ type Effective struct {
 	Auth    v1alpha1.SecretRef
 }
 
+// IsManaged reports whether desired state asks Gitups to provision the
+// proxy (any InfrastructureProvider supplies spec.proxy.squid). A managed
+// proxy only exists after the bastion has stood it up, so callers that run
+// before that — bastion bootstrap — must not route through it. When no
+// provider supplies a proxy, any Environment.spec.proxy is external and is
+// already reachable.
+func IsManaged(state v1alpha1.State) bool {
+	for _, p := range state.InfrastructureProviders {
+		if v1alpha1.ProviderProxySquid(p) != nil {
+			return true
+		}
+	}
+	return false
+}
+
 // Resolve returns the effective proxy for env, computed once from state.
 // Returns nil when env is nil or has no proxy block. Callers pass the result
 // down to renderers and CLI helpers; recomputing per call site would risk
@@ -26,6 +41,7 @@ func Resolve(state v1alpha1.State, env *v1alpha1.Environment) *Effective {
 	if env == nil || env.Spec.Proxy == nil {
 		return nil
 	}
+
 	p := env.Spec.Proxy
 	eff := &Effective{HTTP: p.HTTP, HTTPS: p.HTTPS}
 	if p.Auth != nil {
