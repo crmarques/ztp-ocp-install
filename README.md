@@ -11,7 +11,7 @@ The CLI covers the full pipeline:
 gitups init-repo --cluster-name ocp-bm-01 --provider bare-metal
                                           author bootstrap repo desired state
 gitups apply infra                         install/configure infra (libvirt, bare metal, …)
-gitups render cluster-install-files        render OpenShift install files
+gitups render installer        render OpenShift install files
 gitups apply clusters --scope ocp-bm-01    install clusters via openshift-install agent
 gitups apply hub                           validate/apply hub components for the hub-role cluster
 gitups gitops apply <package-set>          render package compositions, push to git, bootstrap KRC/SRC
@@ -64,7 +64,7 @@ gitups check bastion -f examples/libvirt-redfish-fleet
 gitups apply bastion -f examples/libvirt-redfish-fleet --yes
 gitups check infra -f examples/libvirt-redfish-fleet --dry-run
 gitups apply infra -f examples/libvirt-redfish-fleet --dry-run
-gitups render cluster-install-files -f examples/libvirt-redfish-fleet --scope managed-01
+gitups render installer -f examples/libvirt-redfish-fleet --scope managed-01
 gitups apply clusters -f examples/libvirt-redfish-fleet --scope managed-01 --dry-run
 gitups apply all -f examples/libvirt-redfish-fleet --dry-run
 

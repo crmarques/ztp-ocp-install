@@ -195,7 +195,7 @@ func newRenderClusterInstallFilesCmd(stdout io.Writer, _ io.Writer) *cobra.Comma
 	)
 	secretsDir = defaultSecretsDir()
 	cmd := &cobra.Command{
-		Use:   "cluster-install-files",
+		Use:   "installer",
 		Short: "Render install-config.yaml and agent-config.yaml",
 		Args:  cobra.NoArgs,
 	}
@@ -216,7 +216,7 @@ func newRenderClusterInstallFilesCmd(stdout io.Writer, _ io.Writer) *cobra.Comma
 		if err != nil {
 			return failErr(1, err)
 		}
-		printTitle(stdout, "cluster-install-files render")
+		printTitle(stdout, "installer render")
 		printInstallerFiles(stdout, result)
 		return nil
 	}

@@ -70,7 +70,7 @@ func TestRenderClusterInstallFilesUsesBootstrapRepoByDefault(t *testing.T) {
 	stdout.Reset()
 	stderr.Reset()
 	code = Run(context.Background(), []string{
-		"render", "cluster-install-files",
+		"render", "installer",
 		"--state-dir", stateDir,
 		"--scope", "ocp-bm-01",
 	}, nil, &stdout, &stderr)
@@ -134,7 +134,7 @@ func TestStatusAfterInitRepoReportsClusterAndMissingInstaller(t *testing.T) {
 		"ocp-bm-01",
 		"installer",
 		"not rendered",
-		"gitups render cluster-install-files --scope ocp-bm-01",
+		"gitups render installer --scope ocp-bm-01",
 	} {
 		if !strings.Contains(out, expected) {
 			t.Fatalf("stdout missing %q\n%s", expected, out)
@@ -1007,7 +1007,7 @@ func TestRenderClusterInstallFilesRespectsScope(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"render", "cluster-install-files",
+		"render", "installer",
 		"-f", "../../examples/libvirt-redfish-lab-fleet",
 		"--state-dir", stateDir,
 		"--scope", "managed-01",

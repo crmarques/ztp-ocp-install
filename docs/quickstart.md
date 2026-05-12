@@ -35,7 +35,7 @@ bin/gitups check infra -f test/e2e/local-libvirt-sno-hub-gitea --state-dir /tmp/
 bin/gitups check clusters -f test/e2e/local-libvirt-sno-hub-gitea --state-dir /tmp/gitups-local-libvirt-sno-hub-gitea --dry-run
 bin/gitups check hub -f test/e2e/local-libvirt-sno-hub-gitea --state-dir /tmp/gitups-local-libvirt-sno-hub-gitea
 bin/gitups apply infra -f test/e2e/local-libvirt-sno-hub-gitea --state-dir /tmp/gitups-local-libvirt-sno-hub-gitea --dry-run
-bin/gitups render cluster-install-files -f test/e2e/local-libvirt-sno-hub-gitea --state-dir /tmp/gitups-local-libvirt-sno-hub-gitea
+bin/gitups render installer -f test/e2e/local-libvirt-sno-hub-gitea --state-dir /tmp/gitups-local-libvirt-sno-hub-gitea
 bin/gitups apply clusters -f test/e2e/local-libvirt-sno-hub-gitea --state-dir /tmp/gitups-local-libvirt-sno-hub-gitea --dry-run
 bin/gitups apply hub -f test/e2e/local-libvirt-sno-hub-gitea --state-dir /tmp/gitups-local-libvirt-sno-hub-gitea --dry-run
 ```

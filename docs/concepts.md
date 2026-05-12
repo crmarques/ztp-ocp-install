@@ -77,7 +77,7 @@ targets accept `--scope` to select named `OCPCluster` definitions.
 ## Rendered Output
 
 Rendering is internal to mutating targets, and can be requested explicitly with
-`gitups render cluster-install-files`. Gitups writes deterministic output under
+`gitups render installer`. Gitups writes deterministic output under
 `--state-dir`, including effective state, installer assets, Ansible inventory
 and variables, and the embedded Ansible bundle.
 

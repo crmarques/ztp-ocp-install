@@ -339,7 +339,7 @@ The user-facing CLI is organized by verb. Provisioning targets are `bastion`,
 | `check clusters [--scope a,b]` | yes | no | Local + Ansible read-only checks for OpenShift cluster installation. |
 | `check hub` | yes | no | Validates that exactly one cluster is selected for the hub role. Hub component readiness is reserved until the hub component schema lands. |
 | `check all` | yes | no | Runs bastion, infra, cluster, and hub selection checks. |
-| `render cluster-install-files [--scope a,b]` | yes | local only | Renders installer assets under `<state-dir>/clusters-bootstrap.git/<cluster>/openshift/`. |
+| `render installer [--scope a,b]` | yes | local only | Renders installer assets under `<state-dir>/clusters-bootstrap.git/<cluster>/openshift/`. |
 | `apply bastion [--dry-run]` | optional | yes | Installs pinned controller-local dependencies, defaulting to the user-owned Gitups-managed Ansible venv. |
 | `apply infra [--dry-run]` | yes | yes | Converges `InfrastructureProvider` and `ClusterInfrastructure`: provider services plus per-cluster substrate. |
 | `apply clusters [--scope a,b] [--dry-run]` | yes | yes | Runs `openshift-install agent` for selected clusters. |
@@ -353,7 +353,7 @@ Common flags accepted by provisioning target commands:
 - `--state-dir` — generated state directory (env: `GITUPS_STATE_DIR`).
 - `--secrets-dir` — local install secret material directory (env: `GITUPS_SECRETS_DIR`).
 - `--scope` — comma-separated `OCPCluster.metadata.name` list, accepted by
-  `clusters` and `cluster-install-files` targets.
+  `clusters` and `installer` targets.
 
 Configuration env vars:
 

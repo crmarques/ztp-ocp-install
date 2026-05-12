@@ -124,7 +124,7 @@ func nextStepHints(repoExists, stateLoaded bool, state v1alpha1.State, stateDir 
 	if len(missingInstaller) > 0 {
 		hints = append(hints,
 			"gitups apply infra --dry-run",
-			fmt.Sprintf("gitups render cluster-install-files --scope %s", joinNames(missingInstaller)),
+			fmt.Sprintf("gitups render installer --scope %s", joinNames(missingInstaller)),
 		)
 		return hints
 	}
