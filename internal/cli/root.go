@@ -48,7 +48,8 @@ func newRootCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Comm
 		newInitRepoCmd(stdout),        // 1. author bootstrap repository
 		newSecretsCmd(stdout, stderr), // 2. materialize secret refs
 		newCheckCmd(stdout, stderr),   // 3. validate prerequisites and desired state
-		newRenderCmd(stdout, stderr),  // 4. render generated install files
+		newStatusCmd(stdout),          // 4. report workspace state and next step
+		newRenderCmd(stdout, stderr),  // 5. render generated install files
 		newApplyCmd(stdin, stdout, stderr),
 		newGitopsCmd(),
 	)

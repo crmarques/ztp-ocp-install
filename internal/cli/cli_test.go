@@ -85,6 +85,63 @@ func TestRenderClusterInstallFilesUsesBootstrapRepoByDefault(t *testing.T) {
 	}
 }
 
+func TestStatusUninitializedSuggestsInitRepo(t *testing.T) {
+	clearGitupsEnv(t)
+	stateDir := t.TempDir()
+	var stdout, stderr bytes.Buffer
+	code := Run(context.Background(), []string{"status", "--state-dir", stateDir}, nil, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("status code got %d, stderr: %s", code, stderr.String())
+	}
+	out := stdout.String()
+	for _, expected := range []string{
+		"workspace:",
+		"state-dir:",
+		stateDir,
+		"bootstrap repo",
+		"not initialized",
+		"gitups init-repo",
+	} {
+		if !strings.Contains(out, expected) {
+			t.Fatalf("stdout missing %q\n%s", expected, out)
+		}
+	}
+}
+
+func TestStatusAfterInitRepoReportsClusterAndMissingInstaller(t *testing.T) {
+	clearGitupsEnv(t)
+	stateDir := t.TempDir()
+	var stdout, stderr bytes.Buffer
+	code := Run(context.Background(), []string{
+		"init-repo",
+		"--cluster-name", "ocp-bm-01",
+		"--provider", "emulated-bare-metal",
+		"--state-dir", stateDir,
+	}, nil, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("init-repo code got %d, stderr: %s", code, stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+	code = Run(context.Background(), []string{"status", "--state-dir", stateDir}, nil, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("status code got %d, stderr: %s", code, stderr.String())
+	}
+	out := stdout.String()
+	for _, expected := range []string{
+		"bootstrap repo",
+		"OCPClusters:            1",
+		"ocp-bm-01",
+		"installer",
+		"not rendered",
+		"gitups render cluster-install-files --scope ocp-bm-01",
+	} {
+		if !strings.Contains(out, expected) {
+			t.Fatalf("stdout missing %q\n%s", expected, out)
+		}
+	}
+}
+
 func TestGitopsInitScaffoldPassesCheck(t *testing.T) {
 	outDir := filepath.Join(t.TempDir(), "gitops")
 	var stdout bytes.Buffer
