@@ -12,34 +12,28 @@ under [`/examples/`](../examples/).
 
 ## E2E Case Names
 
-Case names describe the architectural shape — substrate, host layout, and
-fleet shape:
-
-```text
-<substrate>-<host-layout>-<fleet-shape>
-```
-
-OCP install mode (connected vs. disconnected) is not encoded in the case
-name; it is documented in each case's `README.md`.
+Case names describe the bastion/substrate shape — where the controller
+runs, what provider the cluster lands on, and the cluster topology. OCP
+install mode (connected vs. disconnected) is documented in each case's
+`README.md`, not the case name.
 
 Current cases:
 
-- `local-libvirt-1-host-1-sno-hub` — control host is itself the libvirt provider
-  host (SSH back to `localhost`), 1 SNO hub, no managed clusters.
-- `libvirt-1-host-1-sno-hub` — 1 remote QEMU host, 1 SNO hub, no managed clusters.
-- `qemu-3-hosts-1-sno-hub-2-ocp-fleet` — 3 QEMU hosts, 1 SNO hub plus 2
-  multi-node managed OCP clusters (one cluster per host).
-- `qemu-3-hosts-1-hub-2-ocp-fleet` — 3 QEMU hosts, 1 multi-node hub plus 2
-  multi-node managed OCP clusters (one cluster per host).
+- `container-bastion-local-libvirt-sno` — Gitups CLI runs inside a UBI9
+  container; libvirt host is the same machine, reached as `localhost` via
+  `podman run --network host`; one SNO cluster.
+
+Retired fixtures live under `test/e2e/old/` and are kept only as Go test
+inputs; they are not maintained as runnable cases.
 
 ## Running A Case
 
 ```text
 make build
 make list-e2e-cases
-make e2e-dry-run CASE=libvirt-1-host-1-sno-hub
-make e2e         CASE=libvirt-1-host-1-sno-hub
-make clean-e2e-state CASE=libvirt-1-host-1-sno-hub
+make e2e-dry-run CASE=container-bastion-local-libvirt-sno
+make e2e         CASE=container-bastion-local-libvirt-sno
+make clean-e2e-state CASE=container-bastion-local-libvirt-sno
 ```
 
 The user-facing equivalent is plain `gitups`:

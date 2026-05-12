@@ -67,12 +67,12 @@ func defaultSecretsDir() string {
 	return filepath.Join(defaultGitupsUserDir(), "secrets")
 }
 
-func openshiftInstallSearchDirs(hostStateDir string) []string {
-	return []string{defaultControllerCLIInstallDir(), "/usr/local/bin", filepath.Join(hostStateDir, "tools")}
+func openshiftInstallSearchDirs(_ string) []string {
+	return []string{defaultControllerCLIInstallDir()}
 }
 
 func defaultControllerCLIInstallDir() string {
-	return filepath.Join(defaultGitupsUserDir(), "bin")
+	return "/usr/local/bin"
 }
 
 func ansibleVenvDir() string {

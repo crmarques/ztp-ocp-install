@@ -5,6 +5,8 @@
     patterns: "agent.*.iso"
     file_type: file
   register: gitups_agent_iso_find
+  delegate_to: localhost
+  become: false
 
 - name: Fail when agent ISO is missing
   ansible.builtin.fail:
@@ -19,7 +21,6 @@
 - name: Stage agent ISO into the BMC vmedia pool
   ansible.builtin.copy:
     src: "{{ gitups_agent_iso_path }}"
-    remote_src: true
     dest: "{{ gitups_host_state_dir }}/providers/{{ gitups_provider_name }}/bmc/vmedia/{{ gitups_current_cluster.name }}-agent.iso"
     owner: root
     group: root
@@ -46,6 +47,8 @@
   poll: 300
   register: gitups_ocp_install_wait
   changed_when: gitups_ocp_install_wait.rc == 0
+  delegate_to: localhost
+  become: false
 
 - name: Persist kubeconfig path
   ansible.builtin.copy:
@@ -53,3 +56,5 @@
     mode: "0600"
     content: "{{ gitups_ocp_installer_dir }}/work/auth/kubeconfig\n"
   when: gitups_ocp_install_wait.rc == 0
+  delegate_to: localhost
+  become: false

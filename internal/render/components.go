@@ -29,7 +29,7 @@ func ComponentPins(state v1alpha1.State) []ComponentPin {
 	if usesSushyTools(state) {
 		pins = append(pins, ComponentPin{
 			Name:       "sushy-tools",
-			Version:    "2.2.0",
+			Version:    "2.1.0",
 			Source:     "https://pypi.org/project/sushy-tools/",
 			LookupDate: versionLookupDate,
 		})

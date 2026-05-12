@@ -3,11 +3,15 @@
   ansible.builtin.slurp:
     src: "{{ gitups_ocp_install_config_path }}"
   register: gitups_install_config_slurp
+  delegate_to: localhost
+  become: false
 
 - name: Read rendered agent-config.yaml
   ansible.builtin.slurp:
     src: "{{ gitups_ocp_agent_config_path }}"
   register: gitups_agent_config_slurp
+  delegate_to: localhost
+  become: false
 
 - name: Build effective install-config
   ansible.builtin.set_fact:

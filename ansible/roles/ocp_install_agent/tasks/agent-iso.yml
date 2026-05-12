@@ -4,6 +4,8 @@
     path: "{{ gitups_ocp_installer_dir }}/work"
     state: directory
     mode: "0700"
+  delegate_to: localhost
+  become: false
 
 - name: Write effective install-config.yaml to working directory
   ansible.builtin.copy:
@@ -12,6 +14,8 @@
     content: "{{ gitups_effective_install_config | to_nice_yaml(indent=2) }}"
   no_log: true
   register: gitups_effective_install_config_file
+  delegate_to: localhost
+  become: false
 
 - name: Write effective agent-config.yaml to working directory
   ansible.builtin.copy:
@@ -19,11 +23,15 @@
     mode: "0600"
     content: "{{ gitups_effective_agent_config | to_nice_yaml(indent=2) }}"
   register: gitups_effective_agent_config_file
+  delegate_to: localhost
+  become: false
 
 - name: Stat existing agent ISO
   ansible.builtin.stat:
     path: "{{ gitups_ocp_installer_dir }}/work/agent.x86_64.iso"
   register: gitups_agent_iso_stat
+  delegate_to: localhost
+  become: false
 
 - name: Refresh installer working files when configs change
   ansible.builtin.copy:
@@ -35,6 +43,8 @@
     - { name: install-config.yaml, content: "{{ gitups_effective_install_config | to_nice_yaml(indent=2) }}" }
     - { name: agent-config.yaml, content: "{{ gitups_effective_agent_config | to_nice_yaml(indent=2) }}" }
   when: not gitups_agent_iso_stat.stat.exists or gitups_effective_install_config_file.changed or gitups_effective_agent_config_file.changed
+  delegate_to: localhost
+  become: false
 
 - name: Purge stale openshift-install state before regenerating agent ISO
   ansible.builtin.file:
@@ -48,6 +58,8 @@
     - rendezvousIP
     - auth
   when: not gitups_agent_iso_stat.stat.exists or gitups_effective_install_config_file.changed or gitups_effective_agent_config_file.changed
+  delegate_to: localhost
+  become: false
 
 - name: Create agent ISO
   ansible.builtin.command:
@@ -56,6 +68,8 @@
   environment: "{{ gitups_ocp_install_env }}"
   changed_when: true
   when: not gitups_agent_iso_stat.stat.exists or gitups_effective_install_config_file.changed or gitups_effective_agent_config_file.changed
+  delegate_to: localhost
+  become: false
 
 - name: Locate generated rootfs boot artifacts
   ansible.builtin.find:
@@ -64,6 +78,8 @@
     file_type: file
   register: gitups_agent_rootfs_find
   when: gitups_ocp_minimal_iso | bool
+  delegate_to: localhost
+  become: false
 
 - name: Fail when minimal ISO rootfs artifact is missing
   ansible.builtin.fail:
@@ -84,7 +100,6 @@
 - name: Stage rootfs boot artifacts for node access
   ansible.builtin.copy:
     src: "{{ item.path }}"
-    remote_src: true
     dest: "{{ gitups_host_state_dir }}/providers/{{ gitups_provider_name }}/boot-artifacts/{{ item.path | basename }}"
     owner: root
     group: root

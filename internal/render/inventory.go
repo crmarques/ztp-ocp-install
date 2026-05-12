@@ -2,7 +2,6 @@ package render
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/crmarques/gitups/api/v1alpha1"
 )
@@ -22,7 +21,6 @@ type InventoryGroup struct {
 
 type InventoryHost struct {
 	AnsibleHost              string `yaml:"ansible_host" json:"ansible_host"`
-	AnsibleConnection        string `yaml:"ansible_connection,omitempty" json:"ansible_connection,omitempty"`
 	AnsibleUser              string `yaml:"ansible_user" json:"ansible_user"`
 	GitupsProviderName       string `yaml:"gitups_provider_name,omitempty" json:"gitups_provider_name,omitempty"`
 	GitupsClusterName        string `yaml:"gitups_cluster_name,omitempty" json:"gitups_cluster_name,omitempty"`
@@ -54,7 +52,6 @@ func Inventory(state v1alpha1.State, secretsDir string) InventoryFile {
 			inventoryName := fmt.Sprintf("%s-%s", provider.Metadata.Name, hostName)
 			groups["gitups_provider_hosts"].Hosts[inventoryName] = InventoryHost{
 				AnsibleHost:              host.SSH.Address,
-				AnsibleConnection:        ansibleConnection(host.SSH.Address),
 				AnsibleUser:              host.SSH.User,
 				GitupsProviderName:       provider.Metadata.Name,
 				GitupsHostName:           hostName,
@@ -79,7 +76,6 @@ func Inventory(state v1alpha1.State, secretsDir string) InventoryFile {
 			inventoryName := fmt.Sprintf("%s-%s", item.Metadata.Name, hostName)
 			inventoryHost := InventoryHost{
 				AnsibleHost:              host.SSH.Address,
-				AnsibleConnection:        ansibleConnection(host.SSH.Address),
 				AnsibleUser:              host.SSH.User,
 				GitupsProviderName:       closure.MachineProviderName,
 				GitupsClusterName:        item.Metadata.Name,
@@ -97,14 +93,5 @@ func Inventory(state v1alpha1.State, secretsDir string) InventoryFile {
 			},
 			Children: groups,
 		},
-	}
-}
-
-func ansibleConnection(address string) string {
-	switch strings.ToLower(strings.TrimSpace(address)) {
-	case "localhost", "127.0.0.1", "::1":
-		return "local"
-	default:
-		return ""
 	}
 }

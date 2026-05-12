@@ -201,9 +201,9 @@ has a clear ownership boundary in the generated tree.
   tests are isolated, documented, and opt-in until automation is reliable.
 
 E2E case fixtures are test assets, not canonical UX examples. Case names
-describe substrate, host layout, and fleet shape, for example
-`libvirt-1-host-1-sno-hub` or `libvirt-3-hosts-1-sno-hub-2-ocp-fleet`; OCP install
-mode (connected vs. disconnected) is documented in each case's `README.md`
-rather than encoded in the directory name. The canonical UX examples live under `examples/`. Cross-case operator
+describe bastion location and substrate shape, for example
+`container-bastion-local-libvirt-sno`; OCP install mode (connected vs.
+disconnected) is documented in each case's `README.md` rather than
+encoded in the directory name. The canonical UX examples live under `examples/`. Cross-case operator
 guidance lives in `test/README.md`; per-case detail lives in
 `test/e2e/<case>/README.md`.

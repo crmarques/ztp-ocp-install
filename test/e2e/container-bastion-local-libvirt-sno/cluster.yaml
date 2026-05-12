@@ -1,11 +1,12 @@
 apiVersion: gitups.io/v1alpha1
 kind: OCPCluster
 metadata:
-  name: local-libvirt-sno-hub
+  name: container-bastion-local-libvirt-sno
 spec:
+  role: managed
   topology: single-node
   infrastructureRef:
-    name: local-libvirt-sno-hub
+    name: container-bastion-local-libvirt-sno
   install:
     method: agent
   networking:

@@ -115,7 +115,7 @@ func TestRenderAllProducesGeneratedAnsibleArtifacts(t *testing.T) {
 		"memoryMiB: 22528",
 		"macAddress: 52:54:00:",
 		"name: sushy-tools",
-		"version: 2.2.0",
+		"version: 2.1.0",
 		"nameResolution:",
 		"loadBalancer:",
 	} {
@@ -383,7 +383,6 @@ func TestRenderOneHostTreatsLocalhostAsProviderHost(t *testing.T) {
 	inventory := readFile(t, result.InventoryPath)
 	for _, expected := range []string{
 		"ansible_host: localhost",
-		"ansible_connection: local",
 		"gitups_cluster_name: local-libvirt-1-host-hub",
 	} {
 		if !strings.Contains(inventory, expected) {
@@ -775,6 +774,183 @@ func TestRenderMultiProviderClosure(t *testing.T) {
 		if strings.Contains(varsFile, leak) {
 			t.Fatalf("multi-provider vars unexpectedly contains %q\n%s", leak, varsFile)
 		}
+	}
+}
+
+func TestResolveInstallerInlinesSecretsIntoWorkCopies(t *testing.T) {
+	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/old/local-libvirt-1-host-1-sno-hub"})
+	if err != nil {
+		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
+	}
+	secretsDir := t.TempDir()
+	pullSecretContent := `{"auths":{"quay.io":{"auth":"cmVkaGF0OnNlY3JldA=="}}}`
+	sshKey := "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5IFAKE testkey"
+	trustBundle := "-----BEGIN CERTIFICATE-----\nMIIDfaketrust\n-----END CERTIFICATE-----\n"
+	writes := map[string]string{
+		"openshift-pull-secret":       pullSecretContent + "\n",
+		"cluster-admin-key":           sshKey + "\n",
+		"mirror-registry-ca":          trustBundle,
+		"mirror-registry-credentials": "mirroruser:mirrorpass\n",
+	}
+	for name, content := range writes {
+		if err := os.WriteFile(filepath.Join(secretsDir, name), []byte(content), 0o600); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+	// Redirect file-backed keys to the test secretsDir.
+	env := &state.Environments[0]
+	for name, key := range env.Spec.Keys {
+		key.File = ""
+		env.Spec.Keys[name] = key
+	}
+
+	stateDir := t.TempDir()
+	result, err := All(stateDir, secretsDir, state)
+	if err != nil {
+		t.Fatalf("render All returned error: %v", err)
+	}
+	placeholder := readFile(t, result.InstallerAssets[0].InstallConfigPath)
+	if !strings.Contains(placeholder, "gitups-secret-ref:openshift-pull-secret") {
+		t.Fatalf("placeholder install-config missing pull secret placeholder\n%s", placeholder)
+	}
+	if strings.Contains(placeholder, sshKey) || strings.Contains(placeholder, pullSecretContent) {
+		t.Fatalf("placeholder install-config leaked secret material\n%s", placeholder)
+	}
+
+	resolved, err := ResolveInstaller(stateDir, secretsDir, state)
+	if err != nil {
+		t.Fatalf("ResolveInstaller returned error: %v", err)
+	}
+	if len(resolved.InstallerAssets) != 1 {
+		t.Fatalf("expected one resolved installer asset, got %d", len(resolved.InstallerAssets))
+	}
+	asset := resolved.InstallerAssets[0]
+	expectedWork := filepath.Join(stateDir, "clusters-bootstrap.git", state.OCPClusters[0].Metadata.Name, "openshift", "work", "install-config.yaml")
+	if got := asset.EffectiveInstallConfigPath; got != expectedWork {
+		t.Fatalf("effective install-config path got %q, want %q", got, expectedWork)
+	}
+	workDirInfo, err := os.Stat(asset.WorkDir)
+	if err != nil {
+		t.Fatalf("stat work dir: %v", err)
+	}
+	if got := workDirInfo.Mode().Perm(); got != 0o700 {
+		t.Fatalf("work dir mode got %03o, want 700", got)
+	}
+	effectiveBytes, err := os.ReadFile(asset.EffectiveInstallConfigPath)
+	if err != nil {
+		t.Fatalf("read effective install-config: %v", err)
+	}
+	effective := string(effectiveBytes)
+	for _, expected := range []string{
+		`"auths":{`,
+		`"quay.io":{"auth":"cmVkaGF0OnNlY3JldA=="}`,
+		`"registry.mirror.local:5000":{"auth":"bWlycm9ydXNlcjptaXJyb3JwYXNz"}`,
+		sshKey,
+		"MIIDfaketrust",
+		"additionalTrustBundlePolicy: Always",
+	} {
+		if !strings.Contains(effective, expected) {
+			t.Fatalf("effective install-config missing %q\n%s", expected, effective)
+		}
+	}
+	for _, leaked := range []string{
+		"gitups-secret-ref:",
+		"<gitups-ssh-key-ref:",
+		"<gitups-trust-bundle-ref:",
+	} {
+		if strings.Contains(effective, leaked) {
+			t.Fatalf("effective install-config still contains placeholder %q\n%s", leaked, effective)
+		}
+	}
+	info, err := os.Stat(asset.EffectiveInstallConfigPath)
+	if err != nil {
+		t.Fatalf("stat effective install-config: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Fatalf("effective install-config mode got %03o, want 600", got)
+	}
+}
+
+func TestLoadInstallerSecretsBakesProxyCredentialsIntoURLs(t *testing.T) {
+	secretsDir := t.TempDir()
+	pull := `{"auths":{"quay.io":{"auth":"YWJjOmRlZg=="}}}`
+	if err := os.WriteFile(filepath.Join(secretsDir, "openshift-pull-secret"), []byte(pull), 0o600); err != nil {
+		t.Fatalf("write pull: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(secretsDir, "cluster-admin-key"), []byte("ssh-ed25519 AAA fake"), 0o600); err != nil {
+		t.Fatalf("write ssh: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(secretsDir, "proxy-credentials"), []byte("proxy user:pass/word"), 0o600); err != nil {
+		t.Fatalf("write proxy: %v", err)
+	}
+	state := v1alpha1.State{
+		Environments: []v1alpha1.Environment{{
+			Metadata: v1alpha1.Metadata{Name: "env"},
+			Spec: v1alpha1.EnvironmentSpec{
+				BaseDomain: "example.com",
+				OCPInstall: v1alpha1.EnvironmentOCPInstallSpec{
+					Disconnected: &v1alpha1.DisconnectedSpec{
+						Proxy: &v1alpha1.OCPInstallProxy{
+							HTTPProxy:      "http://proxy.example.com:3128",
+							HTTPSProxy:     "http://proxy.example.com:3128",
+							NoProxy:        []string{".cluster.local"},
+							CredentialsRef: v1alpha1.SecretRef{Name: "proxy-credentials"},
+						},
+					},
+				},
+			},
+		}},
+		OCPClusters: []v1alpha1.OCPCluster{{
+			Metadata: v1alpha1.Metadata{Name: "hub"},
+			Spec: v1alpha1.OCPClusterSpec{
+				Install: v1alpha1.OCPInstallSpec{
+					PullSecretRef: v1alpha1.SecretRef{Name: "openshift-pull-secret"},
+					SSHKeyRef:     v1alpha1.SecretRef{Name: "cluster-admin-key"},
+				},
+			},
+		}},
+	}
+	secrets, err := LoadInstallerSecrets(state, state.OCPClusters[0], secretsDir)
+	if err != nil {
+		t.Fatalf("LoadInstallerSecrets returned error: %v", err)
+	}
+	want := "http://proxy%20user:pass%2Fword@proxy.example.com:3128"
+	if secrets.ProxyHTTP != want {
+		t.Fatalf("ProxyHTTP got %q, want %q", secrets.ProxyHTTP, want)
+	}
+	if secrets.ProxyHTTPS != want {
+		t.Fatalf("ProxyHTTPS got %q, want %q", secrets.ProxyHTTPS, want)
+	}
+}
+
+func TestResolveInstallerFailsWhenSecretFileMissing(t *testing.T) {
+	secretsDir := t.TempDir()
+	state := v1alpha1.State{
+		Environments: []v1alpha1.Environment{{
+			Metadata: v1alpha1.Metadata{Name: "env"},
+			Spec:     v1alpha1.EnvironmentSpec{BaseDomain: "example.com"},
+		}},
+		OCPClusters: []v1alpha1.OCPCluster{{
+			Metadata: v1alpha1.Metadata{Name: "hub"},
+			Spec: v1alpha1.OCPClusterSpec{
+				InfrastructureRef: v1alpha1.LocalObjectReference{Name: "hub"},
+				Install: v1alpha1.OCPInstallSpec{
+					Method:        "agent",
+					BaseDomain:    "example.com",
+					PullSecretRef: v1alpha1.SecretRef{Name: "missing-pull-secret"},
+					SSHKeyRef:     v1alpha1.SecretRef{Name: "missing-ssh-key"},
+				},
+				Topology: v1alpha1.OCPTopologySingleNode,
+			},
+		}},
+		ClusterInfrastructures: []v1alpha1.ClusterInfrastructure{{
+			Metadata: v1alpha1.Metadata{Name: "hub"},
+		}},
+	}
+	if _, err := ResolveInstaller(t.TempDir(), secretsDir, state); err == nil {
+		t.Fatalf("expected ResolveInstaller to fail when pull secret file is missing")
+	} else if !strings.Contains(err.Error(), "pull secret") {
+		t.Fatalf("error should mention pull secret, got: %v", err)
 	}
 }
 

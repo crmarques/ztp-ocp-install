@@ -30,10 +30,11 @@
     path: "{{ gitups_clis_install_dir }}"
     state: directory
     mode: "0755"
+  become: true
 
-- name: Compute CLI lookup PATH (install dir + system PATH + /usr/local/bin)
+- name: Compute CLI lookup PATH (install dir + system PATH)
   ansible.builtin.set_fact:
-    gitups_clis_lookup_path: "{{ gitups_clis_install_dir }}:{{ ansible_facts.env.PATH }}:/usr/local/bin"
+    gitups_clis_lookup_path: "{{ gitups_clis_install_dir }}:{{ ansible_facts.env.PATH }}"
 
 - name: Probe installed openshift-install version
   ansible.builtin.command:
@@ -57,10 +58,12 @@
   ansible.builtin.set_fact:
     gitups_clis_oi_version: >-
       {{ gitups_clis_oi_probe.stdout | default('')
-         | regex_search('openshift-install\s+(\S+)', '\1') | first | default('') }}
+         | regex_search('openshift-install\s+(\S+)', '\1')
+         | default([], true) | first | default('') }}
     gitups_clis_oc_version: >-
       {{ gitups_clis_oc_probe.stdout | default('')
-         | regex_search('Client Version:\s*(\S+)', '\1') | first | default('') }}
+         | regex_search('Client Version:\s*(\S+)', '\1')
+         | default([], true) | first | default('') }}
 
 - name: Decide whether each CLI needs install (accept same-or-newer version)
   ansible.builtin.set_fact:
@@ -133,6 +136,7 @@
       - oc
       - kubectl
     mode: "0755"
+  become: true
   when: gitups_clis_install_oc | bool
 
 - name: Extract openshift-install into install dir
@@ -143,6 +147,7 @@
     include:
       - openshift-install
     mode: "0755"
+  become: true
   when: gitups_clis_install_oi | bool
 
 - name: Remove tarball working directory

@@ -61,7 +61,7 @@ func TestLoadNormalizeValidateExamples(t *testing.T) {
 }
 
 func TestLoadNormalizeValidateOneHostSample(t *testing.T) {
-	state, err := LoadNormalizeValidate([]string{"../../test/e2e/local-libvirt-sno-hub-gitea"})
+	state, err := LoadNormalizeValidate([]string{"../../test/e2e/container-bastion-local-libvirt-sno"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestLoadNormalizeValidateOneHostSample(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s missing master-0 machine", item.Metadata.Name)
 		}
-		if got, want := machine.Libvirt.HostRef.Name, "local-libvirt-host"; got != want {
+		if got, want := machine.Libvirt.HostRef.Name, "lab-host"; got != want {
 			t.Fatalf("%s machine hostRef got %q, want %q", item.Metadata.Name, got, want)
 		}
 		if machine.Resources == nil || machine.Resources.CPU != 9 || machine.Resources.MemoryMiB != 19456 {

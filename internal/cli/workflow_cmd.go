@@ -195,8 +195,9 @@ func newHubApplyCmd(stdout io.Writer) *cobra.Command {
 
 func newRenderClusterInstallFilesCmd(stdout io.Writer, _ io.Writer) *cobra.Command {
 	var (
-		secretsDir   string
-		clusterScope string
+		secretsDir     string
+		clusterScope   string
+		resolveSecrets bool
 	)
 	secretsDir = defaultSecretsDir()
 	cmd := &cobra.Command{
@@ -207,6 +208,7 @@ func newRenderClusterInstallFilesCmd(stdout io.Writer, _ io.Writer) *cobra.Comma
 	cf := addCommonFlags(cmd)
 	cmd.Flags().StringVar(&clusterScope, "scope", "", "comma-separated OCPCluster names to render")
 	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material (env: GITUPS_SECRETS_DIR)")
+	cmd.Flags().BoolVar(&resolveSecrets, "resolve-secrets", false, "also write effective install-config.yaml/agent-config.yaml under each cluster's openshift/work/ directory with secret material inlined for direct openshift-install consumption (mode 0600)")
 	cmd.RunE = func(_ *cobra.Command, _ []string) error {
 		state, err := loadDesiredState(cf)
 		if err != nil {
@@ -223,6 +225,13 @@ func newRenderClusterInstallFilesCmd(stdout io.Writer, _ io.Writer) *cobra.Comma
 		}
 		printTitle(stdout, "installer render")
 		printInstallerFiles(stdout, result)
+		if resolveSecrets {
+			resolved, err := render.ResolveInstaller(cf.stateDir, secretsDir, state)
+			if err != nil {
+				return failErr(1, err)
+			}
+			printEffectiveInstallerFiles(stdout, resolved)
+		}
 		return nil
 	}
 	return cmd
@@ -244,6 +253,14 @@ func printInstallerFiles(stdout io.Writer, result render.Result) {
 	for _, asset := range result.InstallerAssets {
 		fmt.Fprintf(stdout, "- %s\n", asset.InstallConfigPath)
 		fmt.Fprintf(stdout, "- %s\n", asset.AgentConfigPath)
+	}
+}
+
+func printEffectiveInstallerFiles(stdout io.Writer, result render.Result) {
+	printSubtitle(stdout, "effective (secrets inlined):")
+	for _, asset := range result.InstallerAssets {
+		fmt.Fprintf(stdout, "- %s\n", asset.EffectiveInstallConfigPath)
+		fmt.Fprintf(stdout, "- %s\n", asset.EffectiveAgentConfigPath)
 	}
 }
 

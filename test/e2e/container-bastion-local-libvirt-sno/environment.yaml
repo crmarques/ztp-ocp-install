@@ -1,7 +1,7 @@
 apiVersion: gitups.io/v1alpha1
 kind: Environment
 metadata:
-  name: local-libvirt-sno-hub-gitea
+  name: container-bastion-local-libvirt-sno
 spec:
   baseDomain: gitups.test
   ocpInstall:
@@ -12,16 +12,17 @@ spec:
     clusterSSHKeyRef:
       name: cluster-admin-key
   keys:
-    openshift-pull-secret:
-      file: ~/.gitups/secrets/openshift-pull-secret
     cluster-admin-key:
       file: ~/.ssh/gitups-ssh-key.pub
-    local-libvirt-host-admin-key:
+    openshift-pull-secret:
+      file: ~/.gitups/secrets/openshift-pull-secret
+    provider-host-ssh:
       file: ~/.ssh/gitups-ssh-key
-    local-libvirt-sno-hub-bmc-credentials:
+    bmc-credentials:
       generated:
         credentials:
           username: admin
+
   openshift:
     release:
       channel: stable-4.21

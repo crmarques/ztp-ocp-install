@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"os"
+	"os/user"
 	"strings"
 
 	"github.com/crmarques/gitups/api/v1alpha1"
@@ -333,6 +334,11 @@ func currentUsername() string {
 	for _, key := range []string{"USER", "LOGNAME"} {
 		if value := strings.TrimSpace(os.Getenv(key)); value != "" {
 			return value
+		}
+	}
+	if u, err := user.Current(); err == nil {
+		if name := strings.TrimSpace(u.Username); name != "" {
+			return name
 		}
 	}
 	return ""

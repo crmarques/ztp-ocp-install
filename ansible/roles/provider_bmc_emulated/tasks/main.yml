@@ -121,17 +121,22 @@
     cmd: "python3 -m venv --system-site-packages {{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/venv"
     creates: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/venv/bin/python"
 
-- name: Ensure pip is available inside sushy-tools virtualenv
-  ansible.builtin.pip:
-    name: pip
-    state: present
-    virtualenv: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/venv"
+- name: Probe installed sushy-tools version inside virtualenv
+  ansible.builtin.command:
+    cmd: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/venv/bin/pip show sushy-tools"
+  register: gitups_bmc_sushy_show
+  changed_when: false
+  failed_when: false
 
 - name: Install pinned sushy-tools into virtualenv
-  ansible.builtin.pip:
-    name: "sushy-tools=={{ gitups_sushy_tools_version }}"
-    virtualenv: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/venv"
-    extra_args: --ignore-installed --no-deps
+  ansible.builtin.command:
+    cmd: >-
+      {{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/venv/bin/pip
+      install --ignore-installed --no-deps
+      sushy-tools=={{ gitups_sushy_tools_version }}
+  when: >-
+    gitups_bmc_sushy_show.rc != 0
+    or ('Version: ' ~ gitups_sushy_tools_version) not in gitups_bmc_sushy_show.stdout
 
 - name: Verify sushy-emulator can import libvirt
   ansible.builtin.command:

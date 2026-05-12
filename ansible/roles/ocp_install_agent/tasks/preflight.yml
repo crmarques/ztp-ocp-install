@@ -30,6 +30,8 @@
   register: gitups_ocp_apply_lingering_procs
   failed_when: false
   changed_when: false
+  delegate_to: localhost
+  become: false
 
 - name: Terminate lingering openshift-install / oc processes from a prior apply
   ansible.builtin.shell: |
@@ -57,6 +59,8 @@
     executable: /bin/bash
   changed_when: gitups_ocp_apply_lingering_procs.rc == 0
   when: gitups_ocp_apply_lingering_procs.rc == 0
+  delegate_to: localhost
+  become: false
 
 - name: Read BMC credentials for Redfish auth
   ansible.builtin.slurp:
@@ -99,8 +103,8 @@
   register: gitups_openshift_install_lookup
   changed_when: false
   failed_when: gitups_openshift_install_lookup.rc != 0
-  environment:
-    PATH: "{{ ansible_facts.env.PATH }}:/usr/local/bin:{{ gitups_host_state_dir }}/tools"
+  delegate_to: localhost
+  become: false
 
 - name: Resolve openshift-install absolute path
   ansible.builtin.set_fact:
@@ -112,6 +116,8 @@
     cmd: "{{ gitups_openshift_install_path }} version"
   register: gitups_openshift_install_version
   changed_when: false
+  delegate_to: localhost
+  become: false
 
 - name: Validate openshift-install version matches release
   ansible.builtin.assert:

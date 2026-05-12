@@ -283,7 +283,7 @@ func secretsDirCheck(secretsDir string, deps preflightDeps) preflightCheck {
 	return preflightCheck{name: name, ok: true}
 }
 
-func secretFileCheck(refName, path, label string, deps preflightDeps) preflightCheck {
+func secretFileCheck(refName, path, label string, publicKey bool, deps preflightDeps) preflightCheck {
 	name := label + " at " + path
 	info, err := deps.statPath(path)
 	if err != nil {
@@ -301,8 +301,10 @@ func secretFileCheck(refName, path, label string, deps preflightDeps) preflightC
 	if info.IsDir() {
 		return preflightCheck{name: name, ok: false, detail: "is a directory; expected a file"}
 	}
-	if got := info.Mode().Perm(); got != 0o600 {
-		return preflightCheck{name: name, ok: false, detail: fmt.Sprintf("mode %04o; expected 0600", got)}
+	if !publicKey {
+		if got := info.Mode().Perm(); got != 0o600 {
+			return preflightCheck{name: name, ok: false, detail: fmt.Sprintf("mode %04o; expected 0600", got)}
+		}
 	}
 	return preflightCheck{name: name, ok: true}
 }
@@ -327,6 +329,7 @@ type secretRefRequirement struct {
 	label     string
 	phases    []string
 	generated bool
+	publicKey bool
 }
 
 func secretRefChecks(state v1alpha1.State, secretsDir string, selected []Phase, deps preflightDeps) []preflightCheck {
@@ -357,7 +360,7 @@ func secretRefChecks(state v1alpha1.State, secretsDir string, selected []Phase, 
 			continue
 		}
 		path := resolvedSecretPath(req.refName, env, secretsDir)
-		checks = append(checks, secretFileCheck(req.refName, path, req.label, deps))
+		checks = append(checks, secretFileCheck(req.refName, path, req.label, req.publicKey, deps))
 	}
 	return checks
 }
@@ -445,9 +448,10 @@ func collectSecretRefRequirements(state v1alpha1.State) []secretRefRequirement {
 		}
 		if install.SSHKeyRef.Name != "" {
 			out = append(out, secretRefRequirement{
-				refName: install.SSHKeyRef.Name,
-				label:   cluster.Metadata.Name + " sshKeyRef",
-				phases:  []string{"clusters"},
+				refName:   install.SSHKeyRef.Name,
+				label:     cluster.Metadata.Name + " sshKeyRef",
+				phases:    []string{"clusters"},
+				publicKey: true,
 			})
 		}
 		if install.AdditionalTrustBundleRef.Name != "" {

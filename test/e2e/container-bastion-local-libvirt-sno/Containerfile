@@ -1,0 +1,43 @@
+# Minimal bastion image for the container-bastion-local-libvirt-sno e2e case.
+#
+# Gitups installs the managed Ansible runtime, OpenShift CLIs, and provider
+# host dependencies. The image carries only bootstrap tools needed before
+# Gitups can manage itself: a same-name non-root user, sudo, git for
+# `gitups init workspace`, and base TLS/archive utilities.
+#
+# Build:
+#   podman build -t gitups-bastion \
+#     -f test/e2e/container-bastion-local-libvirt-sno/Containerfile \
+#     --build-arg UID=$(id -u) \
+#     --build-arg GID=$(id -g) \
+#     --build-arg USER=$(id -un) \
+#     .
+
+FROM registry.access.redhat.com/ubi9/ubi:9.7
+
+ARG UID=1000
+ARG GID=1000
+ARG USER=gitups
+
+RUN dnf install -y \
+        sudo \
+        ca-certificates \
+        git \
+        tar \
+        gzip \
+        which \
+    && dnf clean all
+
+RUN if ! getent group ${GID} >/dev/null; then groupadd -g ${GID} ${USER}; fi \
+    && if ! id -u ${UID} >/dev/null 2>&1; then useradd -m -u ${UID} -g ${GID} -s /bin/bash ${USER}; fi \
+    && install -d -m 0750 /etc/sudoers.d \
+    && printf '%s ALL=(ALL) NOPASSWD: ALL\n' "${USER}" > /etc/sudoers.d/${USER} \
+    && chmod 0440 /etc/sudoers.d/${USER}
+
+COPY --chmod=0755 bin/gitups /usr/local/bin/gitups
+
+USER ${USER}
+WORKDIR /home/${USER}
+ENV PATH=/home/${USER}/.gitups/bin:/usr/local/bin:/usr/bin:/bin
+
+CMD ["bash"]

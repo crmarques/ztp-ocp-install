@@ -1,0 +1,43 @@
+apiVersion: gitups.io/v1alpha1
+kind: ClusterInfrastructure
+metadata:
+  name: container-bastion-local-libvirt-sno
+spec:
+  providerRefs:
+    - name: container-bastion-local-libvirt-sno-emulated-bare-metal
+  networks:
+    primary:
+      cidr: 192.168.132.0/24
+      gateway: 192.168.132.1
+      dnsServers:
+        - 192.168.132.1
+      libvirt:
+        bridge: vbr-cb-sno
+  machines:
+    master-0:
+      profileRef:
+        name: sno
+      interfaces:
+        primary:
+          networkRef:
+            name: primary
+          ipAddress: 192.168.132.20
+          macAddress: 52:54:00:32:11:10
+      rootDeviceHints:
+        deviceName: /dev/vda
+      libvirt:
+        hostRef:
+          name: lab-host
+  endpoints:
+    api:
+      address: 192.168.132.10
+    apiInt:
+      address: 192.168.132.10
+    ingress:
+      address: 192.168.132.11
+  loadBalancers:
+    default:
+      endpoints:
+        - api
+        - apiInt
+        - ingress

@@ -11,29 +11,44 @@ import (
 )
 
 type InstallerAsset struct {
-	ClusterName       string
-	Method            string
-	Dir               string
-	InstallConfigPath string
-	AgentConfigPath   string
+	ClusterName                string
+	Method                     string
+	Dir                        string
+	InstallConfigPath          string
+	AgentConfigPath            string
+	WorkDir                    string
+	EffectiveInstallConfigPath string
+	EffectiveAgentConfigPath   string
 }
 
 func InstallerAssets(stateDir string, state v1alpha1.State) []InstallerAsset {
 	assets := make([]InstallerAsset, 0, len(state.OCPClusters))
 	for _, ocp := range state.OCPClusters {
 		dir := filepath.Join(stateDir, "clusters-bootstrap.git", ocp.Metadata.Name, "openshift")
+		workDir := filepath.Join(dir, "work")
 		assets = append(assets, InstallerAsset{
-			ClusterName:       ocp.Metadata.Name,
-			Method:            ocp.Spec.Install.Method,
-			Dir:               dir,
-			InstallConfigPath: filepath.Join(dir, "install-config.yaml"),
-			AgentConfigPath:   filepath.Join(dir, "agent-config.yaml"),
+			ClusterName:                ocp.Metadata.Name,
+			Method:                     ocp.Spec.Install.Method,
+			Dir:                        dir,
+			InstallConfigPath:          filepath.Join(dir, "install-config.yaml"),
+			AgentConfigPath:            filepath.Join(dir, "agent-config.yaml"),
+			WorkDir:                    workDir,
+			EffectiveInstallConfigPath: filepath.Join(workDir, "install-config.yaml"),
+			EffectiveAgentConfigPath:   filepath.Join(workDir, "agent-config.yaml"),
 		})
 	}
 	return assets
 }
 
 func InstallerConfig(state v1alpha1.State, ocp v1alpha1.OCPCluster) (map[string]any, error) {
+	return InstallerConfigWithSecrets(state, ocp, PlaceholderInstallerSecrets(ocp))
+}
+
+// InstallerConfigWithSecrets renders install-config.yaml with the provided
+// secret material inlined into pullSecret, sshKey, and (when set)
+// additionalTrustBundle / proxy URLs. Pass PlaceholderInstallerSecrets to keep
+// the safe-to-inspect placeholders.
+func InstallerConfigWithSecrets(state v1alpha1.State, ocp v1alpha1.OCPCluster, secrets InstallerSecrets) (map[string]any, error) {
 	infra, err := clusterInfrastructureForOCP(state, ocp)
 	if err != nil {
 		return nil, err
@@ -60,23 +75,23 @@ func InstallerConfig(state v1alpha1.State, ocp v1alpha1.OCPCluster) (map[string]
 		},
 		"networking": networkingConfig(infra, ocp),
 		"platform":   platformConfig(provider, infra, ocp),
-		"pullSecret": pullSecretPlaceholder(ocp.Spec.Install.PullSecretRef.Name),
-		"sshKey":     secretRefPlaceholder("ssh-key", ocp.Spec.Install.SSHKeyRef.Name),
+		"pullSecret": secrets.PullSecret,
+		"sshKey":     secrets.SSHKey,
 	}
-	if ocp.Spec.Install.AdditionalTrustBundleRef.Name != "" {
-		base["additionalTrustBundle"] = secretRefPlaceholder("trust-bundle", ocp.Spec.Install.AdditionalTrustBundleRef.Name)
+	if secrets.TrustBundle != "" {
+		base["additionalTrustBundle"] = secrets.TrustBundle
 		base["additionalTrustBundlePolicy"] = "Always"
 	}
 	if mirrors := imageDigestSourcesConfig(ocp.Spec.Install.ImageDigestSources); len(mirrors) > 0 {
 		base["imageDigestSources"] = mirrors
 	}
-	if proxy := installerProxyConfig(primaryEnvironment(state)); proxy != nil {
+	if proxy := installerProxyConfig(primaryEnvironment(state), secrets); proxy != nil {
 		base["proxy"] = proxy
 	}
 	return mergeYAMLMaps(base, ocp.Spec.Install.InstallConfigOverrides), nil
 }
 
-func installerProxyConfig(env *v1alpha1.Environment) map[string]any {
+func installerProxyConfig(env *v1alpha1.Environment, secrets InstallerSecrets) map[string]any {
 	if env == nil {
 		return nil
 	}
@@ -85,11 +100,19 @@ func installerProxyConfig(env *v1alpha1.Environment) map[string]any {
 		return nil
 	}
 	out := map[string]any{}
-	if proxy.HTTPProxy != "" {
-		out["httpProxy"] = proxy.HTTPProxy
+	httpURL := proxy.HTTPProxy
+	if secrets.ProxyHTTP != "" {
+		httpURL = secrets.ProxyHTTP
 	}
-	if proxy.HTTPSProxy != "" {
-		out["httpsProxy"] = proxy.HTTPSProxy
+	httpsURL := proxy.HTTPSProxy
+	if secrets.ProxyHTTPS != "" {
+		httpsURL = secrets.ProxyHTTPS
+	}
+	if httpURL != "" {
+		out["httpProxy"] = httpURL
+	}
+	if httpsURL != "" {
+		out["httpsProxy"] = httpsURL
 	}
 	if len(proxy.NoProxy) > 0 {
 		out["noProxy"] = strings.Join(proxy.NoProxy, ",")

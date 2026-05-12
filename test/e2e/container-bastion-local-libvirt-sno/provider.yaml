@@ -1,0 +1,47 @@
+apiVersion: gitups.io/v1alpha1
+kind: InfrastructureProvider
+metadata:
+  name: container-bastion-local-libvirt-sno-emulated-bare-metal
+spec:
+  hosts:
+    lab-host:
+      ssh:
+        # The bastion runs in a container started with `--network host`, so
+        # `localhost` resolves to the libvirt host. The SSH user is omitted
+        # so Gitups defaults it to the invoking bastion user, which is the
+        # same non-root account as the host user in this case.
+        address: localhost
+        keyRef:
+          name: provider-host-ssh
+      libvirtURI: qemu:///system
+      capabilities:
+        - libvirt
+        - container-runtime
+        - hosts-file
+  machine:
+    libvirt:
+      hostRefs:
+        - name: lab-host
+      bmcEmulation:
+        enabled: true
+        protocol: redfish
+        port: 8000
+        auth:
+          credentialRef:
+            name: bmc-credentials
+      machineProfiles:
+        sno:
+          cpu: 9
+          memoryMiB: 19456
+          diskGiB: 120
+  loadBalancer:
+    haProxy:
+      hostRef:
+        name: lab-host
+  nameResolution:
+    hostsFile:
+      hostRefs:
+        - name: lab-host
+      additionalIngressHosts:
+        - console-openshift-console.apps.container-bastion-local-libvirt-sno.gitups.test
+        - oauth-openshift.apps.container-bastion-local-libvirt-sno.gitups.test
