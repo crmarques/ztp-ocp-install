@@ -332,18 +332,12 @@ metadata:
   name: %[1]s
 spec:
   baseDomain: example.test
-  ocpInstall:
-    connected: {}
+  ocpInstallType: connected
   secrets:
-    pullSecretRef:
-      name: openshift-pull-secret
-    clusterSSHKeyRef:
-      name: cluster-admin-key
-  keys:
-    cluster-admin-key:
-      file: ~/.ssh/id_rsa.pub
     openshift-pull-secret:
       file: ./pull-secret.json
+    cluster-admin-key:
+      file: ~/.ssh/id_rsa.pub
 %s
   openshift:
     release:

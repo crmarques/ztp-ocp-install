@@ -312,14 +312,11 @@ func TestPreflightHubChecksDisconnectedRegistryCredentials(t *testing.T) {
 		Environments: []v1alpha1.Environment{{
 			Metadata: v1alpha1.Metadata{Name: "lab"},
 			Spec: v1alpha1.EnvironmentSpec{
-				OCPInstall: v1alpha1.EnvironmentOCPInstallSpec{
-					Disconnected: &v1alpha1.DisconnectedSpec{
-						Registries: &v1alpha1.OCPInstallRegistries{
-							Mirror: &v1alpha1.OCPInstallRegistryMirror{
-								URL:            "registry.lab.test:5000",
-								CredentialsRef: v1alpha1.SecretRef{Name: "registry-lab-credentials"},
-							},
-						},
+				OCPInstallType: v1alpha1.OCPInstallKindDisconnected,
+				Registries: &v1alpha1.EnvironmentRegistriesSpec{
+					Mirror: &v1alpha1.EnvironmentRegistryMirrorSpec{
+						URL:            "registry.lab.test:5000",
+						CredentialsRef: v1alpha1.SecretRef{Name: "registry-lab-credentials"},
 					},
 				},
 			},
@@ -373,8 +370,8 @@ func TestPreflightHubGeneratedTrustBundleChecksOpenSSL(t *testing.T) {
 		Environments: []v1alpha1.Environment{{
 			Metadata: v1alpha1.Metadata{Name: "env"},
 			Spec: v1alpha1.EnvironmentSpec{
-				Keys: map[string]v1alpha1.EnvironmentKeySpec{
-					"trust": {Generated: &v1alpha1.EnvironmentKeyGenerated{
+				Secrets: map[string]v1alpha1.EnvironmentSecretSpec{
+					"trust": {Generated: &v1alpha1.EnvironmentSecretGenerated{
 						SelfSignedCertificate: &v1alpha1.SelfSignedCertificateSpec{CommonName: "registry.lab.test"},
 					}},
 				},
@@ -437,8 +434,8 @@ func TestPreflightFailsWhenSelfSignedCertOnDiskDoesNotMatchSpec(t *testing.T) {
 		Environments: []v1alpha1.Environment{{
 			Metadata: v1alpha1.Metadata{Name: "env"},
 			Spec: v1alpha1.EnvironmentSpec{
-				Keys: map[string]v1alpha1.EnvironmentKeySpec{
-					"trust": {Generated: &v1alpha1.EnvironmentKeyGenerated{
+				Secrets: map[string]v1alpha1.EnvironmentSecretSpec{
+					"trust": {Generated: &v1alpha1.EnvironmentSecretGenerated{
 						SelfSignedCertificate: &v1alpha1.SelfSignedCertificateSpec{
 							CommonName:   "registry.lab.test",
 							ValidityDays: v1alpha1.DefaultCertificateDays,
@@ -509,8 +506,8 @@ func TestPreflightSelfSignedCertDriftCheckPassesWhenMatching(t *testing.T) {
 		Environments: []v1alpha1.Environment{{
 			Metadata: v1alpha1.Metadata{Name: "env"},
 			Spec: v1alpha1.EnvironmentSpec{
-				Keys: map[string]v1alpha1.EnvironmentKeySpec{
-					"trust": {Generated: &v1alpha1.EnvironmentKeyGenerated{
+				Secrets: map[string]v1alpha1.EnvironmentSecretSpec{
+					"trust": {Generated: &v1alpha1.EnvironmentSecretGenerated{
 						SelfSignedCertificate: &cert,
 					}},
 				},
@@ -793,17 +790,16 @@ func TestPreflightSecretsDirSkippedWithoutHubPhase(t *testing.T) {
 	}
 }
 
-func TestPreflightChecksProxyCredentialsRef(t *testing.T) {
+func TestPreflightChecksProxyAuthRef(t *testing.T) {
 	state := v1alpha1.State{
 		Environments: []v1alpha1.Environment{{
 			Metadata: v1alpha1.Metadata{Name: "lab"},
 			Spec: v1alpha1.EnvironmentSpec{
-				OCPInstall: v1alpha1.EnvironmentOCPInstallSpec{
-					Restricted: &v1alpha1.RestrictedSpec{
-						Proxy: &v1alpha1.OCPInstallProxy{
-							HTTPProxy:      "http://proxy.lab.test:3128",
-							CredentialsRef: v1alpha1.SecretRef{Name: "proxy-credentials"},
-						},
+				OCPInstallType: v1alpha1.OCPInstallKindConnected,
+				Proxy: &v1alpha1.EnvironmentProxySpec{
+					HTTP: "http://proxy.lab.test:3128",
+					Auth: &v1alpha1.EnvironmentProxyAuthSpec{
+						ProxyAuthRef: v1alpha1.SecretRef{Name: "proxy-credentials"},
 					},
 				},
 			},
@@ -815,7 +811,7 @@ func TestPreflightChecksProxyCredentialsRef(t *testing.T) {
 		"sudo":             "/usr/bin/sudo",
 	}, false, map[string]bool{"/secrets": true})
 	checks := collectPreflightChecks(state, nil, true, "/secrets", defaultHostStateDir, deps)
-	const want = "ocpInstall proxy credentialsRef at /secrets/proxy-credentials"
+	const want = "proxy proxyAuthRef at /secrets/proxy-credentials"
 	var found *preflightCheck
 	for i := range checks {
 		if checks[i].name == want {
@@ -824,7 +820,7 @@ func TestPreflightChecksProxyCredentialsRef(t *testing.T) {
 		}
 	}
 	if found == nil {
-		t.Fatalf("missing expected proxy credentialsRef check %q in %+v", want, checks)
+		t.Fatalf("missing expected proxy proxyAuthRef check %q in %+v", want, checks)
 	}
 	if found.ok {
 		t.Fatalf("expected %q to fail when missing, got ok", want)
@@ -834,17 +830,16 @@ func TestPreflightChecksProxyCredentialsRef(t *testing.T) {
 	}
 }
 
-func TestPreflightProxyCredentialsScopedAwayFromHubOnlyRun(t *testing.T) {
+func TestPreflightProxyAuthScopedAwayFromHubOnlyRun(t *testing.T) {
 	state := v1alpha1.State{
 		Environments: []v1alpha1.Environment{{
 			Metadata: v1alpha1.Metadata{Name: "lab"},
 			Spec: v1alpha1.EnvironmentSpec{
-				OCPInstall: v1alpha1.EnvironmentOCPInstallSpec{
-					Restricted: &v1alpha1.RestrictedSpec{
-						Proxy: &v1alpha1.OCPInstallProxy{
-							HTTPProxy:      "http://proxy.lab.test:3128",
-							CredentialsRef: v1alpha1.SecretRef{Name: "proxy-credentials"},
-						},
+				OCPInstallType: v1alpha1.OCPInstallKindConnected,
+				Proxy: &v1alpha1.EnvironmentProxySpec{
+					HTTP: "http://proxy.lab.test:3128",
+					Auth: &v1alpha1.EnvironmentProxyAuthSpec{
+						ProxyAuthRef: v1alpha1.SecretRef{Name: "proxy-credentials"},
 					},
 				},
 			},
@@ -864,8 +859,8 @@ func TestPreflightProxyCredentialsScopedAwayFromHubOnlyRun(t *testing.T) {
 	}, false)
 	checks := collectPreflightChecks(state, hub, true, "/secrets", defaultHostStateDir, deps)
 	for _, c := range checks {
-		if strings.Contains(c.name, "ocpInstall proxy credentialsRef") {
-			t.Fatalf("proxy credentialsRef must not surface in clusters-only run: %+v", c)
+		if strings.Contains(c.name, "proxy proxyAuthRef") {
+			t.Fatalf("proxy proxyAuthRef must not surface in clusters-only run: %+v", c)
 		}
 	}
 
@@ -876,13 +871,13 @@ func TestPreflightProxyCredentialsScopedAwayFromHubOnlyRun(t *testing.T) {
 	checks = collectPreflightChecks(state, cluster, true, "/secrets", defaultHostStateDir, deps)
 	var found bool
 	for _, c := range checks {
-		if strings.Contains(c.name, "ocpInstall proxy credentialsRef") {
+		if strings.Contains(c.name, "proxy proxyAuthRef") {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Fatalf("proxy credentialsRef must surface in cluster-only run; host_proxy runs there")
+		t.Fatalf("proxy proxyAuthRef must surface in cluster-only run; host_proxy runs there")
 	}
 }
 
@@ -891,7 +886,7 @@ func TestPreflightChecksSSHKeyRefAtSourcePathWhenFileBased(t *testing.T) {
 		Environments: []v1alpha1.Environment{{
 			Metadata: v1alpha1.Metadata{Name: "env"},
 			Spec: v1alpha1.EnvironmentSpec{
-				Keys: map[string]v1alpha1.EnvironmentKeySpec{
+				Secrets: map[string]v1alpha1.EnvironmentSecretSpec{
 					"my-host-key": {File: "/tmp/foo"},
 				},
 			},
@@ -928,8 +923,8 @@ func TestPreflightChecksSSHKeyRefAtSourcePathWhenFileBased(t *testing.T) {
 	if found.ok {
 		t.Fatalf("expected %q to fail when /tmp/foo missing, got ok", want)
 	}
-	if !strings.Contains(found.detail, "Environment.spec.keys[my-host-key].file") {
-		t.Fatalf("expected hint to point at Environment.spec.keys, got: %s", found.detail)
+	if !strings.Contains(found.detail, "Environment.spec.secrets[my-host-key].file") {
+		t.Fatalf("expected hint to point at Environment.spec.secrets, got: %s", found.detail)
 	}
 }
 

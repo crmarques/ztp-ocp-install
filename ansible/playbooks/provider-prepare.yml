@@ -23,7 +23,17 @@
         gitups_current_mirror_registry: "{{ (gitups_mirror_registries | default([]) | selectattr('providerRef', 'equalto', gitups_provider_name) | selectattr('providerHostRef', 'equalto', gitups_host_name) | list | first) | default(None) }}"
       changed_when: false
 
+    - name: Select forward proxy for current host
+      ansible.builtin.set_fact:
+        gitups_current_forward_proxy: "{{ (gitups_forward_proxies | default([]) | selectattr('providerRef', 'equalto', gitups_provider_name) | selectattr('providerHostRef', 'equalto', gitups_host_name) | list | first) | default(None) }}"
+      changed_when: false
+
   tasks:
+    - name: Apply managed forward proxy role
+      ansible.builtin.import_role:
+        name: provider_proxy_squid
+      when: gitups_current_forward_proxy is not none
+
     - name: Apply host proxy role
       ansible.builtin.import_role:
         name: host_proxy

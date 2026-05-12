@@ -291,10 +291,10 @@ func secretFileCheck(refName, path, label string, publicKey bool, deps preflight
 		switch {
 		case strings.Contains(label, "pullSecretRef"):
 			detail = "missing — run `gitups secret set " + refName + " --pull-secret <path>`"
-		case strings.Contains(label, "credentialRef") || strings.Contains(label, "credentialsRef"):
+		case strings.Contains(label, "credentialRef") || strings.Contains(label, "credentialsRef") || strings.Contains(label, "proxyAuthRef"):
 			detail = "missing — run `gitups secret set " + refName + " --from-file <path>` (or `--generate` for test fixtures)"
 		case strings.Contains(label, "sshKeyRef"):
-			detail = "missing — ensure the file exists at the path declared in Environment.spec.keys[" + refName + "].file"
+			detail = "missing — ensure the file exists at the path declared in Environment.spec.secrets[" + refName + "].file"
 		}
 		return preflightCheck{name: name, ok: false, detail: detail}
 	}
@@ -370,14 +370,14 @@ func collectSecretRefRequirements(state v1alpha1.State) []secretRefRequirement {
 	var out []secretRefRequirement
 
 	if env := environmentForChecks(state); env != nil {
-		if proxy := v1alpha1.OCPInstallProxyOf(*env); proxy != nil && proxy.CredentialsRef.Name != "" {
+		if env.Spec.Proxy != nil && env.Spec.Proxy.Auth != nil && env.Spec.Proxy.Auth.ProxyAuthRef.Name != "" {
 			out = append(out, secretRefRequirement{
-				refName: proxy.CredentialsRef.Name,
-				label:   "ocpInstall proxy credentialsRef",
+				refName: env.Spec.Proxy.Auth.ProxyAuthRef.Name,
+				label:   "proxy proxyAuthRef",
 				phases:  []string{"provider", "cluster"},
 			})
 		}
-		if registries := v1alpha1.OCPInstallRegistriesOf(*env); registries != nil && registries.Mirror != nil && registries.Mirror.CredentialsRef.Name != "" {
+		if registries := env.Spec.Registries; registries != nil && registries.Mirror != nil && registries.Mirror.CredentialsRef.Name != "" {
 			out = append(out, secretRefRequirement{
 				refName: registries.Mirror.CredentialsRef.Name,
 				label:   "registry mirror credentialsRef",
@@ -476,7 +476,7 @@ func environmentForChecks(state v1alpha1.State) *v1alpha1.Environment {
 func allGeneratedSecretNames(state v1alpha1.State) map[string]bool {
 	out := map[string]bool{}
 	if env := primaryEnvironmentForSync(state); env != nil {
-		for name, key := range env.Spec.Keys {
+		for name, key := range env.Spec.Secrets {
 			if key.Generated != nil {
 				out[name] = true
 			}
@@ -499,7 +499,7 @@ func clustersNeedOpenSSL(state v1alpha1.State, secretsDir string, deps preflight
 	if env == nil {
 		return false
 	}
-	for name, key := range env.Spec.Keys {
+	for name, key := range env.Spec.Secrets {
 		if key.Generated == nil || key.Generated.SelfSignedCertificate == nil {
 			continue
 		}

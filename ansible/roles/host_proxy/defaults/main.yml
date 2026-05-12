@@ -1,7 +1,7 @@
 ---
-gitups_proxy_http: "{{ (gitups_ocp_install.proxy | default({})).httpProxy | default('') }}"
-gitups_proxy_https: "{{ (gitups_ocp_install.proxy | default({})).httpsProxy | default('') }}"
+gitups_proxy_http: "{{ (gitups_ocp_install.proxy | default({})).http | default('') }}"
+gitups_proxy_https: "{{ (gitups_ocp_install.proxy | default({})).https | default('') }}"
 gitups_proxy_no: "{{ (gitups_ocp_install.proxy | default({})).noProxy | default([]) | join(',') }}"
-gitups_proxy_credentials_ref: "{{ (gitups_ocp_install.proxy | default({})).credentialsRef | default('') }}"
+gitups_proxy_credentials_ref: "{{ (gitups_ocp_install.proxy | default({})).proxyAuthRef | default('') }}"
 
 gitups_secrets_dir: "{{ lookup('env', 'GITUPS_SECRETS_DIR') | default((lookup('env', 'GITUPS_USER_DIR') | default(lookup('env', 'HOME') ~ '/.gitups', true)) ~ '/secrets', true) }}"

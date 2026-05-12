@@ -42,8 +42,8 @@ User-authored YAML uses `apiVersion: gitups.io/v1alpha1` and four kinds:
 
 | Kind | Owns |
 | --- | --- |
-| `Environment` | Shared environment defaults: base domain, OpenShift install mode, secret refs, OpenShift release, component image pins |
-| `InfrastructureProvider` | Provider connections and capabilities: libvirt, bare metal, and future vSphere/OpenShift Virtualization scaffolds |
+| `Environment` | Shared environment defaults: base domain, OpenShift install mode, secret sources, OpenShift release, component image pins |
+| `InfrastructureProvider` | Provider connections and capabilities: libvirt, bare metal, managed HAProxy, mirror registry, managed Squid proxy, and future vSphere/OpenShift Virtualization scaffolds |
 | `ClusterInfrastructure` | One cluster's realised infrastructure: networks, machines, endpoints, load balancers, name resolution |
 | `OCPCluster` | Provider-neutral OpenShift intent: topology, install method, networking, node identity |
 

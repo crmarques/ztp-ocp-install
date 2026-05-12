@@ -21,6 +21,11 @@
         gitups_current_mirror_registry: "{{ (gitups_mirror_registries | default([]) | selectattr('providerRef', 'equalto', gitups_provider_name) | selectattr('providerHostRef', 'equalto', gitups_host_name) | list | first) | default(None) }}"
       changed_when: false
 
+    - name: Select forward proxy for current host
+      ansible.builtin.set_fact:
+        gitups_current_forward_proxy: "{{ (gitups_forward_proxies | default([]) | selectattr('providerRef', 'equalto', gitups_provider_name) | selectattr('providerHostRef', 'equalto', gitups_host_name) | list | first) | default(None) }}"
+      changed_when: false
+
   tasks:
     - name: Build proxy facts for downstream tasks
       ansible.builtin.import_role:
@@ -194,6 +199,48 @@
       register: gitups_lb_parent_rm
       failed_when: false
       changed_when: gitups_lb_parent_rm.rc == 0
+
+    - name: Stop and remove managed Squid proxy container
+      containers.podman.podman_container:
+        name: "gitups-squid-{{ gitups_current_forward_proxy.name }}"
+        state: absent
+      when: gitups_current_forward_proxy is not none
+      failed_when: false
+
+    - name: Check firewalld state before closing managed Squid port
+      ansible.builtin.command:
+        argv:
+          - firewall-cmd
+          - --state
+      register: gitups_squid_firewalld_state
+      changed_when: false
+      failed_when: false
+      when: gitups_current_forward_proxy is not none
+
+    - name: Close managed Squid port on provider host firewall
+      ansible.posix.firewalld:
+        port: "{{ gitups_current_forward_proxy.port | int }}/tcp"
+        state: disabled
+        permanent: true
+        immediate: true
+      when:
+        - gitups_current_forward_proxy is not none
+        - gitups_squid_firewalld_state.rc | default(1) == 0
+
+    - name: Remove managed Squid state directory
+      ansible.builtin.file:
+        path: "{{ gitups_current_forward_proxy.dataDir | default(gitups_host_state_dir ~ '/forward-proxy/' ~ gitups_current_forward_proxy.name, true) }}"
+        state: absent
+      when: gitups_current_forward_proxy is not none
+
+    - name: Remove forward-proxy parent directory if empty
+      ansible.builtin.command:
+        argv:
+          - rmdir
+          - "{{ gitups_host_state_dir }}/forward-proxy"
+      register: gitups_forward_proxy_parent_rm
+      failed_when: false
+      changed_when: gitups_forward_proxy_parent_rm.rc == 0
 
     - name: Remove BMC emulator state for current provider
       ansible.builtin.file:

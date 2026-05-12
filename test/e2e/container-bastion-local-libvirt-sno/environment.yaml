@@ -4,25 +4,18 @@ metadata:
   name: container-bastion-local-libvirt-sno
 spec:
   baseDomain: gitups.test
-  ocpInstall:
-    connected: {}
+  ocpInstallType: connected
   secrets:
-    pullSecretRef:
-      name: openshift-pull-secret
-    clusterSSHKeyRef:
-      name: cluster-admin-key
-  keys:
-    cluster-admin-key:
-      file: ~/.ssh/gitups-ssh-key.pub
     openshift-pull-secret:
       file: ~/.gitups/secrets/openshift-pull-secret
+    cluster-admin-key:
+      file: ~/.ssh/gitups-ssh-key.pub
     provider-host-ssh:
       file: ~/.ssh/gitups-ssh-key
     bmc-credentials:
       generated:
         credentials:
           username: admin
-
   openshift:
     release:
       channel: stable-4.21

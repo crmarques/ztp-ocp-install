@@ -50,6 +50,14 @@ func ComponentPins(state v1alpha1.State) []ComponentPin {
 			LookupDate: versionLookupDate,
 		})
 	}
+	if usesManagedProxy(state) {
+		pins = append(pins, ComponentPin{
+			Name:       v1alpha1.ComponentTypeSquid,
+			Version:    "7.5-oe2403sp3",
+			Source:     "https://hub.docker.com/r/openeuler/squid",
+			LookupDate: versionLookupDate,
+		})
+	}
 	for _, version := range openshiftInstallVersions(state) {
 		pins = append(pins, ComponentPin{
 			Name:       "openshift-install",
@@ -102,6 +110,15 @@ func usesManagedHAProxy(state v1alpha1.State) bool {
 func usesManagedMirrorRegistry(state v1alpha1.State) bool {
 	for _, provider := range state.InfrastructureProviders {
 		if v1alpha1.ProviderMirrorRegistry(provider) != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func usesManagedProxy(state v1alpha1.State) bool {
+	for _, provider := range state.InfrastructureProviders {
+		if v1alpha1.ProviderProxySquid(provider) != nil {
 			return true
 		}
 	}

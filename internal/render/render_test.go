@@ -1,6 +1,7 @@
 package render
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,7 +17,7 @@ func TestRenderResolvesFileBasedSecretsToSourcePath(t *testing.T) {
 		Environments: []v1alpha1.Environment{{
 			Metadata: v1alpha1.Metadata{Name: "env"},
 			Spec: v1alpha1.EnvironmentSpec{
-				Keys: map[string]v1alpha1.EnvironmentKeySpec{
+				Secrets: map[string]v1alpha1.EnvironmentSecretSpec{
 					"my-key": {File: "/tmp/foo"},
 				},
 			},
@@ -371,6 +372,45 @@ func TestRenderMirrorRegistryRunVars(t *testing.T) {
 	}
 }
 
+func TestRenderManagedProxyRunVarsAndLibvirtIsolation(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "case.yaml"), managedProxyRenderYAML("proxy-render", "proxy-render-provider", "192.168.166.0/24", "192.168.166.1", "192.168.166.10", "192.168.166.11", "192.168.166.20"))
+	state, err := infra.LoadNormalizeValidate([]string{dir})
+	if err != nil {
+		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
+	}
+	stateDir := t.TempDir()
+	result, err := All(stateDir, "", state)
+	if err != nil {
+		t.Fatalf("render All returned error: %v", err)
+	}
+	varsFile := readFile(t, result.VarsPath)
+	for _, expected := range []string{
+		"gitups_forward_proxies:",
+		"name: proxy-render-provider",
+		"providerRef: proxy-render-provider",
+		"providerHostRef: host-01",
+		"url: http://192.168.166.1:3128",
+		"port: 3128",
+		"runtime: podman",
+		"credentialsSecretName: proxy-credentials",
+		"public: docker.io/openeuler/squid:7.5-oe2403sp3@sha256:8e16e4439a7c0d4e0e71092a1611bb89cea9929c30642c18ba991ba7a7524d87",
+		"egressRestrictedToProxy: true",
+		"proxyURL: http://192.168.166.1:3128",
+		"proxyPort: 3128",
+		"http: http://192.168.166.1:3128",
+		"https: http://192.168.166.1:3128",
+		"name: squid",
+		"version: 7.5-oe2403sp3",
+	} {
+		if !strings.Contains(varsFile, expected) {
+			t.Fatalf("managed proxy vars missing %q\n%s", expected, varsFile)
+		}
+	}
+	asset := installerAssetFor(result.InstallerAssets, "proxy-render")
+	assertInstallConfigProxy(t, asset.InstallConfigPath, "http://192.168.166.1:3128", "http://192.168.166.1:3128", []string{"localhost", ".example.com"})
+}
+
 func TestRenderOneHostTreatsLocalhostAsProviderHost(t *testing.T) {
 	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/old/local-libvirt-1-host-1-sno-hub"})
 	if err != nil {
@@ -535,6 +575,10 @@ func TestLibvirtSubstrateOpensBootArtifactsHTTPPort(t *testing.T) {
 		"zone: libvirt",
 		"interface: \"{{ gitups_current_cluster.provider.virtualization.libvirt.bridge }}\"",
 		"port: \"{{ gitups_current_cluster.provider.bootArtifactsHttp.port | int }}/tcp\"",
+		"egressRestrictedToProxy",
+		"{% if not (gitups_current_cluster.provider.virtualization.libvirt.egressRestrictedToProxy | default(false) | bool) %}",
+		"<forward mode='nat'>",
+		"port: \"{{ gitups_current_cluster.provider.virtualization.libvirt.proxyPort | int }}/tcp\"",
 	} {
 		if !strings.Contains(tasks, expected) {
 			t.Fatalf("cluster_substrate_libvirt is missing %q\n%s", expected, tasks)
@@ -606,28 +650,22 @@ metadata:
   name: example
 spec:
   baseDomain: example.com
-  ocpInstall:
-    disconnected:
-      registries:
-        mirror:
-          url: registry.lab.test:5000
-          credentialsRef:
-            name: registry-lab-credentials
-          trustBundleRef:
-            name: registry-lab-ca
-        imageDigestSources:
-          - source: quay.io/openshift-release-dev/ocp-release
-            mirrors:
-              - registry.lab.test:5000/openshift/release-images
-          - source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
-            mirrors:
-              - registry.lab.test:5000/openshift/release-images
+  ocpInstallType: disconnected
+  registries:
+    mirror:
+      url: registry.lab.test:5000
+      credentialsRef:
+        name: registry-lab-credentials
+      trustBundleRef:
+        name: registry-lab-ca
+    imageDigestSources:
+      - source: quay.io/openshift-release-dev/ocp-release
+        mirrors:
+          - registry.lab.test:5000/openshift/release-images
+      - source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
+        mirrors:
+          - registry.lab.test:5000/openshift/release-images
   secrets:
-    pullSecretRef:
-      name: openshift-pull-secret
-    clusterSSHKeyRef:
-      name: cluster-admin-key
-  keys:
     openshift-pull-secret:
       file: ~/.gitups/secrets/openshift-pull-secret
     cluster-admin-key:
@@ -800,9 +838,9 @@ func TestResolveInstallerInlinesSecretsIntoWorkCopies(t *testing.T) {
 	}
 	// Redirect file-backed keys to the test secretsDir.
 	env := &state.Environments[0]
-	for name, key := range env.Spec.Keys {
+	for name, key := range env.Spec.Secrets {
 		key.File = ""
-		env.Spec.Keys[name] = key
+		env.Spec.Secrets[name] = key
 	}
 
 	stateDir := t.TempDir()
@@ -888,15 +926,14 @@ func TestLoadInstallerSecretsBakesProxyCredentialsIntoURLs(t *testing.T) {
 		Environments: []v1alpha1.Environment{{
 			Metadata: v1alpha1.Metadata{Name: "env"},
 			Spec: v1alpha1.EnvironmentSpec{
-				BaseDomain: "example.com",
-				OCPInstall: v1alpha1.EnvironmentOCPInstallSpec{
-					Disconnected: &v1alpha1.DisconnectedSpec{
-						Proxy: &v1alpha1.OCPInstallProxy{
-							HTTPProxy:      "http://proxy.example.com:3128",
-							HTTPSProxy:     "http://proxy.example.com:3128",
-							NoProxy:        []string{".cluster.local"},
-							CredentialsRef: v1alpha1.SecretRef{Name: "proxy-credentials"},
-						},
+				BaseDomain:     "example.com",
+				OCPInstallType: v1alpha1.OCPInstallKindDisconnected,
+				Proxy: &v1alpha1.EnvironmentProxySpec{
+					HTTP:    "http://proxy.example.com:3128",
+					HTTPS:   "http://proxy.example.com:3128",
+					NoProxy: []string{".cluster.local"},
+					Auth: &v1alpha1.EnvironmentProxyAuthSpec{
+						ProxyAuthRef: v1alpha1.SecretRef{Name: "proxy-credentials"},
 					},
 				},
 			},
@@ -930,20 +967,15 @@ func TestE2EProxyInputRendersIntoOpenShiftInstallerFiles(t *testing.T) {
 
 	envPath := filepath.Join(fixtureDir, "environment.yaml")
 	envBody := readFile(t, envPath)
-	envBody = replaceOnce(t, envBody, "  ocpInstall:\n    connected: {}\n", `  ocpInstall:
-    restricted:
-      proxy:
-        httpProxy: http://proxy.gitups.test:3128
-        httpsProxy: https://secure-proxy.gitups.test:8443
-        credentialsRef:
-          name: proxy-credentials
-        noProxy:
-          - localhost
-          - 127.0.0.1
-          - .gitups.test
-          - 192.168.132.0/24
-          - 10.128.0.0/14
-          - 172.30.0.0/16
+	envBody = replaceOnce(t, envBody, "  ocpInstallType: connected\n", `  ocpInstallType: connected
+  proxy:
+    http: http://proxy.gitups.test:3128
+    https: https://secure-proxy.gitups.test:8443
+    noProxy:
+      - 192.168.132.0/24
+    auth:
+      proxyAuthRef:
+        name: proxy-credentials
 `)
 	envBody = replaceOnce(t, envBody, "      file: ~/.ssh/gitups-ssh-key.pub\n", "      file: secrets/cluster-admin-key\n")
 	envBody = replaceOnce(t, envBody, "      file: ~/.gitups/secrets/openshift-pull-secret\n", "      file: secrets/openshift-pull-secret\n")
@@ -978,8 +1010,12 @@ func TestE2EProxyInputRendersIntoOpenShiftInstallerFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("render All returned error: %v", err)
 	}
+	varsFile := readFile(t, result.VarsPath)
+	if strings.Contains(varsFile, "gitups_forward_proxies:") || strings.Contains(varsFile, "egressRestrictedToProxy: true") {
+		t.Fatalf("external proxy must not render managed proxy or libvirt isolation\n%s", varsFile)
+	}
 	asset := installerAssetFor(result.InstallerAssets, "container-bastion-local-libvirt-sno")
-	noProxy := "localhost,127.0.0.1,.gitups.test,192.168.132.0/24,10.128.0.0/14,172.30.0.0/16"
+	noProxy := []string{"192.168.132.0/24", "localhost", "127.0.0.1", ".gitups.test", ".svc", ".cluster.local"}
 	assertInstallConfigProxy(t, asset.InstallConfigPath, "http://proxy.gitups.test:3128", "https://secure-proxy.gitups.test:8443", noProxy)
 	if safeConfig := readFile(t, asset.InstallConfigPath); strings.Contains(safeConfig, "proxy%20user") || strings.Contains(safeConfig, "pass%2Fword") {
 		t.Fatalf("safe install-config must not contain proxy credentials\n%s", safeConfig)
@@ -1050,6 +1086,7 @@ func TestProviderDispatchCoversAllKinds(t *testing.T) {
 	}
 	providerTasks := readFile(t, "../../ansible/playbooks/provider-prepare.yml")
 	for _, expected := range []string{
+		"provider_proxy_squid",
 		"provider_bmc_{{ gitups_current_provider.bmcRole }}",
 		"gitups_current_provider.bootArtifactsHttp.enabled",
 	} {
@@ -1057,12 +1094,16 @@ func TestProviderDispatchCoversAllKinds(t *testing.T) {
 			t.Fatalf("provider-prepare.yml missing dispatch fragment %q\n%s", expected, providerTasks)
 		}
 	}
+	if strings.Index(providerTasks, "provider_proxy_squid") > strings.Index(providerTasks, "name: host_proxy") {
+		t.Fatalf("provider-prepare.yml must run managed Squid before host_proxy\n%s", providerTasks)
+	}
 	for _, role := range []string{
 		"cluster_substrate_libvirt",
 		"cluster_substrate_baremetal",
 		"provider_bmc_emulated",
 		"provider_bmc_redfish",
 		"provider_bmc_none",
+		"provider_proxy_squid",
 		"provider_boot_artifacts_http",
 		"ocp_boot_emulated",
 		"ocp_boot_redfish",
@@ -1070,6 +1111,30 @@ func TestProviderDispatchCoversAllKinds(t *testing.T) {
 		path := "../../ansible/roles/" + role + "/tasks/main.yml"
 		if _, err := os.Stat(path); err != nil {
 			t.Fatalf("expected role tasks at %s: %v", path, err)
+		}
+	}
+}
+
+func TestProviderDestroyRemovesManagedProxyWithoutBroadNetworkBlocks(t *testing.T) {
+	destroy := readFile(t, "../../ansible/playbooks/provider-destroy.yml")
+	for _, expected := range []string{
+		"gitups_current_forward_proxy",
+		"gitups-squid-{{ gitups_current_forward_proxy.name }}",
+		"Close managed Squid port on provider host firewall",
+		"Remove managed Squid state directory",
+	} {
+		if !strings.Contains(destroy, expected) {
+			t.Fatalf("provider-destroy.yml missing managed proxy cleanup %q\n%s", expected, destroy)
+		}
+	}
+	for _, unexpected := range []string{
+		"iptables",
+		"nft ",
+		"--add-rich-rule",
+		"--direct",
+	} {
+		if strings.Contains(destroy, unexpected) {
+			t.Fatalf("provider-destroy.yml contains broad network rule %q\n%s", unexpected, destroy)
 		}
 	}
 }
@@ -1103,6 +1168,109 @@ func copyYAMLFixture(t *testing.T, src, dst string) {
 	}
 }
 
+func writeFile(t *testing.T, path string, content string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(strings.TrimLeft(content, "\n")), 0o644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+func managedProxyRenderYAML(name, providerName, cidr, gateway, apiVIP, ingressVIP, nodeIP string) string {
+	return strings.Replace(strings.Replace(strings.Replace(strings.Replace(fmt.Sprintf(`apiVersion: gitups.io/v1alpha1
+kind: Environment
+metadata:
+  name: env-%s
+spec:
+  baseDomain: example.com
+  ocpInstallType: connected
+  proxy:
+    auth:
+      proxyAuthRef:
+        name: proxy-credentials
+  secrets:
+    openshift-pull-secret:
+      file: ./pull-secret
+    cluster-admin-key:
+      file: ./ssh-key.pub
+    default-key:
+      file: ./default-key
+    proxy-credentials:
+      generated:
+        credentials:
+          username: proxy
+---
+apiVersion: gitups.io/v1alpha1
+kind: InfrastructureProvider
+metadata:
+  name: %s
+spec:
+  hosts:
+    host-01:
+      ssh:
+        address: 10.0.0.1
+        user: gitups
+        keyRef:
+          name: default-key
+      capabilities:
+        - libvirt
+        - proxy
+  machine:
+    libvirt:
+      hostRefs:
+        - name: host-01
+      bmcEmulation: {}
+  proxy:
+    squid:
+      hostRef:
+        name: host-01
+---
+apiVersion: gitups.io/v1alpha1
+kind: ClusterInfrastructure
+metadata:
+  name: %s
+spec:
+  providerRefs:
+    - name: %s
+  networks:
+    primary:
+      cidr: %s
+      gateway: %s
+      libvirt:
+        bridge: virbr0
+  machines:
+    master-0:
+      interfaces:
+        primary:
+          networkRef:
+            name: primary
+          ipAddress: %s
+      libvirt:
+        hostRef:
+          name: host-01
+  endpoints:
+    api:
+      address: %s
+    apiInt:
+      address: %s
+    ingress:
+      address: %s
+---
+apiVersion: gitups.io/v1alpha1
+kind: OCPCluster
+metadata:
+  name: %s
+spec:
+  topology: single-node
+  infrastructureRef:
+    name: %s
+  install:
+    method: agent
+  nodes:
+    master-0:
+      role: control-plane
+`, name, providerName, name, providerName, cidr, gateway, nodeIP, apiVIP, apiVIP, ingressVIP, name, name), "\t", "  ", -1), "\r\n", "\n", -1), "\r", "\n", -1), "\n\n\n", "\n\n", -1)
+}
+
 func replaceOnce(t *testing.T, input, old, new string) string {
 	t.Helper()
 	if !strings.Contains(input, old) {
@@ -1111,7 +1279,7 @@ func replaceOnce(t *testing.T, input, old, new string) string {
 	return strings.Replace(input, old, new, 1)
 }
 
-func assertInstallConfigProxy(t *testing.T, path, httpProxy, httpsProxy, noProxy string) {
+func assertInstallConfigProxy(t *testing.T, path, httpProxy, httpsProxy string, requiredNoProxy []string) {
 	t.Helper()
 	var doc map[string]any
 	if err := yaml.Unmarshal([]byte(readFile(t, path)), &doc); err != nil {
@@ -1127,11 +1295,20 @@ func assertInstallConfigProxy(t *testing.T, path, httpProxy, httpsProxy, noProxy
 	}{
 		{key: "httpProxy", want: httpProxy},
 		{key: "httpsProxy", want: httpsProxy},
-		{key: "noProxy", want: noProxy},
 	} {
 		got, ok := proxy[item.key].(string)
 		if !ok || got != item.want {
 			t.Fatalf("install-config %s proxy.%s got %#v, want %q", path, item.key, proxy[item.key], item.want)
+		}
+	}
+	got, _ := proxy["noProxy"].(string)
+	entries := map[string]bool{}
+	for _, e := range strings.Split(got, ",") {
+		entries[strings.TrimSpace(e)] = true
+	}
+	for _, want := range requiredNoProxy {
+		if !entries[want] {
+			t.Fatalf("install-config %s proxy.noProxy missing %q (got %q)", path, want, got)
 		}
 	}
 }

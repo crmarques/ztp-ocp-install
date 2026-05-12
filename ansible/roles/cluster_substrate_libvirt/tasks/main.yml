@@ -18,6 +18,8 @@
       libvirt:
         network: {{ gitups_current_cluster.provider.virtualization.libvirt.network }}
         bridge: {{ gitups_current_cluster.provider.virtualization.libvirt.bridge }}
+        egressRestrictedToProxy: {{ gitups_current_cluster.provider.virtualization.libvirt.egressRestrictedToProxy | default(false) | bool }}
+        proxyURL: {{ gitups_current_cluster.provider.virtualization.libvirt.proxyURL | default('') }}
       defaultNode:
         cpu: {{ gitups_current_cluster.provider.virtualization.defaultNode.cpu }}
         memoryMiB: {{ gitups_current_cluster.provider.virtualization.defaultNode.memoryMiB }}
@@ -92,6 +94,7 @@
             | map(attribute='macAddress') | list),
           (gitups_current_cluster.provider.nodes | default([])
             | map(attribute='ipAddress') | list),
+          (gitups_current_cluster.provider.virtualization.libvirt.egressRestrictedToProxy | default(false) | bool),
           'no-hosts',
         ] | to_json) | hash('sha1')
       }}
@@ -104,11 +107,13 @@
         <name>{{ gitups_current_cluster.provider.virtualization.libvirt.network }}</name>
         <uuid>{{ gitups_libvirt_net_uuid }}</uuid>
         <description>gitups-net-fingerprint:{{ gitups_libvirt_net_fingerprint }}</description>
+        {% if not (gitups_current_cluster.provider.virtualization.libvirt.egressRestrictedToProxy | default(false) | bool) %}
         <forward mode='nat'>
           <nat>
             <port start='1024' end='65535'/>
           </nat>
         </forward>
+        {% endif %}
         <bridge name='{{ gitups_current_cluster.provider.virtualization.libvirt.bridge }}' stp='on' delay='0'/>
         {% if (gitups_current_cluster.provider.virtualization.libvirt.dnsHosts | default([])) | length > 0 %}
         <dns>
@@ -228,7 +233,7 @@
     immediate: true
   when:
     - gitups_firewalld_state.rc == 0
-    - gitups_current_cluster.provider.bootArtifactsHttp.enabled | default(false) | bool
+    - (gitups_current_cluster.provider.bootArtifactsHttp.enabled | default(false) | bool) or (gitups_current_cluster.provider.virtualization.libvirt.egressRestrictedToProxy | default(false) | bool)
 
 - name: Open boot artifacts HTTP firewall port in the libvirt zone
   ansible.posix.firewalld:
@@ -240,6 +245,18 @@
   when:
     - gitups_firewalld_state.rc == 0
     - gitups_current_cluster.provider.bootArtifactsHttp.enabled | default(false) | bool
+
+- name: Open managed proxy firewall port in the libvirt zone
+  ansible.posix.firewalld:
+    zone: libvirt
+    port: "{{ gitups_current_cluster.provider.virtualization.libvirt.proxyPort | int }}/tcp"
+    state: enabled
+    permanent: true
+    immediate: true
+  when:
+    - gitups_firewalld_state.rc == 0
+    - gitups_current_cluster.provider.virtualization.libvirt.egressRestrictedToProxy | default(false) | bool
+    - (gitups_current_cluster.provider.virtualization.libvirt.proxyPort | default(0) | int) > 0
 
 - name: Check QEMU emulator candidates
   ansible.builtin.stat:

@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/crmarques/gitups/api/v1alpha1"
@@ -22,14 +23,11 @@ func TestResolveProxyEnvWithoutCredentials(t *testing.T) {
 	state := v1alpha1.State{
 		Environments: []v1alpha1.Environment{{
 			Spec: v1alpha1.EnvironmentSpec{
-				OCPInstall: v1alpha1.EnvironmentOCPInstallSpec{
-					Restricted: &v1alpha1.RestrictedSpec{
-						Proxy: &v1alpha1.OCPInstallProxy{
-							HTTPProxy:  "http://proxy.lab.test:3128",
-							HTTPSProxy: "http://proxy.lab.test:3128",
-							NoProxy:    []string{".lab.test", "10.0.0.0/8"},
-						},
-					},
+				OCPInstallType: v1alpha1.OCPInstallKindConnected,
+				Proxy: &v1alpha1.EnvironmentProxySpec{
+					HTTP:    "http://proxy.lab.test:3128",
+					HTTPS:   "http://proxy.lab.test:3128",
+					NoProxy: []string{".lab.test", "10.0.0.0/8"},
 				},
 			},
 		}},
@@ -38,21 +36,19 @@ func TestResolveProxyEnvWithoutCredentials(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	want := map[string]string{
-		"HTTP_PROXY":  "http://proxy.lab.test:3128",
-		"http_proxy":  "http://proxy.lab.test:3128",
-		"HTTPS_PROXY": "http://proxy.lab.test:3128",
-		"https_proxy": "http://proxy.lab.test:3128",
-		"NO_PROXY":    ".lab.test,10.0.0.0/8",
-		"no_proxy":    ".lab.test,10.0.0.0/8",
+	if got["HTTP_PROXY"] != "http://proxy.lab.test:3128" {
+		t.Fatalf("HTTP_PROXY: got %q", got["HTTP_PROXY"])
 	}
-	for k, v := range want {
-		if got[k] != v {
-			t.Fatalf("key %q: got %q, want %q", k, got[k], v)
+	if got["HTTPS_PROXY"] != "http://proxy.lab.test:3128" {
+		t.Fatalf("HTTPS_PROXY: got %q", got["HTTPS_PROXY"])
+	}
+	for _, want := range []string{".lab.test", "10.0.0.0/8", "localhost", "127.0.0.1", ".svc", ".cluster.local"} {
+		if !strings.Contains(got["NO_PROXY"], want) {
+			t.Fatalf("NO_PROXY missing %q: got %q", want, got["NO_PROXY"])
 		}
 	}
-	if len(got) != len(want) {
-		t.Fatalf("unexpected extra keys: %+v", got)
+	if got["no_proxy"] != got["NO_PROXY"] {
+		t.Fatalf("lowercase no_proxy must match uppercase: %q vs %q", got["no_proxy"], got["NO_PROXY"])
 	}
 }
 
@@ -65,13 +61,12 @@ func TestResolveProxyEnvInjectsCredentials(t *testing.T) {
 	state := v1alpha1.State{
 		Environments: []v1alpha1.Environment{{
 			Spec: v1alpha1.EnvironmentSpec{
-				OCPInstall: v1alpha1.EnvironmentOCPInstallSpec{
-					Disconnected: &v1alpha1.DisconnectedSpec{
-						Proxy: &v1alpha1.OCPInstallProxy{
-							HTTPProxy:      "http://proxy.lab.test:3128",
-							HTTPSProxy:     "https://proxy.lab.test:3129",
-							CredentialsRef: v1alpha1.SecretRef{Name: "proxy-credentials"},
-						},
+				OCPInstallType: v1alpha1.OCPInstallKindDisconnected,
+				Proxy: &v1alpha1.EnvironmentProxySpec{
+					HTTP:  "http://proxy.lab.test:3128",
+					HTTPS: "https://proxy.lab.test:3129",
+					Auth: &v1alpha1.EnvironmentProxyAuthSpec{
+						ProxyAuthRef: v1alpha1.SecretRef{Name: "proxy-credentials"},
 					},
 				},
 			},
@@ -95,12 +90,11 @@ func TestResolveProxyEnvMissingCredentialsFails(t *testing.T) {
 	state := v1alpha1.State{
 		Environments: []v1alpha1.Environment{{
 			Spec: v1alpha1.EnvironmentSpec{
-				OCPInstall: v1alpha1.EnvironmentOCPInstallSpec{
-					Restricted: &v1alpha1.RestrictedSpec{
-						Proxy: &v1alpha1.OCPInstallProxy{
-							HTTPProxy:      "http://proxy.lab.test:3128",
-							CredentialsRef: v1alpha1.SecretRef{Name: "missing"},
-						},
+				OCPInstallType: v1alpha1.OCPInstallKindConnected,
+				Proxy: &v1alpha1.EnvironmentProxySpec{
+					HTTP: "http://proxy.lab.test:3128",
+					Auth: &v1alpha1.EnvironmentProxyAuthSpec{
+						ProxyAuthRef: v1alpha1.SecretRef{Name: "missing"},
 					},
 				},
 			},
@@ -115,11 +109,7 @@ func TestResolveProxyEnvSkipsEmptyProxy(t *testing.T) {
 	state := v1alpha1.State{
 		Environments: []v1alpha1.Environment{{
 			Spec: v1alpha1.EnvironmentSpec{
-				OCPInstall: v1alpha1.EnvironmentOCPInstallSpec{
-					Restricted: &v1alpha1.RestrictedSpec{
-						Proxy: &v1alpha1.OCPInstallProxy{},
-					},
-				},
+				OCPInstallType: v1alpha1.OCPInstallKindConnected,
 			},
 		}},
 	}

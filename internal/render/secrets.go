@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/crmarques/gitups/api/v1alpha1"
+	"github.com/crmarques/gitups/internal/proxy"
 	"github.com/crmarques/gitups/internal/secretref"
 )
 
@@ -50,7 +51,7 @@ func LoadInstallerSecrets(state v1alpha1.State, ocp v1alpha1.OCPCluster, secrets
 
 	pullName := ocp.Spec.Install.PullSecretRef.Name
 	if pullName == "" {
-		return out, fmt.Errorf("%s: pullSecretRef is empty; set Environment.spec.secrets.pullSecretRef", ocp.Metadata.Name)
+		return out, fmt.Errorf("%s: pullSecretRef is empty; declare Environment.spec.secrets.%s or set OCPCluster.spec.install.pullSecretRef", ocp.Metadata.Name, v1alpha1.DefaultPullSecretName)
 	}
 	pullPath := secretref.ResolvePath(pullName, env, secretsDir)
 	pullSecret, err := readSecretFile(pullPath, "pull secret")
@@ -64,7 +65,7 @@ func LoadInstallerSecrets(state v1alpha1.State, ocp v1alpha1.OCPCluster, secrets
 
 	sshName := ocp.Spec.Install.SSHKeyRef.Name
 	if sshName == "" {
-		return out, fmt.Errorf("%s: sshKeyRef is empty; set Environment.spec.secrets.clusterSSHKeyRef", ocp.Metadata.Name)
+		return out, fmt.Errorf("%s: sshKeyRef is empty; declare Environment.spec.secrets.%s or set OCPCluster.spec.install.sshKeyRef", ocp.Metadata.Name, v1alpha1.DefaultClusterSSHKeyName)
 	}
 	sshPath := secretref.ResolvePath(sshName, env, secretsDir)
 	sshKey, err := readSecretFile(sshPath, "ssh key")
@@ -83,10 +84,8 @@ func LoadInstallerSecrets(state v1alpha1.State, ocp v1alpha1.OCPCluster, secrets
 	}
 
 	if env != nil {
-		kind := v1alpha1.OCPInstallKind(*env)
-		if kind != "" && kind != v1alpha1.OCPInstallKindConnected {
-			registries := v1alpha1.OCPInstallRegistriesOf(*env)
-			if registries != nil && registries.Mirror != nil && registries.Mirror.CredentialsRef.Name != "" {
+		if v1alpha1.OCPInstallKind(*env) == v1alpha1.OCPInstallKindDisconnected {
+			if registries := env.Spec.Registries; registries != nil && registries.Mirror != nil && registries.Mirror.CredentialsRef.Name != "" {
 				credPath := secretref.ResolvePath(registries.Mirror.CredentialsRef.Name, env, secretsDir)
 				creds, err := readUserPassFile(credPath, "mirror registry credentials")
 				if err != nil {
@@ -99,11 +98,25 @@ func LoadInstallerSecrets(state v1alpha1.State, ocp v1alpha1.OCPCluster, secrets
 				out.PullSecret = merged
 			}
 		}
-		if proxy := v1alpha1.OCPInstallProxyOf(*env); proxy != nil {
-			httpURL := proxy.HTTPProxy
-			httpsURL := proxy.HTTPSProxy
-			if proxy.CredentialsRef.Name != "" && (httpURL != "" || httpsURL != "") {
-				credPath := secretref.ResolvePath(proxy.CredentialsRef.Name, env, secretsDir)
+		if eff := proxy.Resolve(state, env); eff != nil {
+			fallbackURL := ""
+			if eff.HTTP == "" || eff.HTTPS == "" {
+				var err error
+				fallbackURL, err = managedProxyClientURLForOCP(state, ocp, env)
+				if err != nil {
+					return out, fmt.Errorf("%s: %w", ocp.Metadata.Name, err)
+				}
+			}
+			httpURL := eff.HTTP
+			if httpURL == "" {
+				httpURL = fallbackURL
+			}
+			httpsURL := eff.HTTPS
+			if httpsURL == "" {
+				httpsURL = fallbackURL
+			}
+			if eff.Auth.Name != "" && (httpURL != "" || httpsURL != "") {
+				credPath := secretref.ResolvePath(eff.Auth.Name, env, secretsDir)
 				creds, err := readUserPassFile(credPath, "proxy credentials")
 				if err != nil {
 					return out, fmt.Errorf("%s: %w", ocp.Metadata.Name, err)

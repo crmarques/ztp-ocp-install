@@ -285,17 +285,11 @@ metadata:
   name: vmware-env
 spec:
   baseDomain: example.com
-  ocpInstall:
-    connected: {}
+  ocpInstallType: connected
   secrets:
-    pullSecretRef:
-      name: pull-secret
-    clusterSSHKeyRef:
-      name: ssh-key
-  keys:
-    pull-secret:
+    openshift-pull-secret:
       file: ./pull-secret
-    ssh-key:
+    cluster-admin-key:
       file: ./ssh-key
     example-vcenter:
       file: ./vcenter
@@ -380,17 +374,11 @@ metadata:
   name: secrets-env
 spec:
   baseDomain: example.com
-  ocpInstall:
-    connected: {}
+  ocpInstallType: connected
   secrets:
-    pullSecretRef:
-      name: pull-secret
-    clusterSSHKeyRef:
-      name: ssh-key
-  keys:
-    pull-secret:
+    openshift-pull-secret:
       file: ./pull-secret
-    ssh-key:
+    cluster-admin-key:
       file: ./ssh-key.pub
     default-key:
       file: ./default-key
@@ -539,17 +527,11 @@ metadata:
   name: cred-env
 spec:
   baseDomain: example.com
-  ocpInstall:
-    connected: {}
+  ocpInstallType: connected
   secrets:
-    pullSecretRef:
-      name: pull-secret
-    clusterSSHKeyRef:
-      name: ssh-key
-  keys:
-    pull-secret:
+    openshift-pull-secret:
       file: ./pull-secret
-    ssh-key:
+    cluster-admin-key:
       file: ./ssh-key.pub
     default-key:
       file: ./default-key

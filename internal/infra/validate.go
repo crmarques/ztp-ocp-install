@@ -65,56 +65,55 @@ func validateEnvironments(envs []v1alpha1.Environment) []string {
 		}
 		errs = append(errs, validateOCPInstall(env)...)
 		errs = append(errs, validateEnvironmentSecrets(env)...)
-		errs = append(errs, validateEnvironmentKeys(env)...)
 		errs = append(errs, validateComponentImages(env)...)
 	}
 	return errs
 }
 
-func validateEnvironmentKeys(env v1alpha1.Environment) []string {
+func validateEnvironmentSecrets(env v1alpha1.Environment) []string {
 	var errs []string
-	for name, key := range env.Spec.Keys {
+	for name, secret := range env.Spec.Secrets {
 		if !dnsLabel.MatchString(name) {
-			errs = append(errs, fmt.Sprintf("Environment/%s spec.keys key %q is not a DNS label", env.Metadata.Name, name))
+			errs = append(errs, fmt.Sprintf("Environment/%s spec.secrets entry %q is not a DNS label", env.Metadata.Name, name))
 			continue
 		}
-		hasFile := key.File != ""
-		hasGenerated := key.Generated != nil
+		hasFile := secret.File != ""
+		hasGenerated := secret.Generated != nil
 		switch {
 		case hasFile && hasGenerated:
-			errs = append(errs, fmt.Sprintf("Environment/%s spec.keys[%s] sets both file and generated; pick exactly one source", env.Metadata.Name, name))
+			errs = append(errs, fmt.Sprintf("Environment/%s spec.secrets[%s] sets both file and generated; pick exactly one source", env.Metadata.Name, name))
 		case !hasFile && !hasGenerated:
-			errs = append(errs, fmt.Sprintf("Environment/%s spec.keys[%s] requires a source (file or generated)", env.Metadata.Name, name))
+			errs = append(errs, fmt.Sprintf("Environment/%s spec.secrets[%s] requires a source (file or generated)", env.Metadata.Name, name))
 		case hasGenerated:
-			errs = append(errs, validateGeneratedKey(env.Metadata.Name, name, key.Generated)...)
+			errs = append(errs, validateGeneratedSecret(env.Metadata.Name, name, secret.Generated)...)
 		}
 	}
 	return errs
 }
 
-func validateGeneratedKey(envName, keyName string, gen *v1alpha1.EnvironmentKeyGenerated) []string {
+func validateGeneratedSecret(envName, secretName string, gen *v1alpha1.EnvironmentSecretGenerated) []string {
 	var errs []string
 	hasCreds := gen.Credentials != nil
 	hasCert := gen.SelfSignedCertificate != nil
 	switch {
 	case hasCreds && hasCert:
-		errs = append(errs, fmt.Sprintf("Environment/%s spec.keys[%s].generated sets both credentials and selfSignedCertificate; pick exactly one", envName, keyName))
+		errs = append(errs, fmt.Sprintf("Environment/%s spec.secrets[%s].generated sets both credentials and selfSignedCertificate; pick exactly one", envName, secretName))
 	case !hasCreds && !hasCert:
-		errs = append(errs, fmt.Sprintf("Environment/%s spec.keys[%s].generated requires one of {credentials, selfSignedCertificate}", envName, keyName))
+		errs = append(errs, fmt.Sprintf("Environment/%s spec.secrets[%s].generated requires one of {credentials, selfSignedCertificate}", envName, secretName))
 	case hasCert:
 		if gen.SelfSignedCertificate.CommonName == "" {
-			errs = append(errs, fmt.Sprintf("Environment/%s spec.keys[%s].generated.selfSignedCertificate.commonName is required", envName, keyName))
+			errs = append(errs, fmt.Sprintf("Environment/%s spec.secrets[%s].generated.selfSignedCertificate.commonName is required", envName, secretName))
 		}
 		if gen.SelfSignedCertificate.ValidityDays < 0 {
-			errs = append(errs, fmt.Sprintf("Environment/%s spec.keys[%s].generated.selfSignedCertificate.validityDays must not be negative", envName, keyName))
+			errs = append(errs, fmt.Sprintf("Environment/%s spec.secrets[%s].generated.selfSignedCertificate.validityDays must not be negative", envName, secretName))
 		}
 	case hasCreds:
 		username := gen.Credentials.Username
 		if username != "" && strings.TrimSpace(username) != username {
-			errs = append(errs, fmt.Sprintf("Environment/%s spec.keys[%s].generated.credentials.username must not contain leading or trailing whitespace", envName, keyName))
+			errs = append(errs, fmt.Sprintf("Environment/%s spec.secrets[%s].generated.credentials.username must not contain leading or trailing whitespace", envName, secretName))
 		}
 		if strings.ContainsAny(username, ":\r\n\t ") {
-			errs = append(errs, fmt.Sprintf("Environment/%s spec.keys[%s].generated.credentials.username must not contain whitespace, colon, or newlines", envName, keyName))
+			errs = append(errs, fmt.Sprintf("Environment/%s spec.secrets[%s].generated.credentials.username must not contain whitespace, colon, or newlines", envName, secretName))
 		}
 	}
 	return errs
@@ -142,50 +141,38 @@ func validateComponentImages(env v1alpha1.Environment) []string {
 
 func validateOCPInstall(env v1alpha1.Environment) []string {
 	var errs []string
-	set := 0
-	if env.Spec.OCPInstall.Connected != nil {
-		set++
+	switch env.Spec.OCPInstallType {
+	case "", v1alpha1.OCPInstallKindConnected, v1alpha1.OCPInstallKindDisconnected:
+	default:
+		return []string{fmt.Sprintf("Environment/%s spec.ocpInstallType %q must be one of {%s, %s}",
+			env.Metadata.Name, env.Spec.OCPInstallType,
+			v1alpha1.OCPInstallKindConnected, v1alpha1.OCPInstallKindDisconnected)}
 	}
-	if env.Spec.OCPInstall.Restricted != nil {
-		set++
-	}
-	if env.Spec.OCPInstall.Disconnected != nil {
-		set++
-	}
-	if set != 1 {
-		errs = append(errs, fmt.Sprintf("Environment/%s spec.ocpInstall must set exactly one of {connected, restricted, disconnected}", env.Metadata.Name))
-		return errs
-	}
-	switch v1alpha1.OCPInstallKind(env) {
-	case v1alpha1.OCPInstallKindConnected:
-	case v1alpha1.OCPInstallKindRestricted:
-		errs = append(errs, validateRegistriesBlock(env, env.Spec.OCPInstall.Restricted.Registries, false)...)
-	case v1alpha1.OCPInstallKindDisconnected:
-		errs = append(errs, validateRegistriesBlock(env, env.Spec.OCPInstall.Disconnected.Registries, true)...)
-	}
-	errs = append(errs, validateOCPInstallProxy(env)...)
+	requireMirror := v1alpha1.OCPInstallKind(env) == v1alpha1.OCPInstallKindDisconnected
+	errs = append(errs, validateRegistriesBlock(env, env.Spec.Registries, requireMirror)...)
+	errs = append(errs, validateEnvironmentProxy(env)...)
 	return errs
 }
 
-func validateOCPInstallProxy(env v1alpha1.Environment) []string {
-	proxy := v1alpha1.OCPInstallProxyOf(env)
-	if proxy == nil {
+func validateEnvironmentProxy(env v1alpha1.Environment) []string {
+	p := env.Spec.Proxy
+	if p == nil {
 		return nil
 	}
 	var errs []string
-	owner := fmt.Sprintf("Environment/%s ocpInstall.%s.proxy", env.Metadata.Name, v1alpha1.OCPInstallKind(env))
-	if proxy.CredentialsRef.Name != "" && !dnsLabel.MatchString(proxy.CredentialsRef.Name) {
-		errs = append(errs, fmt.Sprintf("%s.credentialsRef.name %q is not a DNS label", owner, proxy.CredentialsRef.Name))
+	owner := fmt.Sprintf("Environment/%s spec.proxy", env.Metadata.Name)
+	if p.Auth != nil && p.Auth.ProxyAuthRef.Name != "" && !dnsLabel.MatchString(p.Auth.ProxyAuthRef.Name) {
+		errs = append(errs, fmt.Sprintf("%s.auth.proxyAuthRef.name %q is not a DNS label", owner, p.Auth.ProxyAuthRef.Name))
 	}
 	for _, field := range []struct{ name, value string }{
-		{"httpProxy", proxy.HTTPProxy},
-		{"httpsProxy", proxy.HTTPSProxy},
+		{"http", p.HTTP},
+		{"https", p.HTTPS},
 	} {
 		if field.value == "" {
 			continue
 		}
 		if proxyURLHasInlineCredentials(field.value) {
-			errs = append(errs, fmt.Sprintf("%s.%s must not embed credentials; use credentialsRef and supply the bare URL", owner, field.name))
+			errs = append(errs, fmt.Sprintf("%s.%s must not embed credentials; use auth.proxyAuthRef and supply the bare URL", owner, field.name))
 		}
 	}
 	return errs
@@ -205,24 +192,24 @@ func proxyURLHasInlineCredentials(url string) bool {
 	return false
 }
 
-func validateRegistriesBlock(env v1alpha1.Environment, registries *v1alpha1.OCPInstallRegistries, requireMirror bool) []string {
+func validateRegistriesBlock(env v1alpha1.Environment, registries *v1alpha1.EnvironmentRegistriesSpec, requireMirror bool) []string {
 	var errs []string
-	owner := fmt.Sprintf("Environment/%s ocpInstall.%s", env.Metadata.Name, v1alpha1.OCPInstallKind(env))
+	owner := fmt.Sprintf("Environment/%s spec.registries", env.Metadata.Name)
 	if registries == nil {
 		if requireMirror {
-			errs = append(errs, fmt.Sprintf("%s requires registries.mirror and trust material", owner))
+			errs = append(errs, fmt.Sprintf("%s.mirror and trust material are required when ocpInstallType=%s", owner, v1alpha1.OCPInstallKindDisconnected))
 		}
 		return errs
 	}
 	if requireMirror && registries.Mirror == nil {
-		errs = append(errs, fmt.Sprintf("%s requires registries.mirror", owner))
+		errs = append(errs, fmt.Sprintf("%s.mirror is required when ocpInstallType=%s", owner, v1alpha1.OCPInstallKindDisconnected))
 	}
 	if registries.Mirror != nil {
 		if registries.Mirror.URL == "" {
-			errs = append(errs, fmt.Sprintf("%s.registries.mirror.url is required", owner))
+			errs = append(errs, fmt.Sprintf("%s.mirror.url is required", owner))
 		}
 		if requireMirror && registries.Mirror.TrustBundleRef.Name == "" {
-			errs = append(errs, fmt.Sprintf("%s.registries.mirror.trustBundleRef is required", owner))
+			errs = append(errs, fmt.Sprintf("%s.mirror.trustBundleRef is required", owner))
 		}
 	}
 	if requireMirror {
@@ -231,29 +218,18 @@ func validateRegistriesBlock(env v1alpha1.Environment, registries *v1alpha1.OCPI
 	return errs
 }
 
-func validateDisconnectedRegistrySources(env v1alpha1.Environment, registries *v1alpha1.OCPInstallRegistries) []string {
+func validateDisconnectedRegistrySources(env v1alpha1.Environment, registries *v1alpha1.EnvironmentRegistriesSpec) []string {
 	var errs []string
 	if registries == nil || registries.Mirror == nil {
 		return errs
 	}
-	owner := fmt.Sprintf("Environment/%s ocpInstall.disconnected.registries", env.Metadata.Name)
+	owner := fmt.Sprintf("Environment/%s spec.registries", env.Metadata.Name)
 	for _, src := range registries.ImageDigestSources {
 		errs = append(errs, validateImageDigestSource(owner, src)...)
 		errs = append(errs, validateMirrorRefs(fmt.Sprintf("%s.imageDigestSources[%s]", owner, src.Source), registries.Mirror.URL, src.Mirrors)...)
 		if src.SourcePolicy == v1alpha1.ImageSourcePolicyAllow {
 			errs = append(errs, fmt.Sprintf("%s.imageDigestSources[%s].sourcePolicy must not allow contacting the source when disconnected", owner, src.Source))
 		}
-	}
-	return errs
-}
-
-func validateEnvironmentSecrets(env v1alpha1.Environment) []string {
-	var errs []string
-	if env.Spec.Secrets.PullSecretRef.Name == "" {
-		errs = append(errs, fmt.Sprintf("Environment/%s spec.secrets.pullSecretRef.name is required", env.Metadata.Name))
-	}
-	if env.Spec.Secrets.ClusterSSHKeyRef.Name == "" {
-		errs = append(errs, fmt.Sprintf("Environment/%s spec.secrets.clusterSSHKeyRef.name is required", env.Metadata.Name))
 	}
 	return errs
 }
@@ -271,8 +247,8 @@ func validateProviders(providers []v1alpha1.InfrastructureProvider) []string {
 		}
 		seen[p.Metadata.Name] = true
 		errs = append(errs, validateProviderHosts(p)...)
-		if p.Spec.Machine == nil && p.Spec.LoadBalancer == nil && p.Spec.NameResolution == nil && p.Spec.Registry == nil {
-			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec must set at least one capability sub-block (machine, loadBalancer, nameResolution, registry)", p.Metadata.Name))
+		if p.Spec.Machine == nil && p.Spec.LoadBalancer == nil && p.Spec.NameResolution == nil && p.Spec.Registry == nil && p.Spec.Proxy == nil {
+			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec must set at least one capability sub-block (machine, loadBalancer, nameResolution, registry, proxy)", p.Metadata.Name))
 		}
 		if p.Spec.Machine != nil {
 			set := 0
@@ -307,6 +283,7 @@ func validateProviders(providers []v1alpha1.InfrastructureProvider) []string {
 		errs = append(errs, validateProviderLoadBalancer(p)...)
 		errs = append(errs, validateProviderNameResolution(p)...)
 		errs = append(errs, validateProviderRegistry(p)...)
+		errs = append(errs, validateProviderProxy(p)...)
 	}
 	return errs
 }
@@ -346,6 +323,37 @@ func validateProviderRegistry(p v1alpha1.InfrastructureProvider) []string {
 	}
 	if mr.Port != 0 && (mr.Port < 1 || mr.Port > 65535) {
 		errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec.registry.mirrorRegistry.port %d out of range", p.Metadata.Name, mr.Port))
+	}
+	return errs
+}
+
+func validateProviderProxy(p v1alpha1.InfrastructureProvider) []string {
+	if p.Spec.Proxy == nil {
+		return nil
+	}
+	var errs []string
+	if p.Spec.Proxy.Squid == nil {
+		errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec.proxy must set exactly one of {squid}", p.Metadata.Name))
+		return errs
+	}
+	squid := p.Spec.Proxy.Squid
+	if squid.HostRef.Name == "" {
+		errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec.proxy.squid.hostRef.name is required", p.Metadata.Name))
+		return errs
+	}
+	host, ok := p.Spec.Hosts[squid.HostRef.Name]
+	if !ok {
+		errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec.proxy.squid.hostRef %q not defined under spec.hosts", p.Metadata.Name, squid.HostRef.Name))
+		return errs
+	}
+	if host.SSH == nil {
+		errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec.proxy.squid.hostRef %q must have ssh connection set", p.Metadata.Name, squid.HostRef.Name))
+	}
+	if !hasCapability(host.Capabilities, v1alpha1.CapabilityProxy) {
+		errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec.proxy.squid.hostRef %q lacks capability %q", p.Metadata.Name, squid.HostRef.Name, v1alpha1.CapabilityProxy))
+	}
+	if squid.Port != 0 && (squid.Port < 1 || squid.Port > 65535) {
+		errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec.proxy.squid.port %d out of range", p.Metadata.Name, squid.Port))
 	}
 	return errs
 }
@@ -483,6 +491,7 @@ func synthesizeClosureProvider(ci v1alpha1.ClusterInfrastructure, closure v1alph
 			LoadBalancer:   closure.LoadBalancer,
 			NameResolution: closure.NameResolution,
 			Registry:       closure.Registry,
+			Proxy:          closure.Proxy,
 		},
 	}
 }
@@ -905,17 +914,18 @@ func validateCrossLayer(state v1alpha1.State) []string {
 		}
 	}
 	if env := primaryEnvironment(&state); env != nil {
-		registries := v1alpha1.OCPInstallRegistriesOf(*env)
+		registries := env.Spec.Registries
 		if registries != nil && registries.Mirror != nil {
 			if u := registries.Mirror.URL; u != "" {
 				if _, err := url.Parse("https://" + u); err != nil {
-					errs = append(errs, fmt.Sprintf("Environment/%s ocpInstall.registries.mirror.url %q invalid: %v", env.Metadata.Name, u, err))
+					errs = append(errs, fmt.Sprintf("Environment/%s spec.registries.mirror.url %q invalid: %v", env.Metadata.Name, u, err))
 				}
 			}
 		}
 	}
 	errs = append(errs, validateDisconnectedOpenShiftSources(state)...)
 	errs = append(errs, validateMirrorRegistryPlacement(state)...)
+	errs = append(errs, validateManagedProxyPlacement(state)...)
 	return errs
 }
 
@@ -925,7 +935,7 @@ func validateSecretReferences(state v1alpha1.State) []string {
 		return nil
 	}
 	declared := map[string]bool{}
-	for name := range env.Spec.Keys {
+	for name := range env.Spec.Secrets {
 		declared[name] = true
 	}
 	var errs []string
@@ -938,16 +948,14 @@ func validateSecretReferences(state v1alpha1.State) []string {
 			return
 		}
 		if !declared[ref.Name] {
-			errs = append(errs, fmt.Sprintf("%s %q is not declared in Environment/%s spec.keys", owner, ref.Name, env.Metadata.Name))
+			errs = append(errs, fmt.Sprintf("%s %q is not declared in Environment/%s spec.secrets", owner, ref.Name, env.Metadata.Name))
 		}
 	}
-	require(fmt.Sprintf("Environment/%s spec.secrets.pullSecretRef", env.Metadata.Name), env.Spec.Secrets.PullSecretRef)
-	require(fmt.Sprintf("Environment/%s spec.secrets.clusterSSHKeyRef", env.Metadata.Name), env.Spec.Secrets.ClusterSSHKeyRef)
-	if proxy := v1alpha1.OCPInstallProxyOf(*env); proxy != nil {
-		require(fmt.Sprintf("Environment/%s ocpInstall.%s.proxy.credentialsRef", env.Metadata.Name, v1alpha1.OCPInstallKind(*env)), proxy.CredentialsRef)
+	if env.Spec.Proxy != nil && env.Spec.Proxy.Auth != nil {
+		require(fmt.Sprintf("Environment/%s spec.proxy.auth.proxyAuthRef", env.Metadata.Name), env.Spec.Proxy.Auth.ProxyAuthRef)
 	}
-	if registries := v1alpha1.OCPInstallRegistriesOf(*env); registries != nil && registries.Mirror != nil {
-		owner := fmt.Sprintf("Environment/%s ocpInstall.%s.registries.mirror", env.Metadata.Name, v1alpha1.OCPInstallKind(*env))
+	if registries := env.Spec.Registries; registries != nil && registries.Mirror != nil {
+		owner := fmt.Sprintf("Environment/%s spec.registries.mirror", env.Metadata.Name)
 		require(owner+".credentialsRef", registries.Mirror.CredentialsRef)
 		require(owner+".trustBundleRef", registries.Mirror.TrustBundleRef)
 	}
@@ -993,7 +1001,7 @@ func validateMirrorRegistryPlacement(state v1alpha1.State) []string {
 	if v1alpha1.OCPInstallKind(*env) != v1alpha1.OCPInstallKindDisconnected {
 		return nil
 	}
-	registries := v1alpha1.OCPInstallRegistriesOf(*env)
+	registries := env.Spec.Registries
 	if registries == nil || registries.Mirror == nil {
 		return nil
 	}
@@ -1005,12 +1013,12 @@ func validateMirrorRegistryPlacement(state v1alpha1.State) []string {
 		}
 	}
 	if len(suppliers) == 0 {
-		errs = append(errs, fmt.Sprintf("Environment/%s ocpInstall.disconnected requires at least one InfrastructureProvider with spec.registry.mirrorRegistry set; declare the capability or switch to restricted", env.Metadata.Name))
+		errs = append(errs, fmt.Sprintf("Environment/%s ocpInstallType=disconnected requires at least one InfrastructureProvider with spec.registry.mirrorRegistry set", env.Metadata.Name))
 		return errs
 	}
 	if len(suppliers) > 1 {
 		sort.Strings(suppliers)
-		errs = append(errs, fmt.Sprintf("Environment/%s ocpInstall.disconnected requires exactly one provider supplying spec.registry.mirrorRegistry, found %d: %s", env.Metadata.Name, len(suppliers), strings.Join(suppliers, ", ")))
+		errs = append(errs, fmt.Sprintf("Environment/%s ocpInstallType=disconnected requires exactly one provider supplying spec.registry.mirrorRegistry, found %d: %s", env.Metadata.Name, len(suppliers), strings.Join(suppliers, ", ")))
 	}
 	urlPort := mirrorURLPort(registries.Mirror.URL)
 	for _, p := range state.InfrastructureProviders {
@@ -1019,10 +1027,141 @@ func validateMirrorRegistryPlacement(state v1alpha1.State) []string {
 			continue
 		}
 		if mr.Port != urlPort {
-			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec.registry.mirrorRegistry.port %d does not match Environment ocpInstall.registries.mirror.url port %d", p.Metadata.Name, mr.Port, urlPort))
+			errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec.registry.mirrorRegistry.port %d does not match Environment spec.registries.mirror.url port %d", p.Metadata.Name, mr.Port, urlPort))
 		}
 	}
 	return errs
+}
+
+func validateManagedProxyPlacement(state v1alpha1.State) []string {
+	env := primaryEnvironment(&state)
+	var p *v1alpha1.EnvironmentProxySpec
+	if env != nil {
+		p = env.Spec.Proxy
+	}
+	var errs []string
+	var suppliers []v1alpha1.InfrastructureProvider
+	for _, provider := range state.InfrastructureProviders {
+		if v1alpha1.ProviderProxySquid(provider) != nil {
+			suppliers = append(suppliers, provider)
+		}
+	}
+	if len(suppliers) == 0 {
+		return nil
+	}
+	supplierNames := make([]string, 0, len(suppliers))
+	for _, provider := range suppliers {
+		supplierNames = append(supplierNames, provider.Metadata.Name)
+	}
+	sort.Strings(supplierNames)
+	if len(suppliers) > 1 {
+		errs = append(errs, fmt.Sprintf("managed proxy requires exactly one provider supplying spec.proxy.squid, found %d: %s", len(suppliers), strings.Join(supplierNames, ", ")))
+		return errs
+	}
+	supplier := suppliers[0]
+	squid := v1alpha1.ProviderProxySquid(supplier)
+	if env == nil || p == nil {
+		envName := ""
+		if env != nil {
+			envName = "/" + env.Metadata.Name
+		}
+		errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec.proxy.squid requires Environment%s spec.proxy.auth.proxyAuthRef.name", supplier.Metadata.Name, envName))
+		return errs
+	}
+	if p.Auth == nil || p.Auth.ProxyAuthRef.Name == "" {
+		errs = append(errs, fmt.Sprintf("InfrastructureProvider/%s spec.proxy.squid requires Environment/%s spec.proxy.auth.proxyAuthRef.name", supplier.Metadata.Name, env.Metadata.Name))
+	}
+	for _, field := range []struct {
+		name  string
+		value string
+	}{
+		{name: "http", value: p.HTTP},
+		{name: "https", value: p.HTTPS},
+	} {
+		if field.value == "" {
+			continue
+		}
+		errs = append(errs, validateManagedProxyURLPort(env.Metadata.Name, supplier.Metadata.Name, squid.Port, field.name, field.value)...)
+	}
+
+	providers := providerIndex(state.InfrastructureProviders)
+	for _, ci := range state.ClusterInfrastructures {
+		closure, closureErrs := v1alpha1.BuildProviderClosure(ci, providers)
+		if len(closureErrs) > 0 {
+			continue
+		}
+		if closure.Proxy == nil {
+			errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s does not reference the managed proxy provider %q; add it to providerRefs or remove spec.proxy.squid", ci.Metadata.Name, supplier.Metadata.Name))
+			continue
+		}
+		if closure.ProxyProviderName != supplier.Metadata.Name {
+			continue
+		}
+		if closure.Machine == nil || closure.Machine.Libvirt == nil {
+			continue
+		}
+		if !clusterHasLibvirtNetwork(ci) {
+			continue
+		}
+		if gateway := primaryMachineNetworkGateway(ci); gateway == "" && (p.HTTP == "" || p.HTTPS == "") {
+			errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s managed proxy isolation requires the primary libvirt machine network gateway when spec.proxy.http or https is omitted", ci.Metadata.Name))
+		}
+		for machineName, machine := range ci.Spec.Machines {
+			if machine.Libvirt == nil {
+				continue
+			}
+			if machine.Libvirt.HostRef.Name != squid.HostRef.Name {
+				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s machines[%s].libvirt.hostRef %q is not safely reachable from managed proxy hostRef %q; v1 isolation requires same libvirt/provider host placement", ci.Metadata.Name, machineName, machine.Libvirt.HostRef.Name, squid.HostRef.Name))
+			}
+		}
+	}
+	return errs
+}
+
+func validateManagedProxyURLPort(envName, providerName string, proxyPort int, fieldName, raw string) []string {
+	if proxyPort == 0 {
+		proxyPort = v1alpha1.DefaultSquidPort
+	}
+	var errs []string
+	u, err := url.Parse(raw)
+	if err != nil {
+		return []string{fmt.Sprintf("Environment/%s spec.proxy.%s %q invalid: %v", envName, fieldName, raw, err)}
+	}
+	if u.Scheme != "http" || u.Host == "" {
+		errs = append(errs, fmt.Sprintf("Environment/%s spec.proxy.%s must be an http URL with host for managed proxy InfrastructureProvider/%s", envName, fieldName, providerName))
+	}
+	urlPort := u.Port()
+	if urlPort == "" {
+		errs = append(errs, fmt.Sprintf("Environment/%s spec.proxy.%s must include port %d for managed proxy InfrastructureProvider/%s", envName, fieldName, proxyPort, providerName))
+		return errs
+	}
+	if urlPort != fmt.Sprintf("%d", proxyPort) {
+		errs = append(errs, fmt.Sprintf("Environment/%s spec.proxy.%s port %s does not match InfrastructureProvider/%s spec.proxy.squid.port %d", envName, fieldName, urlPort, providerName, proxyPort))
+	}
+	return errs
+}
+
+func clusterHasLibvirtNetwork(ci v1alpha1.ClusterInfrastructure) bool {
+	for _, network := range ci.Spec.Networks {
+		if network.Libvirt != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func primaryMachineNetworkGateway(ci v1alpha1.ClusterInfrastructure) string {
+	names := make([]string, 0, len(ci.Spec.Networks))
+	for name := range ci.Spec.Networks {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if ci.Spec.Networks[name].Libvirt != nil {
+			return ci.Spec.Networks[name].Gateway
+		}
+	}
+	return ""
 }
 
 func mirrorURLPort(u string) int {
@@ -1065,7 +1204,7 @@ func validateDisconnectedOpenShiftSources(state v1alpha1.State) []string {
 	if env == nil || v1alpha1.OCPInstallKind(*env) != v1alpha1.OCPInstallKindDisconnected {
 		return nil
 	}
-	registries := v1alpha1.OCPInstallRegistriesOf(*env)
+	registries := env.Spec.Registries
 	if registries == nil || registries.Mirror == nil {
 		return nil
 	}

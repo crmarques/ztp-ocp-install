@@ -23,13 +23,13 @@
 
 ## OCP Install Trust Material
 
-`Environment.spec.ocpInstall.disconnected` requires registry mirrors and
-trust material defined inside the `disconnected` sub-block. The validator
+`Environment.spec.ocpInstallType: disconnected` requires
+`spec.registries.mirror` and trust material at the top level. The validator
 rejects `disconnected` without both. Trust bundle material is referenced
-by `registries.mirror.trustBundleRef.name`; bundle bytes are never
+by `spec.registries.mirror.trustBundleRef.name`; bundle bytes are never
 inlined into YAML. Lab environments may request generated self-signed
 registry trust by declaring the same name in
-`Environment.spec.keys[name].generated.selfSignedCertificate`, and Gitups
+`Environment.spec.secrets[name].generated.selfSignedCertificate`, and Gitups
 writes the certificate and private key only to the local secrets directory.
 Disconnected mode requires OpenShift `imageDigestSources` for the mirrored
 release payload sources. Gitups renders those sources with
@@ -38,10 +38,10 @@ registry, and uses a local release-image override. For libvirt lab
 installs with emulated BMC, disconnected agent ISO rendering also uses
 provider-hosted boot artifacts rather than public RHCOS boot-artifact URLs.
 
-`Environment.spec.ocpInstall.connected` must remain empty. The validator
-rejects proxy, mirror, or trust material declared under `connected` so no
-mirror credentials, trust bundles, or `imageDigestSources` ever reach the
-rendered install-config or host runtime.
+`Environment.spec.ocpInstallType: connected` only renders mirror credentials,
+trust bundles, or `imageDigestSources` into the install-config when the
+operator explicitly declares `spec.registries`; otherwise none of that
+material reaches the rendered install-config or host runtime.
 
 When the operator declares `InfrastructureProvider.spec.registry.mirrorRegistry`,
 the `provider_mirror_registry` role installs the registry CA into the host
@@ -51,6 +51,19 @@ trust still flows through the install-config `additionalTrustBundle` path.
 The mirror htpasswd file is derived at apply time from a single-line
 `username:password` secret named by `registries.mirror.credentialsRef` and
 never inlined into committed YAML or rendered manifests.
+
+When the operator declares `InfrastructureProvider.spec.proxy.squid`, the
+`provider_proxy_squid` role derives Squid htpasswd state from the single-line
+`username:password` secret named by `spec.proxy.auth.proxyAuthRef`. The same
+secret is also used to inject credentialed installer proxy URLs into
+effective install-config work copies. Managed Squid requires authentication;
+open managed proxies and chained upstream proxies are out of scope.
+
+If a managed proxy is referenced by a Gitups-managed libvirt cluster,
+Gitups removes NAT from that libvirt network so VMs cannot use direct internet
+egress. This isolation is limited to those managed libvirt networks and must
+not add firewall blocks to external proxy, no-proxy, bare-metal, vSphere,
+OpenShift Virtualization, or provider-host paths.
 
 ## Host Runtime State
 

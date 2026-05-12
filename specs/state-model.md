@@ -17,17 +17,18 @@ stable spec coverage of a real multi-provider deployment.
 
 | Layer | Kind | Owns |
 | --- | --- | --- |
-| Global UX | `Environment` | base domain, OpenShift install mode (typed sub-blocks: `connected` / `restricted` / `disconnected`), shared secret refs, OpenShift release defaults, component image pins |
-| Substrate | `InfrastructureProvider` | provider hosts (shared pool with structural connection sub-block), capability sub-blocks (`machine` / `loadBalancer` / `nameResolution`) — each independently optional |
+| Global UX | `Environment` | base domain, OpenShift install mode (`ocpInstallType: connected | disconnected`), shared secret sources, OpenShift release defaults, component image pins |
+| Substrate | `InfrastructureProvider` | provider hosts (shared pool with structural connection sub-block), capability sub-blocks (`machine` / `loadBalancer` / `nameResolution` / `registry` / `proxy`) — each independently optional |
 | Cluster infra | `ClusterInfrastructure` | provider composition (`providerRefs` list), per-cluster network instances (with provider-typed sub-blocks), machines (with provider-typed placement), endpoints (api / api-int / ingress with VIPs), load-balancer endpoint binds |
 | Cluster intent | `OCPCluster` | role, topology, install method/overrides, networking (clusterNetwork / serviceNetwork), OCP node identity |
 
 `InfrastructureProvider` is **capability-oriented**. Each top-level
-capability sub-block (`machine`, `loadBalancer`, `nameResolution`) is
-**independently optional**: a provider declares only what it supplies. At
-least one capability must be set. `spec.hosts` is also optional — capabilities
-that need an SSH-reachable Linux host reference an entry by name; capabilities
-that talk to an appliance via API embed their endpoint inline.
+capability sub-block (`machine`, `loadBalancer`, `nameResolution`,
+`registry`, `proxy`) is **independently optional**: a provider declares only
+what it supplies. At least one capability must be set. `spec.hosts` is also
+optional — capabilities that need an SSH-reachable Linux host reference an
+entry by name; capabilities that talk to an appliance via API embed their
+endpoint inline.
 
 `ClusterInfrastructure.spec.providerRefs` is a **list**: a cluster may
 compose machines from one provider and load balancing from another. The
@@ -43,13 +44,12 @@ metadata:
   name: connected-fleet
 spec:
   baseDomain: example.test
-  ocpInstall:
-    connected: {}
+  ocpInstallType: connected
   secrets:
-    pullSecretRef:
-      name: openshift-pull-secret
-    clusterSSHKeyRef:
-      name: cluster-admin-key
+    openshift-pull-secret:
+      file: ~/.gitups/secrets/openshift-pull-secret
+    cluster-admin-key:
+      file: ~/.ssh/gitups-ssh-key.pub
   openshift:
     release:
       channel: stable-4.21
@@ -59,28 +59,28 @@ spec:
 
 Rules:
 
-- `ocpInstall` scopes the connected/restricted/disconnected selection to
-  OpenShift install material (release payload, mirror registry, trust
-  bundles). It does not describe the lab host's substrate connectivity.
-- `ocpInstall` carries exactly one of `connected`, `restricted`, or
-  `disconnected`. The presence of the sub-block is the configuration; no
-  `mode` or `type` string sits beside it.
-- When `ocpInstall` is omitted, the normalizer treats it as `connected: {}`.
-- `ocpInstall.connected` is an empty struct. No proxy, mirror, or trust
-  material may be declared inside it.
-- `ocpInstall.restricted` and `ocpInstall.disconnected` carry typed
-  `proxy` and `registries` blocks. The mirror's CA is referenced via
-  `registries.mirror.trustBundleRef.name`. `disconnected` additionally
-  requires registry mirrors and a non-empty `trustBundleRef`; the
-  validator rejects `disconnected` without both.
-- Every secret name lives under `Environment.spec.keys[name]`, with
+- `ocpInstallType` is a string enum: `connected` (default when unset) or
+  `disconnected`. It scopes only OpenShift install material and does not
+  describe the lab host's substrate connectivity.
+- `spec.proxy` is a top-level optional block carrying `http`, `https`,
+  `noProxy`, and `auth.proxyAuthRef`. When set it applies to every component
+  (bastion CLI, provider-host package and image pulls, generated
+  `install-config.yaml`, `openshift-install`). Gitups auto-extends `noProxy`
+  with cluster-local endpoints (service/cluster CIDRs, `.svc`,
+  `.cluster.local`, base domain, mirror registry host, provider host
+  addresses); user entries take precedence and are listed first.
+- `spec.registries` is a top-level optional block holding the mirror endpoint
+  and trust material plus optional `imageDigestSources`. Required when
+  `ocpInstallType: disconnected`; the validator rejects `disconnected`
+  without `spec.registries.mirror` and a non-empty `trustBundleRef`.
+- Every secret name lives under `Environment.spec.secrets[name]`, with
   exactly one source set: `file:` for operator-supplied material on
   disk, or `generated:` for material gitups produces (a
   `username:password\n` credentials file or a self-signed cert/key
-  pair). `gitups secret generate -f` materializes only generated keys;
-  file-sourced keys must exist at their declared paths or be written by the
+  pair). `gitups secret generate -f` materializes only generated secrets;
+  file-sourced secrets must exist at their declared paths or be written by the
   dedicated secret writer commands. The bytes never appear in YAML.
-- `Environment` owns proxy, registry mirrors, trust bundles, secret refs,
+- `Environment` owns proxy, registry mirrors, trust bundles, secret sources,
   OpenShift defaults, and component image pins.
 - `Environment` must not define machines, provider hosts, BMC settings,
   VIPs, load-balancer placement, DNS placement, or per-cluster topology.
@@ -102,6 +102,7 @@ spec:
       capabilities:
         - libvirt
         - hosts-file
+        - proxy
   machine:
     libvirt:
       hostRefs:
@@ -121,6 +122,13 @@ spec:
       hostRef:
         name: qemu-host
       port: 5000
+  proxy:
+    squid:
+      hostRef:
+        name: qemu-host
+      port: 3128
+      runtime: podman
+      dataDir: /var/lib/gitups/proxy
 ```
 
 Rules:
@@ -128,8 +136,8 @@ Rules:
 - `spec` is capability-oriented. Each top-level sub-block is independently
   optional: `machine` (substrate flavors `libvirt | baremetal | vsphere |
   kubevirt`), `loadBalancer` (flavors `haProxy`, …), `nameResolution`
-  (flavors `hostsFile`, …), `registry` (flavors `mirrorRegistry`, …). At
-  least one capability must be set.
+  (flavors `hostsFile`, …), `registry` (flavors `mirrorRegistry`, …),
+  `proxy` (flavors `squid`, …). At least one capability must be set.
 - `spec.hosts` is the shared host pool. Each entry carries a structural
   connection sub-block — v1 ships only `ssh`. Capabilities reference hosts
   by name (`hostRef` / `hostRefs`); appliance-style capabilities embed the
@@ -139,20 +147,26 @@ Rules:
   Ansible root escalation for mutating provider, cluster, and OCP workflows,
   including `ssh.address: localhost`.
 - Each capability sub-block (`machine`, `loadBalancer`, `nameResolution`,
-  `registry`) is itself a structural-discriminator union: exactly one
+  `registry`, `proxy`) is itself a structural-discriminator union: exactly one
   flavor sub-block is set. There is no `type` / `mode` / `kind`
   discriminator string.
-- Omitting `loadBalancer`, `nameResolution`, or `registry` means
+- Omitting `loadBalancer`, `nameResolution`, `registry`, or `proxy` means
   **external** — the operator owns that concern for clusters bound to
   this provider.
 - `registry.mirrorRegistry` requires its `hostRef` host to list the
   `mirror-registry` capability. The URL, credentials, and trust material
-  remain on `Environment.spec.ocpInstall.{disconnected,restricted}.registries.mirror`;
+  remain on `Environment.spec.registries.mirror`;
   the provider only contributes placement.
+- `proxy.squid` requires its `hostRef` host to list the `proxy`
+  capability. The credentials stay in
+  `Environment.spec.proxy.auth.proxyAuthRef`.
+  If `proxy.squid` is omitted, any install proxy URL is external. If it is
+  present, Gitups provisions authenticated Squid using
+  `componentImages.proxy.squid` or the default pinned Squid image.
 - Owns: provider host pool with capabilities, machine substrate (with
   BMC service settings and reusable machine profiles for libvirt), load
   balancer placement, name resolution placement, mirror registry
-  placement.
+  placement, managed proxy placement.
 - Must not own per-cluster network instances (bridge names, portgroups,
   CIDRs), per-machine placement, OpenShift role, release, install config,
   OCP node roles, cluster VIPs, or cluster endpoint definitions, or the
@@ -210,9 +224,10 @@ Rules:
 
 - `providerRefs` is a non-empty list. The closure of all referenced
   providers' capabilities supplies what the cluster needs; at most one
-  contributor per capability (`machine`, `loadBalancer`, `nameResolution`)
-  is allowed in the closure. A bare-metal `machine` provider can be
-  composed with an haProxy `loadBalancer` provider on a separate host.
+  contributor per capability (`machine`, `loadBalancer`, `nameResolution`,
+  `registry`, `proxy`) is allowed in the closure. A bare-metal `machine`
+  provider can be composed with an haProxy `loadBalancer` provider on a
+  separate host.
 - Per-cluster network instances live here. Each entry under `spec.networks`
   carries the IP layer (CIDR, gateway, DNS) plus a substrate-typed sub-block
   that realises the network (`libvirt.bridge`, `vsphere.portgroup`, …). The
@@ -226,6 +241,14 @@ Rules:
   explicitly overrides them.
 - A default load balancer may bind all standard endpoints by name. Omitting
   `loadBalancers` entirely means external (operator-owned).
+- Managed proxy is selected by pairing
+  `Environment.spec.proxy` with exactly
+  one referenced provider that supplies `InfrastructureProvider.spec.proxy.squid`.
+  The proxy credentials live only in the environment proxy `credentialsRef`.
+  For Gitups-managed libvirt networks, this also renders the libvirt network
+  without NAT so VMs reach the internet only through the managed Squid proxy.
+  External proxies, no proxy, bare metal, vSphere, and OpenShift
+  Virtualization do not receive egress blocking.
 - Provider-specific machine placement (`libvirt.hostRef`, `baremetal.bmc`,
   `vsphere.{datastore,folder,template}`) lives here because it allocates
   machines on a provider; the placement sub-block must match the closure's
@@ -274,7 +297,7 @@ Rules:
   overrides remain allowed on `OCPCluster.spec.install`.
 - Agent-install boot artifact wiring (minimal-ISO selection and provider-
   local `bootArtifactsBaseURL`) is Gitups-derived from `Environment`
-  `ocpInstall`, the referenced provider, and `ClusterInfrastructure`.
+  `ocpInstallType`, the referenced provider, and `ClusterInfrastructure`.
   Users do not set those fields; validation rejects them.
 - For disconnected installs, Gitups derives OpenShift release payload
   `imageDigestSources` for `ocp-release` and `ocp-v4.0-art-dev`, defaults
@@ -306,12 +329,16 @@ The validator enforces:
   provider host addresses and credentials.
 - Reject network sub-blocks on `ClusterInfrastructure.spec.networks` whose
   provider kind disagrees with the referenced `InfrastructureProvider`.
-- Reject `Environment.spec.ocpInstall.disconnected` without registry
+- Reject `Environment.spec.ocpInstallType: disconnected` without registry
   mirror and trust material.
-- Reject `Environment.spec.ocpInstall.disconnected` when no
+- Reject `Environment.spec.ocpInstallType: disconnected` when no
   `InfrastructureProvider` in the loaded set supplies
   `spec.registry.mirrorRegistry`. Omission means external; for
   disconnected, an external mirror is not assumed.
+- Reject managed Squid without `spec.proxy.auth.proxyAuthRef`, duplicate
+  proxy providers, invalid proxy host refs, hosts lacking the `proxy`
+  capability, invalid ports, managed proxy URL/port mismatches, and libvirt
+  managed-proxy isolation whose v1 placement is not safely reachable.
 - Reject duplicated facts across layers when a referenced lower layer
   owns the fact.
 - Resolve every upper-layer reference to the correct lower-layer object

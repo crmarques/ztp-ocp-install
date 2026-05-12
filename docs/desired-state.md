@@ -12,7 +12,7 @@ validation rules live in [`/specs/state-model.md`](../specs/state-model.md).
 
 | Fact | Kind |
 | --- | --- |
-| base domain, OpenShift install mode, shared secret refs, release defaults | `Environment` |
+| base domain, OpenShift install type, optional proxy and registries, shared secret sources, release defaults | `Environment` |
 | provider hosts, provider credentials, Redfish/BMC emulation, machine profiles | `InfrastructureProvider` |
 | cluster networks, machines, VIPs, load balancer placement, name resolution | `ClusterInfrastructure` |
 | hub/managed role, topology, install method, cluster networking, node identity | `OCPCluster` |
@@ -28,13 +28,12 @@ metadata:
   name: connected-hub
 spec:
   baseDomain: example.test
-  ocpInstall:
-    connected: {}
+  ocpInstallType: connected
   secrets:
-    pullSecretRef:
-      name: openshift-pull-secret
-    clusterSSHKeyRef:
-      name: cluster-admin-key
+    openshift-pull-secret:
+      file: ~/.gitups/secrets/openshift-pull-secret
+    cluster-admin-key:
+      file: ~/.ssh/gitups-ssh-key.pub
   openshift:
     release:
       channel: stable-4.21
@@ -107,8 +106,44 @@ spec:
       role: control-plane
 ```
 
-External DNS and load balancing are assumed unless `ClusterInfrastructure`
-declares managed name resolution or managed load balancers.
+External DNS is assumed unless `ClusterInfrastructure` declares managed name
+resolution. Load balancing has three dispositions, selected purely by what
+`ClusterInfrastructure` does or does not declare:
+
+- **External LB** — `endpoints` defined, `loadBalancers` omitted, and the
+  referenced provider has no `loadBalancer` capability. Gitups passes the VIPs
+  to the installer and provisions nothing; an external LB answers the VIPs.
+- **Installer-managed (keepalived + haproxy on the control planes)** — same
+  desired state as External LB. On multi-node `platform: baremetal` (libvirt
+  renders as baremetal) the agent installer itself deploys keepalived and
+  haproxy on the control-plane nodes, so no external LB is required. See
+  [`examples/baremetal-redfish-fleet`](../examples/baremetal-redfish-fleet/).
+- **Gitups-managed HAProxy** — `loadBalancers` is declared on
+  `ClusterInfrastructure` and the referenced provider declares a
+  `loadBalancer.haProxy` capability. Gitups pins the HAProxy component and
+  Ansible places it on the chosen provider host. See
+  [`examples/baremetal-edge-lb-fleet`](../examples/baremetal-edge-lb-fleet/).
+
+Proxy has the same split between client contract and provider placement.
+`Environment.spec.proxy` (`http`, `https`, `noProxy`, `auth.proxyAuthRef`)
+declares the outbound proxy that every component should use — bastion CLI,
+provider-host package and image pulls, generated `install-config.yaml`, and
+`openshift-install`. Gitups auto-extends `noProxy` with cluster-local
+endpoints (service/cluster CIDRs, `.svc`, `.cluster.local`, base domain,
+mirror registry host, provider host addresses); user-supplied entries take
+precedence. If a referenced provider also declares `spec.proxy.squid`, Gitups
+provisions authenticated Squid on that host and materializes its htpasswd
+from the same `auth.proxyAuthRef`. If no provider declares `proxy.squid`, the
+proxy URLs are treated as external.
+
+`Environment.spec.registries.mirror` declares the OpenShift mirror endpoint
+and trust material. It is required when `ocpInstallType: disconnected` and
+optional alongside `connected` when only release content is mirrored.
+
+For Gitups-managed libvirt networks, managed Squid also isolates VM egress:
+the rendered libvirt network omits NAT and VMs reach the internet through the
+proxy only. This is not applied for external proxies, no proxy, bare metal,
+vSphere, OpenShift Virtualization, or provider-host networking.
 
 ## Provider Swap
 
@@ -196,12 +231,12 @@ gitups secret generate -f examples/libvirt-redfish-hub
 ```
 
 Both file-sourced and gitups-generated secrets are declared in
-`Environment.spec.keys[name]`. A `file:` source points at operator-supplied
+`Environment.spec.secrets[name]`. A `file:` source points at operator-supplied
 material on disk; a `generated:` source asks gitups to materialize the
 secret itself — either a `username:password\n` file (`generated.credentials`)
 or a self-signed cert/key pair (`generated.selfSignedCertificate`). The
 mirror trust bundle is wired via `registries.mirror.trustBundleRef.name`;
-the matching `keys[name].generated.selfSignedCertificate` decides how that
+the matching `secrets[name].generated.selfSignedCertificate` decides how that
 reference is sourced. `gitups secret generate -f` materializes only
 `generated:` entries; `file:` entries must already exist at their declared
 paths or be written with `gitups secret set <name> --pull-secret <path>` for

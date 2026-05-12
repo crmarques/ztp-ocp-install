@@ -1,0 +1,7 @@
+---
+gitups_forward_proxy_root: "{{ gitups_current_forward_proxy.dataDir | default(gitups_host_state_dir ~ '/forward-proxy/' ~ gitups_current_forward_proxy.name, true) }}"
+gitups_forward_proxy_config_dir: "{{ gitups_forward_proxy_root }}/config"
+gitups_forward_proxy_auth_dir: "{{ gitups_forward_proxy_root }}/auth"
+gitups_forward_proxy_cache_dir: "{{ gitups_forward_proxy_root }}/cache"
+gitups_forward_proxy_logs_dir: "{{ gitups_forward_proxy_root }}/logs"
+gitups_forward_proxy_container_name: "gitups-squid-{{ gitups_current_forward_proxy.name }}"

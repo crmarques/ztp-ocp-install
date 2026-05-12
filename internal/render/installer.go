@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/crmarques/gitups/api/v1alpha1"
+	"github.com/crmarques/gitups/internal/proxy"
 )
 
 type InstallerAsset struct {
@@ -85,26 +86,35 @@ func InstallerConfigWithSecrets(state v1alpha1.State, ocp v1alpha1.OCPCluster, s
 	if mirrors := imageDigestSourcesConfig(ocp.Spec.Install.ImageDigestSources); len(mirrors) > 0 {
 		base["imageDigestSources"] = mirrors
 	}
-	if proxy := installerProxyConfig(primaryEnvironment(state), secrets); proxy != nil {
+	env := primaryEnvironment(state)
+	if proxy := installerProxyConfig(proxy.Resolve(state, env), secrets, managedProxyClientURL(infra, provider, env)); proxy != nil {
 		base["proxy"] = proxy
 	}
 	return mergeYAMLMaps(base, ocp.Spec.Install.InstallConfigOverrides), nil
 }
 
-func installerProxyConfig(env *v1alpha1.Environment, secrets InstallerSecrets) map[string]any {
-	if env == nil {
+func installerProxyConfig(eff *proxy.Effective, secrets InstallerSecrets, fallbackURL string) map[string]any {
+	if eff == nil && fallbackURL == "" {
 		return nil
 	}
-	proxy := v1alpha1.OCPInstallProxyOf(*env)
-	if proxy == nil || (proxy.HTTPProxy == "" && proxy.HTTPSProxy == "" && len(proxy.NoProxy) == 0) {
+	if eff == nil {
+		eff = &proxy.Effective{}
+	}
+	if eff.HTTP == "" && eff.HTTPS == "" && len(eff.NoProxy) == 0 && fallbackURL == "" {
 		return nil
 	}
 	out := map[string]any{}
-	httpURL := proxy.HTTPProxy
+	httpURL := eff.HTTP
+	if httpURL == "" {
+		httpURL = fallbackURL
+	}
 	if secrets.ProxyHTTP != "" {
 		httpURL = secrets.ProxyHTTP
 	}
-	httpsURL := proxy.HTTPSProxy
+	httpsURL := eff.HTTPS
+	if httpsURL == "" {
+		httpsURL = fallbackURL
+	}
 	if secrets.ProxyHTTPS != "" {
 		httpsURL = secrets.ProxyHTTPS
 	}
@@ -114,8 +124,8 @@ func installerProxyConfig(env *v1alpha1.Environment, secrets InstallerSecrets) m
 	if httpsURL != "" {
 		out["httpsProxy"] = httpsURL
 	}
-	if len(proxy.NoProxy) > 0 {
-		out["noProxy"] = strings.Join(proxy.NoProxy, ",")
+	if len(eff.NoProxy) > 0 {
+		out["noProxy"] = strings.Join(eff.NoProxy, ",")
 	}
 	return out
 }

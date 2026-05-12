@@ -9,32 +9,33 @@ import (
 	"strings"
 
 	"github.com/crmarques/gitups/api/v1alpha1"
+	"github.com/crmarques/gitups/internal/proxy"
 )
 
 // resolveProxyEnv returns HTTP_PROXY/HTTPS_PROXY/NO_PROXY env values
-// derived from the first environment that defines ocpInstall.proxy.
-// Credentials referenced by credentialsRef are read from the resolved
-// secret path and url-encoded into the proxy URLs.
-// Returns nil when no environment declares a proxy.
+// derived from the first environment that defines spec.proxy. Credentials
+// referenced by spec.proxy.auth.proxyAuthRef are read from the resolved
+// secret path and url-encoded into the proxy URLs. Returns nil when no
+// environment declares a proxy.
 func resolveProxyEnv(state v1alpha1.State, secretsDir string) (map[string]string, error) {
 	for i := range state.Environments {
 		env := state.Environments[i]
-		proxy := v1alpha1.OCPInstallProxyOf(env)
-		if proxy == nil || (proxy.HTTPProxy == "" && proxy.HTTPSProxy == "" && len(proxy.NoProxy) == 0) {
+		eff := proxy.Resolve(state, &env)
+		if eff == nil || (eff.HTTP == "" && eff.HTTPS == "" && len(eff.NoProxy) == 0) {
 			continue
 		}
 		authority := ""
-		if proxy.CredentialsRef.Name != "" {
-			path := resolvedSecretPath(proxy.CredentialsRef.Name, &env, secretsDir)
+		if eff.Auth.Name != "" {
+			path := resolvedSecretPath(eff.Auth.Name, &env, secretsDir)
 			user, pass, err := readProxyCredentials(path)
 			if err != nil {
 				return nil, fmt.Errorf("read proxy credentials %q: %w", path, err)
 			}
 			authority = url.QueryEscape(user) + ":" + url.QueryEscape(pass) + "@"
 		}
-		httpURL := injectProxyAuthority(proxy.HTTPProxy, authority)
-		httpsURL := injectProxyAuthority(proxy.HTTPSProxy, authority)
-		noProxy := strings.Join(proxy.NoProxy, ",")
+		httpURL := injectProxyAuthority(eff.HTTP, authority)
+		httpsURL := injectProxyAuthority(eff.HTTPS, authority)
+		noProxy := strings.Join(eff.NoProxy, ",")
 		out := map[string]string{}
 		if httpURL != "" {
 			out["HTTP_PROXY"] = httpURL

@@ -381,9 +381,9 @@ func generatedSelfSignedRequests(state v1alpha1.State) ([]generatedSelfSignedReq
 	if env == nil {
 		return nil, nil
 	}
-	names := make([]string, 0, len(env.Spec.Keys))
-	for name, key := range env.Spec.Keys {
-		if key.Generated == nil || key.Generated.SelfSignedCertificate == nil {
+	names := make([]string, 0, len(env.Spec.Secrets))
+	for name, secret := range env.Spec.Secrets {
+		if secret.Generated == nil || secret.Generated.SelfSignedCertificate == nil {
 			continue
 		}
 		names = append(names, name)
@@ -391,7 +391,7 @@ func generatedSelfSignedRequests(state v1alpha1.State) ([]generatedSelfSignedReq
 	sort.Strings(names)
 	result := make([]generatedSelfSignedRequest, 0, len(names))
 	for _, name := range names {
-		cert := *env.Spec.Keys[name].Generated.SelfSignedCertificate
+		cert := *env.Spec.Secrets[name].Generated.SelfSignedCertificate
 		cert.DNSNames = append([]string(nil), cert.DNSNames...)
 		cert.IPAddresses = append([]string(nil), cert.IPAddresses...)
 		result = append(result, generatedSelfSignedRequest{name: name, certificate: cert})
@@ -409,9 +409,9 @@ func generatedCredentialsRequestsFor(state v1alpha1.State) []generatedCredential
 	if env == nil {
 		return nil
 	}
-	names := make([]string, 0, len(env.Spec.Keys))
-	for name, key := range env.Spec.Keys {
-		if key.Generated == nil || key.Generated.Credentials == nil {
+	names := make([]string, 0, len(env.Spec.Secrets))
+	for name, secret := range env.Spec.Secrets {
+		if secret.Generated == nil || secret.Generated.Credentials == nil {
 			continue
 		}
 		names = append(names, name)
@@ -419,7 +419,7 @@ func generatedCredentialsRequestsFor(state v1alpha1.State) []generatedCredential
 	sort.Strings(names)
 	out := make([]generatedCredentialsRequest, 0, len(names))
 	for _, name := range names {
-		out = append(out, generatedCredentialsRequest{name: name, credentials: *env.Spec.Keys[name].Generated.Credentials})
+		out = append(out, generatedCredentialsRequest{name: name, credentials: *env.Spec.Secrets[name].Generated.Credentials})
 	}
 	return out
 }

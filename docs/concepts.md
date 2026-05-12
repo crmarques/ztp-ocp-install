@@ -16,14 +16,16 @@ points.
 ## The Four Kinds
 
 - `Environment`: shared environment defaults such as base domain,
-  OpenShift install mode, secret refs, OpenShift release, and component
+  OpenShift install mode, secret sources, OpenShift release, and component
   image pins.
 - `InfrastructureProvider`: provider connections and reusable capabilities,
-  such as libvirt hosts, Redfish emulation, bare-metal BMC defaults, or
-  provider credentials.
+  such as libvirt hosts, Redfish emulation, bare-metal BMC defaults, managed
+  HAProxy, mirror registry, managed Squid proxy, or provider credentials.
 - `ClusterInfrastructure`: one cluster's realised infrastructure on a
   provider: networks, machines, endpoints, managed load balancers, and managed
-  name resolution.
+  name resolution. Load balancers are optional — omitting them defers the VIPs
+  to an external LB or, for multi-node `platform: baremetal`, to the agent
+  installer's built-in keepalived + haproxy on the control planes.
 - `OCPCluster`: provider-neutral OpenShift intent: topology, install method,
   cluster networking, and node identity.
 
@@ -33,21 +35,36 @@ Provider-specific facts stay out of `OCPCluster`. Moving a cluster from the
 libvirt/Redfish lab example to real bare metal changes only
 `InfrastructureProvider` and `ClusterInfrastructure`.
 
-## OCP Install Mode
+## OCP Install Type, Proxy, And Registries
 
-`Environment.spec.ocpInstall` selects how the OpenShift install reaches its
-release content and supporting registries. It scopes only OpenShift install
-material; it does not describe the lab host's substrate connectivity. One
-structural selection:
+`Environment.spec.ocpInstallType` selects how the OpenShift install reaches
+its release content:
 
-- `connected: {}` for public registry access. This is the default when
-  `ocpInstall` is omitted.
-- `restricted: { ... }` for constrained egress with optional proxy, mirror, or
+- `connected` (default when unset) for public registry access.
+- `disconnected` for local mirror usage; requires `spec.registries.mirror` and
   trust material.
-- `disconnected: { ... }` for local mirror usage with required registry mirror
-  and trust material.
 
-There is no `mode` field.
+Two optional top-level blocks shape every component, independent of install
+type:
+
+- `spec.proxy` (`http`, `https`, `noProxy`, `auth.proxyAuthRef`) — applies to
+  bastion CLI downloads, provider-host package and image pulls, generated
+  `install-config.yaml`, and `openshift-install`. Gitups auto-extends
+  `noProxy` with cluster-local endpoints (service/cluster CIDRs, `.svc`,
+  `.cluster.local`, `localhost`, base domain, mirror registry host, provider
+  host addresses); user entries take precedence and are listed first.
+- `spec.registries` (`mirror`, `imageDigestSources`) — describes the OpenShift
+  mirror endpoint, its credentials, and trust bundle. Required for
+  `disconnected`; optional alongside `connected` when you mirror release
+  content but still have public-network access for everything else.
+
+If `spec.proxy` is paired with a referenced
+`InfrastructureProvider.spec.proxy.squid`, Gitups provisions an authenticated
+Squid proxy and materializes its htpasswd from
+`spec.proxy.auth.proxyAuthRef` (file-backed or `generated.credentials`).
+Otherwise the proxy URL is external. On Gitups-managed libvirt networks only,
+the managed proxy path also disables direct VM NAT egress so cluster VMs leave
+through Squid.
 
 ## Future: Multi-Cluster Topology
 

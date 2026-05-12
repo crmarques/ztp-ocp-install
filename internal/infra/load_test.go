@@ -304,21 +304,21 @@ func TestValidationRejectsInvalidProviderHostRef(t *testing.T) {
 	}
 }
 
-func TestValidationRejectsRegistriesUnderConnected(t *testing.T) {
+func TestValidationRejectsLegacyOCPInstallNesting(t *testing.T) {
 	dir := t.TempDir()
 	body := strings.Replace(
-		validStateYAML("connected-with-registries", "connected-provider", "192.168.154.0/24", "192.168.154.10", "192.168.154.11", "192.168.154.20"),
+		validStateYAML("legacy-ocp-install", "legacy-provider", "192.168.154.0/24", "192.168.154.10", "192.168.154.11", "192.168.154.20"),
+		"  ocpInstallType: connected\n",
 		"  ocpInstall:\n    connected: {}\n",
-		"  ocpInstall:\n    connected: {}\n    registries:\n      mirror:\n        url: registry.lab.test:5000\n",
 		1,
 	)
-	writeFile(t, filepath.Join(dir, "connected.yaml"), body)
+	writeFile(t, filepath.Join(dir, "legacy.yaml"), body)
 	_, err := LoadNormalizeValidate([]string{dir})
 	if err == nil {
-		t.Fatal("expected unknown-field rejection for registries declared next to connected: {}")
+		t.Fatal("expected unknown-field rejection for legacy ocpInstall nesting")
 	}
-	if !strings.Contains(err.Error(), "registries") {
-		t.Fatalf("expected unknown-field registries error, got %v", err)
+	if !strings.Contains(err.Error(), "ocpInstall") {
+		t.Fatalf("expected unknown-field ocpInstall error, got %v", err)
 	}
 }
 
@@ -326,8 +326,8 @@ func TestValidationRejectsAgentConfigMinimalISOOverride(t *testing.T) {
 	dir := t.TempDir()
 	body := strings.Replace(
 		validStateYAML("disconnected-full-iso", "disconnected-provider", "192.168.155.0/24", "192.168.155.10", "192.168.155.11", "192.168.155.20"),
-		"  ocpInstall:\n    connected: {}\n",
-		"  ocpInstall:\n    disconnected:\n      registries:\n        mirror:\n          url: registry.lab.test:5000\n          credentialsRef:\n            name: registry-lab-credentials\n          trustBundleRef:\n            name: registry-lab-ca\n",
+		"  ocpInstallType: connected\n",
+		"  ocpInstallType: disconnected\n  registries:\n    mirror:\n      url: registry.lab.test:5000\n      credentialsRef:\n        name: registry-lab-credentials\n      trustBundleRef:\n        name: registry-lab-ca\n",
 		1,
 	)
 	body = strings.Replace(body, "  install:\n    method: agent\n", "  install:\n    method: agent\n    agentConfigOverrides:\n      minimalISO: false\n", 1)
@@ -359,8 +359,8 @@ func TestValidationRejectsDisconnectedAllowContactingSource(t *testing.T) {
 	dir := t.TempDir()
 	body := strings.Replace(
 		validStateYAML("disconnected-source-policy", "disconnected-source-policy-provider", "192.168.156.0/24", "192.168.156.10", "192.168.156.11", "192.168.156.20"),
-		"  ocpInstall:\n    connected: {}\n",
-		"  ocpInstall:\n    disconnected:\n      registries:\n        mirror:\n          url: registry.lab.test:5000\n          credentialsRef:\n            name: registry-lab-credentials\n          trustBundleRef:\n            name: registry-lab-ca\n        imageDigestSources:\n          - source: quay.io/openshift-release-dev/ocp-release\n            mirrors:\n              - registry.lab.test:5000/openshift/release-images\n            sourcePolicy: AllowContactingSource\n          - source: quay.io/openshift-release-dev/ocp-v4.0-art-dev\n            mirrors:\n              - registry.lab.test:5000/openshift/release-images\n",
+		"  ocpInstallType: connected\n",
+		"  ocpInstallType: disconnected\n  registries:\n    mirror:\n      url: registry.lab.test:5000\n      credentialsRef:\n        name: registry-lab-credentials\n      trustBundleRef:\n        name: registry-lab-ca\n    imageDigestSources:\n      - source: quay.io/openshift-release-dev/ocp-release\n        mirrors:\n          - registry.lab.test:5000/openshift/release-images\n        sourcePolicy: AllowContactingSource\n      - source: quay.io/openshift-release-dev/ocp-v4.0-art-dev\n        mirrors:\n          - registry.lab.test:5000/openshift/release-images\n",
 		1,
 	)
 	writeFile(t, filepath.Join(dir, "disconnected-source-policy.yaml"), body)
@@ -377,8 +377,8 @@ func TestValidationRejectsDisconnectedExternalOpenShiftMirror(t *testing.T) {
 	dir := t.TempDir()
 	body := strings.Replace(
 		validStateYAML("disconnected-external-mirror", "disconnected-external-mirror-provider", "192.168.157.0/24", "192.168.157.10", "192.168.157.11", "192.168.157.20"),
-		"  ocpInstall:\n    connected: {}\n",
-		"  ocpInstall:\n    disconnected:\n      registries:\n        mirror:\n          url: registry.lab.test:5000\n          credentialsRef:\n            name: registry-lab-credentials\n          trustBundleRef:\n            name: registry-lab-ca\n        imageDigestSources:\n          - source: quay.io/openshift-release-dev/ocp-release\n            mirrors:\n              - quay.io/openshift-release-dev/ocp-release\n          - source: quay.io/openshift-release-dev/ocp-v4.0-art-dev\n            mirrors:\n              - registry.lab.test:5000/openshift/release-images\n",
+		"  ocpInstallType: connected\n",
+		"  ocpInstallType: disconnected\n  registries:\n    mirror:\n      url: registry.lab.test:5000\n      credentialsRef:\n        name: registry-lab-credentials\n      trustBundleRef:\n        name: registry-lab-ca\n    imageDigestSources:\n      - source: quay.io/openshift-release-dev/ocp-release\n        mirrors:\n          - quay.io/openshift-release-dev/ocp-release\n      - source: quay.io/openshift-release-dev/ocp-v4.0-art-dev\n        mirrors:\n          - registry.lab.test:5000/openshift/release-images\n",
 		1,
 	)
 	writeFile(t, filepath.Join(dir, "disconnected-external-mirror.yaml"), body)
@@ -408,6 +408,58 @@ func TestBareMetalAndVMwareSchemasValidate(t *testing.T) {
 	}
 }
 
+func TestLoadRejectsOldEnvironmentSecretShapes(t *testing.T) {
+	tests := map[string]string{
+		"old-keys-field": `apiVersion: gitups.io/v1alpha1
+kind: Environment
+metadata:
+  name: old-keys
+spec:
+  baseDomain: example.com
+  ocpInstallType: connected
+  keys:
+    openshift-pull-secret:
+      file: ./pull-secret
+`,
+		"old-secret-refs": `apiVersion: gitups.io/v1alpha1
+kind: Environment
+metadata:
+  name: old-secret-refs
+spec:
+  baseDomain: example.com
+  ocpInstallType: connected
+  secrets:
+    pullSecretRef:
+      name: openshift-pull-secret
+    clusterSSHKeyRef:
+      name: cluster-admin-key
+`,
+	}
+	for name, body := range tests {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeFile(t, filepath.Join(dir, "env.yaml"), body)
+			if _, err := LoadNormalizeValidate([]string{dir}); err == nil {
+				t.Fatal("expected old Environment secret shape to be rejected")
+			}
+		})
+	}
+}
+
+func TestValidationRejectsMissingInheritedInstallSecrets(t *testing.T) {
+	dir := t.TempDir()
+	body := validStateYAML("missing-defaults", "missing-defaults-provider", "192.168.166.0/24", "192.168.166.10", "192.168.166.11", "192.168.166.20")
+	body = strings.Replace(body, "    openshift-pull-secret:\n      file: ./pull-secret\n", "", 1)
+	writeFile(t, filepath.Join(dir, "case.yaml"), body)
+	_, err := LoadNormalizeValidate([]string{dir})
+	if err == nil {
+		t.Fatal("expected missing inherited pull secret rejection")
+	}
+	if !strings.Contains(err.Error(), "openshift-pull-secret") || !strings.Contains(err.Error(), "spec.secrets") {
+		t.Fatalf("expected missing default secret error, got %v", err)
+	}
+}
+
 func validStateYAML(name string, providerName string, cidr string, apiVIP string, ingressVIP string, nodeIP string) string {
 	envName := "env-" + name
 	return fmt.Sprintf(`apiVersion: gitups.io/v1alpha1
@@ -416,17 +468,11 @@ metadata:
   name: %s
 spec:
   baseDomain: example.com
-  ocpInstall:
-    connected: {}
+  ocpInstallType: connected
   secrets:
-    pullSecretRef:
-      name: pull-secret
-    clusterSSHKeyRef:
-      name: ssh-key
-  keys:
-    pull-secret:
+    openshift-pull-secret:
       file: ./pull-secret
-    ssh-key:
+    cluster-admin-key:
       file: ./ssh-key.pub
     default-key:
       file: ./default-key
@@ -512,17 +558,11 @@ metadata:
   name: bm-env
 spec:
   baseDomain: example.com
-  ocpInstall:
-    connected: {}
+  ocpInstallType: connected
   secrets:
-    pullSecretRef:
-      name: pull-secret
-    clusterSSHKeyRef:
-      name: ssh-key
-  keys:
-    pull-secret:
+    openshift-pull-secret:
       file: ./pull-secret
-    ssh-key:
+    cluster-admin-key:
       file: ./ssh-key.pub
     baremetal-bmc:
       generated:
@@ -592,17 +632,11 @@ metadata:
   name: vmware-env
 spec:
   baseDomain: example.com
-  ocpInstall:
-    connected: {}
+  ocpInstallType: connected
   secrets:
-    pullSecretRef:
-      name: pull-secret
-    clusterSSHKeyRef:
-      name: ssh-key
-  keys:
-    pull-secret:
+    openshift-pull-secret:
       file: ./pull-secret
-    ssh-key:
+    cluster-admin-key:
       file: ./ssh-key.pub
     example-vcenter:
       file: ./vcenter
@@ -671,28 +705,27 @@ func writeFile(t *testing.T, path string, content string) {
 	}
 }
 
-const disconnectedRegistriesBlock = `  ocpInstall:
-    disconnected:
-      registries:
-        mirror:
-          url: registry.lab.test:5000
-          credentialsRef:
-            name: registry-lab-credentials
-          trustBundleRef:
-            name: registry-lab-ca
-        imageDigestSources:
-          - source: quay.io/openshift-release-dev/ocp-release
-            mirrors:
-              - registry.lab.test:5000/openshift/release-images
-          - source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
-            mirrors:
-              - registry.lab.test:5000/openshift/release-images
+const disconnectedRegistriesBlock = `  ocpInstallType: disconnected
+  registries:
+    mirror:
+      url: registry.lab.test:5000
+      credentialsRef:
+        name: registry-lab-credentials
+      trustBundleRef:
+        name: registry-lab-ca
+    imageDigestSources:
+      - source: quay.io/openshift-release-dev/ocp-release
+        mirrors:
+          - registry.lab.test:5000/openshift/release-images
+      - source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
+        mirrors:
+          - registry.lab.test:5000/openshift/release-images
 `
 
 func disconnectedYAML(name, providerName, cidr, apiVIP, ingressVIP, nodeIP string, withMirrorRegistry bool, mirrorRegistryPort int) string {
 	body := strings.Replace(
 		validStateYAML(name, providerName, cidr, apiVIP, ingressVIP, nodeIP),
-		"  ocpInstall:\n    connected: {}\n",
+		"  ocpInstallType: connected\n",
 		disconnectedRegistriesBlock,
 		1,
 	)
@@ -718,6 +751,25 @@ func disconnectedYAML(name, providerName, cidr, apiVIP, ingressVIP, nodeIP strin
 			1,
 		)
 	}
+	return body
+}
+
+func managedProxyYAML(name, providerName, cidr, gateway, apiVIP, ingressVIP, nodeIP string) string {
+	body := strings.Replace(
+		validStateYAML(name, providerName, cidr, apiVIP, ingressVIP, nodeIP),
+		"  ocpInstallType: connected\n",
+		`  ocpInstallType: connected
+  proxy:
+    auth:
+      proxyAuthRef:
+        name: proxy-credentials
+`,
+		1,
+	)
+	body = strings.Replace(body, "    registry-lab-ca:\n", "    proxy-credentials:\n      generated:\n        credentials:\n          username: proxy\n    registry-lab-ca:\n", 1)
+	body = strings.Replace(body, "        - libvirt\n", "        - libvirt\n        - proxy\n", 1)
+	body = strings.Replace(body, fmt.Sprintf("      cidr: %s\n", cidr), fmt.Sprintf("      cidr: %s\n      gateway: %s\n", cidr, gateway), 1)
+	body = strings.Replace(body, "      bmcEmulation: {}\n", "      bmcEmulation: {}\n  proxy:\n    squid:\n      hostRef:\n        name: host-01\n", 1)
 	return body
 }
 
@@ -769,37 +821,116 @@ func TestValidationRejectsMirrorRegistryPortMismatch(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected port mismatch error")
 	}
-	if !strings.Contains(err.Error(), "does not match Environment ocpInstall.registries.mirror.url port") {
+	if !strings.Contains(err.Error(), "does not match Environment spec.registries.mirror.url port") {
 		t.Fatalf("expected port mismatch error, got %v", err)
 	}
 }
 
-func keysFixtureYAML(keysBlock string) string {
-	keysBlock = strings.Replace(keysBlock, "  keys:\n", `  keys:
-    pull-secret:
+func TestValidationAcceptsManagedProxyWithCredentialsAndHostCapability(t *testing.T) {
+	dir := t.TempDir()
+	body := managedProxyYAML("proxy-ok", "proxy-ok-provider", "192.168.162.0/24", "192.168.162.1", "192.168.162.10", "192.168.162.11", "192.168.162.20")
+	writeFile(t, filepath.Join(dir, "case.yaml"), body)
+	state, err := LoadNormalizeValidate([]string{dir})
+	if err != nil {
+		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
+	}
+	squid := v1alpha1.ProviderProxySquid(state.InfrastructureProviders[0])
+	if squid == nil {
+		t.Fatalf("expected managed Squid proxy on provider")
+	}
+	if got, want := squid.Port, v1alpha1.DefaultSquidPort; got != want {
+		t.Fatalf("default Squid port got %d, want %d", got, want)
+	}
+	if got, want := squid.Runtime, v1alpha1.ContainerRuntimePodman; got != want {
+		t.Fatalf("default Squid runtime got %q, want %q", got, want)
+	}
+}
+
+func TestValidationRejectsManagedProxyWithoutCredentialsRef(t *testing.T) {
+	dir := t.TempDir()
+	body := managedProxyYAML("proxy-no-creds", "proxy-no-creds-provider", "192.168.163.0/24", "192.168.163.1", "192.168.163.10", "192.168.163.11", "192.168.163.20")
+	body = strings.Replace(body, "    auth:\n      proxyAuthRef:\n        name: proxy-credentials\n", "", 1)
+	writeFile(t, filepath.Join(dir, "case.yaml"), body)
+	_, err := LoadNormalizeValidate([]string{dir})
+	if err == nil {
+		t.Fatal("expected proxyAuthRef validation error")
+	}
+	if !strings.Contains(err.Error(), "spec.proxy.auth.proxyAuthRef.name") {
+		t.Fatalf("expected managed proxy proxyAuthRef error, got %v", err)
+	}
+}
+
+func TestValidationRejectsDuplicateManagedProxyProviders(t *testing.T) {
+	dir := t.TempDir()
+	body := managedProxyYAML("proxy-dupe", "proxy-dupe-provider", "192.168.164.0/24", "192.168.164.1", "192.168.164.10", "192.168.164.11", "192.168.164.20")
+	body = strings.Replace(body, "---\napiVersion: gitups.io/v1alpha1\nkind: ClusterInfrastructure", `---
+apiVersion: gitups.io/v1alpha1
+kind: InfrastructureProvider
+metadata:
+  name: extra-proxy-provider
+spec:
+  hosts:
+    proxy-02:
+      ssh:
+        address: 10.0.0.2
+        user: gitups
+        keyRef:
+          name: default-key
+      capabilities:
+        - proxy
+  proxy:
+    squid:
+      hostRef:
+        name: proxy-02
+---
+apiVersion: gitups.io/v1alpha1
+kind: ClusterInfrastructure`, 1)
+	writeFile(t, filepath.Join(dir, "case.yaml"), body)
+	_, err := LoadNormalizeValidate([]string{dir})
+	if err == nil {
+		t.Fatal("expected duplicate managed proxy provider validation error")
+	}
+	if !strings.Contains(err.Error(), "exactly one provider supplying spec.proxy.squid") {
+		t.Fatalf("expected duplicate proxy provider error, got %v", err)
+	}
+}
+
+func TestValidationRejectsManagedProxyUnsafeLibvirtPlacement(t *testing.T) {
+	dir := t.TempDir()
+	body := managedProxyYAML("proxy-placement", "proxy-placement-provider", "192.168.165.0/24", "192.168.165.1", "192.168.165.10", "192.168.165.11", "192.168.165.20")
+	body = strings.Replace(body, "    host-01:\n      ssh:", "    host-02:\n      ssh:\n        address: 10.0.0.2\n        user: gitups\n        keyRef:\n          name: default-key\n      capabilities:\n        - libvirt\n    host-01:\n      ssh:", 1)
+	body = strings.Replace(body, "      hostRefs:\n        - name: host-01", "      hostRefs:\n        - name: host-01\n        - name: host-02", 1)
+	body = strings.Replace(body, "      libvirt:\n        hostRef:\n          name: host-01", "      libvirt:\n        hostRef:\n          name: host-02", 1)
+	writeFile(t, filepath.Join(dir, "case.yaml"), body)
+	_, err := LoadNormalizeValidate([]string{dir})
+	if err == nil {
+		t.Fatal("expected unsafe placement validation error")
+	}
+	if !strings.Contains(err.Error(), "requires same libvirt/provider host placement") {
+		t.Fatalf("expected unsafe placement error, got %v", err)
+	}
+}
+
+func secretsFixtureYAML(secretsBlock string) string {
+	secretsBlock = strings.Replace(secretsBlock, "  secrets:\n", `  secrets:
+    openshift-pull-secret:
       file: ./pull-secret
-    ssh-key:
+    cluster-admin-key:
       file: ./ssh-key.pub
 `, 1)
 	return `apiVersion: gitups.io/v1alpha1
 kind: Environment
 metadata:
-  name: keys-env
+  name: secrets-env
 spec:
   baseDomain: example.com
-  ocpInstall:
-    connected: {}
-  secrets:
-    pullSecretRef:
-      name: pull-secret
-    clusterSSHKeyRef:
-      name: ssh-key
-` + keysBlock
+  ocpInstallType: connected
+` + secretsBlock
 }
 
-func TestValidationRejectsKeyWithBothFileAndGenerated(t *testing.T) {
+func TestValidationRejectsSecretWithBothFileAndGenerated(t *testing.T) {
 	dir := t.TempDir()
-	body := keysFixtureYAML(`  keys:
+	body := secretsFixtureYAML(`  secrets:
     bad:
       file: ~/example.txt
       generated:
@@ -816,9 +947,9 @@ func TestValidationRejectsKeyWithBothFileAndGenerated(t *testing.T) {
 	}
 }
 
-func TestValidationRejectsGeneratedKeyWithBothCredentialsAndCert(t *testing.T) {
+func TestValidationRejectsGeneratedSecretWithBothCredentialsAndCert(t *testing.T) {
 	dir := t.TempDir()
-	body := keysFixtureYAML(`  keys:
+	body := secretsFixtureYAML(`  secrets:
     bad:
       generated:
         credentials:
@@ -836,9 +967,9 @@ func TestValidationRejectsGeneratedKeyWithBothCredentialsAndCert(t *testing.T) {
 	}
 }
 
-func TestValidationRejectsGeneratedSelfSignedWithoutCommonName(t *testing.T) {
+func TestValidationRejectsGeneratedSecretSelfSignedWithoutCommonName(t *testing.T) {
 	dir := t.TempDir()
-	body := keysFixtureYAML(`  keys:
+	body := secretsFixtureYAML(`  secrets:
     bad:
       generated:
         selfSignedCertificate: {}
@@ -853,9 +984,9 @@ func TestValidationRejectsGeneratedSelfSignedWithoutCommonName(t *testing.T) {
 	}
 }
 
-func TestNormalizeDefaultsGeneratedKeyValidityAndUsername(t *testing.T) {
+func TestNormalizeDefaultsGeneratedSecretValidityAndUsername(t *testing.T) {
 	dir := t.TempDir()
-	body := keysFixtureYAML(`  keys:
+	body := secretsFixtureYAML(`  secrets:
     cred:
       generated:
         credentials: {}
@@ -872,11 +1003,11 @@ func TestNormalizeDefaultsGeneratedKeyValidityAndUsername(t *testing.T) {
 	if len(state.Environments) != 1 {
 		t.Fatalf("expected 1 environment, got %d", len(state.Environments))
 	}
-	keys := state.Environments[0].Spec.Keys
-	if got := keys["cred"].Generated.Credentials.Username; got != "admin" {
+	secrets := state.Environments[0].Spec.Secrets
+	if got := secrets["cred"].Generated.Credentials.Username; got != "admin" {
 		t.Fatalf("credentials.username got %q, want admin (default)", got)
 	}
-	if got := keys["cert"].Generated.SelfSignedCertificate.ValidityDays; got != v1alpha1.DefaultCertificateDays {
+	if got := secrets["cert"].Generated.SelfSignedCertificate.ValidityDays; got != v1alpha1.DefaultCertificateDays {
 		t.Fatalf("selfSignedCertificate.validityDays got %d, want %d (default)", got, v1alpha1.DefaultCertificateDays)
 	}
 }

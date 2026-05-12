@@ -45,17 +45,17 @@ func newRootCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Comm
 	root.SetCompletionCommandGroupID(groupGeneral)
 
 	addWorkflow(root,
-		newInitCmd(stdout),                 // 1. scaffold workspace material
-		newSecretCmd(stdout, stderr),       // 2. materialize secret refs
-		newCheckCmd(stdout, stderr),        // 3. validate prerequisites and desired state
-		newStatusCmd(stdout),               // 4. report workspace state and next step
-		newExpandCmd(),                     // 5. resolve gitops package sources
-		newFillCmd(),                       // 6. fill placeholders in expanded artifacts
-		newPlanCmd(),                       // 7. preview apply without touching cluster
-		newRenderCmd(stdout, stderr),       // 8. render generated install/gitops files
-		newPushCmd(),                       // 9. publish rendered artifacts
-		newApplyCmd(stdin, stdout, stderr), // 10. converge a provisioning or gitops target
-		newWaitCmd(),                       // 11. wait on cluster-side reconciliation
+		newInitCmd(stdout),                   // 1. scaffold workspace material
+		newSecretCmd(stdout, stderr),         // 2. materialize secret refs
+		newCheckCmd(stdout, stderr),          // 3. validate prerequisites and desired state
+		newStatusCmd(stdout),                 // 4. report workspace state and next step
+		newExpandCmd(),                       // 5. resolve gitops package sources
+		newFillCmd(),                         // 6. fill placeholders in expanded artifacts
+		newPlanCmd(),                         // 7. preview apply without touching cluster
+		newRenderCmd(stdout, stderr),         // 8. render generated install/gitops files
+		newPushCmd(),                         // 9. publish rendered artifacts
+		newApplyCmd(stdin, stdout, stderr),   // 10. converge a provisioning or gitops target
+		newWaitCmd(),                         // 11. wait on cluster-side reconciliation
 		newDestroyCmd(stdin, stdout, stderr), // 12. tear down a target
 	)
 	return root

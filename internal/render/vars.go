@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/crmarques/gitups/api/v1alpha1"
+	"github.com/crmarques/gitups/internal/proxy"
 	"github.com/crmarques/gitups/internal/secretref"
 )
 
@@ -19,6 +20,7 @@ type VarsFile struct {
 	GitupsProviders        []ProviderComponentVars   `yaml:"gitups_providers" json:"gitups_providers"`
 	GitupsLoadBalancers    []SharedLoadBalancerVars  `yaml:"gitups_load_balancers" json:"gitups_load_balancers"`
 	GitupsMirrorRegistries []MirrorRegistryRunVars   `yaml:"gitups_mirror_registries" json:"gitups_mirror_registries"`
+	GitupsForwardProxies   []ForwardProxyRunVars     `yaml:"gitups_forward_proxies,omitempty" json:"gitups_forward_proxies,omitempty"`
 	GitupsClusters         []ClusterVars             `yaml:"gitups_clusters" json:"gitups_clusters"`
 	GitupsComponentPins    []ComponentPin            `yaml:"gitups_component_pins" json:"gitups_component_pins"`
 }
@@ -31,10 +33,10 @@ type EnvironmentOCPInstallVars struct {
 }
 
 type ProxyVars struct {
-	HTTPProxy      string   `yaml:"httpProxy,omitempty" json:"httpProxy,omitempty"`
-	HTTPSProxy     string   `yaml:"httpsProxy,omitempty" json:"httpsProxy,omitempty"`
-	NoProxy        []string `yaml:"noProxy,omitempty" json:"noProxy,omitempty"`
-	CredentialsRef string   `yaml:"credentialsRef,omitempty" json:"credentialsRef,omitempty"`
+	HTTP         string   `yaml:"http,omitempty" json:"http,omitempty"`
+	HTTPS        string   `yaml:"https,omitempty" json:"https,omitempty"`
+	NoProxy      []string `yaml:"noProxy,omitempty" json:"noProxy,omitempty"`
+	ProxyAuthRef string   `yaml:"proxyAuthRef,omitempty" json:"proxyAuthRef,omitempty"`
 }
 
 type ClusterVars struct {
@@ -169,9 +171,12 @@ type VirtualNodeResourceVars struct {
 }
 
 type LibvirtVars struct {
-	Network  string           `yaml:"network" json:"network"`
-	Bridge   string           `yaml:"bridge" json:"bridge"`
-	DNSHosts []LibvirtDNSHost `yaml:"dnsHosts,omitempty" json:"dnsHosts,omitempty"`
+	Network                 string           `yaml:"network" json:"network"`
+	Bridge                  string           `yaml:"bridge" json:"bridge"`
+	EgressRestrictedToProxy bool             `yaml:"egressRestrictedToProxy,omitempty" json:"egressRestrictedToProxy,omitempty"`
+	ProxyURL                string           `yaml:"proxyURL,omitempty" json:"proxyURL,omitempty"`
+	ProxyPort               int              `yaml:"proxyPort,omitempty" json:"proxyPort,omitempty"`
+	DNSHosts                []LibvirtDNSHost `yaml:"dnsHosts,omitempty" json:"dnsHosts,omitempty"`
 }
 
 type LibvirtDNSHost struct {
@@ -287,6 +292,19 @@ type MirrorRegistryRunVars struct {
 	MirrorSet                 []MirrorImageRef   `yaml:"mirrorSet" json:"mirrorSet"`
 }
 
+type ForwardProxyRunVars struct {
+	Name                  string             `yaml:"name" json:"name"`
+	ProviderRef           string             `yaml:"providerRef" json:"providerRef"`
+	ProviderHostRef       string             `yaml:"providerHostRef" json:"providerHostRef"`
+	URL                   string             `yaml:"url" json:"url"`
+	Host                  string             `yaml:"host" json:"host"`
+	Port                  int                `yaml:"port" json:"port"`
+	DataDir               string             `yaml:"dataDir,omitempty" json:"dataDir,omitempty"`
+	Runtime               string             `yaml:"runtime" json:"runtime"`
+	CredentialsSecretName string             `yaml:"credentialsSecretName" json:"credentialsSecretName"`
+	Image                 ComponentImageURLs `yaml:"image" json:"image"`
+}
+
 type MirrorImageRef struct {
 	Kind   string `yaml:"kind" json:"kind"`
 	Public string `yaml:"public" json:"public"`
@@ -370,16 +388,17 @@ func Vars(state v1alpha1.State, secretsDir string) VarsFile {
 		clusters = append(clusters, clusterVars(item, provider, ocp, env, secretsDir))
 	}
 	return VarsFile{
-		GitupsOCPInstall:       ocpInstallEnvVars(env, secretsDir),
+		GitupsOCPInstall:       ocpInstallEnvVars(state, env, secretsDir),
 		GitupsProviders:        providerComponentVars(state, secretsDir),
 		GitupsLoadBalancers:    sharedLoadBalancerVars(state, env),
 		GitupsMirrorRegistries: mirrorRegistryRunVars(state, env, secretsDir),
+		GitupsForwardProxies:   forwardProxyRunVars(state, env, secretsDir),
 		GitupsClusters:         clusters,
 		GitupsComponentPins:    ComponentPins(state),
 	}
 }
 
-func ocpInstallEnvVars(env *v1alpha1.Environment, secretsDir string) EnvironmentOCPInstallVars {
+func ocpInstallEnvVars(state v1alpha1.State, env *v1alpha1.Environment, secretsDir string) EnvironmentOCPInstallVars {
 	kind := v1alpha1.OCPInstallKindConnected
 	if env != nil {
 		if k := v1alpha1.OCPInstallKind(*env); k != "" {
@@ -393,15 +412,19 @@ func ocpInstallEnvVars(env *v1alpha1.Environment, secretsDir string) Environment
 	if env == nil {
 		return result
 	}
-	if proxy := v1alpha1.OCPInstallProxyOf(*env); proxy != nil && proxyHasValue(proxy) {
-		result.Proxy = &ProxyVars{
-			HTTPProxy:      proxy.HTTPProxy,
-			HTTPSProxy:     proxy.HTTPSProxy,
-			NoProxy:        append([]string(nil), proxy.NoProxy...),
-			CredentialsRef: resolvedSecretPath(proxy.CredentialsRef.Name, secretsDir, env),
+	if eff := proxy.Resolve(state, env); eff != nil {
+		fallbackURL := managedProxyClientURLForState(state, env)
+		httpProxy, httpsProxy := effectiveProxyURLs(eff, fallbackURL)
+		if httpProxy != "" || httpsProxy != "" || len(eff.NoProxy) > 0 || eff.Auth.Name != "" {
+			result.Proxy = &ProxyVars{
+				HTTP:         httpProxy,
+				HTTPS:        httpsProxy,
+				NoProxy:      append([]string(nil), eff.NoProxy...),
+				ProxyAuthRef: resolvedSecretPath(eff.Auth.Name, secretsDir, env),
+			}
 		}
 	}
-	registries := v1alpha1.OCPInstallRegistriesOf(*env)
+	registries := env.Spec.Registries
 	if registries == nil || registries.Mirror == nil {
 		return result
 	}
@@ -413,8 +436,74 @@ func ocpInstallEnvVars(env *v1alpha1.Environment, secretsDir string) Environment
 	return result
 }
 
-func proxyHasValue(p *v1alpha1.OCPInstallProxy) bool {
-	return p != nil && (p.HTTPProxy != "" || p.HTTPSProxy != "" || len(p.NoProxy) > 0)
+func effectiveProxyURLs(eff *proxy.Effective, fallbackURL string) (string, string) {
+	if eff == nil {
+		return "", ""
+	}
+	httpProxy := eff.HTTP
+	if httpProxy == "" {
+		httpProxy = fallbackURL
+	}
+	httpsProxy := eff.HTTPS
+	if httpsProxy == "" {
+		httpsProxy = fallbackURL
+	}
+	return httpProxy, httpsProxy
+}
+
+func forwardProxyRunVars(state v1alpha1.State, env *v1alpha1.Environment, secretsDir string) []ForwardProxyRunVars {
+	if env == nil {
+		return nil
+	}
+	eff := proxy.Resolve(state, env)
+	if eff == nil {
+		return nil
+	}
+	imageRef := componentImageURLs(env, v1alpha1.ComponentCategoryProxy, v1alpha1.ComponentTypeSquid)
+	fallbackURL := managedProxyClientURLForState(state, env)
+	clientURL := eff.HTTP
+	if clientURL == "" {
+		clientURL = eff.HTTPS
+	}
+	if clientURL == "" {
+		clientURL = fallbackURL
+	}
+	providers := append([]v1alpha1.InfrastructureProvider(nil), state.InfrastructureProviders...)
+	sort.Slice(providers, func(i, j int) bool {
+		return providers[i].Metadata.Name < providers[j].Metadata.Name
+	})
+	result := make([]ForwardProxyRunVars, 0, len(providers))
+	for _, provider := range providers {
+		squid := v1alpha1.ProviderProxySquid(provider)
+		if squid == nil {
+			continue
+		}
+		hostAddress := ""
+		if host, ok := provider.Spec.Hosts[squid.HostRef.Name]; ok && host.SSH != nil {
+			hostAddress = host.SSH.Address
+		}
+		port := squid.Port
+		if port == 0 {
+			port = v1alpha1.DefaultSquidPort
+		}
+		runtime := squid.Runtime
+		if runtime == "" {
+			runtime = v1alpha1.ContainerRuntimePodman
+		}
+		result = append(result, ForwardProxyRunVars{
+			Name:                  provider.Metadata.Name,
+			ProviderRef:           provider.Metadata.Name,
+			ProviderHostRef:       squid.HostRef.Name,
+			URL:                   clientURL,
+			Host:                  hostAddress,
+			Port:                  port,
+			DataDir:               squid.DataDir,
+			Runtime:               runtime,
+			CredentialsSecretName: resolvedSecretPath(eff.Auth.Name, secretsDir, env),
+			Image:                 imageRef,
+		})
+	}
+	return result
 }
 
 func clusterVars(item v1alpha1.ClusterInfrastructure, provider v1alpha1.InfrastructureProvider, ocp v1alpha1.OCPCluster, env *v1alpha1.Environment, secretsDir string) ClusterVars {
@@ -477,7 +566,7 @@ func localRegistryVars(env *v1alpha1.Environment, ocp v1alpha1.OCPCluster, secre
 	if kind == "" || kind == v1alpha1.OCPInstallKindConnected {
 		return nil
 	}
-	registries := v1alpha1.OCPInstallRegistriesOf(*env)
+	registries := env.Spec.Registries
 	if registries == nil || registries.Mirror == nil {
 		return nil
 	}
@@ -502,9 +591,9 @@ func generatedSecretVarsFromEnv(env *v1alpha1.Environment, secretsDir string) []
 	if env == nil {
 		return nil
 	}
-	names := make([]string, 0, len(env.Spec.Keys))
-	for name, key := range env.Spec.Keys {
-		if key.Generated == nil || key.Generated.SelfSignedCertificate == nil {
+	names := make([]string, 0, len(env.Spec.Secrets))
+	for name, secret := range env.Spec.Secrets {
+		if secret.Generated == nil || secret.Generated.SelfSignedCertificate == nil {
 			continue
 		}
 		names = append(names, name)
@@ -512,7 +601,7 @@ func generatedSecretVarsFromEnv(env *v1alpha1.Environment, secretsDir string) []
 	sort.Strings(names)
 	result := make([]GeneratedSecretVars, 0, len(names))
 	for _, name := range names {
-		cert := env.Spec.Keys[name].Generated.SelfSignedCertificate
+		cert := env.Spec.Secrets[name].Generated.SelfSignedCertificate
 		result = append(result, GeneratedSecretVars{
 			Name:                  name,
 			Path:                  filepath.Join(secretsDir, name),
@@ -614,7 +703,7 @@ func providerVars(item v1alpha1.ClusterInfrastructure, provider v1alpha1.Infrast
 	result.InfrastructureHosts = providerHostVars(provider.Spec.Hosts, env, secretsDir)
 	result.Virtualization = &ProviderVirtualizationVars{
 		Type:        v1alpha1.VirtualizationTypeLibvirt,
-		Libvirt:     libvirtVars(item, q, env),
+		Libvirt:     libvirtVars(item, provider, env),
 		DefaultNode: defaultNodeVars(q),
 	}
 	if q.BMCEmulation != nil {
@@ -696,8 +785,10 @@ func providerComponentVars(state v1alpha1.State, secretsDir string) []ProviderCo
 			BMCRole:           bmcRole,
 			BootArtifactsHttp: http,
 		}
-		if v1alpha1.ProviderMachineLibvirt(provider) != nil {
+		if len(provider.Spec.Hosts) > 0 {
 			item.InfrastructureHosts = providerHostVars(provider.Spec.Hosts, env, secretsDir)
+		}
+		if v1alpha1.ProviderMachineLibvirt(provider) != nil {
 			if provider.Spec.Machine.Libvirt.BMCEmulation != nil {
 				item.BMC = bmcVars(provider.Spec.Machine.Libvirt.BMCEmulation, providerBMCNodes(provider, state), env, secretsDir)
 			}
@@ -757,7 +848,8 @@ func providerBMCNodes(provider v1alpha1.InfrastructureProvider, state v1alpha1.S
 	return result
 }
 
-func libvirtVars(item v1alpha1.ClusterInfrastructure, q *v1alpha1.MachineProviderLibvirtSpec, env *v1alpha1.Environment) *LibvirtVars {
+func libvirtVars(item v1alpha1.ClusterInfrastructure, provider v1alpha1.InfrastructureProvider, env *v1alpha1.Environment) *LibvirtVars {
+	q := v1alpha1.ProviderMachineLibvirt(provider)
 	if len(item.Spec.Networks) == 0 || q == nil {
 		return nil
 	}
@@ -769,10 +861,21 @@ func libvirtVars(item v1alpha1.ClusterInfrastructure, q *v1alpha1.MachineProvide
 	if machineNetwork.Libvirt == nil {
 		return nil
 	}
+	restricted := managedProxyIsolationEnabled(item, provider, env)
+	proxyPort := 0
+	if squid := v1alpha1.ProviderProxySquid(provider); restricted && squid != nil {
+		proxyPort = squid.Port
+		if proxyPort == 0 {
+			proxyPort = v1alpha1.DefaultSquidPort
+		}
+	}
 	return &LibvirtVars{
-		Network:  machineNetwork.Libvirt.LibvirtNetwork,
-		Bridge:   machineNetwork.Libvirt.Bridge,
-		DNSHosts: libvirtDNSHosts(machineNetwork, env),
+		Network:                 machineNetwork.Libvirt.LibvirtNetwork,
+		Bridge:                  machineNetwork.Libvirt.Bridge,
+		EgressRestrictedToProxy: restricted,
+		ProxyURL:                managedProxyClientURL(item, provider, env),
+		ProxyPort:               proxyPort,
+		DNSHosts:                libvirtDNSHosts(machineNetwork, env),
 	}
 }
 
@@ -784,7 +887,7 @@ func libvirtDNSHosts(machineNetwork MachineNetworkVars, env *v1alpha1.Environmen
 	if kind == "" || kind == v1alpha1.OCPInstallKindConnected {
 		return nil
 	}
-	registries := v1alpha1.OCPInstallRegistriesOf(*env)
+	registries := env.Spec.Registries
 	if registries == nil || registries.Mirror == nil {
 		return nil
 	}
@@ -1121,6 +1224,9 @@ func closureProvider(ci v1alpha1.ClusterInfrastructure, providers map[string]v1a
 		name = closure.RegistryProviderName
 	}
 	if name == "" {
+		name = closure.ProxyProviderName
+	}
+	if name == "" {
 		name = ci.Metadata.Name
 	}
 	return v1alpha1.InfrastructureProvider{
@@ -1131,6 +1237,7 @@ func closureProvider(ci v1alpha1.ClusterInfrastructure, providers map[string]v1a
 			LoadBalancer:   closure.LoadBalancer,
 			NameResolution: closure.NameResolution,
 			Registry:       closure.Registry,
+			Proxy:          closure.Proxy,
 		},
 	}
 }
@@ -1143,7 +1250,7 @@ func mirrorRegistryRunVars(state v1alpha1.State, env *v1alpha1.Environment, secr
 	if kind == "" || kind == v1alpha1.OCPInstallKindConnected {
 		return nil
 	}
-	registries := v1alpha1.OCPInstallRegistriesOf(*env)
+	registries := env.Spec.Registries
 	if registries == nil || registries.Mirror == nil {
 		return nil
 	}
@@ -1154,7 +1261,7 @@ func mirrorRegistryRunVars(state v1alpha1.State, env *v1alpha1.Environment, secr
 	var caCertPath, caKeyPath string
 	if mirror.TrustBundleRef.Name != "" {
 		caCertPath = resolvedSecretPath(mirror.TrustBundleRef.Name, secretsDir, env)
-		if key, ok := env.Spec.Keys[mirror.TrustBundleRef.Name]; ok && key.Generated != nil && key.Generated.SelfSignedCertificate != nil {
+		if secret, ok := env.Spec.Secrets[mirror.TrustBundleRef.Name]; ok && secret.Generated != nil && secret.Generated.SelfSignedCertificate != nil {
 			caKeyPath = filepath.Join(secretsDir, mirror.TrustBundleRef.Name+".key")
 		}
 	}
@@ -1309,6 +1416,9 @@ func componentImageURLs(env *v1alpha1.Environment, category, typ string) Compone
 	}
 	if category == v1alpha1.ComponentCategoryRegistry && typ == v1alpha1.ComponentTypeMirrorRegistry {
 		return ComponentImageURLs{Public: v1alpha1.DefaultMirrorRegistryImageRef}
+	}
+	if category == v1alpha1.ComponentCategoryProxy && typ == v1alpha1.ComponentTypeSquid {
+		return ComponentImageURLs{Public: v1alpha1.DefaultSquidImageRef}
 	}
 	return ComponentImageURLs{}
 }

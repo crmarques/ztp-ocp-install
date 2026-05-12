@@ -18,7 +18,6 @@ const (
 	MachineFlavorKubeVirt  = "kubevirt"
 
 	OCPInstallKindConnected    = "connected"
-	OCPInstallKindRestricted   = "restricted"
 	OCPInstallKindDisconnected = "disconnected"
 
 	OCPTopologySingleNode     = "single-node"
@@ -29,6 +28,8 @@ const (
 	NodeRoleControlPlane      = "control-plane"
 	NodeRoleWorker            = "worker"
 	GeneratedSecretSelfSigned = "self-signed-certificate"
+	DefaultPullSecretName     = "openshift-pull-secret"
+	DefaultClusterSSHKeyName  = "cluster-admin-key"
 	DefaultCertificateDays    = 3650
 	ImageSourcePolicyNever    = "NeverContactSource"
 	ImageSourcePolicyAllow    = "AllowContactingSource"
@@ -52,14 +53,19 @@ const (
 	CapabilityContainerRuntime    = "container-runtime"
 	CapabilityHostsFile           = "hosts-file"
 	CapabilityMirrorRegistry      = "mirror-registry"
+	CapabilityProxy               = "proxy"
 	ComponentCategoryLoadBalancer = "load-balancer"
 	ComponentCategoryRegistry     = "registry"
+	ComponentCategoryProxy        = "proxy"
 	ComponentTypeHAProxy          = "haproxy"
 	ComponentTypeMirrorRegistry   = "mirror-registry"
+	ComponentTypeSquid            = "squid"
 	ContainerRuntimePodman        = "podman"
 	DefaultHAProxyImageRef        = "docker.io/library/haproxy:3.3.8@sha256:f14a1788b56894e7ec7b5cb0ca09dbb959b674cf3c980f92139ec008167d4a91"
 	DefaultMirrorRegistryImageRef = "docker.io/library/registry:3.1.1@sha256:85347ed2ecde64161c7a4788a4d7d3dcc9d6f86f7be95834022e3c6a423a945a"
+	DefaultSquidImageRef          = "docker.io/openeuler/squid:7.5-oe2403sp3@sha256:8e16e4439a7c0d4e0e71092a1611bb89cea9929c30642c18ba991ba7a7524d87"
 	DefaultMirrorRegistryPort     = 5000
+	DefaultSquidPort              = 3128
 
 	EndpointAPI     = "api"
 	EndpointAPIInt  = "apiInt"
@@ -100,19 +106,20 @@ type Environment struct {
 
 type EnvironmentSpec struct {
 	BaseDomain      string                                   `yaml:"baseDomain,omitempty" json:"baseDomain,omitempty"`
-	OCPInstall      EnvironmentOCPInstallSpec                `yaml:"ocpInstall,omitempty" json:"ocpInstall,omitempty"`
-	Secrets         EnvironmentSecretsSpec                   `yaml:"secrets,omitempty" json:"secrets,omitempty"`
-	Keys            map[string]EnvironmentKeySpec            `yaml:"keys,omitempty" json:"keys,omitempty"`
+	OCPInstallType  string                                   `yaml:"ocpInstallType,omitempty" json:"ocpInstallType,omitempty"`
+	Proxy           *EnvironmentProxySpec                    `yaml:"proxy,omitempty" json:"proxy,omitempty"`
+	Registries      *EnvironmentRegistriesSpec               `yaml:"registries,omitempty" json:"registries,omitempty"`
+	Secrets         map[string]EnvironmentSecretSpec         `yaml:"secrets,omitempty" json:"secrets,omitempty"`
 	OpenShift       EnvironmentOpenShiftSpec                 `yaml:"openshift,omitempty" json:"openshift,omitempty"`
 	ComponentImages map[string]map[string]ComponentImageSpec `yaml:"componentImages,omitempty" json:"componentImages,omitempty"`
 }
 
-type EnvironmentKeySpec struct {
-	File      string                   `yaml:"file,omitempty" json:"file,omitempty"`
-	Generated *EnvironmentKeyGenerated `yaml:"generated,omitempty" json:"generated,omitempty"`
+type EnvironmentSecretSpec struct {
+	File      string                      `yaml:"file,omitempty" json:"file,omitempty"`
+	Generated *EnvironmentSecretGenerated `yaml:"generated,omitempty" json:"generated,omitempty"`
 }
 
-type EnvironmentKeyGenerated struct {
+type EnvironmentSecretGenerated struct {
 	Credentials           *GeneratedCredentialsSpec  `yaml:"credentials,omitempty" json:"credentials,omitempty"`
 	SelfSignedCertificate *SelfSignedCertificateSpec `yaml:"selfSignedCertificate,omitempty" json:"selfSignedCertificate,omitempty"`
 }
@@ -121,45 +128,26 @@ type GeneratedCredentialsSpec struct {
 	Username string `yaml:"username,omitempty" json:"username,omitempty"`
 }
 
-type EnvironmentOCPInstallSpec struct {
-	Connected    *ConnectedSpec    `yaml:"connected,omitempty" json:"connected,omitempty"`
-	Restricted   *RestrictedSpec   `yaml:"restricted,omitempty" json:"restricted,omitempty"`
-	Disconnected *DisconnectedSpec `yaml:"disconnected,omitempty" json:"disconnected,omitempty"`
+type EnvironmentProxySpec struct {
+	HTTP    string                    `yaml:"http,omitempty"    json:"http,omitempty"`
+	HTTPS   string                    `yaml:"https,omitempty"   json:"https,omitempty"`
+	NoProxy []string                  `yaml:"noProxy,omitempty" json:"noProxy,omitempty"`
+	Auth    *EnvironmentProxyAuthSpec `yaml:"auth,omitempty"    json:"auth,omitempty"`
 }
 
-type ConnectedSpec struct{}
-
-type RestrictedSpec struct {
-	Proxy      *OCPInstallProxy      `yaml:"proxy,omitempty" json:"proxy,omitempty"`
-	Registries *OCPInstallRegistries `yaml:"registries,omitempty" json:"registries,omitempty"`
+type EnvironmentProxyAuthSpec struct {
+	ProxyAuthRef SecretRef `yaml:"proxyAuthRef" json:"proxyAuthRef"`
 }
 
-type DisconnectedSpec struct {
-	Proxy      *OCPInstallProxy      `yaml:"proxy,omitempty" json:"proxy,omitempty"`
-	Registries *OCPInstallRegistries `yaml:"registries,omitempty" json:"registries,omitempty"`
+type EnvironmentRegistriesSpec struct {
+	Mirror             *EnvironmentRegistryMirrorSpec `yaml:"mirror,omitempty" json:"mirror,omitempty"`
+	ImageDigestSources []ImageDigestSource            `yaml:"imageDigestSources,omitempty" json:"imageDigestSources,omitempty"`
 }
 
-type OCPInstallProxy struct {
-	HTTPProxy      string    `yaml:"httpProxy,omitempty" json:"httpProxy,omitempty"`
-	HTTPSProxy     string    `yaml:"httpsProxy,omitempty" json:"httpsProxy,omitempty"`
-	NoProxy        []string  `yaml:"noProxy,omitempty" json:"noProxy,omitempty"`
-	CredentialsRef SecretRef `yaml:"credentialsRef,omitempty" json:"credentialsRef,omitempty"`
-}
-
-type OCPInstallRegistries struct {
-	Mirror             *OCPInstallRegistryMirror `yaml:"mirror,omitempty" json:"mirror,omitempty"`
-	ImageDigestSources []ImageDigestSource       `yaml:"imageDigestSources,omitempty" json:"imageDigestSources,omitempty"`
-}
-
-type OCPInstallRegistryMirror struct {
+type EnvironmentRegistryMirrorSpec struct {
 	URL            string    `yaml:"url" json:"url"`
 	CredentialsRef SecretRef `yaml:"credentialsRef,omitempty" json:"credentialsRef,omitempty"`
 	TrustBundleRef SecretRef `yaml:"trustBundleRef,omitempty" json:"trustBundleRef,omitempty"`
-}
-
-type EnvironmentSecretsSpec struct {
-	PullSecretRef    SecretRef `yaml:"pullSecretRef,omitempty" json:"pullSecretRef,omitempty"`
-	ClusterSSHKeyRef SecretRef `yaml:"clusterSSHKeyRef,omitempty" json:"clusterSSHKeyRef,omitempty"`
 }
 
 type EnvironmentOpenShiftSpec struct {
@@ -186,6 +174,7 @@ type InfrastructureProviderSpec struct {
 	LoadBalancer   *LoadBalancerCapabilitySpec   `yaml:"loadBalancer,omitempty" json:"loadBalancer,omitempty"`
 	NameResolution *NameResolutionCapabilitySpec `yaml:"nameResolution,omitempty" json:"nameResolution,omitempty"`
 	Registry       *RegistryCapabilitySpec       `yaml:"registry,omitempty" json:"registry,omitempty"`
+	Proxy          *ProxyCapabilitySpec          `yaml:"proxy,omitempty" json:"proxy,omitempty"`
 }
 
 type RegistryCapabilitySpec struct {
@@ -197,6 +186,17 @@ type RegistryMirrorSpec struct {
 	Port    int                  `yaml:"port,omitempty" json:"port,omitempty"`
 	DataDir string               `yaml:"dataDir,omitempty" json:"dataDir,omitempty"`
 	Runtime string               `yaml:"runtime,omitempty" json:"runtime,omitempty"`
+}
+
+type ProxyCapabilitySpec struct {
+	Squid *ProxySquidSpec `yaml:"squid,omitempty" json:"squid,omitempty"`
+}
+
+type ProxySquidSpec struct {
+	HostRef LocalObjectReference `yaml:"hostRef" json:"hostRef"`
+	Port    int                  `yaml:"port,omitempty" json:"port,omitempty"`
+	Runtime string               `yaml:"runtime,omitempty" json:"runtime,omitempty"`
+	DataDir string               `yaml:"dataDir,omitempty" json:"dataDir,omitempty"`
 }
 
 type NameResolutionCapabilitySpec struct {
@@ -299,10 +299,12 @@ type ProviderClosure struct {
 	LoadBalancer               *LoadBalancerCapabilitySpec
 	NameResolution             *NameResolutionCapabilitySpec
 	Registry                   *RegistryCapabilitySpec
+	Proxy                      *ProxyCapabilitySpec
 	MachineProviderName        string
 	LoadBalancerProviderName   string
 	NameResolutionProviderName string
 	RegistryProviderName       string
+	ProxyProviderName          string
 	ProviderRefNames           []string
 }
 
@@ -371,6 +373,14 @@ func BuildProviderClosure(ci ClusterInfrastructure, providers map[string]Infrast
 			} else {
 				closure.Registry = p.Spec.Registry
 				closure.RegistryProviderName = ref.Name
+			}
+		}
+		if p.Spec.Proxy != nil {
+			if closure.Proxy != nil {
+				errs = append(errs, fmt.Sprintf("ClusterInfrastructure/%s providerRefs union has multiple suppliers for proxy capability (%s, %s)", ci.Metadata.Name, closure.ProxyProviderName, ref.Name))
+			} else {
+				closure.Proxy = p.Spec.Proxy
+				closure.ProxyProviderName = ref.Name
 			}
 		}
 	}
@@ -560,39 +570,18 @@ func ProviderMirrorRegistry(provider InfrastructureProvider) *RegistryMirrorSpec
 	return provider.Spec.Registry.MirrorRegistry
 }
 
+func ProviderProxySquid(provider InfrastructureProvider) *ProxySquidSpec {
+	if provider.Spec.Proxy == nil {
+		return nil
+	}
+	return provider.Spec.Proxy.Squid
+}
+
 func OCPInstallKind(env Environment) string {
-	switch {
-	case env.Spec.OCPInstall.Connected != nil:
+	if env.Spec.OCPInstallType == "" {
 		return OCPInstallKindConnected
-	case env.Spec.OCPInstall.Restricted != nil:
-		return OCPInstallKindRestricted
-	case env.Spec.OCPInstall.Disconnected != nil:
-		return OCPInstallKindDisconnected
-	default:
-		return ""
 	}
-}
-
-func OCPInstallRegistriesOf(env Environment) *OCPInstallRegistries {
-	switch {
-	case env.Spec.OCPInstall.Disconnected != nil:
-		return env.Spec.OCPInstall.Disconnected.Registries
-	case env.Spec.OCPInstall.Restricted != nil:
-		return env.Spec.OCPInstall.Restricted.Registries
-	default:
-		return nil
-	}
-}
-
-func OCPInstallProxyOf(env Environment) *OCPInstallProxy {
-	switch {
-	case env.Spec.OCPInstall.Disconnected != nil:
-		return env.Spec.OCPInstall.Disconnected.Proxy
-	case env.Spec.OCPInstall.Restricted != nil:
-		return env.Spec.OCPInstall.Restricted.Proxy
-	default:
-		return nil
-	}
+	return env.Spec.OCPInstallType
 }
 
 func StandardLoadBalancerPorts(endpoint string) [][2]int {

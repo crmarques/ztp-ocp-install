@@ -38,16 +38,16 @@ func ResolveKeyFilePath(file, envSourceDir string) (string, error) {
 }
 
 // ResolvePath returns the local filesystem path for a declared SecretRef.
-// File-sourced keys resolve to their declared source path. Generated keys and
-// non-file keys resolve inside secretsDir.
+// File-sourced secrets resolve to their declared source path. Generated secrets
+// and non-file secrets resolve inside secretsDir.
 func ResolvePath(name string, env *v1alpha1.Environment, secretsDir string) string {
 	if name == "" {
 		return ""
 	}
 	if env != nil {
-		if key, ok := env.Spec.Keys[name]; ok && key.File != "" {
+		if secret, ok := env.Spec.Secrets[name]; ok && secret.File != "" {
 			envSourceDir := filepath.Dir(env.SourcePath)
-			if path, err := ResolveKeyFilePath(key.File, envSourceDir); err == nil {
+			if path, err := ResolveKeyFilePath(secret.File, envSourceDir); err == nil {
 				return path
 			}
 		}

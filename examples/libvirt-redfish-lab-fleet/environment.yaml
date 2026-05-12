@@ -4,14 +4,8 @@ metadata:
   name: lab
 spec:
   baseDomain: example.com
-  ocpInstall:
-    connected: {}
+  ocpInstallType: connected
   secrets:
-    pullSecretRef:
-      name: openshift-pull-secret
-    clusterSSHKeyRef:
-      name: cluster-admin-key
-  keys:
     openshift-pull-secret:
       file: ~/.gitups/secrets/openshift-pull-secret
     cluster-admin-key:

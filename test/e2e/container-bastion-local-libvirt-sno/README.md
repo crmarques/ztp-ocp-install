@@ -16,7 +16,7 @@ host.
 | Provider host | Same machine, reached by SSH as `localhost` through `--network host` |
 | Cluster | SNO on libvirt bridge `vbr-cb-sno` |
 | Network | `192.168.132.0/24`, API/API-int `.10`, Ingress `.11`, node `.20` |
-| Install mode | Connected direct by default; restricted when `Environment.spec.ocpInstall.restricted.proxy` is set |
+| Install mode | Connected direct by default; routes through a proxy when `Environment.spec.proxy` is set |
 
 ## Operator Inputs
 
@@ -71,12 +71,11 @@ export https_proxy="$HTTPS_PROXY"
 export no_proxy="$NO_PROXY"
 ```
 
-After the workspace exists, Gitups uses
-`Environment.spec.ocpInstall.restricted.proxy` for bastion CLI downloads,
-provider-host package/image pulls, generated `install-config.yaml`, and
-`openshift-install`. Use bare proxy URLs there. If the proxy requires
-authentication, set `credentialsRef.name` and write the credentials with
-`gitups secret set`; do not embed credentials in the URL.
+After the workspace exists, Gitups uses `Environment.spec.proxy` for bastion
+CLI downloads, provider-host package/image pulls, generated
+`install-config.yaml`, and `openshift-install`. Use bare proxy URLs there. If
+the proxy requires authentication, set `auth.proxyAuthRef.name` and write the
+credentials with `gitups secret set`; do not embed credentials in the URL.
 
 ## Start A Fresh Bastion
 
@@ -175,7 +174,7 @@ Review these user-specific fields before continuing:
 
 | File | Field |
 | --- | --- |
-| `environment.yaml` | `spec.baseDomain`, OpenShift release, optional proxy, and key paths under `spec.keys` |
+| `environment.yaml` | `spec.baseDomain`, OpenShift release, optional proxy, and secret sources under `spec.secrets` |
 | `provider.yaml` | `spec.hosts.lab-host.ssh.address`, optional `ssh.user`, `libvirtURI`, BMC port |
 | `infra.yaml` | CIDR, bridge name, VIPs, node IP, and MAC address |
 
@@ -183,83 +182,129 @@ For the standard local-container path, leave `provider.yaml` with
 `ssh.address: localhost` and no `ssh.user`; Gitups defaults the SSH user to the
 current bastion user, which matches the host user created in the image.
 
-For a proxied OpenShift install, change `environment.yaml` from
-`ocpInstall.connected` to `ocpInstall.restricted.proxy`:
+For a proxied OpenShift install, add a top-level `proxy:` block to
+`environment.yaml` alongside `ocpInstallType: connected`:
 
 ```yaml
-ocpInstall:
-  restricted:
-    proxy:
-      httpProxy: http://proxy.example.test:3128
-      httpsProxy: http://proxy.example.test:3128
-      noProxy:
-        - localhost
-        - 127.0.0.1
-        - ::1
-        - .gitups.test
-        - 192.168.132.0/24
-        - 10.128.0.0/14
-        - 172.30.0.0/16
+proxy:
+  http: http://proxy.example.test:3128
+  https: http://proxy.example.test:3128
+  noProxy:
+    - 192.168.132.0/24
 ```
 
-If the proxy requires authentication, add a credential reference to that block
-and add the key under `spec.keys`:
+Gitups auto-extends `noProxy` with cluster-local endpoints (service/cluster
+CIDRs, `.svc`, `.cluster.local`, `localhost`, the base domain, mirror registry
+host, provider host addresses) — only user-specific entries need to be listed.
+
+If the proxy requires authentication, add an auth ref to that block and a
+matching entry under `spec.secrets`. Pick one of these two forms.
+
+**File-backed** — you write the credentials yourself with `gitups secret set`:
 
 ```yaml
-      credentialsRef:
-        name: proxy-credentials
-keys:
+proxy:
+  auth:
+    proxyAuthRef:
+      name: proxy-credentials
+secrets:
   proxy-credentials:
     file: ~/.gitups/secrets/proxy-credentials
 ```
 
-If `environment.yaml` references `proxy-credentials`, write it before the next
-`gitups apply bastion -f "$WORKSPACE"` command so Gitups can derive the
-credentialed proxy environment for its own CLI downloads:
+**Generated** — `gitups secret generate` materializes the file. The password
+is auto-generated; the username defaults to `admin` if `username:` is omitted:
 
-```bash
-gitups secret set proxy-credentials \
-  --username <proxy-user> \
-  --password-stdin \
-  --secrets-dir "$GITUPS_SECRETS_DIR"
+```yaml
+proxy:
+  auth:
+    proxyAuthRef:
+      name: proxy-credentials
+secrets:
+  proxy-credentials:
+    generated:
+      credentials:
+        username: proxy
 ```
 
-Now install the release-specific OpenShift CLIs declared by the workspace:
+Materialize the secret with `gitups secret set` (file-backed form) or `gitups
+secret generate` (generated form) in the next section before
+`gitups apply bastion -f "$WORKSPACE"` runs.
+
+## Save And Generate Secrets
+
+Secret material the workspace consumes:
+
+| Secret | Form | Required for |
+| --- | --- | --- |
+| `gitups-ssh-key` / `.pub` | File under `~/.ssh` (already created in operator inputs) | Cluster SSH key, bastion→host SSH |
+| `openshift-pull-secret` | Set from the pull-secret JSON | `render installer`, `apply clusters` |
+| `proxy-credentials` (optional) | Set (file-backed form) or generated | `apply bastion -f`, install-config proxy block |
+| `bmc-credentials` | Generated from `environment.yaml` | `apply infra`, `apply clusters` |
+
+Run secret commands in this order, before `apply bastion -f "$WORKSPACE"`.
+
+1. Confirm the SSH key pair from the operator-inputs step is readable from
+   inside the bastion:
+
+   ```bash
+   test -r ~/.ssh/gitups-ssh-key
+   test -r ~/.ssh/gitups-ssh-key.pub
+   ```
+
+2. Save the OpenShift pull secret:
+
+   ```bash
+   gitups secret set openshift-pull-secret \
+     --pull-secret $BASTION_HOME/pull-secret.json \
+     --secrets-dir "$GITUPS_SECRETS_DIR"
+   ```
+
+3. If `environment.yaml` declares `proxy-credentials` in the **file-backed**
+   form, write it now (skip this step for the **generated** form — step 4
+   creates it):
+
+   ```bash
+   gitups secret set proxy-credentials \
+     --username <proxy-user> \
+     --password-stdin \
+     --secrets-dir "$GITUPS_SECRETS_DIR"
+   ```
+
+4. Materialize every `generated:` key declared in `environment.yaml`
+   (`bmc-credentials` always, `proxy-credentials` if its key is in generated
+   form):
+
+   ```bash
+   gitups secret generate \
+     -f "$WORKSPACE" \
+     --secrets-dir "$GITUPS_SECRETS_DIR"
+   ```
+
+5. List the secrets directory to confirm what's on disk:
+
+   ```bash
+   find "$GITUPS_SECRETS_DIR" -maxdepth 1 -type f -printf '%f\n' | sort
+   ```
+
+Expected files (plus `proxy-credentials` when `environment.yaml` references
+it):
+
+```bash
+bmc-credentials
+openshift-pull-secret
+proxy-credentials
+```
+
+## Apply The Workspace To The Bastion
+
+With desired state and secrets in place, install the release-specific
+OpenShift CLIs declared by the workspace:
 
 ```bash
 gitups apply bastion -f "$WORKSPACE" --yes
 gitups check bastion -f "$WORKSPACE"
 ```
-
-## Save And Generate Secrets
-
-The SSH files are file-backed secret references under `~/.ssh`; the pull
-secret and generated BMC credentials live under `$GITUPS_SECRETS_DIR`.
-
-```bash
-test -r ~/.ssh/gitups-ssh-key
-test -r ~/.ssh/gitups-ssh-key.pub
-
-gitups secret set openshift-pull-secret \
-  --pull-secret $BASTION_HOME/pull-secret.json \
-  --secrets-dir "$GITUPS_SECRETS_DIR"
-
-gitups secret generate \
-  -f "$WORKSPACE" \
-  --secrets-dir "$GITUPS_SECRETS_DIR"
-
-find "$GITUPS_SECRETS_DIR" -maxdepth 1 -type f -printf '%f\n' | sort
-```
-
-Expected generated/saved files:
-
-```bash
-bmc-credentials
-openshift-pull-secret
-```
-
-If `environment.yaml` references `proxy-credentials`, that file is also
-expected.
 
 ## Check The Local Libvirt Provider
 

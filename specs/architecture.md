@@ -42,7 +42,7 @@ BMC → real bare metal → vSphere) edits `InfrastructureProvider` and
   that object only. Replacing one layer's object must not require editing
   files in other layers.
 - **R2 Reference, don't repeat.** Container image refs, base domains,
-  secret refs, provider host names, and machine names live in their owning
+  secret names, provider host names, and machine names live in their owning
   object and are referenced by name from others. Validation rejects
   schemas that re-declare an attribute already present in a referenced
   object.
@@ -54,26 +54,29 @@ BMC → real bare metal → vSphere) edits `InfrastructureProvider` and
   - `InfrastructureProvider.spec.machine.{libvirt | baremetal | vsphere | kubevirt}`
   - `InfrastructureProvider.spec.loadBalancer.{haProxy | …}`
   - `InfrastructureProvider.spec.nameResolution.{hostsFile | …}`
+  - `InfrastructureProvider.spec.proxy.{squid | …}`
   - `InfrastructureProvider.spec.hosts.<name>.{ssh | …}` (host connection)
   - per-machine placement on `ClusterInfrastructure.spec.machines.<name>`
   - per-network realisation on `ClusterInfrastructure.spec.networks.<name>`
-  - `Environment.spec.ocpInstall.{connected | restricted | disconnected}`
+  - `Environment.spec.ocpInstallType: {connected | disconnected}` plus
+    top-level `spec.proxy` and `spec.registries`
 
 `InfrastructureProvider` is **capability-oriented**: the top-level
-sub-blocks (`machine`, `loadBalancer`, `nameResolution`) are
-*independently optional* — at least one must be set, but a provider may
-supply any subset. The host pool (`spec.hosts`) is a shared resource;
-appliance-style capabilities (BigIP, vCenter API) embed their endpoint
-inline and need no host pool.
+sub-blocks (`machine`, `loadBalancer`, `nameResolution`, `registry`,
+`proxy`) are *independently optional* — at least one must be set, but a
+provider may supply any subset. The host pool (`spec.hosts`) is a shared
+resource; appliance-style capabilities (BigIP, vCenter API) embed their
+endpoint inline and need no host pool.
 
 `ClusterInfrastructure.spec.providerRefs` is a list. The closure of all
 referenced providers' capabilities must contain at most one contributor
 per capability. The renderer materialises this as a `ProviderClosure`:
-a typed view that exposes the merged hosts pool plus the
-machine/loadBalancer/nameResolution suppliers. Anything that exists
-*because a particular cluster needs it* — networks, machines, endpoints,
-load-balancer endpoint binds — is declared on `ClusterInfrastructure`
-with a substrate-typed sub-block when the realisation is provider-specific.
+a typed view that exposes the merged hosts pool plus the machine,
+loadBalancer, nameResolution, registry, and proxy suppliers. Anything that
+exists *because a particular cluster needs it* — networks, machines,
+endpoints, load-balancer endpoint binds — is declared on
+`ClusterInfrastructure` with a substrate-typed sub-block when the realisation
+is provider-specific.
 
 ## Provider Adapters
 
@@ -149,6 +152,13 @@ provider host that supplies `spec.registry.mirrorRegistry`. It executes in
 `provider-prepare.yml` **before** `network_lb_managed` so any
 local-mirrored image (HAProxy, future workloads) is reachable when its
 consumer pulls it on subsequent applies.
+
+`provider_proxy_squid` runs authenticated Squid on the provider host that
+supplies `spec.proxy.squid`. It executes in `provider-prepare.yml` before
+`host_proxy`, `provider_mirror_registry`, and `network_lb_managed` so
+provider-host tasks can use the managed proxy after it exists. Libvirt egress
+isolation remains in `cluster_substrate_libvirt`: only Gitups-managed libvirt
+networks that reference the managed proxy omit NAT.
 
 ### Provider dispatch
 

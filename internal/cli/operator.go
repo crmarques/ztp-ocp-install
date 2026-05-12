@@ -64,12 +64,18 @@ func python312InstallCmd() []string {
 			return pm.args
 		}
 		if _, err := exec.LookPath("sudo"); err == nil {
-			return append([]string{"sudo"}, pm.args...)
+			return append([]string{"sudo", "--preserve-env=" + sudoPreservedProxyVars}, pm.args...)
 		}
 		return pm.args
 	}
 	return nil
 }
+
+// sudoPreservedProxyVars lists the proxy env vars carried through `sudo` so
+// privileged steps (package installs, become tasks) reach mirrors when the
+// caller is behind a proxy declared in Environment.spec.proxy. Mirrors the
+// keys produced by resolveProxyEnv.
+const sudoPreservedProxyVars = "HTTP_PROXY,HTTPS_PROXY,NO_PROXY,http_proxy,https_proxy,no_proxy"
 
 func controllerBootstrapPlan() ([]bootstrapStep, error) {
 	pin, err := ansibleCorePinnedVersion()

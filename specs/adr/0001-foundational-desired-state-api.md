@@ -31,7 +31,7 @@ layer below by name; no layer copies facts from the layer it references.
 
 | Layer | Kind | Owns |
 | --- | --- | --- |
-| Global UX | `Environment` | base domain, OpenShift install mode (typed sub-blocks), shared secret refs, OpenShift release defaults, component image pins |
+| Global UX | `Environment` | base domain, OpenShift install mode (`ocpInstallType`), shared secret sources, OpenShift release defaults, component image pins |
 | Substrate | `InfrastructureProvider` | shared host pool, capability sub-blocks (`machine` / `loadBalancer` / `nameResolution`) — each independently optional |
 | Cluster infra | `ClusterInfrastructure` | provider composition (`providerRefs` list), machines (with substrate-typed placement), per-cluster networks (with substrate-typed sub-blocks), endpoints (api / api-int / ingress with VIPs), load-balancer endpoint binds |
 | Cluster intent | `OCPCluster` | role, topology, install method/overrides, networking (clusterNetwork / serviceNetwork), OCP node identity |
@@ -90,8 +90,9 @@ Three permanent rules govern the schema:
   | …}`, `InfrastructureProvider.spec.nameResolution.{hostsFile | …}`, the
   host connection sub-block on `InfrastructureProvider.spec.hosts.<name>.{ssh
   | …}`, per-machine placement and per-network realisation on
-  `ClusterInfrastructure`, and `Environment.spec.ocpInstall.{connected |
-  restricted | disconnected}`. Capability sub-blocks themselves
+  `ClusterInfrastructure`, and `Environment.spec.ocpInstallType: {connected |
+  disconnected}` paired with optional top-level `spec.proxy` and
+  `spec.registries`. Capability sub-blocks themselves
   (`machine`, `loadBalancer`, `nameResolution`) are *independently optional*
   rather than a discriminated union — omission means the provider does not
   supply that capability.

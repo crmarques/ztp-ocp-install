@@ -4,14 +4,8 @@ metadata:
   name: libvirt-1-host
 spec:
   baseDomain: gitups.test
-  ocpInstall:
-    connected: {}
+  ocpInstallType: connected
   secrets:
-    pullSecretRef:
-      name: openshift-pull-secret
-    clusterSSHKeyRef:
-      name: cluster-admin-key
-  keys:
     cluster-admin-key:
       file: ~/.ssh/gitups-ssh-key.pub
     remote-libvirt-host-admin-key:

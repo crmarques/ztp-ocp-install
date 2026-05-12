@@ -32,7 +32,7 @@ func Normalize(state *v1alpha1.State) {
 }
 
 func normalizeEnvironment(env *v1alpha1.Environment) {
-	defaultEnvironmentKeys(env)
+	defaultEnvironmentSecrets(env)
 }
 
 func normalizeProvider(p *v1alpha1.InfrastructureProvider) {
@@ -44,6 +44,9 @@ func normalizeProvider(p *v1alpha1.InfrastructureProvider) {
 	}
 	if p.Spec.Machine != nil && p.Spec.Machine.Libvirt != nil && p.Spec.Machine.Libvirt.BMCEmulation != nil {
 		normalizeBMCEmulation(p.Spec.Machine.Libvirt.BMCEmulation)
+	}
+	if p.Spec.Proxy != nil && p.Spec.Proxy.Squid != nil {
+		normalizeProxySquid(p.Spec.Proxy.Squid)
 	}
 }
 
@@ -62,6 +65,15 @@ func normalizeBMCEmulation(b *v1alpha1.BMCEmulationSpec) {
 	}
 	if b.Port == 0 {
 		b.Port = v1alpha1.DefaultBMCPort
+	}
+}
+
+func normalizeProxySquid(s *v1alpha1.ProxySquidSpec) {
+	if s.Port == 0 {
+		s.Port = v1alpha1.DefaultSquidPort
+	}
+	if s.Runtime == "" {
+		s.Runtime = v1alpha1.ContainerRuntimePodman
 	}
 }
 
@@ -180,10 +192,10 @@ func applyEnvironmentInstallDefaults(ocp *v1alpha1.OCPCluster, env *v1alpha1.Env
 		ocp.Spec.Install.BaseDomain = env.Spec.BaseDomain
 	}
 	if ocp.Spec.Install.PullSecretRef.Name == "" {
-		ocp.Spec.Install.PullSecretRef = env.Spec.Secrets.PullSecretRef
+		ocp.Spec.Install.PullSecretRef = v1alpha1.SecretRef{Name: v1alpha1.DefaultPullSecretName}
 	}
 	if ocp.Spec.Install.SSHKeyRef.Name == "" {
-		ocp.Spec.Install.SSHKeyRef = env.Spec.Secrets.ClusterSSHKeyRef
+		ocp.Spec.Install.SSHKeyRef = v1alpha1.SecretRef{Name: v1alpha1.DefaultClusterSSHKeyName}
 	}
 	if ocp.Spec.Install.Release == nil && env.Spec.OpenShift.Release != nil {
 		release := *env.Spec.OpenShift.Release
@@ -195,11 +207,7 @@ func applyOCPInstallEnvIntoInstall(ocp *v1alpha1.OCPCluster, env *v1alpha1.Envir
 	if env == nil {
 		return
 	}
-	kind := v1alpha1.OCPInstallKind(*env)
-	if kind == "" || kind == v1alpha1.OCPInstallKindConnected {
-		return
-	}
-	registries := v1alpha1.OCPInstallRegistriesOf(*env)
+	registries := env.Spec.Registries
 	if registries == nil {
 		return
 	}
@@ -208,7 +216,7 @@ func applyOCPInstallEnvIntoInstall(ocp *v1alpha1.OCPCluster, env *v1alpha1.Envir
 			ocp.Spec.Install.AdditionalTrustBundleRef = registries.Mirror.TrustBundleRef
 		}
 	}
-	if kind == v1alpha1.OCPInstallKindDisconnected {
+	if v1alpha1.OCPInstallKind(*env) == v1alpha1.OCPInstallKindDisconnected {
 		ocp.Spec.Install.ImageDigestSources = mergeImageDigestSources(
 			ocp.Spec.Install.ImageDigestSources,
 			deriveDisconnectedReleaseSources(registries),
@@ -219,7 +227,7 @@ func applyOCPInstallEnvIntoInstall(ocp *v1alpha1.OCPCluster, env *v1alpha1.Envir
 	}
 }
 
-func deriveDisconnectedReleaseSources(registries *v1alpha1.OCPInstallRegistries) []v1alpha1.ImageDigestSource {
+func deriveDisconnectedReleaseSources(registries *v1alpha1.EnvironmentRegistriesSpec) []v1alpha1.ImageDigestSource {
 	if registries == nil {
 		return nil
 	}
@@ -279,23 +287,23 @@ func defaultDisconnectedImageSourcePolicy(sources []v1alpha1.ImageDigestSource) 
 	}
 }
 
-func defaultEnvironmentKeys(env *v1alpha1.Environment) {
+func defaultEnvironmentSecrets(env *v1alpha1.Environment) {
 	if env == nil {
 		return
 	}
-	for name, key := range env.Spec.Keys {
-		if key.Generated == nil {
+	for name, secret := range env.Spec.Secrets {
+		if secret.Generated == nil {
 			continue
 		}
-		if cert := key.Generated.SelfSignedCertificate; cert != nil && cert.ValidityDays == 0 {
+		if cert := secret.Generated.SelfSignedCertificate; cert != nil && cert.ValidityDays == 0 {
 			cert.ValidityDays = v1alpha1.DefaultCertificateDays
-			key.Generated.SelfSignedCertificate = cert
+			secret.Generated.SelfSignedCertificate = cert
 		}
-		if creds := key.Generated.Credentials; creds != nil && creds.Username == "" {
+		if creds := secret.Generated.Credentials; creds != nil && creds.Username == "" {
 			creds.Username = "admin"
-			key.Generated.Credentials = creds
+			secret.Generated.Credentials = creds
 		}
-		env.Spec.Keys[name] = key
+		env.Spec.Secrets[name] = secret
 	}
 }
 
