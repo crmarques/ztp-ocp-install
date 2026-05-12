@@ -85,6 +85,64 @@ func TestRenderClusterInstallFilesUsesBootstrapRepoByDefault(t *testing.T) {
 	}
 }
 
+func TestStatusDiscoversStateDirFromCwd(t *testing.T) {
+	clearGitupsEnv(t)
+	stateDir := t.TempDir()
+	var stdout, stderr bytes.Buffer
+	if code := Run(context.Background(), []string{
+		"init", "workspace",
+		"--cluster-name", "ocp-bm-01",
+		"--provider", "emulated-bare-metal",
+		"--state-dir", stateDir,
+	}, nil, &stdout, &stderr); code != 0 {
+		t.Fatalf("init code=%d, stderr=%s", code, stderr.String())
+	}
+	// chdir into the workspace; status with NO --state-dir should still
+	// resolve the same bootstrap repo via discovery.
+	t.Chdir(stateDir)
+	stdout.Reset()
+	stderr.Reset()
+	if code := Run(context.Background(), []string{"status"}, nil, &stdout, &stderr); code != 0 {
+		t.Fatalf("status code=%d, stderr=%s", code, stderr.String())
+	}
+	out := stdout.String()
+	for _, expected := range []string{
+		stateDir,
+		"ocp-bm-01",
+		"OCPClusters:            1",
+	} {
+		if !strings.Contains(out, expected) {
+			t.Fatalf("status missing %q after cwd discovery\n%s", expected, out)
+		}
+	}
+}
+
+func TestStatusDiscoversStateDirFromNestedCwd(t *testing.T) {
+	clearGitupsEnv(t)
+	stateDir := t.TempDir()
+	var stdout, stderr bytes.Buffer
+	if code := Run(context.Background(), []string{
+		"init", "workspace",
+		"--cluster-name", "ocp-bm-01",
+		"--provider", "emulated-bare-metal",
+		"--state-dir", stateDir,
+	}, nil, &stdout, &stderr); code != 0 {
+		t.Fatalf("init code=%d, stderr=%s", code, stderr.String())
+	}
+	// chdir several levels deep into the bootstrap repo; discovery
+	// should still find the workspace root.
+	nested := filepath.Join(stateDir, "clusters-bootstrap.git", "ocp-bm-01", "gitups")
+	t.Chdir(nested)
+	stdout.Reset()
+	stderr.Reset()
+	if code := Run(context.Background(), []string{"status"}, nil, &stdout, &stderr); code != 0 {
+		t.Fatalf("status code=%d, stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), stateDir) {
+		t.Fatalf("status didn't resolve state-dir via nested cwd discovery:\n%s", stdout.String())
+	}
+}
+
 func TestStatusUninitializedSuggestsInitWorkspace(t *testing.T) {
 	clearGitupsEnv(t)
 	stateDir := t.TempDir()

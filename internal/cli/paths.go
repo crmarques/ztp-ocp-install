@@ -30,7 +30,34 @@ func defaultStateDir() string {
 	if value := strings.TrimSpace(os.Getenv(gitupsStateDirEnv)); value != "" {
 		return filepath.Clean(value)
 	}
+	if found, ok := discoverStateDir(); ok {
+		return found
+	}
 	return filepath.Join(defaultGitupsUserDir(), "state")
+}
+
+// discoverStateDir walks up from the working directory looking for the
+// `clusters-bootstrap.git` directory created by `gitups init workspace`.
+// If found, its parent is the inferred state-dir, letting operators run
+// every subsequent command without re-passing --state-dir. Returns
+// (path, true) when discovered, ("", false) otherwise.
+func discoverStateDir() (string, bool) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", false
+	}
+	for i := 0; i < 32; i++ {
+		info, err := os.Stat(filepath.Join(dir, bootstrapRepoName))
+		if err == nil && info.IsDir() {
+			return dir, true
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", false
+		}
+		dir = parent
+	}
+	return "", false
 }
 
 func defaultSecretsDir() string {
