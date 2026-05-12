@@ -132,7 +132,7 @@ gitups plan gitops <name>            # print apply plan
 gitups push gitops <name>            # publish rendered repos
 gitups apply gitops <name>           # render/push/bootstrap
 gitups wait gitops <name>            # poll cluster state
-gitups diff gitops <name>          # drift + freshness report
+gitups status gitops <name>        # drift + freshness report
 gitups destroy gitops <name>         # tear down bootstrap
 ```
 

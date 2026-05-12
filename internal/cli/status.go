@@ -17,12 +17,14 @@ func newStatusCmd(stdout io.Writer) *cobra.Command {
 	secretsDir := defaultSecretsDir()
 	hostStateDir := defaultHostStateDir
 	cmd := &cobra.Command{
-		Use:   "status",
+		Use:   "status [target]",
 		Short: "Report workspace state and the suggested next command",
-		Long: "Inspects the resolved state-dir and secrets-dir, surfaces declared\n" +
-			"Environment/Provider/Infrastructure/OCPCluster counts, reports which\n" +
-			"clusters have installer assets rendered, and recommends the next\n" +
-			"command in the provisioning sequence. Read-only.",
+		Long: "Without a target, inspects the resolved state-dir and secrets-dir,\n" +
+			"surfaces declared Environment/Provider/Infrastructure/OCPCluster\n" +
+			"counts, reports which clusters have installer assets rendered, and\n" +
+			"recommends the next command. With a target (e.g. `gitops <name>`),\n" +
+			"reports drift between locally rendered artifacts and their sources.\n" +
+			"Read-only.",
 		Args: cobra.NoArgs,
 	}
 	cf := addCommonFlags(cmd)
@@ -31,6 +33,8 @@ func newStatusCmd(stdout io.Writer) *cobra.Command {
 	cmd.RunE = func(_ *cobra.Command, _ []string) error {
 		return runStatus(stdout, cf, secretsDir, hostStateDir)
 	}
+	cmd.AddCommand(newGitopsStatusCmd())
+	showSubcommandFlagsInHelp(cmd)
 	return cmd
 }
 

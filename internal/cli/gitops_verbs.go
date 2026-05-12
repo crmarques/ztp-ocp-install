@@ -62,17 +62,6 @@ func newWaitCmd() *cobra.Command {
 	return cmd
 }
 
-func newDiffCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "diff <target>",
-		Short: "Report drift between local artifacts and expanded sources",
-		Args:  cobra.NoArgs,
-	}
-	cmd.AddCommand(newGitopsStatusCmd())
-	showSubcommandFlagsInHelp(cmd)
-	return cmd
-}
-
 func newDestroyCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "destroy <target>",

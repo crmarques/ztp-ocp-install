@@ -56,8 +56,7 @@ func newRootCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Comm
 		newPushCmd(),                       // 9. publish rendered artifacts
 		newApplyCmd(stdin, stdout, stderr), // 10. converge a provisioning or gitops target
 		newWaitCmd(),                       // 11. wait on cluster-side reconciliation
-		newDiffCmd(),                       // 12. drift report
-		newDestroyCmd(),                    // 13. tear down a target
+		newDestroyCmd(),                    // 12. tear down a target
 	)
 	return root
 }
