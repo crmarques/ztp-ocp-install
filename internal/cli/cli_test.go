@@ -965,6 +965,32 @@ func TestAnsibleUsesHostStateDirVariable(t *testing.T) {
 	}
 }
 
+func TestInfraApplyDryRunRespectsScope(t *testing.T) {
+	stateDir := t.TempDir()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := Run(context.Background(), []string{
+		"apply", "infra",
+		"-f", "../../examples/libvirt-redfish-lab-fleet",
+		"--state-dir", stateDir,
+		"--scope", "managed-01",
+		"--dry-run",
+	}, nil, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
+	}
+	output := stdout.String()
+	if !strings.Contains(output, "playbooks/apply-infra.yml") {
+		t.Fatalf("infra apply playbook missing in dry-run output:\n%s", output)
+	}
+	for _, leakedCluster := range []string{"hub", "managed-02"} {
+		path := filepath.Join("clusters-bootstrap.git", leakedCluster, "openshift", "install-config.yaml")
+		if strings.Contains(output, path) {
+			t.Fatalf("scoped infra apply leaked installer for %s:\n%s", leakedCluster, output)
+		}
+	}
+}
+
 func TestClustersApplyDryRunOnlyRunsClustersScope(t *testing.T) {
 	stateDir := t.TempDir()
 	var stdout bytes.Buffer

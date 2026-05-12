@@ -9,17 +9,22 @@ import (
 )
 
 func scopeState(state v1alpha1.State, target, scope string) (v1alpha1.State, error) {
-	if target == "clusters" {
+	switch target {
+	case "clusters", "infra", "all":
+		if strings.TrimSpace(scope) == "" {
+			return state, nil
+		}
 		names, err := clusterNamesForTarget(state, target, scope)
 		if err != nil {
 			return state, err
 		}
 		return filterStateToClusters(state, names), nil
+	default:
+		if strings.TrimSpace(scope) != "" {
+			return state, fmt.Errorf("--scope is not supported for %s", target)
+		}
+		return state, nil
 	}
-	if strings.TrimSpace(scope) != "" {
-		return state, fmt.Errorf("--scope is only supported for clusters")
-	}
-	return state, nil
 }
 
 func clusterNamesForTarget(state v1alpha1.State, target, scope string) ([]string, error) {

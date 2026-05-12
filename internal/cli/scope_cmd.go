@@ -37,8 +37,8 @@ func newScopeCheckCmd(scope scopeSpec, stdout io.Writer, stderr io.Writer) *cobr
 	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material (env: GITUPS_SECRETS_DIR)")
 	cmd.Flags().StringVar(&hostStateDir, "host-state-dir", hostStateDir, "root-managed host runtime state directory")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "render artifacts and print the Ansible preflight command without executing it")
-	if scope.name == "clusters" {
-		cmd.Flags().StringVar(&clusterScope, "scope", "", "comma-separated OCPCluster names to check")
+	if scope.name == "clusters" || scope.name == "infra" || scope.name == "all" {
+		cmd.Flags().StringVar(&clusterScope, "scope", "", "comma-separated OCPCluster names to check (restricts the matching ClusterInfrastructure/Provider sets)")
 	}
 	cmd.RunE = func(c *cobra.Command, _ []string) error {
 		state, err := loadDesiredState(cf)
@@ -127,8 +127,8 @@ func newScopeApplyCmd(scope scopeSpec, stdin io.Reader, stdout io.Writer, stderr
 	cmd.Flags().StringVar(&executable, "ansible-playbook", resolveAnsiblePlaybook(), "ansible-playbook executable to run (defaults to the gitups-managed venv when present)")
 	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material (env: GITUPS_SECRETS_DIR)")
 	cmd.Flags().StringVar(&hostStateDir, "host-state-dir", hostStateDir, "root-managed host runtime state directory")
-	if scope.name == "clusters" {
-		cmd.Flags().StringVar(&clusterScope, "scope", "", "comma-separated OCPCluster names to apply")
+	if scope.name == "clusters" || scope.name == "infra" || scope.name == "all" {
+		cmd.Flags().StringVar(&clusterScope, "scope", "", "comma-separated OCPCluster names to apply (restricts the matching ClusterInfrastructure/Provider sets)")
 	}
 	cmd.RunE = func(c *cobra.Command, _ []string) error {
 		state, err := loadDesiredState(cf)
