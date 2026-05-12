@@ -529,6 +529,7 @@ func newGitopsApplyCmd() *cobra.Command {
 		outputDir         string
 		toContext         string
 		dryRun            bool
+		yes               bool
 		allowPlaceholders bool
 		waitCRDs          bool
 		full              bool
@@ -592,6 +593,13 @@ func newGitopsApplyCmd() *cobra.Command {
 
 			hasSRC := prov.Spec.Controllers.ServiceResources != nil
 
+			if !dryRun && !yes {
+				prompt := fmt.Sprintf("Apply %s to cluster context %q? [y/N] (default: no): ", ws.Name, toContext)
+				if !confirm(cmd.InOrStdin(), out, prompt) {
+					return errors.New("apply aborted")
+				}
+			}
+
 			if full || !hasSRC {
 				return applyFullTree(cmd, fp, ws, kubeClient, dryRun, waitCRDs, waitTimeout, out)
 			}
@@ -601,6 +609,7 @@ func newGitopsApplyCmd() *cobra.Command {
 	addOutputDirFlag(cmd, &outputDir)
 	cmd.Flags().StringVar(&toContext, "to", "", "cluster context to apply into (required)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "invoke the KRC's apply-dry-run intent; no cluster state changes")
+	cmd.Flags().BoolVar(&yes, "yes", false, "skip the apply confirmation prompt")
 	cmd.Flags().BoolVar(&allowPlaceholders, "allow-placeholders", false, "apply even when placeholders remain in expanded GitOpsPackageSet")
 	cmd.Flags().BoolVar(&waitCRDs, "wait-crds", false, "after each repo, wait for its OLM subscriptions to Succeed before the next repo")
 	cmd.Flags().BoolVar(&full, "full", false, "apply the whole rendered tree even when spec.controllers declares a KRC/SRC (for SRC-less setups or disaster recovery)")
@@ -1921,6 +1930,7 @@ func newGitopsDestroyCmd() *cobra.Command {
 		kubeContext  string
 		archiveRepos bool
 		dryRun       bool
+		yes          bool
 	)
 	cmd := &cobra.Command{
 		Use:   "gitops <name> --to <cluster-context>",
@@ -1934,16 +1944,24 @@ func newGitopsDestroyCmd() *cobra.Command {
 			if kubeContext == "" {
 				return fmt.Errorf("--to <cluster-context> is required")
 			}
-			fmt.Fprintf(cmd.OutOrStdout(),
+			out := cmd.OutOrStdout()
+			fmt.Fprintf(out,
 				"gitops destroy is currently advisory: rendered tree at %s\n"+
 					"  kubectl --context %s delete -f <repo-dir> --recursive  (per repo, reverse apply order)\n",
 				ws.RenderRoot, kubeContext)
 			if archiveRepos {
-				fmt.Fprintln(cmd.OutOrStdout(),
+				fmt.Fprintln(out,
 					"--archive-repos: not implemented; deprecate or delete repos via your git provider's UI/API.")
 			}
 			if dryRun {
-				fmt.Fprintln(cmd.OutOrStdout(), "(dry-run; no actions taken)")
+				fmt.Fprintln(out, "(dry-run; no actions taken)")
+				return nil
+			}
+			if !yes {
+				prompt := fmt.Sprintf("Destroy %s on cluster context %q? [y/N] (default: no): ", ws.Name, kubeContext)
+				if !confirm(cmd.InOrStdin(), out, prompt) {
+					return errors.New("destroy aborted")
+				}
 			}
 			return nil
 		},
@@ -1952,5 +1970,6 @@ func newGitopsDestroyCmd() *cobra.Command {
 	cmd.Flags().StringVar(&kubeContext, "to", "", "kubectl context to operate against (required)")
 	cmd.Flags().BoolVar(&archiveRepos, "archive-repos", false, "archive (do not delete) the published repos via the git provider")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the destroy plan without executing it")
+	cmd.Flags().BoolVar(&yes, "yes", false, "skip the destroy confirmation prompt")
 	return cmd
 }

@@ -965,6 +965,51 @@ func TestAnsibleUsesHostStateDirVariable(t *testing.T) {
 	}
 }
 
+func TestGitopsDestroyPromptsWithoutYes(t *testing.T) {
+	clearGitupsEnv(t)
+	outDir := filepath.Join(t.TempDir(), "gitops")
+	var stdout, stderr bytes.Buffer
+	if code := Run(context.Background(), []string{"init", "gitops", "demo", "-d", outDir}, nil, &stdout, &stderr); code != 0 {
+		t.Fatalf("init gitops code=%d, stderr=%s", code, stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+	code := Run(context.Background(), []string{
+		"destroy", "gitops", "demo",
+		"-d", outDir,
+		"--to", "demo-context",
+	}, strings.NewReader("n\n"), &stdout, &stderr)
+	if code != 1 {
+		t.Fatalf("expected exit 1 on decline, got %d, stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "destroy aborted") {
+		t.Fatalf("stderr missing 'destroy aborted': %s", stderr.String())
+	}
+}
+
+func TestGitopsDestroyDryRunSkipsPrompt(t *testing.T) {
+	clearGitupsEnv(t)
+	outDir := filepath.Join(t.TempDir(), "gitops")
+	var stdout, stderr bytes.Buffer
+	if code := Run(context.Background(), []string{"init", "gitops", "demo", "-d", outDir}, nil, &stdout, &stderr); code != 0 {
+		t.Fatalf("init gitops code=%d, stderr=%s", code, stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+	code := Run(context.Background(), []string{
+		"destroy", "gitops", "demo",
+		"-d", outDir,
+		"--to", "demo-context",
+		"--dry-run",
+	}, nil, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("dry-run code got %d, stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "(dry-run; no actions taken)") {
+		t.Fatalf("stdout missing dry-run marker: %s", stdout.String())
+	}
+}
+
 func TestInfraApplyDryRunRespectsScope(t *testing.T) {
 	stateDir := t.TempDir()
 	var stdout bytes.Buffer
