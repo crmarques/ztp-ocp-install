@@ -87,7 +87,7 @@ ansible-syntax-check: check-e2e-deps
 	done
 
 stale-term-check:
-	@! rg -n 'connectivity[.](mode|connected|restricted|disconnected)|spec[.]connectivity|gitups_connectivity|localRegistry|gitups diff|spoke|examples/infra|ADR 0003' README.md docs specs examples test
+	@! rg -n 'connectivity[.](mode|connected|restricted|disconnected)|spec[.]connectivity|gitups_connectivity|localRegistry|spoke|examples/infra|ADR 0003' README.md docs specs examples test
 
 provider-swap-check:
 	diff -u examples/libvirt-redfish-fleet/environment.yaml examples/baremetal-redfish-fleet/environment.yaml
@@ -119,15 +119,15 @@ e2e: check-e2e-case check-e2e-deps build
 list-e2e-gitops-cases:
 	@printf '%s\n' 'Available gitops e2e cases:' $(addprefix '  ',$(GITOPS_E2E_CASES))
 
-# e2e-gitops runs `gitops check`, `gitops expand`, and `gitops render` against
-# a fixture under test/e2e/gitops/<case>/. It is read-only against the cluster
-# (no apply/push) — the goal is to validate the merged tool's gitops pipeline
-# without touching a remote git provider or a kind cluster.
+# e2e-gitops runs `check gitops`, `expand gitops`, and `render gitops`
+# against a fixture under test/e2e/gitops/<case>/. It is read-only against
+# the cluster (no apply/push) — the goal is to validate the merged tool's
+# gitops pipeline without touching a remote git provider or a kind cluster.
 e2e-gitops: build
 	@test -n "$(CASE)" || { printf '%s\n' 'CASE is required; pass CASE=<name>, e.g. make e2e-gitops CASE=test1' 'Available cases:' $(addprefix '  ',$(GITOPS_E2E_CASES)); exit 1; }
-	$(BIN_DIR)/$(BINARY) gitops check $(CASE) -d $(GITOPS_E2E_DIR)
-	$(BIN_DIR)/$(BINARY) gitops expand $(CASE) -d $(GITOPS_E2E_DIR) --force
-	$(BIN_DIR)/$(BINARY) gitops render $(CASE) -d $(GITOPS_E2E_DIR) --allow-placeholders
+	$(BIN_DIR)/$(BINARY) check gitops $(CASE) -d $(GITOPS_E2E_DIR)
+	$(BIN_DIR)/$(BINARY) expand gitops $(CASE) -d $(GITOPS_E2E_DIR) --force
+	$(BIN_DIR)/$(BINARY) render gitops $(CASE) -d $(GITOPS_E2E_DIR) --allow-placeholders
 
 clean:
 	rm -rf $(BIN_DIR) $(STATE_DIR) dist build out rendered tmp

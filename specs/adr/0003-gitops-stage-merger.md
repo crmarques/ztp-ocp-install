@@ -54,7 +54,7 @@ source drivers (filesystem, OCI, git URL).
 
 ### CLI surface
 
-- New top-level group `gitups gitops` peer to the provisioning workflow.
+- A `gitops <name>` target reachable through every top-level verb (no `gitops` namespace).
 - Verbs preserve the upstream gitops vocabulary
   (`init`, `expand`, `check`, `fill`, `plan`, `push`, `apply`, `wait`,
   `status`) with one rename and one addition:

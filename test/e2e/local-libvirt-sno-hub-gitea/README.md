@@ -94,7 +94,7 @@ forking the generic one.
 make e2e-gitops CASE=local-libvirt-sno-hub-gitea
 ```
 
-That target runs `gitops check`, `gitops expand`, and `gitops render` against
+That target runs `check gitops`, `expand gitops`, and `render gitops` against
 the fixture (no `apply`/`push` — read-only against the cluster). To actually
 apply onto the SNO hub:
 
@@ -102,14 +102,14 @@ apply onto the SNO hub:
 KUBE_CONTEXT=$(oc config current-context)
 WORKSPACE=test/e2e/gitops
 
-./bin/gitups gitops fill   local-libvirt-sno-hub-gitea -d $WORKSPACE \
+./bin/gitups fill gitops   local-libvirt-sno-hub-gitea -d $WORKSPACE \
   --set argocd-managed-repo-gitops-controllers.repoURL=https://example.invalid/gitops/gitops-controllers.git \
   --set argocd-managed-repo-gitops-controllers-dev.repoURL=https://example.invalid/gitops/gitops-controllers-dev.git \
   --set argocd-managed-repo-workloads.repoURL=https://example.invalid/gitops/workloads.git \
   --set argocd-managed-repo-workloads-dev.repoURL=https://example.invalid/gitops/workloads-dev.git
-./bin/gitups gitops render local-libvirt-sno-hub-gitea -d $WORKSPACE --context "$KUBE_CONTEXT" --prune
-./bin/gitups gitops apply  local-libvirt-sno-hub-gitea -d $WORKSPACE --to "$KUBE_CONTEXT" --wait-crds
-./bin/gitups gitops wait   local-libvirt-sno-hub-gitea -d $WORKSPACE --to "$KUBE_CONTEXT" --timeout 15m
+./bin/gitups render gitops local-libvirt-sno-hub-gitea -d $WORKSPACE --context "$KUBE_CONTEXT" --prune
+./bin/gitups apply gitops  local-libvirt-sno-hub-gitea -d $WORKSPACE --to "$KUBE_CONTEXT" --wait-crds
+./bin/gitups wait gitops   local-libvirt-sno-hub-gitea -d $WORKSPACE --to "$KUBE_CONTEXT" --timeout 15m
 ```
 
 The `argocd-managed-repo-*.repoURL` placeholders only need real URLs once
@@ -141,7 +141,7 @@ make clean-e2e-state CASE=local-libvirt-sno-hub-gitea
 Or step-by-step:
 
 ```text
-gitups gitops   destroy local-libvirt-sno-hub-gitea -d test/e2e/gitops --to "$KUBE_CONTEXT" --yes
+gitups destroy gitops local-libvirt-sno-hub-gitea -d test/e2e/gitops --to "$KUBE_CONTEXT" --yes
 sudo rm -rf /tmp/gitups-local-libvirt-sno-hub-gitea
 ```
 

@@ -328,7 +328,7 @@ The validator enforces:
 
 The user-facing CLI is organized by verb. Provisioning targets are `bastion`,
 `infra`, `clusters`, `hub`, and `all`. The GitOps authoring group remains
-`gitups gitops *` until the GitOps command shape is redesigned.
+every gitops operation is reached as `gitups <verb> gitops <name>`.
 
 | Command | Reads input? | Mutates? | Purpose |
 | --- | --- | --- | --- |
@@ -372,7 +372,7 @@ hub cluster is selected.
 
 `GitOpsPackageSet` is a gitops authoring artifact. It is **not** a member of
 the cluster-infra `State` aggregate above; it is loaded by a separate path
-(`internal/gitops/load`) and consumed by the `gitups gitops *` command group.
+(`internal/gitops/load`) and consumed by the gitops leaves under each top-level verb (`init gitops`, `check gitops`, `render gitops`, `apply gitops`, …).
 Its ownership rules, minimal and expanded profiles, catalog source drivers
 (`filesystem`, `oci`, `git`), and renderer priority are specified in
 [gitops.md](gitops.md).

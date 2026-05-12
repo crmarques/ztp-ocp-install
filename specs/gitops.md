@@ -1,6 +1,6 @@
 # GitOps Spec
 
-The `gitups gitops *` command group is the post-provisioning concern of the
+The gitops command leaves (`init gitops`, `check gitops`, `render gitops`, `apply gitops`, …) are the post-provisioning concern of the
 gitups CLI. It turns a declarative package set into rendered git repos and
 bootstraps a target cluster with the KRC/SRC controllers that own ongoing
 reconciliation.
@@ -23,7 +23,7 @@ kinds are consumed by `internal/gitops/load.PackageSet` and
 ## Non-Negotiable Invariants
 
 1. **One object, two profiles.** A minimal `GitOpsPackageSet` carries user
-   intent. `gitups gitops expand` writes the same kind with
+   intent. `gitups expand gitops` writes the same kind with
    `spec.resolved` populated under `.gitups/expanded/`.
 2. **Lean input.** User-authored fields carry only sources, repositories,
    selected templates, controllers, and bindings. Defaults and inferable
@@ -123,17 +123,17 @@ plans, and apply ordering metadata. It must not carry generated secret values.
 ## CLI
 
 ```text
-gitups gitops init <name>            # scaffold a GitOpsPackageSet workspace
-gitups gitops expand <name>          # populate spec.resolved
-gitups gitops check <name>           # validate and dry-expand
-gitups gitops render <name>          # render repo trees under .gitups/render
-gitups gitops fill <name>            # fill non-secret placeholders
-gitups gitops plan <name>            # print apply plan
-gitups gitops push <name>            # publish rendered repos
-gitups gitops apply <name>           # render/push/bootstrap
-gitups gitops wait <name>            # poll cluster state
-gitups gitops status <name>          # drift + freshness report
-gitups gitops destroy <name>         # tear down bootstrap
+gitups init gitops <name>            # scaffold a GitOpsPackageSet workspace
+gitups expand gitops <name>          # populate spec.resolved
+gitups check gitops <name>           # validate and dry-expand
+gitups render gitops <name>          # render repo trees under .gitups/render
+gitups fill gitops <name>            # fill non-secret placeholders
+gitups plan gitops <name>            # print apply plan
+gitups push gitops <name>            # publish rendered repos
+gitups apply gitops <name>           # render/push/bootstrap
+gitups wait gitops <name>            # poll cluster state
+gitups diff gitops <name>          # drift + freshness report
+gitups destroy gitops <name>         # tear down bootstrap
 ```
 
 ## Anti-Goals
