@@ -290,9 +290,9 @@ func secretFileCheck(refName, path, label string, deps preflightDeps) preflightC
 		detail := "missing"
 		switch {
 		case strings.Contains(label, "pullSecretRef"):
-			detail = "missing — run `gitups secrets pull-secret set --name " + refName + " --from-file <path>`"
+			detail = "missing — run `gitups secret set " + refName + " --pull-secret <path>`"
 		case strings.Contains(label, "credentialRef") || strings.Contains(label, "credentialsRef"):
-			detail = "missing — run `gitups secrets credentials set --name " + refName + " --from-file <path>` (or `--generate` for test fixtures)"
+			detail = "missing — run `gitups secret set " + refName + " --from-file <path>` (or `--generate` for test fixtures)"
 		case strings.Contains(label, "sshKeyRef"):
 			detail = "missing — ensure the file exists at the path declared in Environment.spec.keys[" + refName + "].file"
 		}
@@ -311,7 +311,7 @@ func generatedSecretCheck(path, label string, deps preflightDeps) preflightCheck
 	name := label + " at " + path
 	info, err := deps.statPath(path)
 	if err != nil {
-		return preflightCheck{name: name, ok: false, detail: "missing — run `gitups secrets generate` before apply"}
+		return preflightCheck{name: name, ok: false, detail: "missing — run `gitups secret generate` before apply"}
 	}
 	if info.IsDir() {
 		return preflightCheck{name: name, ok: false, detail: "is a directory; expected a generated file"}
@@ -544,7 +544,7 @@ func generatedSelfSignedDriftChecks(state v1alpha1.State, secretsDir string) []p
 			checks = append(checks, preflightCheck{
 				name:   name,
 				ok:     false,
-				detail: fmt.Sprintf("%v — remove %s and %s, then re-run `gitups secrets generate`", err, certPath, keyPath),
+				detail: fmt.Sprintf("%v — remove %s and %s, then re-run `gitups secret generate`", err, certPath, keyPath),
 			})
 			continue
 		}

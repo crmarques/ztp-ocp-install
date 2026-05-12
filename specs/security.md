@@ -12,12 +12,12 @@
 - BMC credential files referenced by
   `InfrastructureProvider.spec.machine.libvirt.bmcEmulation.auth.credentialRef`
   and `ClusterInfrastructure.spec.machines.<name>.baremetal.bmc.credentialRef`
-  are stored as a single `username:password` line. `gitups secrets credentials
-  set` is the only supported writer; sushy emulator htpasswd files are
+  are stored as a single `username:password` line. `gitups secret set <name>`
+  is the only supported writer; sushy emulator htpasswd files are
   derived from the credential file at apply time and are never committed.
 - Generated self-signed certificate material is still secret material when
   it includes a private key. Gitups creates it through
-  `gitups secrets generate`, not through root-escalated Ansible tasks, and
+  `gitups secret generate`, not through root-escalated Ansible tasks, and
   must not render it into committed examples, logs, or GitOps output.
 - Logs must not print sensitive values.
 

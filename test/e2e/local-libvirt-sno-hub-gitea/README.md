@@ -49,8 +49,8 @@ Secret files live outside the repo under `~/.gitups/secrets` by default.
 install -d -m 0700 ~/.ssh ~/.gitups/secrets
 ssh-keygen -t ed25519 -f ~/.ssh/gitups-ssh-key -N '' -C gitups-local-libvirt-sno-hub
 install -m 0600 /dev/stdin ~/.ssh/authorized_keys < <(cat ~/.ssh/authorized_keys 2>/dev/null; cat ~/.ssh/gitups-ssh-key.pub)
-gitups secrets pull-secret set --name openshift-pull-secret --from-file ~/pull-secret.json
-gitups secrets generate -f test/e2e/local-libvirt-sno-hub-gitea
+gitups secret set openshift-pull-secret --pull-secret ~/pull-secret.json
+gitups secret generate -f test/e2e/local-libvirt-sno-hub-gitea
 ```
 
 ## 1. Bring up the SNO hub

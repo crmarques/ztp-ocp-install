@@ -24,5 +24,5 @@ gitups check infra -f examples/libvirt-redfish-hub --state-dir .state --dry-run
 gitups apply infra -f examples/libvirt-redfish-hub --state-dir .state --dry-run
 gitups apply clusters -f examples/libvirt-redfish-hub --state-dir .state --dry-run
 gitups apply hub -f examples/libvirt-redfish-hub --state-dir .state --dry-run
-gitups secrets generate -f examples/libvirt-redfish-hub
+gitups secret generate -f examples/libvirt-redfish-hub
 ```

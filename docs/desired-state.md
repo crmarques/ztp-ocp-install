@@ -190,9 +190,9 @@ where the Gitups user directory is `GITUPS_USER_DIR` or `~/.gitups`. Override
 the secrets directory directly with `GITUPS_SECRETS_DIR` or `--secrets-dir`.
 
 ```text
-gitups secrets pull-secret set --name openshift-pull-secret --from-file ~/pull-secret.json
-gitups secrets credentials set --name baremetal-redfish-bmc --username admin --password-stdin
-gitups secrets generate -f examples/libvirt-redfish-hub
+gitups secret set openshift-pull-secret --pull-secret ~/pull-secret.json
+gitups secret set baremetal-redfish-bmc --username admin --password-stdin
+gitups secret generate -f examples/libvirt-redfish-hub
 ```
 
 Both file-sourced and gitups-generated secrets are declared in
@@ -202,7 +202,8 @@ secret itself — either a `username:password\n` file (`generated.credentials`)
 or a self-signed cert/key pair (`generated.selfSignedCertificate`). The
 mirror trust bundle is wired via `registries.mirror.trustBundleRef.name`;
 the matching `keys[name].generated.selfSignedCertificate` decides how that
-reference is sourced. `gitups secrets generate -f` materializes only
+reference is sourced. `gitups secret generate -f` materializes only
 `generated:` entries; `file:` entries must already exist at their declared
-paths or be written with the specific `secrets pull-secret set` and
-`secrets credentials set` commands.
+paths or be written with `gitups secret set <name> --pull-secret <path>` for
+pull-secrets or `gitups secret set <name> [--from-file|--username|--generate]`
+for credentials.

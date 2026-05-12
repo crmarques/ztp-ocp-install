@@ -410,7 +410,7 @@ spec:
 	secretsDir := filepath.Join(dir, "secrets")
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	code := Run(context.Background(), []string{"secrets", "generate", "-f", path, "--secrets-dir", secretsDir}, nil, &stdout, &stderr)
+	code := Run(context.Background(), []string{"secret", "generate", "-f", path, "--secrets-dir", secretsDir}, nil, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
 	}
@@ -440,7 +440,7 @@ spec:
 
 	stdout.Reset()
 	stderr.Reset()
-	code = Run(context.Background(), []string{"secrets", "generate", "-f", path, "--secrets-dir", secretsDir}, nil, &stdout, &stderr)
+	code = Run(context.Background(), []string{"secret", "generate", "-f", path, "--secrets-dir", secretsDir}, nil, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("second run code got %d, stderr: %s", code, stderr.String())
 	}
@@ -454,7 +454,7 @@ spec:
 	}
 	stdout.Reset()
 	stderr.Reset()
-	code = Run(context.Background(), []string{"secrets", "generate", "-f", driftPath, "--secrets-dir", secretsDir}, nil, &stdout, &stderr)
+	code = Run(context.Background(), []string{"secret", "generate", "-f", driftPath, "--secrets-dir", secretsDir}, nil, &stdout, &stderr)
 	if code == 0 {
 		t.Fatalf("expected drift to fail, stdout: %s", stdout.String())
 	}
@@ -574,7 +574,7 @@ func TestSecretsGenerateMaterializesCredentials(t *testing.T) {
 	}
 	secretsDir := filepath.Join(dir, "secrets")
 	var stdout, stderr bytes.Buffer
-	if code := Run(context.Background(), []string{"secrets", "generate", "-f", statePath, "--secrets-dir", secretsDir}, nil, &stdout, &stderr); code != 0 {
+	if code := Run(context.Background(), []string{"secret", "generate", "-f", statePath, "--secrets-dir", secretsDir}, nil, &stdout, &stderr); code != 0 {
 		t.Fatalf("first run code=%d stderr=%s", code, stderr.String())
 	}
 	for _, name := range []string{"bmc-credentials", "mirror-creds"} {
@@ -606,7 +606,7 @@ func TestSecretsGenerateMaterializesCredentials(t *testing.T) {
 	}
 	stdout.Reset()
 	stderr.Reset()
-	if code := Run(context.Background(), []string{"secrets", "generate", "-f", statePath, "--secrets-dir", secretsDir}, nil, &stdout, &stderr); code != 0 {
+	if code := Run(context.Background(), []string{"secret", "generate", "-f", statePath, "--secrets-dir", secretsDir}, nil, &stdout, &stderr); code != 0 {
 		t.Fatalf("second run code=%d stderr=%s", code, stderr.String())
 	}
 	bmcAfter, err := os.ReadFile(filepath.Join(secretsDir, "bmc-credentials"))
@@ -627,7 +627,7 @@ func TestSecretsGenerateMaterializesCredentials(t *testing.T) {
 	}
 	stdout.Reset()
 	stderr.Reset()
-	code := Run(context.Background(), []string{"secrets", "generate", "-f", driftPath, "--secrets-dir", secretsDir}, nil, &stdout, &stderr)
+	code := Run(context.Background(), []string{"secret", "generate", "-f", driftPath, "--secrets-dir", secretsDir}, nil, &stdout, &stderr)
 	if code == 0 {
 		t.Fatalf("expected username drift to fail, stdout=%s", stdout.String())
 	}
@@ -647,9 +647,8 @@ func TestSecretsPullSecretSetWritesAndOverwrites(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"secrets", "pull-secret", "set",
-		"--name", "openshift-pull-secret",
-		"--from-file", source,
+		"secret", "set", "openshift-pull-secret",
+		"--pull-secret", source,
 		"--secrets-dir", secretsDir,
 	}, nil, &stdout, &stderr)
 	if code != 0 {
@@ -684,9 +683,8 @@ func TestSecretsPullSecretSetWritesAndOverwrites(t *testing.T) {
 	stdout.Reset()
 	stderr.Reset()
 	code = Run(context.Background(), []string{
-		"secrets", "pull-secret", "set",
-		"--name", "openshift-pull-secret",
-		"--from-file", source,
+		"secret", "set", "openshift-pull-secret",
+		"--pull-secret", source,
 		"--secrets-dir", secretsDir,
 	}, nil, &stdout, &stderr)
 	if code != 0 {
@@ -713,9 +711,8 @@ func TestSecretsPullSecretSetRejectsInvalidInputs(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"secrets", "pull-secret", "set",
-		"--name", "openshift-pull-secret",
-		"--from-file", source,
+		"secret", "set", "openshift-pull-secret",
+		"--pull-secret", source,
 		"--secrets-dir", filepath.Join(dir, "secrets"),
 	}, nil, &stdout, &stderr)
 	if code != 1 {
@@ -728,15 +725,14 @@ func TestSecretsPullSecretSetRejectsInvalidInputs(t *testing.T) {
 	stdout.Reset()
 	stderr.Reset()
 	code = Run(context.Background(), []string{
-		"secrets", "pull-secret", "set",
-		"--name", "../pull-secret",
-		"--from-file", source,
+		"secret", "set", "../pull-secret",
+		"--pull-secret", source,
 		"--secrets-dir", filepath.Join(dir, "secrets"),
 	}, nil, &stdout, &stderr)
 	if code != 2 {
 		t.Fatalf("invalid ref code got %d, stderr: %s", code, stderr.String())
 	}
-	if !strings.Contains(stderr.String(), "--name must be a lowercase DNS label") {
+	if !strings.Contains(stderr.String(), "<name> must be a lowercase DNS label") {
 		t.Fatalf("unexpected stderr: %s", stderr.String())
 	}
 }
@@ -747,8 +743,7 @@ func TestSecretsBMCSetGeneratesAndOverwrites(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"secrets", "credentials", "set",
-		"--name", "lab-bmc",
+		"secret", "set", "lab-bmc",
 		"--generate",
 		"--secrets-dir", secretsDir,
 	}, nil, &stdout, &stderr)
@@ -783,8 +778,7 @@ func TestSecretsBMCSetGeneratesAndOverwrites(t *testing.T) {
 	stdout.Reset()
 	stderr.Reset()
 	code = Run(context.Background(), []string{
-		"secrets", "credentials", "set",
-		"--name", "lab-bmc",
+		"secret", "set", "lab-bmc",
 		"--username", "operator",
 		"--password", "hunter2",
 		"--secrets-dir", secretsDir,
@@ -816,8 +810,7 @@ func TestSecretsBMCSetFromFile(t *testing.T) {
 	secretsDir := filepath.Join(dir, "secrets")
 	var stdout, stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"secrets", "credentials", "set",
-		"--name", "lab-bmc",
+		"secret", "set", "lab-bmc",
 		"--from-file", source,
 		"--secrets-dir", secretsDir,
 	}, nil, &stdout, &stderr)
@@ -844,27 +837,27 @@ func TestSecretsBMCSetRejectsInvalidInputs(t *testing.T) {
 	}{
 		{
 			name:     "missing-input-mode",
-			args:     []string{"secrets", "credentials", "set", "--name", "lab-bmc", "--secrets-dir", secretsDir},
+			args:     []string{"secret", "set", "lab-bmc", "--secrets-dir", secretsDir},
 			wantCode: 2,
-			want:     "one of --from-file, --password, --password-stdin, or --generate is required",
+			want:     "one of --pull-secret, --from-file, --password, --password-stdin, or --generate is required",
 		},
 		{
 			name:     "conflicting-input-mode",
-			args:     []string{"secrets", "credentials", "set", "--name", "lab-bmc", "--password", "x", "--generate", "--secrets-dir", secretsDir},
+			args:     []string{"secret", "set", "lab-bmc", "--password", "x", "--generate", "--secrets-dir", secretsDir},
 			wantCode: 2,
 			want:     "mutually exclusive",
 		},
 		{
 			name:     "password-without-username",
-			args:     []string{"secrets", "credentials", "set", "--name", "lab-bmc", "--password", "x", "--secrets-dir", secretsDir},
+			args:     []string{"secret", "set", "lab-bmc", "--password", "x", "--secrets-dir", secretsDir},
 			wantCode: 2,
 			want:     "--username is required with --password",
 		},
 		{
 			name:     "invalid-name",
-			args:     []string{"secrets", "credentials", "set", "--name", "../bmc", "--generate", "--secrets-dir", secretsDir},
+			args:     []string{"secret", "set", "../bmc", "--generate", "--secrets-dir", secretsDir},
 			wantCode: 2,
-			want:     "--name must be a lowercase DNS label",
+			want:     "<name> must be a lowercase DNS label",
 		},
 	}
 	for _, tt := range cases {

@@ -35,17 +35,17 @@ type generatedSelfSignedRequest struct {
 	certificate v1alpha1.SelfSignedCertificateSpec
 }
 
-func newSecretsCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
+func newSecretCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "secrets",
+		Use:   "secret",
 		Short: "Manage local install secret material",
 		Args:  cobra.NoArgs,
 	}
 	cmd.AddCommand(
-		newSecretsGenerateCmd(stdout, stderr),
-		newSecretsPullSecretCmd(stdout, stderr),
-		newSecretsCredentialsCmd(stdout),
+		newSecretSetCmd(stdout),
+		newSecretGenerateCmd(stdout, stderr),
 	)
+	showSubcommandFlagsInHelp(cmd)
 	return cmd
 }
 
@@ -60,7 +60,7 @@ func primaryEnvironmentForSync(state v1alpha1.State) *v1alpha1.Environment {
 	return &state.Environments[0]
 }
 
-func newSecretsGenerateCmd(stdout io.Writer, _ io.Writer) *cobra.Command {
+func newSecretGenerateCmd(stdout io.Writer, _ io.Writer) *cobra.Command {
 	var (
 		files      []string
 		secretsDir string
@@ -83,9 +83,9 @@ func newSecretsGenerateCmd(stdout io.Writer, _ io.Writer) *cobra.Command {
 			return failErr(1, err)
 		}
 		credRequests := generatedCredentialsRequestsFor(state)
-		printTitle(stdout, "Secrets")
+		printTitle(stdout, "secret generate")
 		if len(certRequests) == 0 && len(credRequests) == 0 {
-			fmt.Fprintln(stdout, "secrets: no generated secret requests found")
+			fmt.Fprintln(stdout, "secret generate: no generated secret requests found")
 			return nil
 		}
 		if err := os.MkdirAll(secretsDir, 0o700); err != nil {
@@ -148,88 +148,9 @@ func materializeGeneratedCredentials(secretsDir string, request generatedCredent
 	return fmt.Sprintf("generated %s (user %q)", target, wantUser), nil
 }
 
-func newSecretsPullSecretCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "pull-secret",
-		Short: "Manage local OpenShift pull secret material",
-		Args:  cobra.NoArgs,
-	}
-	cmd.AddCommand(newSecretsPullSecretSetCmd(stdout, stderr))
-	showSubcommandFlagsInHelp(cmd)
-	return cmd
-}
-
-func newSecretsPullSecretSetCmd(stdout io.Writer, _ io.Writer) *cobra.Command {
+func newSecretSetCmd(stdout io.Writer) *cobra.Command {
 	var (
-		name       string
-		fromFile   string
-		secretsDir string
-	)
-	secretsDir = defaultSecretsDir()
-	cmd := &cobra.Command{
-		Use:   "set",
-		Short: "Store an OpenShift pull secret from a local JSON file",
-		Args:  cobra.NoArgs,
-	}
-	cmd.Flags().StringVar(&name, "name", "", "SecretRef name to write")
-	cmd.Flags().StringVar(&fromFile, "from-file", "", "path to pull secret JSON")
-	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory for local install secret material")
-	cmd.RunE = func(_ *cobra.Command, _ []string) error {
-		if name == "" {
-			return failf(2, "--name is required")
-		}
-		if !infra.IsDNSLabel(name) {
-			return failf(2, "--name must be a lowercase DNS label")
-		}
-		if fromFile == "" {
-			return failf(2, "--from-file is required")
-		}
-		data, err := os.ReadFile(fromFile)
-		if err != nil {
-			return failErr(1, fmt.Errorf("read pull secret file %s: %w", fromFile, err))
-		}
-		if err := validatePullSecretJSON(data); err != nil {
-			return failErr(1, err)
-		}
-		if err := os.MkdirAll(secretsDir, 0o700); err != nil {
-			return failErr(1, fmt.Errorf("create secrets directory %s: %w", secretsDir, err))
-		}
-		if err := os.Chmod(secretsDir, 0o700); err != nil {
-			return failErr(1, fmt.Errorf("chmod secrets directory %s: %w", secretsDir, err))
-		}
-		target := filepath.Join(secretsDir, name)
-		exists, err := regularFileExists(target)
-		if err != nil {
-			return failErr(1, err)
-		}
-		if err := atomicWriteFile(target, data, 0o600); err != nil {
-			return failErr(1, err)
-		}
-		action := "wrote"
-		if exists {
-			action = "updated"
-		}
-		printTitle(stdout, "Secrets")
-		printOK(stdout, name, fmt.Sprintf("%s pull secret at %s", action, target))
-		return nil
-	}
-	return cmd
-}
-
-func newSecretsCredentialsCmd(stdout io.Writer) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "credentials",
-		Short: "Manage local username:password credentials",
-		Args:  cobra.NoArgs,
-	}
-	cmd.AddCommand(newSecretsCredentialsSetCmd(stdout))
-	showSubcommandFlagsInHelp(cmd)
-	return cmd
-}
-
-func newSecretsCredentialsSetCmd(stdout io.Writer) *cobra.Command {
-	var (
-		name          string
+		pullSecret    string
 		fromFile      string
 		username      string
 		password      string
@@ -239,35 +160,37 @@ func newSecretsCredentialsSetCmd(stdout io.Writer) *cobra.Command {
 	)
 	secretsDir = defaultSecretsDir()
 	cmd := &cobra.Command{
-		Use:   "set",
-		Short: "Store username:password credentials for a SecretRef",
-		Long: `Store credentials at <secrets-dir>/<name> as a single line "username:password",
-mode 0600. Three input modes are supported:
+		Use:   "set <name>",
+		Short: "Store a pull secret or username:password credentials for a SecretRef",
+		Long: `Write the named SecretRef material to <secrets-dir>/<name>, mode 0600.
+Exactly one input mode is required:
 
-  --from-file <path>           read an existing "username:password" file
-  --username <u> --password <p>      pass credentials directly
-  --username <u> --password-stdin    read the password from stdin
-  --generate                   generate a random password (default username "admin")
+  --pull-secret <file>             store an OpenShift pull-secret JSON file
+  --from-file <file>               store an existing "username:password" file
+  --username <u> --password <p>    store inline credentials
+  --username <u> --password-stdin  read the password from stdin
+  --generate                       generate a random password (default username "admin")
 
-Inputs are mutually exclusive. Use --generate for test fixtures; use --from-file
-or --username/--password for real credentials provided by the operator.`,
-		Args: cobra.NoArgs,
+Use --generate for test fixtures; use the other modes for material the
+operator provides.`,
+		Args: cobra.ExactArgs(1),
 	}
-	cmd.Flags().StringVar(&name, "name", "", "SecretRef name to write")
+	cmd.Flags().StringVar(&pullSecret, "pull-secret", "", "path to an OpenShift pull-secret JSON file")
 	cmd.Flags().StringVar(&fromFile, "from-file", "", "path to a file containing one line: username:password")
 	cmd.Flags().StringVar(&username, "username", "", "username (required with --password, --password-stdin, or --generate)")
 	cmd.Flags().StringVar(&password, "password", "", "password (mutually exclusive with --password-stdin and --generate)")
 	cmd.Flags().BoolVar(&passwordStdin, "password-stdin", false, "read password from stdin instead of --password")
 	cmd.Flags().BoolVar(&generate, "generate", false, "generate a strong random password (intended for test fixtures)")
-	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory for local install secret material")
-	cmd.RunE = func(c *cobra.Command, _ []string) error {
-		if name == "" {
-			return failf(2, "--name is required")
-		}
+	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory for local install secret material (env: GITUPS_SECRETS_DIR)")
+	cmd.RunE = func(c *cobra.Command, args []string) error {
+		name := args[0]
 		if !infra.IsDNSLabel(name) {
-			return failf(2, "--name must be a lowercase DNS label")
+			return failf(2, "<name> must be a lowercase DNS label")
 		}
 		modes := 0
+		if pullSecret != "" {
+			modes++
+		}
 		if fromFile != "" {
 			modes++
 		}
@@ -281,86 +204,124 @@ or --username/--password for real credentials provided by the operator.`,
 			modes++
 		}
 		if modes == 0 {
-			return failf(2, "one of --from-file, --password, --password-stdin, or --generate is required")
+			return failf(2, "one of --pull-secret, --from-file, --password, --password-stdin, or --generate is required")
 		}
 		if modes > 1 {
-			return failf(2, "--from-file, --password, --password-stdin, and --generate are mutually exclusive")
+			return failf(2, "--pull-secret, --from-file, --password, --password-stdin, and --generate are mutually exclusive")
 		}
-		var resolvedUser, resolvedPass string
-		switch {
-		case fromFile != "":
-			data, err := os.ReadFile(fromFile)
-			if err != nil {
-				return failErr(1, fmt.Errorf("read credentials file %s: %w", fromFile, err))
-			}
-			u, p, err := parseBMCCredentials(data)
-			if err != nil {
-				return failErr(1, err)
-			}
-			resolvedUser, resolvedPass = u, p
-		case password != "":
-			if username == "" {
-				return failf(2, "--username is required with --password")
-			}
-			resolvedUser, resolvedPass = username, password
-		case passwordStdin:
-			if username == "" {
-				return failf(2, "--username is required with --password-stdin")
-			}
-			stdin := c.InOrStdin()
-			if stdin == nil {
-				return failErr(1, errors.New("--password-stdin requires stdin"))
-			}
-			line, err := bufio.NewReader(stdin).ReadString('\n')
-			if err != nil && line == "" {
-				return failErr(1, fmt.Errorf("read password from stdin: %w", err))
-			}
-			resolvedUser, resolvedPass = username, strings.TrimRight(line, "\r\n")
-		case generate:
-			resolvedUser = username
-			if resolvedUser == "" {
-				resolvedUser = "admin"
-			}
-			generated, err := generateBMCPassword()
-			if err != nil {
-				return failErr(1, err)
-			}
-			resolvedPass = generated
+		if pullSecret != "" {
+			return runSecretSetPullSecret(stdout, name, pullSecret, secretsDir)
 		}
-		if err := validateBMCUsername(resolvedUser); err != nil {
-			return failErr(1, err)
+		return runSecretSetCredentials(c, stdout, name, fromFile, username, password, passwordStdin, generate, secretsDir)
+	}
+	return cmd
+}
+
+func runSecretSetPullSecret(stdout io.Writer, name, fromFile, secretsDir string) error {
+	data, err := os.ReadFile(fromFile)
+	if err != nil {
+		return failErr(1, fmt.Errorf("read pull secret file %s: %w", fromFile, err))
+	}
+	if err := validatePullSecretJSON(data); err != nil {
+		return failErr(1, err)
+	}
+	if err := os.MkdirAll(secretsDir, 0o700); err != nil {
+		return failErr(1, fmt.Errorf("create secrets directory %s: %w", secretsDir, err))
+	}
+	if err := os.Chmod(secretsDir, 0o700); err != nil {
+		return failErr(1, fmt.Errorf("chmod secrets directory %s: %w", secretsDir, err))
+	}
+	target := filepath.Join(secretsDir, name)
+	exists, err := regularFileExists(target)
+	if err != nil {
+		return failErr(1, err)
+	}
+	if err := atomicWriteFile(target, data, 0o600); err != nil {
+		return failErr(1, err)
+	}
+	action := "wrote"
+	if exists {
+		action = "updated"
+	}
+	printTitle(stdout, "secret set")
+	printOK(stdout, name, fmt.Sprintf("%s pull secret at %s", action, target))
+	return nil
+}
+
+func runSecretSetCredentials(c *cobra.Command, stdout io.Writer, name, fromFile, username, password string, passwordStdin, generate bool, secretsDir string) error {
+	var resolvedUser, resolvedPass string
+	switch {
+	case fromFile != "":
+		data, err := os.ReadFile(fromFile)
+		if err != nil {
+			return failErr(1, fmt.Errorf("read credentials file %s: %w", fromFile, err))
 		}
-		if resolvedPass == "" {
-			return failErr(1, errors.New("password must not be empty"))
-		}
-		if err := os.MkdirAll(secretsDir, 0o700); err != nil {
-			return failErr(1, fmt.Errorf("create secrets directory %s: %w", secretsDir, err))
-		}
-		if err := os.Chmod(secretsDir, 0o700); err != nil {
-			return failErr(1, fmt.Errorf("chmod secrets directory %s: %w", secretsDir, err))
-		}
-		target := filepath.Join(secretsDir, name)
-		exists, err := regularFileExists(target)
+		u, p, err := parseBMCCredentials(data)
 		if err != nil {
 			return failErr(1, err)
 		}
-		payload := []byte(resolvedUser + ":" + resolvedPass + "\n")
-		if err := atomicWriteFile(target, payload, 0o600); err != nil {
+		resolvedUser, resolvedPass = u, p
+	case password != "":
+		if username == "" {
+			return failf(2, "--username is required with --password")
+		}
+		resolvedUser, resolvedPass = username, password
+	case passwordStdin:
+		if username == "" {
+			return failf(2, "--username is required with --password-stdin")
+		}
+		stdin := c.InOrStdin()
+		if stdin == nil {
+			return failErr(1, errors.New("--password-stdin requires stdin"))
+		}
+		line, err := bufio.NewReader(stdin).ReadString('\n')
+		if err != nil && line == "" {
+			return failErr(1, fmt.Errorf("read password from stdin: %w", err))
+		}
+		resolvedUser, resolvedPass = username, strings.TrimRight(line, "\r\n")
+	case generate:
+		resolvedUser = username
+		if resolvedUser == "" {
+			resolvedUser = "admin"
+		}
+		generated, err := generateBMCPassword()
+		if err != nil {
 			return failErr(1, err)
 		}
-		action := "wrote"
-		if exists {
-			action = "updated"
-		}
-		printTitle(stdout, "Secrets")
-		message := fmt.Sprintf("%s credentials at %s (user %q)", action, target, resolvedUser)
-		if generate {
-			message += " — password generated; copy it from the file above before sharing"
-		}
-		printOK(stdout, name, message)
-		return nil
+		resolvedPass = generated
 	}
-	return cmd
+	if err := validateBMCUsername(resolvedUser); err != nil {
+		return failErr(1, err)
+	}
+	if resolvedPass == "" {
+		return failErr(1, errors.New("password must not be empty"))
+	}
+	if err := os.MkdirAll(secretsDir, 0o700); err != nil {
+		return failErr(1, fmt.Errorf("create secrets directory %s: %w", secretsDir, err))
+	}
+	if err := os.Chmod(secretsDir, 0o700); err != nil {
+		return failErr(1, fmt.Errorf("chmod secrets directory %s: %w", secretsDir, err))
+	}
+	target := filepath.Join(secretsDir, name)
+	exists, err := regularFileExists(target)
+	if err != nil {
+		return failErr(1, err)
+	}
+	payload := []byte(resolvedUser + ":" + resolvedPass + "\n")
+	if err := atomicWriteFile(target, payload, 0o600); err != nil {
+		return failErr(1, err)
+	}
+	action := "wrote"
+	if exists {
+		action = "updated"
+	}
+	printTitle(stdout, "secret set")
+	message := fmt.Sprintf("%s credentials at %s (user %q)", action, target, resolvedUser)
+	if generate {
+		message += " — password generated; copy it from the file above before sharing"
+	}
+	printOK(stdout, name, message)
+	return nil
 }
 
 func parseBMCCredentials(data []byte) (string, string, error) {

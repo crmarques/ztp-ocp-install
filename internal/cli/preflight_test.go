@@ -363,8 +363,8 @@ func TestPreflightHubChecksDisconnectedRegistryCredentials(t *testing.T) {
 	if found.ok {
 		t.Fatalf("expected %q to fail when missing, got ok", want)
 	}
-	if !strings.Contains(found.detail, "gitups secrets credentials set --name registry-lab-credentials") {
-		t.Fatalf("expected hint pointing at `gitups secrets credentials set`, got: %s", found.detail)
+	if !strings.Contains(found.detail, "gitups secret set registry-lab-credentials") {
+		t.Fatalf("expected hint pointing at `gitups secret set`, got: %s", found.detail)
 	}
 }
 
@@ -420,7 +420,7 @@ func TestPreflightHubGeneratedTrustBundleChecksOpenSSL(t *testing.T) {
 		if c.ok != want[c.name] {
 			t.Fatalf("check %q: ok=%v want=%v (%s)", c.name, c.ok, want[c.name], c.detail)
 		}
-		if c.name == "hub additionalTrustBundleRef at /secrets/trust" && !strings.Contains(c.detail, "gitups secrets generate") {
+		if c.name == "hub additionalTrustBundleRef at /secrets/trust" && !strings.Contains(c.detail, "gitups secret generate") {
 			t.Fatalf("expected generated-secret guidance, got %+v", c)
 		}
 	}
@@ -491,7 +491,7 @@ func TestPreflightFailsWhenSelfSignedCertOnDiskDoesNotMatchSpec(t *testing.T) {
 	if !strings.Contains(found.detail, wantPath) {
 		t.Fatalf("expected detail to mention cert path %s, got %q", wantPath, found.detail)
 	}
-	if !strings.Contains(found.detail, "gitups secrets generate") {
+	if !strings.Contains(found.detail, "gitups secret generate") {
 		t.Fatalf("expected remediation hint, got %q", found.detail)
 	}
 }
@@ -829,8 +829,8 @@ func TestPreflightChecksProxyCredentialsRef(t *testing.T) {
 	if found.ok {
 		t.Fatalf("expected %q to fail when missing, got ok", want)
 	}
-	if !strings.Contains(found.detail, "gitups secrets credentials set --name proxy-credentials") {
-		t.Fatalf("expected hint pointing at `gitups secrets credentials set`, got: %s", found.detail)
+	if !strings.Contains(found.detail, "gitups secret set proxy-credentials") {
+		t.Fatalf("expected hint pointing at `gitups secret set`, got: %s", found.detail)
 	}
 }
 
@@ -1027,7 +1027,7 @@ func TestPreflightChecksBMCEmulationAndMachineCredentials(t *testing.T) {
 		if c.ok {
 			t.Fatalf("expected %q to fail when missing, got ok", c.name)
 		}
-		if !strings.Contains(c.detail, "gitups secrets credentials set") {
+		if !strings.Contains(c.detail, "gitups secret set") {
 			t.Fatalf("expected BMC writer hint for %q, got: %s", c.name, c.detail)
 		}
 	}

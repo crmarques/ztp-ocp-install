@@ -58,7 +58,7 @@ source drivers (filesystem, OCI, git URL).
 - Verbs preserve the upstream gitops vocabulary
   (`init`, `expand`, `check`, `fill`, `plan`, `push`, `apply`, `wait`,
   `status`) with one rename and one addition:
-  - `generate` → `render` (avoids semantic adjacency to `gitups secrets generate`).
+  - `generate` → `render` (avoids semantic adjacency to `gitups secret generate`).
   - `destroy` is new (currently advisory; prints manual `kubectl delete`
     commands until KRC packages declare a destroy intent).
 - The group does **not** wrap into the ansible-shaped `scopeSpec`. It

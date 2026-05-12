@@ -77,7 +77,7 @@ Rules:
   exactly one source set: `file:` for operator-supplied material on
   disk, or `generated:` for material gitups produces (a
   `username:password\n` credentials file or a self-signed cert/key
-  pair). `gitups secrets generate -f` materializes only generated keys;
+  pair). `gitups secret generate -f` materializes only generated keys;
   file-sourced keys must exist at their declared paths or be written by the
   dedicated secret writer commands. The bytes never appear in YAML.
 - `Environment` owns proxy, registry mirrors, trust bundles, secret refs,
