@@ -45,7 +45,7 @@ func newRootCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Comm
 	root.SetCompletionCommandGroupID(groupGeneral)
 
 	addWorkflow(root,
-		newInitRepoCmd(stdout),        // 1. author bootstrap repository
+		newInitCmd(stdout),            // 1. scaffold workspace material
 		newSecretsCmd(stdout, stderr), // 2. materialize secret refs
 		newCheckCmd(stdout, stderr),   // 3. validate prerequisites and desired state
 		newStatusCmd(stdout),          // 4. report workspace state and next step

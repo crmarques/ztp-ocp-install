@@ -17,7 +17,18 @@ const (
 	initProviderEmulatedBareMetal = "emulated-bare-metal"
 )
 
-func newInitRepoCmd(stdout io.Writer) *cobra.Command {
+func newInitCmd(stdout io.Writer) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "init <target>",
+		Short: "Scaffold workspace material",
+		Args:  cobra.NoArgs,
+	}
+	cmd.AddCommand(newInitWorkspaceCmd(stdout))
+	showSubcommandFlagsInHelp(cmd)
+	return cmd
+}
+
+func newInitWorkspaceCmd(stdout io.Writer) *cobra.Command {
 	var (
 		clusterName string
 		provider    string
@@ -26,8 +37,8 @@ func newInitRepoCmd(stdout io.Writer) *cobra.Command {
 	)
 	stateDir = defaultStateDir()
 	cmd := &cobra.Command{
-		Use:   "init-repo --cluster-name <name> --provider <provider>",
-		Short: "Create a clusters-bootstrap.git repository with Gitups input files",
+		Use:   "workspace --cluster-name <name> --provider <provider>",
+		Short: "Create a clusters-bootstrap.git workspace with Gitups input files",
 		Args:  cobra.NoArgs,
 	}
 	cmd.Flags().StringVar(&clusterName, "cluster-name", "", "cluster name to scaffold")
@@ -60,7 +71,7 @@ func newInitRepoCmd(stdout io.Writer) *cobra.Command {
 			return failErr(1, err)
 		}
 
-		printTitle(stdout, "init-repo")
+		printTitle(stdout, "init workspace")
 		for _, item := range files {
 			path := filepath.Join(gitupsDir, item.name)
 			if _, err := os.Stat(path); err == nil && !force {

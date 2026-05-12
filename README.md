@@ -8,7 +8,7 @@ GitOps, then converges the environment in ordered phases.
 The CLI covers the full pipeline:
 
 ```text
-gitups init-repo --cluster-name ocp-bm-01 --provider bare-metal
+gitups init workspace --cluster-name ocp-bm-01 --provider bare-metal
                                           author bootstrap repo desired state
 gitups apply infra                         install/configure infra (libvirt, bare metal, …)
 gitups render installer        render OpenShift install files
@@ -59,7 +59,7 @@ until their provider roles land.
 ## CLI
 
 ```text
-gitups init-repo --cluster-name managed-01 --provider emulated-bare-metal
+gitups init workspace --cluster-name managed-01 --provider emulated-bare-metal
 gitups check bastion -f examples/libvirt-redfish-fleet
 gitups apply bastion -f examples/libvirt-redfish-fleet --yes
 gitups check infra -f examples/libvirt-redfish-fleet --dry-run
@@ -80,7 +80,7 @@ Provisioning commands are verb-first: `check`, `render`, and `apply`
 operate on targets such as `bastion`, `infra`, `clusters`, `hub`, and `all`.
 The `gitops` group still exposes `init`, `expand`, `check`, `render`, `fill`,
 `plan`, `push`, `apply`, `wait`, `status`, and `destroy`. Standalone commands:
-`init-repo` and `secrets`. The formal CLI contract lives in
+`init workspace` and `secrets`. The formal CLI contract lives in
 [specs/state-model.md](specs/state-model.md#cli-contract); the gitops
 contract lives in [specs/gitops.md](specs/gitops.md).
 

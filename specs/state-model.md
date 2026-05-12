@@ -332,7 +332,7 @@ The user-facing CLI is organized by verb. Provisioning targets are `bastion`,
 
 | Command | Reads input? | Mutates? | Purpose |
 | --- | --- | --- | --- |
-| `init-repo --cluster-name <name> --provider <provider>` | no | local only | Creates `<state-dir>/clusters-bootstrap.git/<cluster>/{gitups,openshift}` and scaffolds `environment.yaml`, `provider.yaml`, `infra.yaml`, and `cluster.yaml` under `gitups/`. Providers: `vsphere`, `bare-metal`, `emulated-bare-metal`. |
+| `init workspace --cluster-name <name> --provider <provider>` | no | local only | Creates `<state-dir>/clusters-bootstrap.git/<cluster>/{gitups,openshift}` and scaffolds `environment.yaml`, `provider.yaml`, `infra.yaml`, and `cluster.yaml` under `gitups/`. Providers: `vsphere`, `bare-metal`, `emulated-bare-metal`. |
 | `secrets` | optional | yes (writes secrets) | `generate`, `pull-secret set`, and credential writers — the only writers into `<gitups-user-dir>/secrets`. |
 | `check bastion` | optional | no | Controller prerequisite checks for the selected desired state. |
 | `check infra` | yes | no | Local + Ansible read-only checks for provider hosts and per-cluster substrate. |

@@ -52,7 +52,7 @@ func bootstrapGitupsDirs(stateDir string) ([]string, error) {
 	entries, err := os.ReadDir(repo)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("%w: %s not found; run `gitups init-repo --cluster-name <name> --provider <provider>` or pass -f", err, repo)
+			return nil, fmt.Errorf("%w: %s not found; run `gitups init workspace --cluster-name <name> --provider <provider>` or pass -f", err, repo)
 		}
 		return nil, fmt.Errorf("read %s: %w", repo, err)
 	}

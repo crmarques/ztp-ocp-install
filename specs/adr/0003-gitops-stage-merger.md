@@ -94,7 +94,7 @@ release pipeline (`pkg/<name>/v<version>` tags → GHCR) is unchanged.
 
 ## Consequences
 
-- One binary `gitups` covers the full pipeline: `init-repo` → `apply infra`
+- One binary `gitups` covers the full pipeline: `init workspace` → `apply infra`
   → `apply clusters` → `apply hub` → `gitops apply`.
 - The autonomous catalog repo continues its independent per-package
   release lifecycle.

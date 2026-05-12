@@ -60,7 +60,7 @@ func runStatus(stdout io.Writer, cf *commonFlags, secretsDir, hostStateDir strin
 	case loadErr != nil:
 		printFail(stdout, "load", loadErr.Error())
 	case !stateLoaded:
-		printFail(stdout, "load", "no desired state found (run `gitups init-repo` or pass -f)")
+		printFail(stdout, "load", "no desired state found (run `gitups init workspace` or pass -f)")
 	default:
 		fmt.Fprintf(stdout, "  Environments:           %d\n", len(state.Environments))
 		fmt.Fprintf(stdout, "  InfrastructureProviders: %d\n", len(state.InfrastructureProviders))
@@ -110,7 +110,7 @@ func printClusterStatus(stdout io.Writer, state v1alpha1.State, stateDir string)
 
 func nextStepHints(repoExists, stateLoaded bool, state v1alpha1.State, stateDir string) []string {
 	if !repoExists {
-		return []string{"gitups init-repo --cluster-name <name> --provider <bare-metal|emulated-bare-metal|vsphere>"}
+		return []string{"gitups init workspace --cluster-name <name> --provider <bare-metal|emulated-bare-metal|vsphere>"}
 	}
 	if !stateLoaded {
 		return []string{

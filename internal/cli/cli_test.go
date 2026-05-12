@@ -19,12 +19,12 @@ func clearGitupsEnv(t *testing.T) {
 	t.Setenv(gitupsSecretsDirEnv, "")
 }
 
-func TestInitRepoCommandGeneratesBootstrapRepo(t *testing.T) {
+func TestInitWorkspaceGeneratesBootstrapRepo(t *testing.T) {
 	stateDir := t.TempDir()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"init-repo",
+		"init", "workspace",
 		"--cluster-name", "ocp-bm-01",
 		"--provider", "emulated-bare-metal",
 		"--state-dir", stateDir,
@@ -58,13 +58,13 @@ func TestRenderClusterInstallFilesUsesBootstrapRepoByDefault(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"init-repo",
+		"init", "workspace",
 		"--cluster-name", "ocp-bm-01",
 		"--provider", "emulated-bare-metal",
 		"--state-dir", stateDir,
 	}, nil, &stdout, &stderr)
 	if code != 0 {
-		t.Fatalf("init-repo code got %d, stderr: %s", code, stderr.String())
+		t.Fatalf("init workspace code got %d, stderr: %s", code, stderr.String())
 	}
 
 	stdout.Reset()
@@ -85,7 +85,7 @@ func TestRenderClusterInstallFilesUsesBootstrapRepoByDefault(t *testing.T) {
 	}
 }
 
-func TestStatusUninitializedSuggestsInitRepo(t *testing.T) {
+func TestStatusUninitializedSuggestsInitWorkspace(t *testing.T) {
 	clearGitupsEnv(t)
 	stateDir := t.TempDir()
 	var stdout, stderr bytes.Buffer
@@ -100,7 +100,7 @@ func TestStatusUninitializedSuggestsInitRepo(t *testing.T) {
 		stateDir,
 		"bootstrap repo",
 		"not initialized",
-		"gitups init-repo",
+		"gitups init workspace --cluster-name",
 	} {
 		if !strings.Contains(out, expected) {
 			t.Fatalf("stdout missing %q\n%s", expected, out)
@@ -108,18 +108,18 @@ func TestStatusUninitializedSuggestsInitRepo(t *testing.T) {
 	}
 }
 
-func TestStatusAfterInitRepoReportsClusterAndMissingInstaller(t *testing.T) {
+func TestStatusAfterInitWorkspaceReportsClusterAndMissingInstaller(t *testing.T) {
 	clearGitupsEnv(t)
 	stateDir := t.TempDir()
 	var stdout, stderr bytes.Buffer
 	code := Run(context.Background(), []string{
-		"init-repo",
+		"init", "workspace",
 		"--cluster-name", "ocp-bm-01",
 		"--provider", "emulated-bare-metal",
 		"--state-dir", stateDir,
 	}, nil, &stdout, &stderr)
 	if code != 0 {
-		t.Fatalf("init-repo code got %d, stderr: %s", code, stderr.String())
+		t.Fatalf("init workspace code got %d, stderr: %s", code, stderr.String())
 	}
 	stdout.Reset()
 	stderr.Reset()
