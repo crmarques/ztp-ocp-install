@@ -23,7 +23,10 @@ func newInitCmd(stdout io.Writer) *cobra.Command {
 		Short: "Scaffold workspace material",
 		Args:  cobra.NoArgs,
 	}
-	cmd.AddCommand(newInitWorkspaceCmd(stdout))
+	cmd.AddCommand(
+		newInitWorkspaceCmd(stdout),
+		newGitopsInitCmd(),
+	)
 	showSubcommandFlagsInHelp(cmd)
 	return cmd
 }

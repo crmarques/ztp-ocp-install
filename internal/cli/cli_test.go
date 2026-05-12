@@ -146,7 +146,7 @@ func TestGitopsInitScaffoldPassesCheck(t *testing.T) {
 	outDir := filepath.Join(t.TempDir(), "gitops")
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	code := Run(context.Background(), []string{"gitops", "init", "demo", "-d", outDir}, nil, &stdout, &stderr)
+	code := Run(context.Background(), []string{"init", "gitops", "demo", "-d", outDir}, nil, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("init code got %d, stderr: %s", code, stderr.String())
 	}
@@ -156,7 +156,7 @@ func TestGitopsInitScaffoldPassesCheck(t *testing.T) {
 	}
 	stdout.Reset()
 	stderr.Reset()
-	code = Run(context.Background(), []string{"gitops", "check", "demo", "-d", outDir}, nil, &stdout, &stderr)
+	code = Run(context.Background(), []string{"check", "gitops", "demo", "-d", outDir}, nil, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("check code got %d, stderr: %s", code, stderr.String())
 	}

@@ -1,19 +1,20 @@
 // Command gitups drives the workspace-oriented GitOps-bootstrap flow.
-// Subcommands appear under `gitups gitops --help` in usage order:
+// The leaf factories below are adopted by top-level verb parents so each
+// invocation reads as `gitups <verb> gitops <name>`:
 //
-//	init     <name> [-d <dir>]                                  scaffold GitOpsPackageSet
-//	expand   <name> [-d <dir>] [--force]                        GitOpsPackageSet  -> expanded GitOpsPackageSet
-//	fill     <name> [-d <dir>] --set <instance>.<path>=<value>  fill placeholders in expanded GitOpsPackageSet
-//	check    <name> [-d <dir>]                                  validate GitOpsPackageSet and expanded GitOpsPackageSet
-//	plan     <name> [-d <dir>] [--full]                         print apply plan without touching the cluster
-//	render   <name> [-d <dir>] [--context c] [--allow-placeholders]
-//	                                                            expanded GitOpsPackageSet -> repo tree
-//	push     <name> --provider <p> --base-url <url> [-d <dir>]  push rendered repos to git
-//	apply    <name> --to <ctx> [-d <dir>] [--dry-run] [--allow-placeholders]
-//	                                                            apply each repo dir via the KRC-declared CLI
-//	wait     <name> --to <ctx> [-d <dir>]                       wait for KRC handoff conditions
-//	status   <name> [-d <dir>]                                  drift report
-//	destroy  <name> --to <ctx> [-d <dir>]                       reverse apply
+//	init     gitops <name> [-d <dir>]                                  scaffold GitOpsPackageSet
+//	expand   gitops <name> [-d <dir>] [--force]                        GitOpsPackageSet  -> expanded GitOpsPackageSet
+//	fill     gitops <name> [-d <dir>] --set <instance>.<path>=<value>  fill placeholders in expanded GitOpsPackageSet
+//	check    gitops <name> [-d <dir>]                                  validate GitOpsPackageSet and expanded GitOpsPackageSet
+//	plan     gitops <name> [-d <dir>] [--full]                         print apply plan without touching the cluster
+//	render   gitops <name> [-d <dir>] [--context c] [--allow-placeholders]
+//	                                                                   expanded GitOpsPackageSet -> repo tree
+//	push     gitops <name> --provider <p> --base-url <url> [-d <dir>]  push rendered repos to git
+//	apply    gitops <name> --to <ctx> [-d <dir>] [--dry-run] [--allow-placeholders]
+//	                                                                   apply each repo dir via the KRC-declared CLI
+//	wait     gitops <name> --to <ctx> [-d <dir>]                       wait for KRC handoff conditions
+//	diff     gitops <name> [-d <dir>]                                  drift report
+//	destroy  gitops <name> --to <ctx> [-d <dir>]                       reverse apply
 //
 // Each <name> owns a workspace at <dir>/<name>/ with user-authored
 // gitops-package-set.yaml and generated state under .gitups/.
@@ -52,37 +53,6 @@ import (
 )
 
 const defaultGitopsWorkspace = "./gitops-workspaces"
-
-// newGitopsCmd returns the `gitops` parent command and registers every
-// gitops sub-verb. The group consumes a user-authored
-// `apiVersion: gitups.io/v1alpha1, kind: GitOpsPackageSet` YAML and drives
-// the package composition through expand -> render -> push -> bootstrap.
-func newGitopsCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "gitops",
-		Short: "Render, publish, and bootstrap GitOpsPackageSet compositions",
-		Long: "Gitops takes a user-authored GitOpsPackageSet describing catalog\n" +
-			"sources, output repositories, package selections, and KRC/SRC\n" +
-			"controllers; expands it into a reviewable GitOpsPackageSet; renders\n" +
-			"deterministic repo trees with helm/kustomize/olm/raw; pushes them to a\n" +
-			"git provider; and bootstraps the cluster via the KRC's declared CLI.",
-	}
-	cmd.AddGroup(&cobra.Group{ID: groupWorkflow, Title: "Workflow Commands:"})
-	addWorkflow(cmd,
-		newGitopsInitCmd(),    // 1. scaffold GitOpsPackageSet
-		newGitopsExpandCmd(),  // 2. GitOpsPackageSet -> expanded GitOpsPackageSet
-		newGitopsFillCmd(),    // 3. fill placeholders in expanded GitOpsPackageSet
-		newGitopsCheckCmd(),   // 4. validate GitOpsPackageSet + expanded GitOpsPackageSet
-		newGitopsPlanCmd(),    // 5. print apply plan without touching the cluster
-		newGitopsRenderCmd(),  // 6. expanded GitOpsPackageSet -> repo tree
-		newGitopsPushCmd(),    // 7. push rendered repos to git
-		newGitopsApplyCmd(),   // 8. apply repo dirs via the KRC-declared CLI
-		newGitopsWaitCmd(),    // 9. wait for KRC handoff conditions
-		newGitopsStatusCmd(),  // 10. drift report
-		newGitopsDestroyCmd(), // 11. reverse apply
-	)
-	return cmd
-}
 
 // workspace holds the resolved filesystem paths for a named environment.
 type workspace struct {
@@ -124,7 +94,7 @@ func newGitopsInitCmd() *cobra.Command {
 		force     bool
 	)
 	cmd := &cobra.Command{
-		Use:   "init <name>",
+		Use:   "gitops <name>",
 		Short: "Scaffold an empty GitOpsPackageSet for <name>",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -142,7 +112,7 @@ func newGitopsInitCmd() *cobra.Command {
 				return fmt.Errorf("write %s: %w", ws.PackageSet, err)
 			}
 			fmt.Fprintf(cmd.ErrOrStderr(),
-				"gitups: scaffolded %s\n  next: edit spec.sources and spec.repositories, then `gitups expand %s`\n",
+				"gitups: scaffolded %s\n  next: edit spec.sources and spec.repositories, then `gitups expand gitops %s`\n",
 				ws.PackageSet, ws.Name)
 			return nil
 		},
@@ -158,7 +128,7 @@ func newGitopsExpandCmd() *cobra.Command {
 		force     bool
 	)
 	cmd := &cobra.Command{
-		Use:   "expand <name>",
+		Use:   "gitops <name>",
 		Short: "Expand GitOpsPackageSet <name> into spec.resolved",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -167,7 +137,7 @@ func newGitopsExpandCmd() *cobra.Command {
 				return err
 			}
 			if _, err := os.Stat(ws.PackageSet); err != nil {
-				return fmt.Errorf("%s not found (run `gitups init %s` first)", ws.PackageSet, ws.Name)
+				return fmt.Errorf("%s not found (run `gitups init gitops %s` first)", ws.PackageSet, ws.Name)
 			}
 			prov, extFrom, err := load.PackageSetResolved(ws.PackageSet)
 			if err != nil {
@@ -178,7 +148,7 @@ func newGitopsExpandCmd() *cobra.Command {
 					ws.PackageSet, prov.Metadata.Name, ws.Name)
 			}
 			if load.IsScaffold(prov) {
-				return fmt.Errorf("%s is still the init scaffold; fill in spec.sources and spec.repositories before `gitups expand %s`",
+				return fmt.Errorf("%s is still the init scaffold; fill in spec.sources and spec.repositories before `gitups expand gitops %s`",
 					ws.PackageSet, ws.Name)
 			}
 			if len(prov.Spec.Sources) == 0 {
@@ -233,7 +203,7 @@ func newGitopsExpandCmd() *cobra.Command {
 func newGitopsCheckCmd() *cobra.Command {
 	var outputDir string
 	cmd := &cobra.Command{
-		Use:   "check <name>",
+		Use:   "gitops <name>",
 		Short: "Validate GitOpsPackageSet and expanded GitOpsPackageSet for <name>",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -243,7 +213,7 @@ func newGitopsCheckCmd() *cobra.Command {
 			}
 			out := cmd.ErrOrStderr()
 			if _, err := os.Stat(ws.PackageSet); err != nil {
-				return fmt.Errorf("%s not found (run `gitups init %s`)", ws.PackageSet, ws.Name)
+				return fmt.Errorf("%s not found (run `gitups init gitops %s`)", ws.PackageSet, ws.Name)
 			}
 			prov, extFrom, err := load.PackageSetResolved(ws.PackageSet)
 			if err != nil {
@@ -279,7 +249,7 @@ func newGitopsCheckCmd() *cobra.Command {
 			fmt.Fprintf(out, "gitups: dry expand ok\n")
 
 			if _, err := os.Stat(ws.ExpandedPackageSet); err != nil {
-				fmt.Fprintf(out, "gitups: %s not present — run `gitups expand %s`\n",
+				fmt.Fprintf(out, "gitups: %s not present — run `gitups expand gitops %s`\n",
 					ws.ExpandedPackageSet, ws.Name)
 				return nil
 			}
@@ -310,7 +280,7 @@ func newGitopsRenderCmd() *cobra.Command {
 		skipDetCheck      bool
 	)
 	cmd := &cobra.Command{
-		Use:   "render <name>",
+		Use:   "gitops <name>",
 		Short: "Render repo directories from GitOpsPackageSet <name>",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -319,7 +289,7 @@ func newGitopsRenderCmd() *cobra.Command {
 				return err
 			}
 			if _, err := os.Stat(ws.ExpandedPackageSet); err != nil {
-				return fmt.Errorf("%s not found (run `gitups expand %s` first)",
+				return fmt.Errorf("%s not found (run `gitups expand gitops %s` first)",
 					ws.ExpandedPackageSet, ws.Name)
 			}
 			fp, err := load.ExpandedPackageSet(ws.ExpandedPackageSet)
@@ -428,7 +398,7 @@ func newGitopsPushCmd() *cobra.Command {
 		dryRun        bool
 	)
 	cmd := &cobra.Command{
-		Use:   "push <name> --provider <p> --base-url <url>",
+		Use:   "gitops <name> --provider <p> --base-url <url>",
 		Short: "Publish rendered repos to a git provider (github|gitlab|gitea)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -437,7 +407,7 @@ func newGitopsPushCmd() *cobra.Command {
 				return err
 			}
 			if _, err := os.Stat(ws.ExpandedPackageSet); err != nil {
-				return fmt.Errorf("%s not found (run `gitups expand %s` first)", ws.ExpandedPackageSet, ws.Name)
+				return fmt.Errorf("%s not found (run `gitups expand gitops %s` first)", ws.ExpandedPackageSet, ws.Name)
 			}
 			fp, err := load.ExpandedPackageSet(ws.ExpandedPackageSet)
 			if err != nil {
@@ -565,7 +535,7 @@ func newGitopsApplyCmd() *cobra.Command {
 		waitTimeout       time.Duration
 	)
 	cmd := &cobra.Command{
-		Use:   "apply <name> --to <cluster-context>",
+		Use:   "gitops <name> --to <cluster-context>",
 		Short: "Bootstrap the target cluster via the KRC-declared CLI (+ SRC CLI for SRC-owned units), then hand off to the in-cluster KRC/SRC",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -577,7 +547,7 @@ func newGitopsApplyCmd() *cobra.Command {
 				return err
 			}
 			if _, err := os.Stat(ws.ExpandedPackageSet); err != nil {
-				return fmt.Errorf("%s not found (run `gitups expand %s` and `gitups render %s` first)",
+				return fmt.Errorf("%s not found (run `gitups expand gitops %s` and `gitups render gitops %s` first)",
 					ws.ExpandedPackageSet, ws.Name, ws.Name)
 			}
 			fp, err := load.ExpandedPackageSet(ws.ExpandedPackageSet)
@@ -664,7 +634,7 @@ func applyFullTree(cmd *cobra.Command, fp *v1.GitOpsPackageSet, ws workspace, kc
 	for _, repo := range repoOrder {
 		repoDir := filepath.Join(ws.RenderRoot, repo)
 		if _, err := os.Stat(repoDir); err != nil {
-			return fmt.Errorf("%s not rendered (render with `gitups render %s` first): %w", repo, ws.Name, err)
+			return fmt.Errorf("%s not rendered (render with `gitups render gitops %s` first): %w", repo, ws.Name, err)
 		}
 		if err := applyUnitDir(cmd.Context(), kc, repoDir, dryRun, out); err != nil {
 			return err
@@ -748,7 +718,7 @@ func applyBootstrapOnly(cmd *cobra.Command, fp *v1.GitOpsPackageSet, prov *v1.Gi
 		}
 		unitDir := filepath.Join(ws.RenderRoot, rp.RenderedPaths.Repo, rp.RenderedPaths.Dir)
 		if _, err := os.Stat(unitDir); err != nil {
-			return fmt.Errorf("unit %s not rendered at %s (render with `gitups render %s` first): %w", rp.Instance, unitDir, ws.Name, err)
+			return fmt.Errorf("unit %s not rendered at %s (render with `gitups render gitops %s` first): %w", rp.Instance, unitDir, ws.Name, err)
 		}
 		if rp.Controller != nil && rp.Controller.Kind == v1.RoleSRC {
 			intent := rp.Controller.Intent
@@ -1113,7 +1083,7 @@ func writeBootstrapPlan(out writer, fp *v1.GitOpsPackageSet, planned []*v1.Resol
 	const maxList = 30
 	for i, rp := range planned {
 		if i == maxList {
-			fmt.Fprintf(out, "gitups:   ... (+%d more; run `gitups plan %s` for the full list)\n",
+			fmt.Fprintf(out, "gitups:   ... (+%d more; run `gitups plan gitops %s` for the full list)\n",
 				len(planned)-maxList, fp.Metadata.Name)
 			break
 		}
@@ -1334,7 +1304,7 @@ func newGitopsWaitCmd() *cobra.Command {
 		timeout   time.Duration
 	)
 	cmd := &cobra.Command{
-		Use:   "wait <name> --to <cluster-context>",
+		Use:   "gitops <name> --to <cluster-context>",
 		Short: "Block until OLM subscriptions referenced by <name> have Succeeded CSVs",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -1346,7 +1316,7 @@ func newGitopsWaitCmd() *cobra.Command {
 				return err
 			}
 			if _, err := os.Stat(ws.ExpandedPackageSet); err != nil {
-				return fmt.Errorf("%s not found (run `gitups expand %s` first)", ws.ExpandedPackageSet, ws.Name)
+				return fmt.Errorf("%s not found (run `gitups expand gitops %s` first)", ws.ExpandedPackageSet, ws.Name)
 			}
 			fp, err := load.ExpandedPackageSet(ws.ExpandedPackageSet)
 			if err != nil {
@@ -1403,7 +1373,7 @@ func newGitopsStatusCmd() *cobra.Command {
 		diffLines int
 	)
 	cmd := &cobra.Command{
-		Use:   "status <name>",
+		Use:   "gitops <name>",
 		Short: "Report drift between rendered repos and expanded GitOpsPackageSet <name>",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -1412,7 +1382,7 @@ func newGitopsStatusCmd() *cobra.Command {
 				return err
 			}
 			if _, err := os.Stat(ws.ExpandedPackageSet); err != nil {
-				return fmt.Errorf("%s not found (run `gitups expand %s` first)",
+				return fmt.Errorf("%s not found (run `gitups expand gitops %s` first)",
 					ws.ExpandedPackageSet, ws.Name)
 			}
 			fp, err := load.ExpandedPackageSet(ws.ExpandedPackageSet)
@@ -1466,7 +1436,7 @@ func newGitopsStatusCmd() *cobra.Command {
 					writeDriftDiff(out, filepath.Join(scratchOut, d.Path), filepath.Join(ws.RenderRoot, d.Path), diffLines)
 				}
 			}
-			return fmt.Errorf("drift detected; re-render with `gitups render %s` to reconcile", ws.Name)
+			return fmt.Errorf("drift detected; re-render with `gitups render gitops %s` to reconcile", ws.Name)
 		},
 	}
 	addOutputDirFlag(cmd, &outputDir)
@@ -1715,7 +1685,7 @@ func newGitopsPlanCmd() *cobra.Command {
 		full      bool
 	)
 	cmd := &cobra.Command{
-		Use:   "plan <name>",
+		Use:   "gitops <name>",
 		Short: "Print the ordered apply plan without touching the cluster",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -1724,7 +1694,7 @@ func newGitopsPlanCmd() *cobra.Command {
 				return err
 			}
 			if _, err := os.Stat(ws.ExpandedPackageSet); err != nil {
-				return fmt.Errorf("%s not found (run `gitups expand %s` first)", ws.ExpandedPackageSet, ws.Name)
+				return fmt.Errorf("%s not found (run `gitups expand gitops %s` first)", ws.ExpandedPackageSet, ws.Name)
 			}
 			fp, err := load.ExpandedPackageSet(ws.ExpandedPackageSet)
 			if err != nil {
@@ -1813,7 +1783,7 @@ func newGitopsFillCmd() *cobra.Command {
 		sets      []string
 	)
 	cmd := &cobra.Command{
-		Use:   "fill <name>",
+		Use:   "gitops <name>",
 		Short: "Fill placeholders in expanded GitOpsPackageSet <name> via --set args",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -1822,7 +1792,7 @@ func newGitopsFillCmd() *cobra.Command {
 				return err
 			}
 			if _, err := os.Stat(ws.ExpandedPackageSet); err != nil {
-				return fmt.Errorf("%s not found (run `gitups expand %s` first)", ws.ExpandedPackageSet, ws.Name)
+				return fmt.Errorf("%s not found (run `gitups expand gitops %s` first)", ws.ExpandedPackageSet, ws.Name)
 			}
 			fp, err := load.ExpandedPackageSet(ws.ExpandedPackageSet)
 			if err != nil {
@@ -1937,7 +1907,7 @@ func setDottedPath(m map[string]any, path string, v any) error {
 	return nil
 }
 
-// newGitopsDestroyCmd tears down a bootstrap by inverting `gitups gitops apply`:
+// newGitopsDestroyCmd tears down a bootstrap by inverting `gitups apply gitops`:
 // for every repo (in reverse apply order) it invokes the KRC-declared CLI's
 // delete-intent against the rendered tree. KRC packages opt in by adding an
 // `intents.delete.args` block to their package.yaml; without it, destroy is a
@@ -1953,7 +1923,7 @@ func newGitopsDestroyCmd() *cobra.Command {
 		dryRun       bool
 	)
 	cmd := &cobra.Command{
-		Use:   "destroy <name> --to <cluster-context>",
+		Use:   "gitops <name> --to <cluster-context>",
 		Short: "Tear down a bootstrap (delete rendered manifests via the KRC CLI)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

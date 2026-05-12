@@ -14,10 +14,10 @@ gitups apply infra                         install/configure infra (libvirt, bar
 gitups render installer        render OpenShift install files
 gitups apply clusters --scope ocp-bm-01    install clusters via openshift-install agent
 gitups apply hub                           validate/apply hub components for the hub-role cluster
-gitups gitops apply <package-set>          render package compositions, push to git, bootstrap KRC/SRC
+gitups apply gitops <package-set>          render package compositions, push to git, bootstrap KRC/SRC
 ```
 
-The `gitops` group consumes a user-authored
+The `gitops` target consumes a user-authored
 `apiVersion: gitups.io/v1alpha1, kind: GitOpsPackageSet` that names catalog
 sources (filesystem path / OCI artifact / git URL), output repositories,
 package selections, and the KRC/SRC controllers that own ongoing
@@ -68,19 +68,19 @@ gitups render installer -f examples/libvirt-redfish-fleet --scope managed-01
 gitups apply clusters -f examples/libvirt-redfish-fleet --scope managed-01 --dry-run
 gitups apply all -f examples/libvirt-redfish-fleet --dry-run
 
-gitups gitops init dev
-gitups gitops expand dev
-gitups gitops check dev
-gitups gitops render dev
-gitups gitops push dev --base-url https://github.com/myorg
-gitups gitops apply dev --to <kubectl-context>
+gitups init gitops dev
+gitups expand gitops dev
+gitups check gitops dev
+gitups render gitops dev
+gitups push gitops dev --base-url https://github.com/myorg
+gitups apply gitops dev --to <kubectl-context>
 ```
 
-Provisioning commands are verb-first: `check`, `render`, and `apply`
-operate on targets such as `bastion`, `infra`, `clusters`, `hub`, and `all`.
-The `gitops` group still exposes `init`, `expand`, `check`, `render`, `fill`,
-`plan`, `push`, `apply`, `wait`, `status`, and `destroy`. Standalone commands:
-`init workspace` and `secrets`. The formal CLI contract lives in
+The CLI is verb-first; every subcommand picks a target. Provisioning
+targets are `bastion`, `infra`, `clusters`, `hub`, and `all`; the gitops
+target is `gitops <name>`. Verbs are `init`, `secret`, `check`, `status`,
+`expand`, `fill`, `plan`, `render`, `push`, `apply`, `wait`, `diff`, and
+`destroy`. The formal CLI contract lives in
 [specs/state-model.md](specs/state-model.md#cli-contract); the gitops
 contract lives in [specs/gitops.md](specs/gitops.md).
 

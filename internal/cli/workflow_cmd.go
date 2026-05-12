@@ -25,6 +25,7 @@ func newCheckCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 		retargetCommand(newScopeCheckCmd(infraScope, stdout, stderr), "infra", "Check infrastructure hosts and substrate"),
 		retargetCommand(newScopeCheckCmd(clustersScope, stdout, stderr), "clusters", "Check cluster install prerequisites"),
 		newHubCheckCmd(stdout),
+		newGitopsCheckCmd(),
 		newCheckAllCmd(stdout, stderr),
 	)
 	showSubcommandFlagsInHelp(cmd)
@@ -42,6 +43,7 @@ func newApplyCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Com
 		retargetCommand(newScopeApplyCmd(infraScope, stdin, stdout, stderr), "infra", "Converge infrastructure hosts and substrate"),
 		retargetCommand(newScopeApplyCmd(clustersScope, stdin, stdout, stderr), "clusters", "Install OpenShift clusters"),
 		newHubApplyCmd(stdout),
+		newGitopsApplyCmd(),
 		retargetCommand(newScopeApplyCmd(allScope, stdin, stdout, stderr), "all", "Converge infrastructure, all OpenShift clusters, and hub components"),
 	)
 	showSubcommandFlagsInHelp(cmd)
@@ -54,7 +56,10 @@ func newRenderCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 		Short: "Render generated artifacts",
 		Args:  cobra.NoArgs,
 	}
-	cmd.AddCommand(newRenderClusterInstallFilesCmd(stdout, stderr))
+	cmd.AddCommand(
+		newRenderClusterInstallFilesCmd(stdout, stderr),
+		newGitopsRenderCmd(),
+	)
 	showSubcommandFlagsInHelp(cmd)
 	return cmd
 }
