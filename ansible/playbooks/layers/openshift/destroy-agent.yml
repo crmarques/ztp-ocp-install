@@ -20,3 +20,11 @@
       ansible.builtin.import_role:
         name: destroy_agent
       when: gitups_current_cluster.ocp.install.method == 'agent'
+
+    # install-agent.yml applies host_proxy on ocp_hosts; strip the same
+    # artifacts on destroy. Idempotent — no-op when ocp_hosts overlap a
+    # provider host that the providers/destroy.yml teardown also covers.
+    - name: Strip host-level proxy configuration
+      ansible.builtin.import_role:
+        name: host_proxy
+        tasks_from: cleanup
