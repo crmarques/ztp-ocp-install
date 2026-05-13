@@ -87,7 +87,7 @@ ansible-syntax-check: check-e2e-deps
 	done
 
 stale-term-check:
-	@! rg -n 'connectivity[.](mode|connected|restricted|disconnected)|spec[.]connectivity|gitups_connectivity|localRegistry|spoke|examples/infra|ADR 0003' README.md docs specs examples test
+	@! rg -n 'connectivity[.](mode|connected|restricted|disconnected)|spec[.]connectivity|gitups_connectivity|localRegistry|ocpInstall[.]|spoke|examples/infra' README.md docs specs examples test
 
 provider-swap-check:
 	diff -u examples/libvirt-redfish-fleet/environment.yaml examples/baremetal-redfish-fleet/environment.yaml

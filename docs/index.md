@@ -16,6 +16,7 @@ the openshift-install agent run.
 | Run the single-host libvirt/Redfish lab | [Quickstart](quickstart.md) |
 | Learn the main terms | [Concepts](concepts.md) |
 | Write your own YAML | [Desired State](desired-state.md) |
+| Understand the implementation map | [Architecture](architecture.md) |
 
 The docs are intentionally practical. The binding contracts live in
 [`/specs/`](../specs/index.md), including the desired-state schema, CLI

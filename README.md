@@ -30,6 +30,7 @@ catalog repo via the filesystem, OCI, or git driver.
 | --- | --- |
 | Users running a lab | [Quickstart](docs/quickstart.md) |
 | Users authoring desired state | [Desired State](docs/desired-state.md) |
+| Contributors mapping implementation ownership | [Architecture](docs/architecture.md) |
 | Contributors and coding agents | [Specs](specs/index.md) |
 | Architecture decisions | [ADRs](specs/adr/README.md) |
 

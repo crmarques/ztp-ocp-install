@@ -568,6 +568,8 @@ func TestOCPInstallRoleDoesNotShadowEnvironmentInstallVars(t *testing.T) {
 
 func TestLibvirtSubstrateOpensBootArtifactsHTTPPort(t *testing.T) {
 	tasks := readFile(t, "../../ansible/roles/cluster_infra/substrate_libvirt/tasks/main.yml")
+	networkTemplate := readFile(t, "../../ansible/roles/cluster_infra/substrate_libvirt/templates/network.xml.j2")
+	combined := tasks + "\n" + networkTemplate
 	for _, expected := range []string{
 		"<dhcp>",
 		"<host mac='{{ node.macAddress }}'",
@@ -582,8 +584,8 @@ func TestLibvirtSubstrateOpensBootArtifactsHTTPPort(t *testing.T) {
 		"<forward mode='nat'>",
 		"port: \"{{ gitups_current_cluster.provider.virtualization.libvirt.proxyPort | int }}/tcp\"",
 	} {
-		if !strings.Contains(tasks, expected) {
-			t.Fatalf("substrate_libvirt is missing %q\n%s", expected, tasks)
+		if !strings.Contains(combined, expected) {
+			t.Fatalf("substrate_libvirt is missing %q\n%s", expected, combined)
 		}
 	}
 	for _, leak := range []string{
@@ -968,8 +970,13 @@ func TestE2EProxyInputRendersIntoOpenShiftInstallerFiles(t *testing.T) {
 
 	envPath := filepath.Join(fixtureDir, "environment.yaml")
 	envBody := readFile(t, envPath)
-	envBody = replaceOnce(t, envBody, "  ocpInstallType: connected\n", `  ocpInstallType: connected
-  proxy:
+	envBody = replaceOnce(t, envBody, `  proxy:
+    noProxy:
+      - 192.168.132.0/24
+    auth:
+      proxyAuthRef:
+        name: proxy-credentials
+`, `  proxy:
     http: http://proxy.gitups.test:3128
     https: https://secure-proxy.gitups.test:8443
     noProxy:
@@ -980,9 +987,20 @@ func TestE2EProxyInputRendersIntoOpenShiftInstallerFiles(t *testing.T) {
 `)
 	envBody = replaceOnce(t, envBody, "      file: ~/.ssh/gitups-ssh-key.pub\n", "      file: secrets/cluster-admin-key\n")
 	envBody = replaceOnce(t, envBody, "      file: ~/.gitups/secrets/openshift-pull-secret\n", "      file: secrets/openshift-pull-secret\n")
-	envBody = replaceOnce(t, envBody, "    bmc-credentials:\n", "    proxy-credentials:\n      file: secrets/proxy-credentials\n    bmc-credentials:\n")
+	envBody = replaceOnce(t, envBody, "    proxy-credentials:\n      generated:\n        credentials:\n          username: proxy\n", "    proxy-credentials:\n      file: secrets/proxy-credentials\n")
 	if err := os.WriteFile(envPath, []byte(envBody), 0o644); err != nil {
 		t.Fatalf("write environment with proxy: %v", err)
+	}
+	providerPath := filepath.Join(fixtureDir, "provider.yaml")
+	providerBody := readFile(t, providerPath)
+	providerBody = replaceOnce(t, providerBody, "        - proxy\n", "")
+	providerBody = replaceOnce(t, providerBody, `  proxy:
+    squid:
+      hostRef:
+        name: lab-host
+`, "")
+	if err := os.WriteFile(providerPath, []byte(providerBody), 0o644); err != nil {
+		t.Fatalf("write provider without managed proxy: %v", err)
 	}
 
 	secretsDir := filepath.Join(fixtureDir, "secrets")

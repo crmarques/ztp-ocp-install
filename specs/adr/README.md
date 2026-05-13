@@ -7,6 +7,7 @@ file is current; superseded ADRs are removed rather than carried forward.
 | --- | --- | --- |
 | [0001](0001-foundational-desired-state-api.md) | Foundational Desired State API | Accepted |
 | [0002](0002-ansible-provider-dispatch.md) | Ansible Provider Dispatch | Accepted |
+| [0003](0003-gitops-stage-merger.md) | GitOps stage merger | Accepted |
 
 ## Authoring Rules
 

@@ -1,0 +1,28 @@
+name: {{ gitups_current_load_balancer.name }}
+runtime: {{ gitups_current_load_balancer.runtime }}
+providerRef: {{ gitups_current_load_balancer.providerRef }}
+providerHostRef: {{ gitups_current_load_balancer.placement.providerHostRef }}
+image:
+  local: {{ gitups_current_load_balancer.image.local | default('') }}
+  public: {{ gitups_current_load_balancer.image.public | default('') }}
+frontends:
+{% for frontend in gitups_current_load_balancer.frontends %}
+  - name: {{ frontend.name }}
+    endpointRef: {{ frontend.endpointRef }}
+    ports:
+{% for port in frontend.ports %}
+      - listenPort: {{ port.listenPort }}
+        targetPort: {{ port.targetPort }}
+{% endfor %}
+    bindings:
+{% for binding in frontend.bindings %}
+      - clusterName: {{ binding.clusterName }}
+        bindAddress: {{ binding.bindAddress }}
+        backends:
+{% for backend in binding.backends %}
+          - name: {{ backend.name }}
+            address: {{ backend.address }}
+            role: {{ backend.role }}
+{% endfor %}
+{% endfor %}
+{% endfor %}

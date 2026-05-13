@@ -10,7 +10,7 @@ import (
 
 	"github.com/crmarques/gitups/api/v1alpha1"
 	"github.com/crmarques/gitups/internal/ansible"
-	"github.com/crmarques/gitups/internal/embedded"
+	"github.com/crmarques/gitups/internal/orchestrate/provisioning"
 	"github.com/crmarques/gitups/internal/render"
 )
 
@@ -112,33 +112,19 @@ func newCheckAllCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 		if err != nil {
 			return failErr(1, err)
 		}
-		stateDirAbs, err := filepath.Abs(cf.stateDir)
+		spec, err := provisioning.NewRunSpec(provisioning.RunSpecConfig{
+			Executable:    executable,
+			BundleDir:     bundleDir,
+			StateDir:      cf.stateDir,
+			SecretsDir:    secretsDir,
+			HostStateDir:  hostStateDir,
+			InventoryPath: result.InventoryPath,
+			VarsPath:      result.VarsPath,
+			Playbook:      "playbooks/checks/preflight.yml",
+			ArtifactsDir:  filepath.Join(result.ArtifactsDir, "preflight-all"),
+		})
 		if err != nil {
 			return failErr(1, err)
-		}
-		secretsDirAbs, err := filepath.Abs(secretsDir)
-		if err != nil {
-			return failErr(1, err)
-		}
-		hostStateDirAbs, err := filepath.Abs(hostStateDir)
-		if err != nil {
-			return failErr(1, err)
-		}
-		spec := ansible.RunSpec{
-			Executable:        executable,
-			AnsibleCfg:        filepath.Join(bundleDir, embedded.AnsibleCfgRelPath),
-			RolesPath:         embedded.RolesPath(bundleDir),
-			CollectionsPath:   filepath.Join(bundleDir, embedded.CollectionsRelPath),
-			FilterPluginsPath: filepath.Join(bundleDir, embedded.FilterPluginsRelPath),
-			Inventory:         result.InventoryPath,
-			Playbook:          filepath.Join(bundleDir, "playbooks/checks/preflight.yml"),
-			ExtraVars:         result.VarsPath,
-			ExtraVarPairs: []string{
-				"gitups_state_dir=" + stateDirAbs,
-				"gitups_secrets_dir=" + secretsDirAbs,
-				"gitups_host_state_dir=" + hostStateDirAbs,
-			},
-			ArtifactsDir: filepath.Join(result.ArtifactsDir, "preflight-all"),
 		}
 		runner := ansible.CommandRunner{Stdout: stdout, Stderr: stderr}
 		command := runner.Command(spec)

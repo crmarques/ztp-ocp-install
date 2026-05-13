@@ -1,11 +1,11 @@
 # Example: Libvirt/Redfish Hub
 
-**Install type:** disconnected (`Environment.spec.ocpInstall.disconnected`).
+**Install type:** disconnected (`Environment.spec.ocpInstallType: disconnected`).
 
 A hub SNO running with disconnected OpenShift release content from a local
-registry mirror. The example demonstrates
-`Environment.spec.ocpInstall.disconnected`, including mirror credentials and
-generated self-signed registry trust referenced through `SecretRef`.
+registry mirror. The example demonstrates `Environment.spec.ocpInstallType:
+disconnected`, including mirror credentials and generated self-signed registry
+trust referenced through `SecretRef`.
 
 ## Files
 

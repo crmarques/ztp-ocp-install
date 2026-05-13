@@ -1,6 +1,6 @@
 # Example: Bare-Metal Redfish Fleet
 
-**Install type:** connected (`Environment.spec.ocpInstall.connected`).
+**Install type:** connected (`Environment.spec.ocpInstallType: connected`).
 
 A hub SNO plus one managed cluster on real bare-metal hosts driven by Redfish
 virtual media BMCs.

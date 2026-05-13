@@ -88,7 +88,7 @@
 
 - name: Validate disconnected release image
   ansible.builtin.fail:
-    msg: "disconnected installs require a local release image override from ocpInstall.registries.imageDigestSources"
+    msg: "disconnected installs require a local release image override derived from spec.registries.imageDigestSources"
   when:
     - gitups_ocp_install.disconnected | default(false) | bool
     - gitups_ocp_release_image_override | length == 0

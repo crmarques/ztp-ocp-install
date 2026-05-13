@@ -13,7 +13,7 @@ import (
 
 	"github.com/crmarques/gitups/api/v1alpha1"
 	"github.com/crmarques/gitups/internal/ansible"
-	"github.com/crmarques/gitups/internal/embedded"
+	"github.com/crmarques/gitups/internal/orchestrate/provisioning"
 	"github.com/crmarques/gitups/internal/render"
 )
 
@@ -61,34 +61,20 @@ func newScopeCheckCmd(scope scopeSpec, stdout io.Writer, stderr io.Writer) *cobr
 		if err != nil {
 			return failErr(1, err)
 		}
-		stateDirAbs, err := filepath.Abs(cf.stateDir)
+		spec, err := provisioning.NewRunSpec(provisioning.RunSpecConfig{
+			Executable:    executable,
+			BundleDir:     bundleDir,
+			StateDir:      cf.stateDir,
+			SecretsDir:    secretsDir,
+			HostStateDir:  hostStateDir,
+			InventoryPath: result.InventoryPath,
+			VarsPath:      result.VarsPath,
+			Playbook:      "playbooks/checks/preflight.yml",
+			Limit:         ansibleLimitForScope(scope.name),
+			ArtifactsDir:  filepath.Join(result.ArtifactsDir, "preflight-"+scope.name),
+		})
 		if err != nil {
 			return failErr(1, err)
-		}
-		secretsDirAbs, err := filepath.Abs(secretsDir)
-		if err != nil {
-			return failErr(1, err)
-		}
-		hostStateDirAbs, err := filepath.Abs(hostStateDir)
-		if err != nil {
-			return failErr(1, err)
-		}
-		spec := ansible.RunSpec{
-			Executable:        executable,
-			AnsibleCfg:        filepath.Join(bundleDir, embedded.AnsibleCfgRelPath),
-			RolesPath:         embedded.RolesPath(bundleDir),
-			CollectionsPath:   filepath.Join(bundleDir, embedded.CollectionsRelPath),
-			FilterPluginsPath: filepath.Join(bundleDir, embedded.FilterPluginsRelPath),
-			Inventory:         result.InventoryPath,
-			Playbook:          filepath.Join(bundleDir, "playbooks/checks/preflight.yml"),
-			Limit:             ansibleLimitForScope(scope.name),
-			ExtraVars:         result.VarsPath,
-			ExtraVarPairs: []string{
-				"gitups_state_dir=" + stateDirAbs,
-				"gitups_secrets_dir=" + secretsDirAbs,
-				"gitups_host_state_dir=" + hostStateDirAbs,
-			},
-			ArtifactsDir: filepath.Join(result.ArtifactsDir, "preflight-"+scope.name),
 		}
 		runner := ansible.CommandRunner{Stdout: stdout, Stderr: stderr}
 		command := runner.Command(spec)
@@ -170,39 +156,30 @@ func newScopeApplyCmd(scope scopeSpec, stdin io.Reader, stdout io.Writer, stderr
 		}
 		printRenderResult(stdout, result)
 		fmt.Fprintf(stdout, "ansible bundle: %s\n", bundleDir)
-		stateDirAbs, err := filepath.Abs(cf.stateDir)
+		hostStateDirAbs, err := provisioning.AbsHostStateDir(hostStateDir)
 		if err != nil {
 			return failErr(1, err)
 		}
-		secretsDirAbs, err := filepath.Abs(secretsDir)
-		if err != nil {
-			return failErr(1, err)
-		}
-		hostStateDirAbs, err := filepath.Abs(hostStateDir)
-		if err != nil {
-			return failErr(1, err)
-		}
-		pairs := []string{
-			"gitups_state_dir=" + stateDirAbs,
-			"gitups_secrets_dir=" + secretsDirAbs,
-			"gitups_host_state_dir=" + hostStateDirAbs,
-		}
+		pairs := []string{}
 		pairs = append(pairs, resolvedOCPBinaryPairs(selected, hostStateDirAbs)...)
 		runner := ansible.CommandRunner{Stdout: stdout, Stderr: stderr}
-		spec := ansible.RunSpec{
-			Executable:        executable,
-			AnsibleCfg:        filepath.Join(bundleDir, embedded.AnsibleCfgRelPath),
-			RolesPath:         embedded.RolesPath(bundleDir),
-			CollectionsPath:   filepath.Join(bundleDir, embedded.CollectionsRelPath),
-			FilterPluginsPath: filepath.Join(bundleDir, embedded.FilterPluginsRelPath),
-			Inventory:         result.InventoryPath,
-			Playbook:          filepath.Join(bundleDir, scope.applyPlaybook),
-			Limit:             ansibleLimitForScope(scope.name),
-			ExtraVars:         result.VarsPath,
-			ExtraVarPairs:     pairs,
-			ArtifactsDir:      filepath.Join(result.ArtifactsDir, scope.artifactsBaseName),
-			Check:             check,
-			AskBecomePass:     askBecomePass,
+		spec, err := provisioning.NewRunSpec(provisioning.RunSpecConfig{
+			Executable:    executable,
+			BundleDir:     bundleDir,
+			StateDir:      cf.stateDir,
+			SecretsDir:    secretsDir,
+			HostStateDir:  hostStateDir,
+			InventoryPath: result.InventoryPath,
+			VarsPath:      result.VarsPath,
+			Playbook:      scope.applyPlaybook,
+			Limit:         ansibleLimitForScope(scope.name),
+			ExtraVarPairs: pairs,
+			ArtifactsDir:  filepath.Join(result.ArtifactsDir, scope.artifactsBaseName),
+			Check:         check,
+			AskBecomePass: askBecomePass,
+		})
+		if err != nil {
+			return failErr(1, err)
 		}
 		command := runner.Command(spec)
 		if dryRun {
@@ -280,39 +257,30 @@ func newScopeDestroyCmd(scope scopeSpec, stdin io.Reader, stdout io.Writer, stde
 		}
 		printRenderResult(stdout, result)
 		fmt.Fprintf(stdout, "ansible bundle: %s\n", bundleDir)
-		stateDirAbs, err := filepath.Abs(cf.stateDir)
+		hostStateDirAbs, err := provisioning.AbsHostStateDir(hostStateDir)
 		if err != nil {
 			return failErr(1, err)
 		}
-		secretsDirAbs, err := filepath.Abs(secretsDir)
-		if err != nil {
-			return failErr(1, err)
-		}
-		hostStateDirAbs, err := filepath.Abs(hostStateDir)
-		if err != nil {
-			return failErr(1, err)
-		}
-		pairs := []string{
-			"gitups_state_dir=" + stateDirAbs,
-			"gitups_secrets_dir=" + secretsDirAbs,
-			"gitups_host_state_dir=" + hostStateDirAbs,
-		}
+		pairs := []string{}
 		pairs = append(pairs, resolvedOCPBinaryPairs(selected, hostStateDirAbs)...)
 		runner := ansible.CommandRunner{Stdout: stdout, Stderr: stderr}
-		spec := ansible.RunSpec{
-			Executable:        executable,
-			AnsibleCfg:        filepath.Join(bundleDir, embedded.AnsibleCfgRelPath),
-			RolesPath:         embedded.RolesPath(bundleDir),
-			CollectionsPath:   filepath.Join(bundleDir, embedded.CollectionsRelPath),
-			FilterPluginsPath: filepath.Join(bundleDir, embedded.FilterPluginsRelPath),
-			Inventory:         result.InventoryPath,
-			Playbook:          filepath.Join(bundleDir, scope.destroyPlaybook),
-			Limit:             ansibleLimitForScope(scope.name),
-			ExtraVars:         result.VarsPath,
-			ExtraVarPairs:     pairs,
-			ArtifactsDir:      filepath.Join(result.ArtifactsDir, scope.artifactsBaseName+"-destroy"),
-			Check:             check,
-			AskBecomePass:     askBecomePass,
+		spec, err := provisioning.NewRunSpec(provisioning.RunSpecConfig{
+			Executable:    executable,
+			BundleDir:     bundleDir,
+			StateDir:      cf.stateDir,
+			SecretsDir:    secretsDir,
+			HostStateDir:  hostStateDir,
+			InventoryPath: result.InventoryPath,
+			VarsPath:      result.VarsPath,
+			Playbook:      scope.destroyPlaybook,
+			Limit:         ansibleLimitForScope(scope.name),
+			ExtraVarPairs: pairs,
+			ArtifactsDir:  filepath.Join(result.ArtifactsDir, scope.artifactsBaseName+"-destroy"),
+			Check:         check,
+			AskBecomePass: askBecomePass,
+		})
+		if err != nil {
+			return failErr(1, err)
 		}
 		command := runner.Command(spec)
 		if dryRun {

@@ -127,47 +127,6 @@ func mergeGitOpsPackageSets(base, env *v1.GitOpsPackageSet) (*v1.GitOpsPackageSe
 	return out, nil
 }
 
-func deepMergeMaps(dst, src map[string]any) map[string]any {
-	if dst == nil && src == nil {
-		return nil
-	}
-	out := map[string]any{}
-	for k, v := range dst {
-		out[k] = cloneAny(v)
-	}
-	for k, sv := range src {
-		if dv, ok := out[k]; ok {
-			if dm, dmOK := dv.(map[string]any); dmOK {
-				if sm, smOK := sv.(map[string]any); smOK {
-					out[k] = deepMergeMaps(dm, sm)
-					continue
-				}
-			}
-		}
-		out[k] = cloneAny(sv)
-	}
-	return out
-}
-
-func cloneAny(v any) any {
-	switch t := v.(type) {
-	case map[string]any:
-		out := make(map[string]any, len(t))
-		for k, vv := range t {
-			out[k] = cloneAny(vv)
-		}
-		return out
-	case []any:
-		out := make([]any, len(t))
-		for i, e := range t {
-			out[i] = cloneAny(e)
-		}
-		return out
-	default:
-		return v
-	}
-}
-
 func rejectOldGitOpsPackageSetFields(raw []byte) error {
 	doc, err := decodeMap(raw)
 	if err != nil {

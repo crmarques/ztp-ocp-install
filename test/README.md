@@ -24,7 +24,7 @@ Current cases:
   `podman run --network host`; one SNO cluster.
 
 Retired fixtures live under `test/e2e/old/` and are kept only as Go test
-inputs; they are not maintained as runnable cases.
+inputs; they are not maintained as runnable cases or user documentation.
 
 ## Running A Case
 

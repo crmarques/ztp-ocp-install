@@ -1,15 +1,12 @@
 package cli
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
@@ -24,36 +21,15 @@ import (
 	"github.com/crmarques/gitups/internal/gitops/push"
 	"github.com/crmarques/gitups/internal/gitops/render"
 	"github.com/crmarques/gitups/internal/gitops/resolve"
+	"github.com/crmarques/gitups/internal/gitops/workflow"
 )
 
-const defaultGitopsWorkspace = "./gitops-workspaces"
+const defaultGitopsWorkspace = workflow.DefaultWorkspaceRoot
 
-type workspace struct {
-	Name               string
-	Root               string
-	PackageSet         string
-	ExpandedPackageSet string
-	RenderRoot         string
-}
+type workspace = workflow.Workspace
 
 func newWorkspace(outputDir, name string) (workspace, error) {
-	if name == "" {
-		return workspace{}, fmt.Errorf("name is required")
-	}
-	if strings.ContainsAny(name, `/\`) {
-		return workspace{}, fmt.Errorf("name %q must not contain path separators", name)
-	}
-	if outputDir == "" {
-		outputDir = defaultGitopsWorkspace
-	}
-	root := filepath.Join(outputDir, name)
-	return workspace{
-		Name:               name,
-		Root:               root,
-		PackageSet:         filepath.Join(root, "gitops-package-set.yaml"),
-		ExpandedPackageSet: filepath.Join(root, ".gitups", "expanded", "gitops-package-set.yaml"),
-		RenderRoot:         filepath.Join(root, ".gitups", "render"),
-	}, nil
+	return workflow.NewWorkspace(outputDir, name)
 }
 
 func addOutputDirFlag(cmd *cobra.Command, target *string) {
@@ -81,7 +57,7 @@ func newGitopsInitCmd() *cobra.Command {
 			if err := os.MkdirAll(ws.Root, 0o755); err != nil {
 				return fmt.Errorf("mkdir %s: %w", ws.Root, err)
 			}
-			if err := os.WriteFile(ws.PackageSet, []byte(scaffoldGitOpsPackageSet(ws.Name)), 0o644); err != nil {
+			if err := os.WriteFile(ws.PackageSet, []byte(workflow.ScaffoldPackageSet(ws.Name)), 0o644); err != nil {
 				return fmt.Errorf("write %s: %w", ws.PackageSet, err)
 			}
 			fmt.Fprintf(cmd.ErrOrStderr(),
@@ -130,8 +106,8 @@ func newGitopsExpandCmd() *cobra.Command {
 			if len(prov.Spec.Repositories) == 0 {
 				return fmt.Errorf("%s: spec.repositories is empty", ws.PackageSet)
 			}
-			baseDir := filepath.Dir(absPath(ws.PackageSet))
-			registerGitopsSourceResolvers(prov.Spec.Sources, packageNamesByTemplate(prov))
+			baseDir := filepath.Dir(workflow.AbsPath(ws.PackageSet))
+			workflow.RegisterSourceResolvers(prov.Spec.Sources, workflow.PackageNamesByTemplate(prov), workflow.SourceCacheDir(defaultStateDir()))
 			cat, err := catalog.Build(prov.Spec.Sources, baseDir)
 			if err != nil {
 				return err
@@ -206,8 +182,8 @@ func newGitopsCheckCmd() *cobra.Command {
 			fmt.Fprintf(out, "gitups: %s ok (%d source(s), %d repositories)\n",
 				ws.PackageSet, len(prov.Spec.Sources), len(prov.Spec.Repositories))
 
-			baseDir := filepath.Dir(absPath(ws.PackageSet))
-			registerGitopsSourceResolvers(prov.Spec.Sources, packageNamesByTemplate(prov))
+			baseDir := filepath.Dir(workflow.AbsPath(ws.PackageSet))
+			workflow.RegisterSourceResolvers(prov.Spec.Sources, workflow.PackageNamesByTemplate(prov), workflow.SourceCacheDir(defaultStateDir()))
 			cat, err := catalog.Build(prov.Spec.Sources, baseDir)
 			if err != nil {
 				return fmt.Errorf("catalog: %w", err)
@@ -270,17 +246,17 @@ func newGitopsRenderCmd() *cobra.Command {
 					ws.ExpandedPackageSet, fp.Metadata.Name, ws.Name)
 			}
 			baseDir := ws.Root
-			registerGitopsSourceResolvers(fp.Spec.Sources, packageNamesFromExpandedPackageSet(fp))
+			workflow.RegisterSourceResolvers(fp.Spec.Sources, workflow.PackageNamesFromExpandedPackageSet(fp), workflow.SourceCacheDir(defaultStateDir()))
 			cat, err := catalog.Build(fp.Spec.Sources, baseDir)
 			if err != nil {
 				return err
 			}
-			if err := ensureBinaries(); err != nil {
+			if err := workflow.EnsureRenderBinaries(); err != nil {
 				return err
 			}
 			ctx := kubeContext
 			if ctx == "" {
-				ctx = currentKubectlContext()
+				ctx = workflow.CurrentKubectlContext()
 			}
 			opts := render.Options{
 				OutputPath:             ws.RenderRoot,
@@ -296,7 +272,7 @@ func newGitopsRenderCmd() *cobra.Command {
 			if skipDetCheck {
 				return nil
 			}
-			return verifyDeterminism(cmd.Context(), fp, cat, opts, ws, cmd.ErrOrStderr())
+			return workflow.VerifyDeterminism(cmd.Context(), fp, cat, opts, ws, cmd.ErrOrStderr())
 		},
 	}
 	addOutputDirFlag(cmd, &outputDir)
@@ -306,44 +282,6 @@ func newGitopsRenderCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&skipDetCheck, "skip-determinism-check", false, "skip the second render pass that verifies byte-identical output")
 	cmd.SetContext(context.Background())
 	return cmd
-}
-
-// re-renders into a scratch dir and diffs against the workspace to catch chart-side
-// non-determinism (auto-generated TLS certs, random IDs, timestamps).
-func verifyDeterminism(ctx context.Context, fp *v1.GitOpsPackageSet, cat *catalog.Catalog, first render.Options, ws workspace, out writer) error {
-	scratchRoot, err := os.MkdirTemp("", "gitups-det-")
-	if err != nil {
-		return fmt.Errorf("create determinism scratch: %w", err)
-	}
-	defer os.RemoveAll(scratchRoot)
-	scratchOut := filepath.Join(scratchRoot, ws.Name)
-	second := first
-	second.OutputPath = scratchOut
-	second.PreserveExtras = false
-	second.Prune = false
-	if err := render.Render(ctx, fp, cat, second); err != nil {
-		return fmt.Errorf("determinism re-render: %w", err)
-	}
-	drifts, err := diffWorkspace(ws.RenderRoot, scratchOut)
-	if err != nil {
-		return fmt.Errorf("determinism diff: %w", err)
-	}
-	// PreserveExtras runs only on the first pass, so extras/orphan-dirs are expected drift
-	filtered := drifts[:0]
-	for _, d := range drifts {
-		if d.Kind == "extra" || d.Kind == "orphan-dir" {
-			continue
-		}
-		filtered = append(filtered, d)
-	}
-	if len(filtered) == 0 {
-		return nil
-	}
-	fmt.Fprintf(out, "gitups: determinism check failed — %d file(s) differ between two render passes:\n", len(filtered))
-	for _, d := range filtered {
-		fmt.Fprintf(out, "  %-12s %s\n", d.Kind, d.Path)
-	}
-	return fmt.Errorf("non-deterministic render; inspect chart values for timestamps, random IDs, or auto-generated secrets, or pass --skip-determinism-check to bypass")
 }
 
 func newGitopsPushCmd() *cobra.Command {
@@ -405,7 +343,7 @@ func newGitopsPushCmd() *cobra.Command {
 			}
 
 			out := cmd.ErrOrStderr()
-			repos := renderedRepoNames(fp)
+			repos := workflow.RenderedRepoNames(fp)
 			if len(repos) == 0 {
 				return fmt.Errorf("no rendered repos referenced by %s", ws.ExpandedPackageSet)
 			}
@@ -468,20 +406,6 @@ func resolvePushToken(flag, provider string) string {
 	return ""
 }
 
-func renderedRepoNames(fp *v1.GitOpsPackageSet) []string {
-	seen := map[string]bool{}
-	var out []string
-	for i := range fp.Spec.Resolved.Packages {
-		r := fp.Spec.Resolved.Packages[i].RenderedPaths.Repo
-		if r == "" || seen[r] {
-			continue
-		}
-		seen[r] = true
-		out = append(out, r)
-	}
-	return out
-}
-
 func newGitopsApplyCmd() *cobra.Command {
 	var (
 		outputDir         string
@@ -533,11 +457,11 @@ func newGitopsApplyCmd() *cobra.Command {
 				return fmt.Errorf("apply requires spec.controllers.kubernetesResources in %s — the KRC declares the cluster binary gitups uses", provPath)
 			}
 
-			cat, err := buildGitOpsPackageSetCatalog(prov, ws)
+			cat, err := workflow.BuildCatalog(prov, ws, workflow.SourceCacheDir(defaultStateDir()))
 			if err != nil {
 				return err
 			}
-			kubeClient, err := newKubeClientFromGitOpsPackageSet(prov, cat, toContext)
+			kubeClient, err := workflow.NewKubeClientFromPackageSet(prov, cat, toContext)
 			if err != nil {
 				return err
 			}
@@ -556,9 +480,9 @@ func newGitopsApplyCmd() *cobra.Command {
 			}
 
 			if full || !hasSRC {
-				return applyFullTree(cmd, fp, ws, kubeClient, dryRun, waitCRDs, waitTimeout, out)
+				return workflow.ApplyFullTree(cmd.Context(), fp, ws, kubeClient, workflow.ApplyOptions{DryRun: dryRun, WaitCRDs: waitCRDs, WaitTimeout: waitTimeout, Out: out})
 			}
-			return applyBootstrapOnly(cmd, fp, prov, cat, ws, kubeClient, dryRun, waitCRDs, waitTimeout, out)
+			return workflow.ApplyBootstrapOnly(cmd.Context(), fp, prov, cat, ws, kubeClient, workflow.ApplyOptions{DryRun: dryRun, WaitCRDs: waitCRDs, WaitTimeout: waitTimeout, Out: out})
 		},
 	}
 	addOutputDirFlag(cmd, &outputDir)
@@ -571,575 +495,6 @@ func newGitopsApplyCmd() *cobra.Command {
 	cmd.Flags().DurationVar(&waitTimeout, "wait-timeout", 10*time.Minute, "per-repo wait budget when --wait-crds is set")
 	cmd.SetContext(context.Background())
 	return cmd
-}
-
-// applies each rendered repo in topo order via the KRC-declared apply intent;
-// service-resources repos (declarest payload skeletons) are skipped — not K8s manifest trees.
-func applyFullTree(cmd *cobra.Command, fp *v1.GitOpsPackageSet, ws workspace, kc *cluster.KubeClient, dryRun, waitCRDs bool, waitTimeout time.Duration, out writer) error {
-	skip := serviceResourcesRepoSet(fp)
-	seen := map[string]bool{}
-	var repoOrder []string
-	for i := range fp.Spec.Resolved.Packages {
-		repo := fp.Spec.Resolved.Packages[i].RenderedPaths.Repo
-		if skip[repo] {
-			continue
-		}
-		if !seen[repo] {
-			seen[repo] = true
-			repoOrder = append(repoOrder, repo)
-		}
-	}
-	fmt.Fprintf(out, "gitups: applying %d repo(s) via %s (dry-run=%v, mode=full)\n",
-		len(repoOrder), kc.Binary(), dryRun)
-	for _, repo := range repoOrder {
-		repoDir := filepath.Join(ws.RenderRoot, repo)
-		if _, err := os.Stat(repoDir); err != nil {
-			return fmt.Errorf("%s not rendered (render with `gitups render gitops %s` first): %w", repo, ws.Name, err)
-		}
-		if err := applyUnitDir(cmd.Context(), kc, repoDir, dryRun, out); err != nil {
-			return err
-		}
-		if waitCRDs && !dryRun {
-			subs := cluster.SubscriptionsForRepo(fp.Spec.Resolved.Packages, repo)
-			if len(subs) > 0 {
-				fmt.Fprintf(out, "gitups: waiting on %d subscription(s) from %s before next repo\n", len(subs), repo)
-				if err := cluster.WaitForSubscriptions(cmd.Context(), kc, subs, cluster.WaitOptions{Timeout: waitTimeout, Out: stdioWriter{w: out}}); err != nil {
-					return fmt.Errorf("wait after %s: %w", repo, err)
-				}
-			}
-		}
-	}
-	fmt.Fprintf(out, "gitups: apply complete\n")
-	return nil
-}
-
-// applies the bootstrap subset only (installs, KRC/SRC self resources, controller-owned units);
-// routing is per-unit because the subset spans repos and skips siblings; waves gate on readiness checks.
-func applyBootstrapOnly(cmd *cobra.Command, fp *v1.GitOpsPackageSet, prov *v1.GitOpsPackageSet, cat *catalog.Catalog, ws workspace, kc *cluster.KubeClient, dryRun, waitCRDs bool, waitTimeout time.Duration, out writer) error {
-	planned := bootstrapSubset(fp)
-	if len(planned) == 0 {
-		return fmt.Errorf("bootstrap subset is empty; nothing to apply")
-	}
-	sort.SliceStable(planned, func(i, j int) bool {
-		if planned[i].ApplyWave != planned[j].ApplyWave {
-			return planned[i].ApplyWave < planned[j].ApplyWave
-		}
-		return planned[i].Instance < planned[j].Instance
-	})
-
-	srcCLI, srcBinary, err := srcCLIForPlan(cat, prov, planned)
-	if err != nil {
-		return err
-	}
-	if srcBinary != "" {
-		if _, err := exec.LookPath(srcBinary); err != nil {
-			return fmt.Errorf("required SRC binary %q not found in PATH (declared in %s spec.cli)", srcBinary, srcCLI.ownerName)
-		}
-	}
-
-	fmt.Fprintf(out, "gitups: bootstrap-only mode; %d unit(s) to apply via %s (dry-run=%v)\n",
-		len(planned), kc.Binary(), dryRun)
-	writeBootstrapPlan(out, fp, planned)
-	if warnings := compatibilityWarnings(cmd.Context(), cat, planned, kc); len(warnings) > 0 {
-		for _, w := range warnings {
-			fmt.Fprintf(out, "gitups: compatibility warning — %s\n", w)
-		}
-	}
-
-	appliedRepos := map[string]bool{}
-	runner := cluster.DefaultCLIRunner{}
-	currentWave := -1
-	var waveReady []readinessTarget
-	for _, rp := range planned {
-		if rp.ApplyWave != currentWave {
-			if !dryRun && len(waveReady) > 0 {
-				if err := waitForReadiness(cmd.Context(), kc, waveReady, waitTimeout, out); err != nil {
-					return err
-				}
-			}
-			waveReady = nil
-			currentWave = rp.ApplyWave
-		}
-		unitDir := filepath.Join(ws.RenderRoot, rp.RenderedPaths.Repo, rp.RenderedPaths.Dir)
-		if _, err := os.Stat(unitDir); err != nil {
-			return fmt.Errorf("unit %s not rendered at %s (render with `gitups render gitops %s` first): %w", rp.Instance, unitDir, ws.Name, err)
-		}
-		if rp.Controller != nil && rp.Controller.Kind == v1.RoleSRC {
-			intent := rp.Controller.Intent
-			if intentSpec, ok := srcCLI.spec.Intents[intent]; ok {
-				if err := applyUnitDir(cmd.Context(), kc, unitDir, dryRun, out); err != nil {
-					return err
-				}
-				if err := invokeSRCCliWithArgs(cmd.Context(), runner, srcCLI.spec.Binary, intentSpec.Args, unitDir, kc.KubeContext(), rp, out, dryRun); err != nil {
-					return err
-				}
-			} else {
-				if err := invokeSRCCli(cmd.Context(), runner, srcCLI.spec, unitDir, kc.KubeContext(), rp, out, dryRun); err != nil {
-					return err
-				}
-			}
-		} else {
-			if err := applyUnitDir(cmd.Context(), kc, unitDir, dryRun, out); err != nil {
-				return err
-			}
-		}
-		appliedRepos[rp.RenderedPaths.Repo] = true
-		waveReady = append(waveReady, readinessTargetsFor(rp, cat)...)
-		if waitCRDs && !dryRun && rp.Renderer == "olm" {
-			ns, _ := rp.ResolvedValues["namespace"].(string)
-			if ns != "" {
-				sub := []cluster.SubscriptionRef{{Namespace: ns, Name: rp.Instance}}
-				fmt.Fprintf(out, "gitups: waiting on subscription %s/%s\n", ns, rp.Instance)
-				if err := cluster.WaitForSubscriptions(cmd.Context(), kc, sub, cluster.WaitOptions{Timeout: waitTimeout, Out: stdioWriter{w: out}}); err != nil {
-					return fmt.Errorf("wait after %s: %w", rp.Instance, err)
-				}
-			}
-		}
-	}
-	if !dryRun && len(waveReady) > 0 {
-		if err := waitForReadiness(cmd.Context(), kc, waveReady, waitTimeout, out); err != nil {
-			return err
-		}
-	}
-	fmt.Fprintf(out, "gitups: bootstrap complete; handoff to in-cluster KRC/SRC.\n")
-	return nil
-}
-
-type writer interface{ Write([]byte) (int, error) }
-
-// retries once after waiting for CRDs to establish — the first apply often races CRD registration
-func applyUnitDir(ctx context.Context, kc *cluster.KubeClient, dir string, dryRun bool, out writer) error {
-	run := func(label string) error {
-		fmt.Fprintf(out, "gitups: apply [%s]\n", label)
-		return kc.ApplyKustomize(ctx, dir, dryRun, stdioWriter{w: out})
-	}
-	if err := run("pass 1"); err != nil {
-		if dryRun {
-			return fmt.Errorf("apply -k %s: %w", dir, err)
-		}
-		fmt.Fprintf(out, "gitups: pass 1 reported errors; waiting for CRD establishment before retry\n")
-		if waitErr := waitForCRDsEstablished(ctx, kc, out); waitErr != nil {
-			fmt.Fprintf(out, "gitups: CRD establishment wait did not complete cleanly: %v\n", waitErr)
-		}
-		if err2 := run("pass 2"); err2 != nil {
-			return fmt.Errorf("apply -k %s (both passes failed): %w", dir, err2)
-		}
-	}
-	return nil
-}
-
-func serviceResourcesRepoSet(fp *v1.GitOpsPackageSet) map[string]bool {
-	out := map[string]bool{}
-	for _, r := range fp.Spec.Resolved.Repositories {
-		if r.Type == v1.RepoTypeServiceResources {
-			out[r.Name] = true
-		}
-	}
-	return out
-}
-
-type readinessTarget struct {
-	Kind, Namespace, Name, Condition string
-}
-
-func readinessTargetsFor(rp *v1.ResolvedPackage, cat *catalog.Catalog) []readinessTarget {
-	entry, ok := cat.Lookup(rp.Template)
-	if !ok {
-		return nil
-	}
-	var checks []v1.ReadinessCheck
-	if rp.UnitType == v1.UnitTypeInstall {
-		checks = append(checks, entry.Def.Spec.Readiness...)
-	}
-	if u, ok := entry.LookupDomainUnit(rp.Domain, rp.ResourceTemplate); ok {
-		checks = append(checks, u.Descriptor.Readiness...)
-	} else if u, ok := entry.LookupDomainUnit(v1.DomainInstall, rp.InstallMethod); ok {
-		checks = append(checks, u.Descriptor.Readiness...)
-	}
-	out := make([]readinessTarget, 0, len(checks))
-	for _, c := range checks {
-		if c.Kind == "" || c.Name == "" || c.Condition == "" {
-			continue
-		}
-		out = append(out, readinessTarget{Kind: c.Kind, Namespace: c.Namespace, Name: c.Name, Condition: c.Condition})
-	}
-	return out
-}
-
-// best-effort gate: package-level readiness often points at CRs that only exist after a later wave,
-// so wait failures are logged and skipped — the dependsOn DAG remains the real ordering authority.
-func waitForReadiness(ctx context.Context, kc *cluster.KubeClient, targets []readinessTarget, timeout time.Duration, out writer) error {
-	seen := map[readinessTarget]bool{}
-	perTarget := timeout
-	if perTarget > 2*time.Minute || perTarget <= 0 {
-		perTarget = 2 * time.Minute
-	}
-	for _, t := range targets {
-		if seen[t] {
-			continue
-		}
-		seen[t] = true
-		fmt.Fprintf(out, "gitups: wave gate — %s/%s/%s condition=%s (best-effort, %s)\n", t.Kind, t.Namespace, t.Name, t.Condition, perTarget)
-		if err := kc.WaitCondition(ctx, t.Namespace, t.Kind, t.Name, t.Condition, perTarget, stdioWriter{w: out}); err != nil {
-			fmt.Fprintf(out, "gitups: wave gate skipped %s/%s/%s — %v (continuing; dependsOn ordering is still authoritative)\n", t.Kind, t.Namespace, t.Name, err)
-		}
-	}
-	return nil
-}
-
-func newKubeClientFromGitOpsPackageSet(prov *v1.GitOpsPackageSet, cat *catalog.Catalog, toContext string) (*cluster.KubeClient, error) {
-	if prov.Spec.Controllers == nil || prov.Spec.Controllers.KubernetesResources == nil {
-		return nil, fmt.Errorf("spec.controllers.kubernetesResources is required — the KRC declares the cluster binary gitups uses")
-	}
-	a := prov.Spec.Controllers.KubernetesResources
-	for _, r := range prov.Spec.Repositories {
-		if r.Type != v1.RepoTypeKubernetesResources || r.RepoRef != nil || r.Name != a.Repo {
-			continue
-		}
-		for _, pr := range r.Packages {
-			entry, ok := cat.Lookup(pr.Template)
-			if !ok {
-				continue
-			}
-			instance := pr.Instance
-			if instance == "" {
-				parts := strings.Split(pr.Template, "/")
-				instance = parts[len(parts)-1]
-			}
-			if instance != a.Instance {
-				continue
-			}
-			if entry.Def.Spec.CLI == nil || entry.Def.Spec.CLI.Binary == "" {
-				return nil, fmt.Errorf("KRC package %q has no spec.cli declared — gitups needs it to know what binary to run for apply/wait",
-					entry.Def.Metadata.Name)
-			}
-			return cluster.NewKubeClient(entry.Def.Spec.CLI, entry.Def.Metadata.Name, toContext, cluster.DefaultCLIRunner{})
-		}
-	}
-	return nil, fmt.Errorf("KRC instance %q not found in repo %q", a.Instance, a.Repo)
-}
-
-func invokeSRCCli(ctx context.Context, runner cluster.CLIRunner, spec *v1.ControllerCLI, unitDir, toContext string, rp *v1.ResolvedPackage, out writer, dryRun bool) error {
-	return invokeSRCCliWithArgs(ctx, runner, spec.Binary, spec.Args, unitDir, toContext, rp, out, dryRun)
-}
-
-func invokeSRCCliWithArgs(ctx context.Context, runner cluster.CLIRunner, binary string, argsTmpl []string, unitDir, toContext string, rp *v1.ResolvedPackage, out writer, dryRun bool) error {
-	if dryRun {
-		fmt.Fprintf(out, "gitups: [dry-run] %s (skipped: SRC CLI has no uniform --dry-run contract) [%s]\n", binary, unitDir)
-		return nil
-	}
-	ns, _ := rp.ResolvedValues["namespace"].(string)
-	ctxFields := cluster.CLIContext{
-		KubeContext:  toContext,
-		ManifestPath: unitDir,
-		Namespace:    ns,
-	}
-	args, err := cluster.RenderCLIArgs(&v1.ControllerCLI{Binary: binary, Args: argsTmpl}, ctxFields)
-	if err != nil {
-		return fmt.Errorf("unit %s: %w", rp.Instance, err)
-	}
-	fmt.Fprintf(out, "gitups: %s %s\n", binary, strings.Join(args, " "))
-	if err := runner.Run(ctx, binary, args, out, out); err != nil {
-		return fmt.Errorf("unit %s: %s %s: %w", rp.Instance, binary, strings.Join(args, " "), err)
-	}
-	return nil
-}
-
-// advisory only — never blocks apply
-func compatibilityWarnings(ctx context.Context, cat *catalog.Catalog, planned []*v1.ResolvedPackage, kc *cluster.KubeClient) []string {
-	serverVer := kubeServerMinor(ctx, kc)
-	if serverVer == "" {
-		return nil
-	}
-	seenPkg := map[string]bool{}
-	var out []string
-	for _, rp := range planned {
-		entry, ok := cat.Lookup(rp.Template)
-		if !ok {
-			continue
-		}
-		name := entry.Def.Metadata.Name
-		if seenPkg[name] {
-			continue
-		}
-		seenPkg[name] = true
-		c := entry.Def.Spec.Compatibility
-		if c == nil || len(c.Kubernetes) == 0 {
-			continue
-		}
-		if !k8sVersionSatisfies(serverVer, c.Kubernetes) {
-			out = append(out, fmt.Sprintf("package %q declares compatibility %v; cluster reports %s",
-				name, c.Kubernetes, serverVer))
-		}
-	}
-	return out
-}
-
-func kubeServerMinor(ctx context.Context, kc *cluster.KubeClient) string {
-	body, err := kc.ServerVersion(ctx)
-	if err != nil {
-		return ""
-	}
-	return cluster.ParseServerMinor(body)
-}
-
-// supported constraint syntax: ">=1.N", "<1.N", "<=1.N", ">1.N", "==1.N", or plain "1.N";
-// unrecognised grammars are treated as matched so the check stays a hint, not a false-alarm gate.
-func k8sVersionSatisfies(server string, constraints []string) bool {
-	sMaj, sMin := parseMajorMinor(server)
-	if sMaj == 0 {
-		return true
-	}
-	for _, c := range constraints {
-		c = strings.TrimSpace(c)
-		op, rest := splitOp(c)
-		cMaj, cMin := parseMajorMinor(rest)
-		if cMaj == 0 {
-			continue
-		}
-		cmp := (sMaj*1000 + sMin) - (cMaj*1000 + cMin)
-		ok := true
-		switch op {
-		case ">=":
-			ok = cmp >= 0
-		case ">":
-			ok = cmp > 0
-		case "<=":
-			ok = cmp <= 0
-		case "<":
-			ok = cmp < 0
-		case "==", "":
-			ok = cmp == 0
-		}
-		if !ok {
-			return false
-		}
-	}
-	return true
-}
-
-func splitOp(c string) (op, rest string) {
-	for _, o := range []string{">=", "<=", "==", ">", "<"} {
-		if strings.HasPrefix(c, o) {
-			return o, strings.TrimSpace(c[len(o):])
-		}
-	}
-	return "", c
-}
-
-func parseMajorMinor(s string) (maj, min int) {
-	parts := strings.SplitN(s, ".", 3)
-	if len(parts) < 2 {
-		return 0, 0
-	}
-	for i, p := range parts[:2] {
-		n := 0
-		for _, r := range p {
-			if r < '0' || r > '9' {
-				break
-			}
-			n = n*10 + int(r-'0')
-		}
-		if i == 0 {
-			maj = n
-		} else {
-			min = n
-		}
-	}
-	return maj, min
-}
-
-func writeBootstrapPlan(out writer, fp *v1.GitOpsPackageSet, planned []*v1.ResolvedPackage) {
-	total := len(fp.Spec.Resolved.Packages)
-	deferred := total - len(planned)
-	fmt.Fprintf(out, "gitups: plan — %d direct, %d deferred to KRC (total %d); handoff after direct set succeeds\n",
-		len(planned), deferred, total)
-	const maxList = 30
-	for i, rp := range planned {
-		if i == maxList {
-			fmt.Fprintf(out, "gitups:   ... (+%d more; run `gitups plan gitops %s` for the full list)\n",
-				len(planned)-maxList, fp.Metadata.Name)
-			break
-		}
-		fmt.Fprintf(out, "gitups:   [wave %d] %s (%s) → %s\n",
-			rp.ApplyWave, rp.Instance, planUnitTag(rp), rp.RenderedPaths.Repo)
-	}
-}
-
-func planUnitTag(rp *v1.ResolvedPackage) string {
-	switch {
-	case rp.Controller != nil:
-		return fmt.Sprintf("%s/%s", rp.Controller.Instance, rp.Controller.Intent)
-	case rp.UnitType == v1.UnitTypeInstall:
-		return fmt.Sprintf("install/%s", rp.InstallMethod)
-	case rp.UnitType == v1.UnitTypeResource:
-		if rp.Role == v1.RoleKRC || rp.Role == v1.RoleSRC {
-			return fmt.Sprintf("%s/self", rp.Role)
-		}
-		return fmt.Sprintf("resource/%s", rp.ResourceTemplate)
-	}
-	return rp.UnitType
-}
-
-func bootstrapSubset(fp *v1.GitOpsPackageSet) []*v1.ResolvedPackage {
-	var out []*v1.ResolvedPackage
-	for i := range fp.Spec.Resolved.Packages {
-		rp := &fp.Spec.Resolved.Packages[i]
-		switch {
-		case rp.UnitType == v1.UnitTypeInstall:
-			out = append(out, rp)
-		case rp.Controller != nil:
-			out = append(out, rp)
-		case rp.Role == v1.RoleKRC || rp.Role == v1.RoleSRC:
-			out = append(out, rp)
-		}
-	}
-	return out
-}
-
-type srcCLIBundle struct {
-	spec      *v1.ControllerCLI
-	ownerName string
-}
-
-func srcCLIForPlan(cat *catalog.Catalog, prov *v1.GitOpsPackageSet, plan []*v1.ResolvedPackage) (srcCLIBundle, string, error) {
-	hasSRCOwned := false
-	for _, rp := range plan {
-		if rp.Controller != nil && rp.Controller.Kind == v1.RoleSRC {
-			hasSRCOwned = true
-			break
-		}
-	}
-	if !hasSRCOwned {
-		return srcCLIBundle{}, "", nil
-	}
-	if prov.Spec.Controllers == nil || prov.Spec.Controllers.ServiceResources == nil {
-		return srcCLIBundle{}, "", fmt.Errorf("SRC-owned units present but spec.controllers.serviceResources is missing")
-	}
-	a := prov.Spec.Controllers.ServiceResources
-	for _, r := range prov.Spec.Repositories {
-		if r.Type != v1.RepoTypeKubernetesResources || r.RepoRef != nil || r.Name != a.Repo {
-			continue
-		}
-		for _, pr := range r.Packages {
-			entry, ok := cat.Lookup(pr.Template)
-			if !ok {
-				continue
-			}
-			instance := pr.Instance
-			if instance == "" {
-				parts := strings.Split(pr.Template, "/")
-				instance = parts[len(parts)-1]
-			}
-			if instance != a.Instance {
-				continue
-			}
-			if entry.Def.Spec.CLI == nil || entry.Def.Spec.CLI.Binary == "" {
-				return srcCLIBundle{}, "", fmt.Errorf("SRC package %q has no spec.cli declared", entry.Def.Metadata.Name)
-			}
-			return srcCLIBundle{spec: entry.Def.Spec.CLI, ownerName: entry.Def.Metadata.Name}, entry.Def.Spec.CLI.Binary, nil
-		}
-	}
-	return srcCLIBundle{}, "", fmt.Errorf("SRC instance %q not found in repo %q", a.Instance, a.Repo)
-}
-
-func buildGitOpsPackageSetCatalog(prov *v1.GitOpsPackageSet, ws workspace) (*catalog.Catalog, error) {
-	registerGitopsSourceResolvers(prov.Spec.Sources, packageNamesByTemplate(prov))
-	return catalog.Build(prov.Spec.Sources, ws.Root)
-}
-
-func registerGitopsSourceResolvers(sources []v1.PackageSource, names map[string][]string) {
-	cacheDir := filepath.Join(defaultStateDir(), "gitops", "sources")
-	for _, s := range sources {
-		switch {
-		case s.OCI != nil:
-			r := &catalog.OCIResolver{
-				CacheDir:     cacheDir,
-				Stdout:       os.Stdout,
-				Stderr:       os.Stderr,
-				PackageNames: names[s.Name],
-			}
-			catalog.RegisterSourceResolver("oci", r.Resolve)
-		case s.Git != nil:
-			r := &catalog.GitResolver{
-				CacheDir: cacheDir,
-				Stdout:   os.Stdout,
-				Stderr:   os.Stderr,
-			}
-			catalog.RegisterSourceResolver("git", r.Resolve)
-		}
-	}
-}
-
-func packageNamesFromExpandedPackageSet(fp *v1.GitOpsPackageSet) map[string][]string {
-	out := map[string]map[string]struct{}{}
-	for _, pkg := range fp.Spec.Resolved.Packages {
-		parts := strings.SplitN(pkg.Template, "/", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		set, ok := out[parts[0]]
-		if !ok {
-			set = map[string]struct{}{}
-			out[parts[0]] = set
-		}
-		set[parts[1]] = struct{}{}
-	}
-	flat := map[string][]string{}
-	for src, set := range out {
-		names := make([]string, 0, len(set))
-		for n := range set {
-			names = append(names, n)
-		}
-		sort.Strings(names)
-		flat[src] = names
-	}
-	return flat
-}
-
-func packageNamesByTemplate(prov *v1.GitOpsPackageSet) map[string][]string {
-	out := map[string]map[string]struct{}{}
-	for _, repo := range prov.Spec.Repositories {
-		for _, pkg := range repo.Packages {
-			parts := strings.SplitN(pkg.Template, "/", 2)
-			if len(parts) != 2 {
-				continue
-			}
-			set, ok := out[parts[0]]
-			if !ok {
-				set = map[string]struct{}{}
-				out[parts[0]] = set
-			}
-			set[parts[1]] = struct{}{}
-		}
-	}
-	flat := map[string][]string{}
-	for src, set := range out {
-		names := make([]string, 0, len(set))
-		for n := range set {
-			names = append(names, n)
-		}
-		sort.Strings(names)
-		flat[src] = names
-	}
-	return flat
-}
-
-func waitForCRDsEstablished(ctx context.Context, kc *cluster.KubeClient, out interface{ Write([]byte) (int, error) }) error {
-	// kubectl wait --all on a CRD-less cluster reports "no matching resources" — skip cleanly
-	if !crdsExist(ctx, kc) {
-		fmt.Fprintf(out, "gitups: no CRDs yet on %s; skipping establishment wait\n", kc.KubeContext())
-		return nil
-	}
-	return kc.WaitCRDsEstablished(ctx, 60*time.Second, out)
-}
-
-func crdsExist(ctx context.Context, kc *cluster.KubeClient) bool {
-	body, err := kc.ListCRDs(ctx)
-	if err != nil {
-		return false
-	}
-	return len(strings.TrimSpace(string(body))) > 0
 }
 
 func newGitopsWaitCmd() *cobra.Command {
@@ -1176,11 +531,11 @@ func newGitopsWaitCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("load package set %s: %w", provPath, err)
 			}
-			cat, err := buildGitOpsPackageSetCatalog(prov, ws)
+			cat, err := workflow.BuildCatalog(prov, ws, workflow.SourceCacheDir(defaultStateDir()))
 			if err != nil {
 				return err
 			}
-			kc, err := newKubeClientFromGitOpsPackageSet(prov, cat, toContext)
+			kc, err := workflow.NewKubeClientFromPackageSet(prov, cat, toContext)
 			if err != nil {
 				return err
 			}
@@ -1237,12 +592,12 @@ func newGitopsStatusCmd() *cobra.Command {
 					ws.ExpandedPackageSet, fp.Metadata.Name, ws.Name)
 			}
 			baseDir := ws.Root
-			registerGitopsSourceResolvers(fp.Spec.Sources, packageNamesFromExpandedPackageSet(fp))
+			workflow.RegisterSourceResolvers(fp.Spec.Sources, workflow.PackageNamesFromExpandedPackageSet(fp), workflow.SourceCacheDir(defaultStateDir()))
 			cat, err := catalog.Build(fp.Spec.Sources, baseDir)
 			if err != nil {
 				return err
 			}
-			if err := ensureBinaries(); err != nil {
+			if err := workflow.EnsureRenderBinaries(); err != nil {
 				return err
 			}
 			scratchRoot, err := os.MkdirTemp("", "gitups-status-")
@@ -1253,13 +608,13 @@ func newGitopsStatusCmd() *cobra.Command {
 			scratchOut := filepath.Join(scratchRoot, ws.Name)
 			if err := render.Render(cmd.Context(), fp, cat, render.Options{
 				OutputPath:             scratchOut,
-				KubectlContext:         currentKubectlContext(),
+				KubectlContext:         workflow.CurrentKubectlContext(),
 				AllowPlaceholders:      true,
 				SuppressPackageSetCopy: true,
 			}); err != nil {
 				return fmt.Errorf("dry render: %w", err)
 			}
-			drifts, err := diffWorkspace(ws.RenderRoot, scratchOut)
+			drifts, err := workflow.DiffWorkspace(ws.RenderRoot, scratchOut)
 			if err != nil {
 				return err
 			}
@@ -1273,7 +628,7 @@ func newGitopsStatusCmd() *cobra.Command {
 			for _, d := range drifts {
 				fmt.Fprintf(out, "  %-12s %s\n", d.Kind, d.Path)
 				if showDiff && d.Kind == "modified" {
-					writeDriftDiff(out, filepath.Join(scratchOut, d.Path), filepath.Join(ws.RenderRoot, d.Path), diffLines)
+					workflow.WriteDriftDiff(out, filepath.Join(scratchOut, d.Path), filepath.Join(ws.RenderRoot, d.Path), diffLines)
 				}
 			}
 			return fmt.Errorf("drift detected; re-render with `gitups render gitops %s` to reconcile", ws.Name)
@@ -1284,167 +639,6 @@ func newGitopsStatusCmd() *cobra.Command {
 	cmd.Flags().IntVar(&diffLines, "diff-lines", 20, "max lines of diff to print per modified file (use 0 for unlimited)")
 	cmd.SetContext(context.Background())
 	return cmd
-}
-
-func writeDriftDiff(out writer, want, have string, maxLines int) {
-	wantBody, werr := os.ReadFile(want)
-	haveBody, herr := os.ReadFile(have)
-	if werr != nil || herr != nil {
-		return
-	}
-	wantLines := strings.Split(string(wantBody), "\n")
-	haveLines := strings.Split(string(haveBody), "\n")
-	var lines []string
-	n := len(wantLines)
-	if len(haveLines) < n {
-		n = len(haveLines)
-	}
-	start := 0
-	for start < n && wantLines[start] == haveLines[start] {
-		start++
-	}
-	for i := start; i < len(wantLines); i++ {
-		if i >= start+maxLines {
-			lines = append(lines, fmt.Sprintf("      ... (+%d more lines in want)", len(wantLines)-i))
-			break
-		}
-		lines = append(lines, fmt.Sprintf("    - %s", wantLines[i]))
-	}
-	for i := start; i < len(haveLines); i++ {
-		if i >= start+maxLines {
-			lines = append(lines, fmt.Sprintf("      ... (+%d more lines in have)", len(haveLines)-i))
-			break
-		}
-		lines = append(lines, fmt.Sprintf("    + %s", haveLines[i]))
-	}
-	for _, l := range lines {
-		fmt.Fprintln(out, l)
-	}
-}
-
-type drift struct {
-	Kind string // missing | modified | extra | orphan-dir | missing-dir
-	Path string
-}
-
-func diffWorkspace(wsRoot, rendered string) ([]drift, error) {
-	rEntries, err := os.ReadDir(rendered)
-	if err != nil {
-		return nil, fmt.Errorf("read rendered: %w", err)
-	}
-	var drifts []drift
-	rendereredRepos := map[string]bool{}
-	for _, e := range rEntries {
-		if !e.IsDir() {
-			continue
-		}
-		rendereredRepos[e.Name()] = true
-		wsPath := filepath.Join(wsRoot, e.Name())
-		rPath := filepath.Join(rendered, e.Name())
-		if _, err := os.Stat(wsPath); errors.Is(err, fs.ErrNotExist) {
-			drifts = append(drifts, drift{Kind: "missing-dir", Path: e.Name() + "/"})
-		}
-		if err := compareRepoTree(rPath, wsPath, e.Name(), &drifts); err != nil {
-			return nil, err
-		}
-	}
-	wsEntries, err := os.ReadDir(wsRoot)
-	if err == nil {
-		for _, e := range wsEntries {
-			if !e.IsDir() {
-				continue
-			}
-			if !rendereredRepos[e.Name()] {
-				drifts = append(drifts, drift{Kind: "orphan-dir", Path: e.Name() + "/"})
-			}
-		}
-	}
-	sort.SliceStable(drifts, func(i, j int) bool {
-		if drifts[i].Path == drifts[j].Path {
-			return drifts[i].Kind < drifts[j].Kind
-		}
-		return drifts[i].Path < drifts[j].Path
-	})
-	return drifts, nil
-}
-
-func compareRepoTree(rendered, workspace, prefix string, drifts *[]drift) error {
-	rFiles := map[string]bool{}
-	err := filepath.WalkDir(rendered, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
-		rel, _ := filepath.Rel(rendered, p)
-		rFiles[rel] = true
-		displayPath := filepath.Join(prefix, rel)
-		wsFile := filepath.Join(workspace, rel)
-		wsBody, werr := os.ReadFile(wsFile)
-		if errors.Is(werr, fs.ErrNotExist) {
-			*drifts = append(*drifts, drift{Kind: "missing", Path: displayPath})
-			return nil
-		}
-		if werr != nil {
-			return werr
-		}
-		rBody, rerr := os.ReadFile(p)
-		if rerr != nil {
-			return rerr
-		}
-		if !bytes.Equal(rBody, wsBody) {
-			*drifts = append(*drifts, drift{Kind: "modified", Path: displayPath})
-		}
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-	if _, err := os.Stat(workspace); errors.Is(err, fs.ErrNotExist) {
-		return nil
-	}
-	return filepath.WalkDir(workspace, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
-		rel, _ := filepath.Rel(workspace, p)
-		if !rFiles[rel] {
-			*drifts = append(*drifts, drift{Kind: "extra", Path: filepath.Join(prefix, rel)})
-		}
-		return nil
-	})
-}
-
-func scaffoldGitOpsPackageSet(name string) string {
-	return fmt.Sprintf(`apiVersion: gitups.io/v1alpha1
-kind: GitOpsPackageSet
-metadata:
-  name: %s
-spec:
-  # Package sources: where gitups looks up package definitions.
-  sources: []
-  # - name: local
-  #   filesystem:
-  #     path: ./packages
-
-  # Repositories select package installs and environment resources.
-  repositories: []
-  # - name: platform
-  #   type: kubernetes-resources
-  #   packages:
-  #     - template: local/olm
-  #     - template: local/metallb
-  #       installMethod: helm
-  # - name: platform-{{.Env}}
-  #   type: kubernetes-resources
-  #   repoRef:
-  #     name: platform
-  #     commit: v0.0.1
-`, name)
 }
 
 func printPlaceholderSummary(w interface{ Write([]byte) (int, error) }, fp *v1.GitOpsPackageSet) {
@@ -1469,25 +663,6 @@ type stdioWriter struct {
 }
 
 func (s stdioWriter) Write(p []byte) (int, error) { return s.w.Write(p) }
-
-func absPath(p string) string {
-	abs, err := filepath.Abs(p)
-	if err != nil {
-		return p
-	}
-	return abs
-}
-
-func ensureBinaries() error {
-	for _, bin := range []string{"helm", "kustomize"} {
-		if _, err := exec.LookPath(bin); err != nil {
-			return fmt.Errorf("required binary %q not found in PATH", bin)
-		}
-	}
-	return nil
-}
-
-func currentKubectlContext() string { return "" }
 
 func newGitopsPlanCmd() *cobra.Command {
 	var (
@@ -1541,22 +716,17 @@ func newGitopsPlanCmd() *cobra.Command {
 						if rp.RenderedPaths.Repo != r {
 							continue
 						}
-						fmt.Fprintf(out, "    [wave %d] %s (%s)\n", rp.ApplyWave, rp.Instance, planUnitTag(rp))
+						fmt.Fprintf(out, "    [wave %d] %s (%s)\n", rp.ApplyWave, rp.Instance, workflow.PlanUnitTag(rp))
 					}
 				}
 				return nil
 			}
-			planned := bootstrapSubset(fp)
-			sort.SliceStable(planned, func(i, j int) bool {
-				if planned[i].ApplyWave != planned[j].ApplyWave {
-					return planned[i].ApplyWave < planned[j].ApplyWave
-				}
-				return planned[i].Instance < planned[j].Instance
-			})
+			planned := workflow.BootstrapSubset(fp)
+			workflow.SortPlan(planned)
 			fmt.Fprintf(out, "gitups: mode=bootstrap; %d direct, %d deferred to KRC (total %d)\n",
 				len(planned), len(fp.Spec.Resolved.Packages)-len(planned), len(fp.Spec.Resolved.Packages))
 			for _, rp := range planned {
-				fmt.Fprintf(out, "  [wave %d] %-48s (%s) → %s\n", rp.ApplyWave, rp.Instance, planUnitTag(rp), rp.RenderedPaths.Repo)
+				fmt.Fprintf(out, "  [wave %d] %-48s (%s) → %s\n", rp.ApplyWave, rp.Instance, workflow.PlanUnitTag(rp), rp.RenderedPaths.Repo)
 			}
 			inPlan := map[string]bool{}
 			for _, rp := range planned {
@@ -1611,7 +781,7 @@ func newGitopsFillCmd() *cobra.Command {
 			}
 			out := cmd.ErrOrStderr()
 			for _, s := range sets {
-				inst, path, val, err := parseFillSet(s)
+				inst, path, val, err := workflow.ParseFillSet(s)
 				if err != nil {
 					return fmt.Errorf("--set %q: %w", s, err)
 				}
@@ -1622,7 +792,7 @@ func newGitopsFillCmd() *cobra.Command {
 				if rp.ResolvedValues == nil {
 					rp.ResolvedValues = map[string]any{}
 				}
-				if err := setDottedPath(rp.ResolvedValues, path, val); err != nil {
+				if err := workflow.SetDottedPath(rp.ResolvedValues, path, val); err != nil {
 					return fmt.Errorf("--set %q: %w", s, err)
 				}
 				fmt.Fprintf(out, "gitups: set %s.%s\n", inst, path)
@@ -1654,51 +824,6 @@ func newGitopsFillCmd() *cobra.Command {
 	cmd.Flags().StringArrayVar(&sets, "set", nil, "repeatable: <instance>.<dotted.path>=<value>")
 	cmd.SetContext(context.Background())
 	return cmd
-}
-
-// values are stored as strings; descriptor types govern coercion downstream
-func parseFillSet(s string) (instance, path, value string, err error) {
-	eq := strings.IndexByte(s, '=')
-	if eq < 0 {
-		return "", "", "", fmt.Errorf("missing '='")
-	}
-	left := s[:eq]
-	value = s[eq+1:]
-	dot := strings.IndexByte(left, '.')
-	if dot < 0 {
-		return "", "", "", fmt.Errorf("missing '.' between <instance> and <path>")
-	}
-	instance = left[:dot]
-	path = left[dot+1:]
-	if instance == "" || path == "" {
-		return "", "", "", fmt.Errorf("instance and path are both required")
-	}
-	return instance, path, value, nil
-}
-
-// array indices not supported — edit YAML directly for nested arrays
-func setDottedPath(m map[string]any, path string, v any) error {
-	parts := strings.Split(path, ".")
-	cur := m
-	for i, p := range parts {
-		if i == len(parts)-1 {
-			cur[p] = v
-			return nil
-		}
-		next, ok := cur[p]
-		if !ok {
-			child := map[string]any{}
-			cur[p] = child
-			cur = child
-			continue
-		}
-		nm, ok := next.(map[string]any)
-		if !ok {
-			return fmt.Errorf("path %q: segment %q is not a map", path, p)
-		}
-		cur = nm
-	}
-	return nil
 }
 
 func newGitopsDestroyCmd() *cobra.Command {

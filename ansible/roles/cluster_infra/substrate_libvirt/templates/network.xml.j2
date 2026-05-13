@@ -1,0 +1,36 @@
+<network xmlns:dnsmasq='http://libvirt.org/schemas/network/dnsmasq/1.0'>
+  <name>{{ gitups_current_cluster.provider.virtualization.libvirt.network }}</name>
+  <uuid>{{ gitups_libvirt_net_uuid }}</uuid>
+  <description>gitups-net-fingerprint:{{ gitups_libvirt_net_fingerprint }}</description>
+  {% if not (gitups_current_cluster.provider.virtualization.libvirt.egressRestrictedToProxy | default(false) | bool) %}
+  <forward mode='nat'>
+    <nat>
+      <port start='1024' end='65535'/>
+    </nat>
+  </forward>
+  {% endif %}
+  <bridge name='{{ gitups_current_cluster.provider.virtualization.libvirt.bridge }}' stp='on' delay='0'/>
+  {% if (gitups_current_cluster.provider.virtualization.libvirt.dnsHosts | default([])) | length > 0 %}
+  <dns>
+  {% for host in gitups_current_cluster.provider.virtualization.libvirt.dnsHosts %}
+    <host ip='{{ host.ip }}'>
+      {% for hostname in host.hostnames %}
+      <hostname>{{ hostname }}</hostname>
+      {% endfor %}
+    </host>
+  {% endfor %}
+  </dns>
+  {% endif %}
+  <ip address='{{ gitups_libvirt_machine_network.gateway }}' prefix='{{ gitups_libvirt_machine_network.cidr.split("/") | last }}'>
+    <dhcp>
+    {% for node in gitups_current_cluster.provider.nodes %}
+    {% if (node.macAddress | default('') | length > 0) and (node.ipAddress | default('') | length > 0) %}
+      <host mac='{{ node.macAddress }}' name='{{ gitups_current_cluster.name }}-{{ node.name }}' ip='{{ node.ipAddress }}'/>
+    {% endif %}
+    {% endfor %}
+    </dhcp>
+  </ip>
+  <dnsmasq:options>
+    <dnsmasq:option value='no-hosts'/>
+  </dnsmasq:options>
+</network>

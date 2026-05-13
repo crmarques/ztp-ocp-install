@@ -1,6 +1,6 @@
 # Example: Libvirt/Redfish Fleet
 
-**Install type:** connected (`Environment.spec.ocpInstall.connected`).
+**Install type:** connected (`Environment.spec.ocpInstallType: connected`).
 
 A hub SNO plus one managed cluster running as libvirt-managed virtual machines.
 Redfish BMC emulation keeps the lab path close to real bare-metal
