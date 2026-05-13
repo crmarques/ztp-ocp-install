@@ -1,0 +1,138 @@
+---
+- name: Resolve cluster-node Redfish target system name
+  ansible.builtin.set_fact:
+    gitups_ocp_system_name: "{{ gitups_current_cluster.name }}-{{ gitups_ocp_node.name }}"
+  changed_when: false
+
+- name: Resolve cluster-node Redfish system entry by name
+  ansible.builtin.set_fact:
+    gitups_ocp_system_entry: >-
+      {{ (gitups_ocp_redfish_system_details.results
+          | map(attribute='json')
+          | selectattr('Name', 'equalto', gitups_ocp_system_name)
+          | list | first) }}
+  changed_when: false
+
+- name: Fail when Redfish system is missing for cluster node
+  ansible.builtin.fail:
+    msg: >-
+      Redfish system {{ gitups_ocp_system_name }} was not found in the
+      emulator enumeration. The libvirt domain is missing or sushy-emulator
+      did not pick it up. Re-run `gitups apply infra` for cluster
+      {{ gitups_current_cluster.name }}.
+  when: gitups_ocp_system_entry | length == 0
+
+- name: Resolve cluster-node Redfish system identifiers
+  ansible.builtin.set_fact:
+    gitups_ocp_system_id: "{{ gitups_ocp_system_entry.Id }}"
+    gitups_ocp_system_power: "{{ gitups_ocp_system_entry.PowerState | default('Off') }}"
+    gitups_ocp_system_uri: "{{ gitups_ocp_system_entry['@odata.id'] }}"
+    gitups_ocp_system_reset_uri: "{{ gitups_ocp_system_entry.Actions['#ComputerSystem.Reset'].target }}"
+    gitups_ocp_vmedia_collection_uri: "{{ gitups_ocp_system_entry.VirtualMedia['@odata.id'] }}"
+  changed_when: false
+
+- name: Power off cluster node before inserting agent media
+  ansible.builtin.uri:
+    url: "{{ gitups_ocp_redfish_baseuri }}{{ gitups_ocp_system_reset_uri }}"
+    method: POST
+    body_format: json
+    body:
+      ResetType: ForceOff
+    status_code: [200, 202, 204]
+    url_username: "{{ gitups_ocp_bmc_username | default(omit) }}"
+    url_password: "{{ gitups_ocp_bmc_password | default(omit) }}"
+    force_basic_auth: "{{ gitups_ocp_bmc_auth_enabled }}"
+  when: gitups_ocp_system_power != 'Off'
+  register: gitups_ocp_power_off
+  no_log: "{{ gitups_ocp_bmc_auth_enabled }}"
+
+- name: Wait for cluster node to report Off
+  ansible.builtin.uri:
+    url: "{{ gitups_ocp_redfish_baseuri }}{{ gitups_ocp_system_uri }}"
+    method: GET
+    return_content: true
+    body_format: json
+    url_username: "{{ gitups_ocp_bmc_username | default(omit) }}"
+    url_password: "{{ gitups_ocp_bmc_password | default(omit) }}"
+    force_basic_auth: "{{ gitups_ocp_bmc_auth_enabled }}"
+  register: gitups_ocp_redfish_off_check
+  retries: 20
+  delay: 2
+  until: gitups_ocp_redfish_off_check.json.PowerState == 'Off'
+  when: gitups_ocp_power_off.changed | default(false)
+  no_log: "{{ gitups_ocp_bmc_auth_enabled }}"
+
+- name: List cluster-node system virtual media slots
+  ansible.builtin.uri:
+    url: "{{ gitups_ocp_redfish_baseuri }}{{ gitups_ocp_vmedia_collection_uri }}"
+    method: GET
+    return_content: true
+    body_format: json
+    url_username: "{{ gitups_ocp_bmc_username | default(omit) }}"
+    url_password: "{{ gitups_ocp_bmc_password | default(omit) }}"
+    force_basic_auth: "{{ gitups_ocp_bmc_auth_enabled }}"
+  register: gitups_ocp_vmedia_list
+  no_log: "{{ gitups_ocp_bmc_auth_enabled }}"
+
+- name: Fetch cluster-node virtual media slot details
+  ansible.builtin.uri:
+    url: "{{ gitups_ocp_redfish_baseuri }}{{ item['@odata.id'] }}"
+    method: GET
+    return_content: true
+    body_format: json
+    url_username: "{{ gitups_ocp_bmc_username | default(omit) }}"
+    url_password: "{{ gitups_ocp_bmc_password | default(omit) }}"
+    force_basic_auth: "{{ gitups_ocp_bmc_auth_enabled }}"
+  loop: "{{ gitups_ocp_vmedia_list.json.Members }}"
+  register: gitups_ocp_vmedia_details
+  no_log: "{{ gitups_ocp_bmc_auth_enabled }}"
+
+- name: Resolve cluster-node CD virtual media slot
+  ansible.builtin.set_fact:
+    gitups_ocp_vmedia_cd: >-
+      {{ (gitups_ocp_vmedia_details.results
+          | map(attribute='json')
+          | selectattr('Id', 'equalto', 'Cd')
+          | list | first) }}
+  changed_when: false
+
+- name: Eject any previously-inserted virtual media
+  ansible.builtin.uri:
+    url: "{{ gitups_ocp_redfish_baseuri }}{{ gitups_ocp_vmedia_cd.Actions['#VirtualMedia.EjectMedia'].target }}"
+    method: POST
+    body_format: json
+    body: {}
+    status_code: [200, 202, 204]
+    url_username: "{{ gitups_ocp_bmc_username | default(omit) }}"
+    url_password: "{{ gitups_ocp_bmc_password | default(omit) }}"
+    force_basic_auth: "{{ gitups_ocp_bmc_auth_enabled }}"
+  failed_when: false
+  changed_when: false
+  no_log: "{{ gitups_ocp_bmc_auth_enabled }}"
+
+- name: Insert agent ISO via Redfish virtual media
+  ansible.builtin.uri:
+    url: "{{ gitups_ocp_redfish_baseuri }}{{ gitups_ocp_vmedia_cd.Actions['#VirtualMedia.InsertMedia'].target }}"
+    method: POST
+    body_format: json
+    body:
+      Image: "http://127.0.0.1:{{ gitups_ocp_provider_bmc.port | int + 1 }}/{{ gitups_current_cluster.name }}-agent.iso"
+      Inserted: true
+    status_code: [200, 202, 204]
+    url_username: "{{ gitups_ocp_bmc_username | default(omit) }}"
+    url_password: "{{ gitups_ocp_bmc_password | default(omit) }}"
+    force_basic_auth: "{{ gitups_ocp_bmc_auth_enabled }}"
+  no_log: "{{ gitups_ocp_bmc_auth_enabled }}"
+
+- name: Power on cluster node
+  ansible.builtin.uri:
+    url: "{{ gitups_ocp_redfish_baseuri }}{{ gitups_ocp_system_reset_uri }}"
+    method: POST
+    body_format: json
+    body:
+      ResetType: "On"
+    status_code: [200, 202, 204]
+    url_username: "{{ gitups_ocp_bmc_username | default(omit) }}"
+    url_password: "{{ gitups_ocp_bmc_password | default(omit) }}"
+    force_basic_auth: "{{ gitups_ocp_bmc_auth_enabled }}"
+  no_log: "{{ gitups_ocp_bmc_auth_enabled }}"

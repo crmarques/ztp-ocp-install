@@ -1,0 +1,25 @@
+---
+- name: Resolve cluster-node Redfish target system name
+  ansible.builtin.set_fact:
+    gitups_ocp_system_name: "{{ gitups_current_cluster.name }}-{{ gitups_ocp_node.name }}"
+  changed_when: false
+
+- name: Select Redfish system for cluster node
+  ansible.builtin.set_fact:
+    gitups_ocp_system_id: "{{ ((gitups_ocp_redfish_systems.redfish_facts.system.entries | default([])) | selectattr('Name', 'equalto', gitups_ocp_system_name) | list | first).Id | default('') }}"
+  changed_when: false
+
+- name: Eject virtual media
+  community.general.redfish_command:
+    category: Systems
+    command: VirtualMediaEject
+    baseuri: "{{ gitups_ocp_redfish_baseuri }}"
+    username: "{{ gitups_ocp_bmc_username | default(omit) }}"
+    password: "{{ gitups_ocp_bmc_password | default(omit) }}"
+    resource_id: "{{ gitups_ocp_system_id }}"
+    virtual_media:
+      image_url: ""
+  failed_when: false
+  changed_when: false
+  when: gitups_ocp_system_id | length > 0
+  no_log: "{{ gitups_ocp_bmc_auth_enabled }}"
