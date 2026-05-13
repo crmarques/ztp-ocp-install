@@ -118,6 +118,13 @@
       http_access allow authenticated
       http_access deny all
 
+      # Shrink negative DNS caching from the 60s default so a brief
+      # host-resolver hiccup doesn't lock the proxy out of an upstream
+      # name for a full minute. With systemd-resolved on 127.0.0.53 a
+      # ~1s blip otherwise produces a 60s window of TCP_TUNNEL/503 +
+      # HIER_NONE/- for every cached negative.
+      negative_dns_ttl 5 seconds
+
       access_log stdio:/var/log/squid/access.log
       cache_log /var/log/squid/cache.log
       cache deny all
@@ -195,7 +202,7 @@
           ~ '|htpasswd=' ~ (gitups_forward_proxy_htpasswd_stat.stat.checksum | default(''))
           ~ '|run-image=' ~ gitups_forward_proxy_run_image
           ~ '|port=' ~ gitups_current_forward_proxy.port | string
-          ~ '|run-args=v2:user=' ~ gitups_forward_proxy_runtime_uid ~ ':' ~ gitups_forward_proxy_runtime_gid ~ ',net=host,restart=unless-stopped'
+          ~ '|run-args=v3:user=' ~ gitups_forward_proxy_runtime_uid ~ ':' ~ gitups_forward_proxy_runtime_gid ~ ',net=host,restart=unless-stopped'
          ) | hash('sha1') }}
   changed_when: false
 

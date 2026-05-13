@@ -111,32 +111,26 @@
           proxy = {{ gitups_proxy_primary }}
       no_log: "{{ (gitups_proxy_credentials_ref | length) > 0 }}"
 
-    - name: Ensure containers.conf.d drop-in directory
+    # No containers.conf.d drop-in is rendered, deliberately. Podman
+    # reads system-wide drop-ins for ROOTLESS invocations too, so a
+    # 0600 file (which is what we'd need to hide a credentialed proxy
+    # URL) breaks every non-root `podman` on the host with "permission
+    # denied"; a 0644 file would leak the URL-embedded password to any
+    # local user. Instead, gitups containers receive HTTP_PROXY via
+    # the play-level `environment: gitups_proxy_env` block: the
+    # ansible task running `podman run`/`podman pull` inherits the env
+    # vars, and podman's default `--http-proxy=true` propagates them
+    # into the container. This treatment is uniform across the
+    # managed-Squid case and the bring-your-own authenticated external
+    # proxy case — the URL form is identical, the wire behaviour is
+    # identical, and credentials never land in a podman config file.
+    #
+    # Removing here also cleans up the 0600 file written by older
+    # versions of this role (which broke rootless `podman` on the host).
+    - name: Remove legacy containers.conf proxy drop-in
       ansible.builtin.file:
-        path: /etc/containers/containers.conf.d
-        state: directory
-        owner: root
-        group: root
-        mode: "0755"
-
-    # Use a containers.conf.d drop-in instead of editing the main
-    # containers.conf — the distro file already ships an [engine]
-    # table on Fedora/RHEL, and TOML rejects duplicate tables in a
-    # single file. Drop-ins are merged by podman automatically.
-    - name: Render containers.conf proxy drop-in
-      ansible.builtin.copy:
-        dest: /etc/containers/containers.conf.d/10-gitups-proxy.conf
-        owner: root
-        group: root
-        mode: "{{ '0600' if (gitups_proxy_credentials_ref | length) > 0 else '0644' }}"
-        content: |
-          [engine]
-          env = [
-            "HTTP_PROXY={{ gitups_proxy_http_effective }}",
-            "HTTPS_PROXY={{ gitups_proxy_https_effective }}",
-            "NO_PROXY={{ gitups_proxy_no }}",
-          ]
-      no_log: "{{ (gitups_proxy_credentials_ref | length) > 0 }}"
+        path: /etc/containers/containers.conf.d/10-gitups-proxy.conf
+        state: absent
 
     - name: Stat legacy containers.conf for cleanup
       ansible.builtin.stat:
@@ -151,10 +145,11 @@
       when: gitups_proxy_legacy_containers_conf.stat.exists
       failed_when: false
 
-    # The legacy task locked the main file to 0600 to hide credentials.
-    # Now the secrets live in the 0600 drop-in, so the main file goes
-    # back to the distro default (0644) — otherwise regular users lose
-    # the ability to run `podman info`.
+    # An even older version of this role locked the main containers.conf
+    # to 0600 to hide credentials. Credentials no longer land in any
+    # podman config file (see drop-in note above), so restore the distro
+    # default mode — otherwise regular users lose the ability to run
+    # `podman info`.
     - name: Restore distro mode on /etc/containers/containers.conf
       ansible.builtin.file:
         path: /etc/containers/containers.conf
