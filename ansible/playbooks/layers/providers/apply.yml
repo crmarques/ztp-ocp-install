@@ -1,5 +1,5 @@
 ---
-- name: Prepare Gitups provider-scoped infrastructure components
+- name: Apply provider services
   hosts: gitups_provider_hosts
   gather_subset:
     - "!all"
@@ -8,35 +8,35 @@
   environment: "{{ gitups_proxy_env | default({}) }}"
 
   pre_tasks:
-    - name: Build provider context
+    - name: Resolve provider context
       ansible.builtin.import_role:
         name: context_provider
 
   tasks:
-    - name: Apply managed forward proxy role
+    - name: Apply managed proxy
       ansible.builtin.import_role:
         name: proxy_squid
       when: gitups_current_forward_proxy is not none
 
-    - name: Apply host proxy role
+    - name: Persist host proxy settings
       ansible.builtin.import_role:
         name: host_proxy
 
-    - name: Apply BMC role for current provider kind
+    - name: Apply provider BMC service
       ansible.builtin.include_role:
         name: "bmc_{{ gitups_current_provider.bmcRole }}"
 
-    - name: Apply boot-artifacts HTTP role
+    - name: Apply boot artifacts HTTP service
       ansible.builtin.import_role:
         name: boot_artifacts_http
       when: gitups_current_provider.bootArtifactsHttp.enabled | default(false) | bool
 
-    - name: Apply mirror registry role
+    - name: Apply mirror registry
       ansible.builtin.import_role:
         name: mirror_registry
       when: gitups_current_mirror_registry is not none
 
-    - name: Apply managed load balancer role
+    - name: Apply managed load balancers
       ansible.builtin.import_role:
         name: load_balancer_haproxy
       when: gitups_current_load_balancers | length > 0

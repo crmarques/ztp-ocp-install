@@ -1,5 +1,5 @@
 ---
-- name: Compute mirror registry spec fingerprint
+- name: Compute mirror registry fingerprint
   ansible.builtin.set_fact:
     gitups_mirror_registry_spec_hash: >-
       {{ (gitups_mirror_registry_requirements.checksum
@@ -11,13 +11,13 @@
          ) | hash('sha1') }}
   changed_when: false
 
-- name: Inspect existing mirror registry container
+- name: Inspect mirror registry container
   containers.podman.podman_container_info:
     name: "{{ gitups_mirror_registry_container_name }}"
   register: gitups_mirror_registry_existing
   failed_when: false
 
-- name: Resolve mirror registry recreate decision
+- name: Decide mirror registry restart
   ansible.builtin.set_fact:
     gitups_mirror_registry_recreate: >-
       {{
@@ -53,7 +53,7 @@
       - "{{ gitups_mirror_registry_data_dir }}:/var/lib/registry:Z"
   when: gitups_mirror_registry_recreate | bool
 
-- name: Probe mirror registry container stability
+- name: Probe mirror registry container
   ansible.builtin.command:
     argv:
       - timeout
@@ -66,13 +66,13 @@
   failed_when: false
   changed_when: false
 
-- name: Capture mirror registry container inspect for diagnostics
+- name: Capture mirror registry inspect
   containers.podman.podman_container_info:
     name: "{{ gitups_mirror_registry_container_name }}"
   register: gitups_mirror_registry_post_inspect
   failed_when: false
 
-- name: Capture mirror registry container logs for diagnostics
+- name: Capture mirror registry logs
   ansible.builtin.command:
     argv:
       - podman
@@ -84,7 +84,7 @@
   failed_when: false
   changed_when: false
 
-- name: Persist mirror registry container inspect snapshot
+- name: Save mirror registry inspect
   ansible.builtin.copy:
     dest: "{{ gitups_mirror_registry_root }}/last-inspect.json"
     owner: root
@@ -92,7 +92,7 @@
     mode: "0644"
     content: "{{ (gitups_mirror_registry_post_inspect.containers | default([])) | to_nice_json }}"
 
-- name: Persist mirror registry container log snapshot
+- name: Save mirror registry logs
   ansible.builtin.copy:
     dest: "{{ gitups_mirror_registry_root }}/last-run.log"
     owner: root
@@ -100,12 +100,12 @@
     mode: "0644"
     content: "{{ gitups_mirror_registry_logs.stdout | default('') }}\n===== stderr =====\n{{ gitups_mirror_registry_logs.stderr | default('') }}\n"
 
-- name: Resolve final mirror registry container state
+- name: Resolve mirror registry state
   ansible.builtin.set_fact:
     gitups_mirror_registry_final_state: "{{ ((gitups_mirror_registry_post_inspect.containers | first).State | default({})) if (gitups_mirror_registry_post_inspect.containers | default([]) | length) > 0 else {} }}"
   changed_when: false
 
-- name: Fail when mirror registry container is not healthy
+- name: Validate mirror registry health
   ansible.builtin.fail:
     msg: |
       Mirror registry container {{ gitups_mirror_registry_container_name }} is not running cleanly.
@@ -117,7 +117,7 @@
       Inspect: {{ gitups_mirror_registry_root }}/last-inspect.json
   when: gitups_mirror_registry_wait.rc != 124
 
-- name: Check firewalld state on mirror registry host
+- name: Check mirror registry firewalld state
   ansible.builtin.command:
     argv:
       - firewall-cmd
@@ -126,7 +126,7 @@
   changed_when: false
   failed_when: false
 
-- name: Resolve firewalld zones present on mirror registry host
+- name: Resolve mirror registry firewalld zones
   ansible.builtin.command:
     argv:
       - firewall-cmd
@@ -136,7 +136,7 @@
   failed_when: false
   when: gitups_mirror_registry_firewalld_state.rc == 0
 
-- name: Open mirror registry firewall port in the libvirt zone
+- name: Open mirror registry firewall port
   ansible.posix.firewalld:
     zone: libvirt
     port: "{{ gitups_current_mirror_registry.port | int }}/tcp"

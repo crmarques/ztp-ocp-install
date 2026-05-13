@@ -1,13 +1,13 @@
 ---
-- name: Load OS-family KVM package list
+- name: Load libvirt package list
   ansible.builtin.include_vars: "{{ ansible_facts['os_family'] }}.yml"
 
-- name: Install KVM packages
+- name: Install libvirt host packages
   ansible.builtin.package:
     name: "{{ gitups_host_libvirt_packages }}"
     state: present
 
-- name: Enable libvirt service
+- name: Start libvirt service
   ansible.builtin.service:
     name: "{{ gitups_host_libvirt_libvirt_service }}"
     state: started

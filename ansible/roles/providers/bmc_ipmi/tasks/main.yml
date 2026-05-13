@@ -1,6 +1,6 @@
 ---
 
-- name: IPMI BMC is not yet implemented
+- name: Fail until IPMI BMC support is implemented
   ansible.builtin.fail:
     msg: |
       bmc_ipmi is a scaffold. To enable, model IPMI endpoints on

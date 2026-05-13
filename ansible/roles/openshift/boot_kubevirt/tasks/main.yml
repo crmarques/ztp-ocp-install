@@ -1,5 +1,5 @@
 ---
 
-- name: KubeVirt hub boot is not yet implemented
+- name: Fail until KubeVirt boot is implemented
   ansible.builtin.fail:
     msg: "boot_kubevirt is a scaffold; pair with substrate_kubevirt when adding OpenShift Virtualization support."

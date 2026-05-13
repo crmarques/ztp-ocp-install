@@ -17,7 +17,7 @@ import (
 func newCheckCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "check <target>",
-		Short: "Run validation and preflight checks",
+		Short: "Validate desired state and prerequisites",
 		Args:  cobra.NoArgs,
 	}
 	cmd.AddCommand(
@@ -35,7 +35,7 @@ func newCheckCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 func newApplyCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "apply <target>",
-		Short: "Converge a provisioning target",
+		Short: "Apply a provisioning target",
 		Args:  cobra.NoArgs,
 	}
 	cmd.AddCommand(
@@ -44,7 +44,7 @@ func newApplyCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Com
 		retargetCommand(newScopeApplyCmd(clustersScope, stdin, stdout, stderr), "clusters", "Install OpenShift clusters"),
 		newHubApplyCmd(stdout),
 		newGitopsApplyCmd(),
-		retargetCommand(newScopeApplyCmd(allScope, stdin, stdout, stderr), "all", "Converge infrastructure, all OpenShift clusters, and hub components"),
+		retargetCommand(newScopeApplyCmd(allScope, stdin, stdout, stderr), "all", "Apply infrastructure, OpenShift clusters, and hub components"),
 	)
 	showSubcommandFlagsInHelp(cmd)
 	return cmd
@@ -81,7 +81,7 @@ func newCheckAllCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 	hostStateDir = defaultHostStateDir
 	cmd := &cobra.Command{
 		Use:   "all",
-		Short: "Check bastion, infrastructure, cluster, and hub prerequisites",
+		Short: "Check all provisioning prerequisites",
 		Args:  cobra.NoArgs,
 	}
 	cf := addCommonFlags(cmd)
@@ -154,7 +154,7 @@ func newCheckAllCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 func newHubCheckCmd(stdout io.Writer) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "hub",
-		Short: "Check the cluster selected for hub components",
+		Short: "Check hub cluster selection",
 		Args:  cobra.NoArgs,
 	}
 	cf := addCommonFlags(cmd)
@@ -173,7 +173,7 @@ func newHubApplyCmd(stdout io.Writer) *cobra.Command {
 	var dryRun bool
 	cmd := &cobra.Command{
 		Use:   "hub",
-		Short: "Apply hub components to the selected hub cluster",
+		Short: "Apply reserved hub components",
 		Args:  cobra.NoArgs,
 	}
 	cf := addCommonFlags(cmd)

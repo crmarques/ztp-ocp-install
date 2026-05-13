@@ -1,5 +1,5 @@
 ---
-- name: Create installer working directory
+- name: Create installer work directory
   ansible.builtin.file:
     path: "{{ gitups_ocp_installer_dir }}/work"
     state: directory
@@ -7,7 +7,7 @@
   delegate_to: localhost
   become: false
 
-- name: Write effective install-config.yaml to working directory
+- name: Write effective install config
   ansible.builtin.copy:
     dest: "{{ gitups_ocp_installer_dir }}/work/install-config.yaml"
     mode: "0600"
@@ -17,7 +17,7 @@
   delegate_to: localhost
   become: false
 
-- name: Write effective agent-config.yaml to working directory
+- name: Write effective agent config
   ansible.builtin.copy:
     dest: "{{ gitups_ocp_installer_dir }}/work/agent-config.yaml"
     mode: "0600"
@@ -26,14 +26,14 @@
   delegate_to: localhost
   become: false
 
-- name: Stat existing agent ISO
+- name: Check existing agent ISO
   ansible.builtin.stat:
     path: "{{ gitups_ocp_installer_dir }}/work/agent.x86_64.iso"
   register: gitups_agent_iso_stat
   delegate_to: localhost
   become: false
 
-- name: Refresh installer working files when configs change
+- name: Clear stale installer state
   ansible.builtin.copy:
     dest: "{{ gitups_ocp_installer_dir }}/work/{{ item.name }}"
     mode: "0600"
@@ -46,7 +46,7 @@
   delegate_to: localhost
   become: false
 
-- name: Purge stale openshift-install state before regenerating agent ISO
+- name: Remove stale installer files
   ansible.builtin.file:
     path: "{{ gitups_ocp_installer_dir }}/work/{{ item }}"
     state: absent
@@ -71,7 +71,7 @@
   delegate_to: localhost
   become: false
 
-- name: Locate generated rootfs boot artifacts
+- name: Locate rootfs boot artifacts
   ansible.builtin.find:
     paths: "{{ gitups_ocp_installer_dir }}/work/boot-artifacts"
     patterns: "agent.*-rootfs.img"
@@ -81,14 +81,14 @@
   delegate_to: localhost
   become: false
 
-- name: Fail when minimal ISO rootfs artifact is missing
+- name: Validate minimal ISO rootfs
   ansible.builtin.fail:
     msg: "openshift-install did not produce an agent rootfs artifact under {{ gitups_ocp_installer_dir }}/work/boot-artifacts"
   when:
     - gitups_ocp_minimal_iso | bool
     - gitups_agent_rootfs_find.matched == 0
 
-- name: Create provider boot artifacts directory
+- name: Create provider boot artifact directory
   ansible.builtin.file:
     path: "{{ gitups_host_state_dir }}/providers/{{ gitups_provider_name }}/boot-artifacts"
     state: directory
@@ -97,7 +97,7 @@
     mode: "0755"
   when: gitups_ocp_minimal_iso | bool
 
-- name: Stage rootfs boot artifacts for node access
+- name: Stage rootfs boot artifacts
   ansible.builtin.copy:
     src: "{{ item.path }}"
     dest: "{{ gitups_host_state_dir }}/providers/{{ gitups_provider_name }}/boot-artifacts/{{ item.path | basename }}"
@@ -109,7 +109,7 @@
     label: "{{ item.path | basename }}"
   when: gitups_ocp_minimal_iso | bool
 
-- name: Validate staged rootfs is reachable from provider HTTP server
+- name: Verify staged rootfs HTTP URL
   ansible.builtin.uri:
     url: "http://127.0.0.1:{{ gitups_ocp_boot_artifacts_http_port }}/{{ (gitups_agent_rootfs_find.files | first).path | basename }}"
     method: GET

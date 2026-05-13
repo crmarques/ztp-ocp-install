@@ -1,5 +1,5 @@
 ---
-- name: Stop boot artifacts HTTP server for current provider
+- name: Stop boot artifact HTTP service
   ansible.builtin.systemd_service:
     name: "gitups-boot-artifacts-{{ gitups_current_provider.name }}.service"
     state: stopped
@@ -9,13 +9,13 @@
   changed_when: gitups_boot_artifacts_stop.changed | default(false)
   when: gitups_current_provider.bootArtifactsHttp.enabled | default(false) | bool
 
-- name: Remove boot artifacts HTTP systemd unit
+- name: Remove boot artifact HTTP unit
   ansible.builtin.file:
     path: "/etc/systemd/system/gitups-boot-artifacts-{{ gitups_current_provider.name }}.service"
     state: absent
   register: gitups_boot_artifacts_unit_remove
 
-- name: Reload systemd after removing boot artifacts unit
+- name: Reload systemd after boot artifact cleanup
   ansible.builtin.systemd_service:
     daemon_reload: true
   when: gitups_boot_artifacts_unit_remove.changed

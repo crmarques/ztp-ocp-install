@@ -602,7 +602,7 @@ func TestLibvirtSubstrateOpensBootArtifactsHTTPPort(t *testing.T) {
 func TestClusterNetworkVipsOwnsVIPPlumbing(t *testing.T) {
 	apply := readFile(t, "../../ansible/roles/cluster_infra/network_vips/tasks/main.yml")
 	for _, expected := range []string{
-		"Plumb cluster load balancer VIPs onto libvirt bridges",
+		"Attach load balancer VIPs",
 		"gitups_in_cidr",
 		"gitups_load_balancers",
 	} {
@@ -611,7 +611,7 @@ func TestClusterNetworkVipsOwnsVIPPlumbing(t *testing.T) {
 		}
 	}
 	destroy := readFile(t, "../../ansible/roles/cluster_infra/network_vips/tasks/destroy.yml")
-	if !strings.Contains(destroy, "Unplumb managed load balancer VIPs from the cluster bridge") {
+	if !strings.Contains(destroy, "Detach load balancer VIPs") {
 		t.Fatalf("network_vips/tasks/destroy.yml missing unplumb task\n%s", destroy)
 	}
 	if _, err := os.Stat("../../ansible/roles/cluster_infra/network_vips/test_plugins/cidr.py"); err != nil {
@@ -1151,8 +1151,8 @@ func TestProviderDestroyRemovesManagedProxyWithoutBroadNetworkBlocks(t *testing.
 	for _, expected := range []string{
 		"gitups_current_forward_proxy",
 		"gitups-squid-{{ gitups_current_forward_proxy.name }}",
-		"Close managed Squid port on provider host firewall",
-		"Remove managed Squid state directory",
+		"Close managed proxy firewall port",
+		"Remove managed proxy state directory",
 	} {
 		if !strings.Contains(destroy, expected) {
 			t.Fatalf("proxy_squid destroy task missing managed proxy cleanup %q\n%s", expected, destroy)

@@ -1,22 +1,22 @@
 ---
-- name: Tear down OpenShift cluster install state
+- name: Destroy OpenShift agent install state
   hosts: gitups_ocp_hosts
   gather_facts: false
   become: true
   environment: "{{ gitups_proxy_env | default({}) }}"
 
   pre_tasks:
-    - name: Build cluster context
+    - name: Resolve cluster context
       ansible.builtin.import_role:
         name: context_cluster
 
   tasks:
-    - name: Build proxy facts for downstream tasks
+    - name: Resolve proxy settings
       ansible.builtin.import_role:
         name: host_proxy
         tasks_from: facts
 
-    - name: Apply OCP destroy agent role
+    - name: Destroy agent install state
       ansible.builtin.import_role:
         name: destroy_agent
       when: gitups_current_cluster.ocp.install.method == 'agent'

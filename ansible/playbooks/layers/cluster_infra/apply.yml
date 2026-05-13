@@ -1,5 +1,5 @@
 ---
-- name: Prepare Gitups per-cluster infrastructure
+- name: Apply cluster infrastructure
   hosts: gitups_infra_hosts
   gather_subset:
     - "!all"
@@ -8,33 +8,33 @@
   environment: "{{ gitups_proxy_env | default({}) }}"
 
   pre_tasks:
-    - name: Build cluster context
+    - name: Resolve cluster context
       ansible.builtin.import_role:
         name: context_cluster
 
   tasks:
-    - name: Apply host proxy role
+    - name: Persist host proxy settings
       ansible.builtin.import_role:
         name: host_proxy
 
-    - name: Apply host base role
+    - name: Apply base host packages
       ansible.builtin.import_role:
         name: host_base
 
-    - name: Apply substrate role for current provider kind
+    - name: Apply substrate provider
       ansible.builtin.include_role:
         name: "substrate_{{ gitups_current_cluster.provider.substrateRole }}"
 
-    - name: Plumb managed load balancer VIPs onto the cluster bridge
+    - name: Attach managed load balancer VIPs
       ansible.builtin.import_role:
         name: network_vips
 
-    - name: Apply managed name resolution
+    - name: Apply managed hosts-file records
       ansible.builtin.import_role:
         name: name_resolution_hosts_file
       when: gitups_current_cluster.network.nameResolution.mode == 'managed'
 
-    - name: Validate external network reachability
+    - name: Validate external DNS and load balancer
       ansible.builtin.import_role:
         name: external_network_validate
       when: gitups_current_cluster.network.nameResolution.mode == 'external' or gitups_current_cluster.network.loadBalancer.external | default(false) | bool

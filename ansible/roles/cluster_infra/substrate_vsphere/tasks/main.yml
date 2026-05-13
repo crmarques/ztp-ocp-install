@@ -1,6 +1,6 @@
 ---
 
-- name: vSphere substrate is not yet implemented
+- name: Fail until vSphere substrate support is implemented
   ansible.builtin.fail:
     msg: |
       substrate_vsphere is a scaffold. To enable, extend

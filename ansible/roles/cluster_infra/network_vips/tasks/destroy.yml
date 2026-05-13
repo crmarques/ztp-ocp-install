@@ -1,6 +1,6 @@
 ---
 
-- name: Resolve managed load balancer VIPs to remove
+- name: Select load balancer VIPs to remove
   ansible.builtin.set_fact:
     gitups_cluster_vips_unplumb_targets: >-
       {{
@@ -14,7 +14,7 @@
       }}
   changed_when: false
 
-- name: Unplumb managed load balancer VIPs from the cluster bridge
+- name: Detach load balancer VIPs
   ansible.builtin.command:
     argv:
       - ip

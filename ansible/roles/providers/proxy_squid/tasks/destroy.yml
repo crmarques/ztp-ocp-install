@@ -1,12 +1,12 @@
 ---
-- name: Stop and remove managed Squid proxy container
+- name: Remove managed proxy container
   containers.podman.podman_container:
     name: "gitups-squid-{{ gitups_current_forward_proxy.name }}"
     state: absent
   when: gitups_current_forward_proxy is not none
   failed_when: false
 
-- name: Remove managed Squid /etc/hosts pin
+- name: Remove managed proxy hosts-file pin
   ansible.builtin.blockinfile:
     path: /etc/hosts
     marker: "# {mark} GITUPS managed-forward-proxy {{ gitups_current_forward_proxy.name }}"
@@ -14,7 +14,7 @@
   when: gitups_current_forward_proxy is not none
   failed_when: false
 
-- name: Check firewalld state before closing managed Squid port
+- name: Check managed proxy firewalld state
   ansible.builtin.command:
     argv:
       - firewall-cmd
@@ -24,7 +24,7 @@
   failed_when: false
   when: gitups_current_forward_proxy is not none
 
-- name: Close managed Squid port on provider host firewall
+- name: Close managed proxy firewall port
   ansible.posix.firewalld:
     port: "{{ gitups_current_forward_proxy.port | int }}/tcp"
     state: disabled
@@ -34,13 +34,13 @@
     - gitups_current_forward_proxy is not none
     - gitups_squid_firewalld_state.rc | default(1) == 0
 
-- name: Remove managed Squid state directory
+- name: Remove managed proxy state directory
   ansible.builtin.file:
     path: "{{ gitups_current_forward_proxy.dataDir | default(gitups_host_state_dir ~ '/forward-proxy/' ~ gitups_current_forward_proxy.name, true) }}"
     state: absent
   when: gitups_current_forward_proxy is not none
 
-- name: Remove forward-proxy parent directory if empty
+- name: Remove empty forward-proxy directory
   ansible.builtin.command:
     argv:
       - rmdir

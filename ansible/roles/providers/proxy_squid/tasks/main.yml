@@ -1,12 +1,12 @@
 ---
-- name: Install Podman and htpasswd tooling for managed Squid
+- name: Install managed proxy packages
   ansible.builtin.package:
     name:
       - podman
       - httpd-tools
     state: present
 
-- name: Create managed Squid state directories
+- name: Create managed proxy directories
   ansible.builtin.file:
     path: "{{ item.path }}"
     state: directory
@@ -20,7 +20,7 @@
     - { path: "{{ gitups_forward_proxy_cache_dir }}", mode: "0755", owner: "{{ gitups_forward_proxy_runtime_uid }}", group: "{{ gitups_forward_proxy_runtime_gid }}" }
     - { path: "{{ gitups_forward_proxy_logs_dir }}", mode: "0755", owner: "{{ gitups_forward_proxy_runtime_uid }}", group: "{{ gitups_forward_proxy_runtime_gid }}" }
 
-- name: Persist managed Squid requirements snapshot
+- name: Record managed proxy requirements
   ansible.builtin.copy:
     dest: "{{ gitups_forward_proxy_root }}/requirements.yml"
     owner: root
@@ -39,7 +39,7 @@
         public: {{ gitups_current_forward_proxy.image.public | default('') }}
   register: gitups_forward_proxy_requirements
 
-- name: Slurp managed Squid credentials secret
+- name: Read managed proxy credential file
   ansible.builtin.slurp:
     src: "{{ gitups_current_forward_proxy.credentialsSecretName }}"
   register: gitups_forward_proxy_credentials_raw
@@ -47,12 +47,12 @@
   delegate_to: localhost
   become: false
 
-- name: Parse managed Squid credentials
+- name: Parse managed proxy credentials
   ansible.builtin.set_fact:
     gitups_forward_proxy_credentials: "{{ gitups_forward_proxy_credentials_raw | gitups_parse_credential('proxy credentialsSecret ' ~ gitups_current_forward_proxy.credentialsSecretName) }}"
   no_log: true
 
-- name: Verify existing managed Squid htpasswd
+- name: Verify managed proxy htpasswd
   ansible.builtin.command:
     argv:
       - htpasswd
@@ -65,7 +65,7 @@
   failed_when: false
   no_log: true
 
-- name: Generate managed Squid htpasswd content
+- name: Generate managed proxy htpasswd
   ansible.builtin.command:
     argv:
       - htpasswd
@@ -77,7 +77,7 @@
   no_log: true
   when: gitups_forward_proxy_htpasswd_verify.rc | default(1) != 0
 
-- name: Write managed Squid htpasswd file
+- name: Write managed proxy htpasswd
   ansible.builtin.copy:
     dest: "{{ gitups_forward_proxy_auth_dir }}/htpasswd"
     owner: "{{ gitups_forward_proxy_runtime_uid }}"
@@ -88,12 +88,12 @@
   no_log: true
   when: gitups_forward_proxy_htpasswd_verify.rc | default(1) != 0
 
-- name: Compute managed Squid htpasswd checksum
+- name: Hash managed proxy htpasswd
   ansible.builtin.stat:
     path: "{{ gitups_forward_proxy_auth_dir }}/htpasswd"
   register: gitups_forward_proxy_htpasswd_stat
 
-- name: Write managed Squid configuration
+- name: Write managed proxy configuration
   ansible.builtin.copy:
     dest: "{{ gitups_forward_proxy_config_dir }}/squid.conf"
     owner: root
@@ -131,7 +131,7 @@
       coredump_dir /var/spool/squid
   register: gitups_forward_proxy_config
 
-- name: Pull managed Squid image from local registry
+- name: Pull managed proxy image from mirror
   containers.podman.podman_image:
     name: "{{ gitups_current_forward_proxy.image.local }}"
     state: present
@@ -140,7 +140,7 @@
   failed_when: false
   when: (gitups_current_forward_proxy.image.local | default('')) | length > 0
 
-- name: Check whether managed Squid local image is in podman storage
+- name: Check mirrored proxy image
   ansible.builtin.command:
     argv:
       - podman
@@ -152,7 +152,7 @@
   failed_when: false
   when: (gitups_current_forward_proxy.image.local | default('')) | length > 0
 
-- name: Pull managed Squid image from public registry
+- name: Pull managed proxy image from public registry
   containers.podman.podman_image:
     name: "{{ gitups_current_forward_proxy.image.public }}"
     state: present
@@ -165,7 +165,7 @@
       (gitups_current_forward_proxy.image.local | default('')) | length == 0
       or (gitups_forward_proxy_local_present.rc | default(1) != 0)
 
-- name: Check whether managed Squid public image is in podman storage
+- name: Check public proxy image
   ansible.builtin.command:
     argv:
       - podman
@@ -177,14 +177,14 @@
   failed_when: false
   when: (gitups_current_forward_proxy.image.public | default('')) | length > 0
 
-- name: Resolve managed Squid image ref for run
+- name: Select managed proxy image
   ansible.builtin.set_fact:
     gitups_forward_proxy_run_image: >-
       {{ gitups_current_forward_proxy.image.local
          if (gitups_forward_proxy_local_present.rc | default(1) == 0)
          else gitups_current_forward_proxy.image.public }}
 
-- name: Fail when managed Squid image cannot be pulled
+- name: Validate managed proxy image
   ansible.builtin.fail:
     msg: >-
       Managed Squid image pull failed.
@@ -194,7 +194,7 @@
     - (gitups_forward_proxy_local_present.rc | default(1) != 0)
     - (gitups_forward_proxy_public_present.rc | default(1) != 0)
 
-- name: Compute managed Squid spec fingerprint
+- name: Compute managed proxy fingerprint
   ansible.builtin.set_fact:
     gitups_forward_proxy_spec_hash: >-
       {{ (gitups_forward_proxy_requirements.checksum
@@ -206,13 +206,13 @@
          ) | hash('sha1') }}
   changed_when: false
 
-- name: Inspect existing managed Squid container
+- name: Inspect managed proxy container
   containers.podman.podman_container_info:
     name: "{{ gitups_forward_proxy_container_name }}"
   register: gitups_forward_proxy_existing
   failed_when: false
 
-- name: Resolve managed Squid recreate decision
+- name: Decide managed proxy restart
   ansible.builtin.set_fact:
     gitups_forward_proxy_recreate: >-
       {{
@@ -222,7 +222,7 @@
       }}
   changed_when: false
 
-- name: Run managed Squid container
+- name: Run managed proxy container
   containers.podman.podman_container:
     name: "{{ gitups_forward_proxy_container_name }}"
     image: "{{ gitups_forward_proxy_run_image }}"
@@ -243,7 +243,7 @@
       - "{{ gitups_forward_proxy_logs_dir }}:/var/log/squid:Z"
   when: gitups_forward_proxy_recreate | bool
 
-- name: Probe managed Squid container stability
+- name: Probe managed proxy container
   ansible.builtin.command:
     argv:
       - timeout
@@ -256,13 +256,13 @@
   failed_when: false
   changed_when: false
 
-- name: Capture managed Squid container inspect for diagnostics
+- name: Capture managed proxy inspect
   containers.podman.podman_container_info:
     name: "{{ gitups_forward_proxy_container_name }}"
   register: gitups_forward_proxy_post_inspect
   failed_when: false
 
-- name: Capture managed Squid container logs for diagnostics
+- name: Capture managed proxy logs
   ansible.builtin.command:
     argv:
       - podman
@@ -274,7 +274,7 @@
   failed_when: false
   changed_when: false
 
-- name: Persist managed Squid container inspect snapshot
+- name: Save managed proxy inspect
   ansible.builtin.copy:
     dest: "{{ gitups_forward_proxy_root }}/last-inspect.json"
     owner: root
@@ -282,7 +282,7 @@
     mode: "0644"
     content: "{{ (gitups_forward_proxy_post_inspect.containers | default([])) | to_nice_json }}"
 
-- name: Persist managed Squid container log snapshot
+- name: Save managed proxy logs
   ansible.builtin.copy:
     dest: "{{ gitups_forward_proxy_root }}/last-run.log"
     owner: root
@@ -290,12 +290,12 @@
     mode: "0644"
     content: "{{ gitups_forward_proxy_logs.stdout | default('') }}\n===== stderr =====\n{{ gitups_forward_proxy_logs.stderr | default('') }}\n"
 
-- name: Resolve final managed Squid container state
+- name: Resolve managed proxy state
   ansible.builtin.set_fact:
     gitups_forward_proxy_final_state: "{{ ((gitups_forward_proxy_post_inspect.containers | first).State | default({})) if (gitups_forward_proxy_post_inspect.containers | default([]) | length) > 0 else {} }}"
   changed_when: false
 
-- name: Fail when managed Squid container is not healthy
+- name: Validate managed proxy health
   ansible.builtin.fail:
     msg: |
       Managed Squid container {{ gitups_forward_proxy_container_name }} is not running cleanly.
@@ -307,7 +307,7 @@
       Inspect: {{ gitups_forward_proxy_root }}/last-inspect.json
   when: gitups_forward_proxy_wait.rc != 124
 
-- name: Check firewalld state on managed Squid host
+- name: Check managed proxy firewalld state
   ansible.builtin.command:
     argv:
       - firewall-cmd
@@ -316,7 +316,7 @@
   changed_when: false
   failed_when: false
 
-- name: Open managed Squid firewall port
+- name: Open managed proxy firewall port
   ansible.posix.firewalld:
     port: "{{ gitups_current_forward_proxy.port | int }}/tcp"
     state: enabled
@@ -332,14 +332,14 @@
 # case: skip when no host-level proxy is configured, when the Squid URL
 # uses an IP literal, or when the configured proxy points at a different
 # host than this Squid.
-- name: Resolve hostnames for /etc/hosts pin gating
+- name: Resolve managed proxy hostnames
   ansible.builtin.set_fact:
     gitups_forward_proxy_url_host: "{{ gitups_current_forward_proxy.url | urlsplit('hostname') | default('', true) }}"
     gitups_forward_proxy_host_http_host: "{{ (gitups_ocp_install.proxy | default({})).http | default('') | urlsplit('hostname') | default('', true) }}"
     gitups_forward_proxy_host_https_host: "{{ (gitups_ocp_install.proxy | default({})).https | default('') | urlsplit('hostname') | default('', true) }}"
   changed_when: false
 
-- name: Pin managed Squid proxy hostname to loopback on provider host
+- name: Pin managed proxy hostname
   ansible.builtin.blockinfile:
     path: /etc/hosts
     create: true

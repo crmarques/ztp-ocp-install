@@ -1,10 +1,10 @@
 ---
-- name: Check whether this host owns managed hosts-file entries
+- name: Check hosts-file ownership
   ansible.builtin.set_fact:
     gitups_manage_hosts_file_here: "{{ gitups_host_name in gitups_current_cluster.network.nameResolution.managed.providerHostRefs }}"
   changed_when: false
 
-- name: Create managed name-resolution state directory
+- name: Create name-resolution state directory
   ansible.builtin.file:
     path: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}/name-resolution"
     state: directory
@@ -13,7 +13,7 @@
     mode: "0755"
   when: gitups_manage_hosts_file_here
 
-- name: Write managed hosts-file records
+- name: Record managed hosts-file entries
   ansible.builtin.copy:
     dest: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}/name-resolution/hosts-file.yml"
     owner: root
@@ -35,7 +35,7 @@
       {% endfor %}
   when: gitups_manage_hosts_file_here
 
-- name: Manage Gitups block in /etc/hosts
+- name: Write managed hosts-file block
   ansible.builtin.blockinfile:
     path: /etc/hosts
     create: true

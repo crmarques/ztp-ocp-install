@@ -1,5 +1,5 @@
 ---
-- name: Resolve hub destroy context
+- name: Resolve agent destroy context
   ansible.builtin.set_fact:
     gitups_ocp_installer_dir: "{{ gitups_state_dir }}/{{ gitups_current_cluster.ocp.installer.relativeDir }}"
     gitups_ocp_installer_relative_work: "{{ gitups_current_cluster.ocp.installer.relativeDir }}/work"
@@ -8,7 +8,7 @@
     gitups_ocp_bmc_auth_enabled: "{{ (gitups_current_provider.bmc | default({})).auth is defined and (gitups_current_provider.bmc | default({})).auth.credentialRef | default('') | length > 0 }}"
   changed_when: false
 
-- name: Find lingering openshift-install / oc processes for this cluster
+- name: Find stale installer processes
   ansible.builtin.command:
     argv:
       - pgrep
@@ -19,7 +19,7 @@
   failed_when: false
   changed_when: false
 
-- name: Terminate lingering openshift-install / oc processes for this cluster
+- name: Stop stale installer processes
   ansible.builtin.shell: |
     set -uo pipefail
     pids="{{ gitups_ocp_lingering_procs.stdout_lines | join(' ') }}"
@@ -47,7 +47,7 @@
   changed_when: gitups_ocp_lingering_procs.rc == 0
   when: gitups_ocp_lingering_procs.rc == 0
 
-- name: Read BMC credentials for Redfish auth
+- name: Read BMC credential file
   ansible.builtin.slurp:
     src: "{{ gitups_ocp_provider_bmc.auth.credentialRef }}"
   register: gitups_ocp_bmc_credentials_slurp
@@ -57,16 +57,16 @@
   become: false
   when: gitups_ocp_bmc_auth_enabled
 
-- name: Resolve BMC credentials
+- name: Parse BMC credentials
   ansible.builtin.set_fact:
-    gitups_ocp_bmc_credentials: "{{ gitups_ocp_bmc_credentials_slurp | gitups_parse_credential('hub BMC credentialRef ' ~ gitups_ocp_provider_bmc.auth.credentialRef) }}"
+    gitups_ocp_bmc_credentials: "{{ gitups_ocp_bmc_credentials_slurp | gitups_parse_credential('cluster BMC credentialRef ' ~ gitups_ocp_provider_bmc.auth.credentialRef) }}"
   no_log: true
   changed_when: false
   when:
     - gitups_ocp_bmc_auth_enabled
     - gitups_ocp_bmc_credentials_slurp.content is defined
 
-- name: Expose BMC username and password as facts
+- name: Publish BMC auth facts
   ansible.builtin.set_fact:
     gitups_ocp_bmc_username: "{{ gitups_ocp_bmc_credentials.username }}"
     gitups_ocp_bmc_password: "{{ gitups_ocp_bmc_credentials.password }}"
@@ -76,14 +76,14 @@
     - gitups_ocp_bmc_auth_enabled
     - gitups_ocp_bmc_credentials_slurp.content is defined
 
-- name: Resolve hub Redfish endpoint
+- name: Resolve Redfish endpoint
   ansible.builtin.set_fact:
     gitups_ocp_redfish_baseuri: "http://127.0.0.1:{{ gitups_ocp_provider_bmc.port }}"
     gitups_ocp_system_name: "{{ gitups_current_cluster.name }}-{{ gitups_ocp_first_node_name }}"
   when: gitups_ocp_provider_bmc.enabled | default(false) | bool
   changed_when: false
 
-- name: Enumerate Redfish systems for cleanup
+- name: List Redfish systems
   community.general.redfish_info:
     category: Systems
     command: GetSystemInventory
@@ -98,7 +98,7 @@
     - gitups_ocp_first_node_name | length > 0
   no_log: "{{ gitups_ocp_bmc_auth_enabled }}"
 
-- name: Resolve hub Redfish system id
+- name: Select Redfish system
   ansible.builtin.set_fact:
     gitups_ocp_system_id: "{{ ((gitups_ocp_redfish_systems.redfish_facts.system.entries | default([])) | selectattr('Name', 'equalto', gitups_ocp_system_name) | list | first).Id | default('') }}"
   changed_when: false
@@ -107,7 +107,7 @@
     - gitups_ocp_redfish_systems is defined
     - gitups_ocp_redfish_systems.redfish_facts is defined
 
-- name: Eject any virtual media still inserted
+- name: Eject virtual media
   community.general.redfish_command:
     category: Systems
     command: VirtualMediaEject
@@ -125,12 +125,12 @@
     - gitups_ocp_system_id | length > 0
   no_log: "{{ gitups_ocp_bmc_auth_enabled }}"
 
-- name: Remove staged agent ISO from BMC vmedia pool
+- name: Remove staged agent ISO
   ansible.builtin.file:
     path: "{{ gitups_host_state_dir }}/providers/{{ gitups_provider_name }}/bmc/vmedia/{{ gitups_current_cluster.name }}-agent.iso"
     state: absent
 
-- name: Remove installer working directory
+- name: Remove installer work directory
   ansible.builtin.file:
     path: "{{ gitups_ocp_installer_dir }}/work"
     state: absent

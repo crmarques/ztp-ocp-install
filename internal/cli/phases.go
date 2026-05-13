@@ -18,19 +18,19 @@ var phases = map[string]Phase{
 		Name:          "provider",
 		ApplyPlaybook: "playbooks/layers/providers/apply.yml",
 		NeedsRoot:     true,
-		Description:   "provision provider-scoped services (BMC emulator, boot-artifacts HTTP, mirror registry, managed HAProxy) and host runtime state",
+		Description:   "converge provider services: proxy, registry, BMC, boot artifacts, and load balancers",
 	},
 	"cluster": {
 		Name:          "cluster",
 		ApplyPlaybook: "playbooks/layers/cluster_infra/apply.yml",
 		NeedsRoot:     true,
-		Description:   "provision per-cluster substrate (libvirt domains and networks, managed name resolution, /etc/hosts records, VIP plumbing)",
+		Description:   "converge per-cluster substrate, networks, name resolution, and VIPs",
 	},
 	"clusters": {
 		Name:          "clusters",
 		ApplyPlaybook: "playbooks/layers/openshift/install-agent.yml",
 		NeedsRoot:     true,
-		Description:   "run openshift-install agent against the cluster nodes (boots via Redfish, manages the libvirt domain, writes per-cluster install state)",
+		Description:   "run openshift-install agent and boot nodes through the provider BMC path",
 	},
 }
 

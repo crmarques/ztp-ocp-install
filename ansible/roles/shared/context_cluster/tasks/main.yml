@@ -1,16 +1,16 @@
 ---
-- name: Select cluster infrastructure for current host
+- name: Select cluster for this host
   ansible.builtin.set_fact:
     gitups_current_cluster: "{{ gitups_clusters | selectattr('name', 'equalto', gitups_cluster_name) | first }}"
   changed_when: false
 
-- name: Select infrastructure provider for current host
+- name: Select provider for this host
   ansible.builtin.set_fact:
     gitups_current_provider: "{{ gitups_providers | selectattr('name', 'equalto', gitups_provider_name) | first }}"
   changed_when: false
   when: gitups_provider_name is defined
 
-- name: Publish cluster context
+- name: Publish cluster context facts
   ansible.builtin.set_fact:
     gitups_cluster_ctx:
       cluster: "{{ gitups_current_cluster }}"

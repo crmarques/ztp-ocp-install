@@ -1,10 +1,10 @@
 ---
-- name: Resolve effective proxy state
+- name: Resolve proxy desired state
   ansible.builtin.set_fact:
     gitups_proxy_enabled: "{{ (gitups_proxy_http | length) > 0 or (gitups_proxy_https | length) > 0 }}"
   changed_when: false
 
-- name: Read proxy credentials
+- name: Read proxy credential file
   ansible.builtin.slurp:
     src: "{{ gitups_proxy_credentials_ref }}"
   register: gitups_proxy_credentials_slurp
@@ -37,7 +37,7 @@
   changed_when: false
   when: gitups_proxy_enabled
 
-- name: Resolve credentialed proxy URLs
+- name: Select effective proxy URLs
   ansible.builtin.set_fact:
     gitups_proxy_http_effective: >-
       {{
@@ -53,7 +53,7 @@
   changed_when: false
   when: gitups_proxy_enabled
 
-- name: Resolve primary proxy URL for single-value config files
+- name: Select primary proxy URL
   ansible.builtin.set_fact:
     gitups_proxy_primary: "{{ gitups_proxy_https_effective if (gitups_proxy_https_effective | length) > 0 else gitups_proxy_http_effective }}"
   no_log: true
@@ -65,7 +65,7 @@
 # a previous run when proxy was enabled; the file-level cleanup below
 # can't unset those for already-spawned processes, so we override at the
 # task-environment layer to keep this run from inheriting them.
-- name: Build proxy environment for downstream task overrides
+- name: Build proxy environment facts
   ansible.builtin.set_fact:
     gitups_proxy_env: >-
       {{

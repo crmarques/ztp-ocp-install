@@ -1,5 +1,5 @@
 ---
-- name: Install Podman, skopeo, httpd-tools for mirror registry
+- name: Install mirror registry packages
   ansible.builtin.package:
     name:
       - podman
@@ -8,7 +8,7 @@
       - ca-certificates
     state: present
 
-- name: Create mirror registry state directories
+- name: Create mirror registry directories
   ansible.builtin.file:
     path: "{{ item.path }}"
     state: directory
@@ -22,7 +22,7 @@
     - { path: "{{ gitups_mirror_registry_data_dir }}", mode: "0755" }
     - { path: "{{ gitups_mirror_registry_tools_dir }}", mode: "0755" }
 
-- name: Persist mirror registry requirements snapshot
+- name: Record mirror registry requirements
   ansible.builtin.copy:
     dest: "{{ gitups_mirror_registry_root }}/requirements.yml"
     owner: root
@@ -41,7 +41,7 @@
         public: {{ gitups_current_mirror_registry.image.public | default('') }}
   register: gitups_mirror_registry_requirements
 
-- name: Persist mirror set snapshot
+- name: Record mirror image set
   ansible.builtin.copy:
     dest: "{{ gitups_mirror_registry_root }}/mirror-set.yml"
     owner: root

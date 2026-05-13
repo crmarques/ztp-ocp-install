@@ -1,5 +1,5 @@
 ---
-- name: Locate generated agent ISO
+- name: Locate agent ISO
   ansible.builtin.find:
     paths: "{{ gitups_ocp_installer_dir }}/work"
     patterns: "agent.*.iso"
@@ -8,17 +8,17 @@
   delegate_to: localhost
   become: false
 
-- name: Fail when agent ISO is missing
+- name: Validate agent ISO exists
   ansible.builtin.fail:
     msg: "openshift-install did not produce an agent ISO under {{ gitups_ocp_installer_dir }}/work"
   when: gitups_agent_iso_find.matched == 0
 
-- name: Resolve agent ISO path
+- name: Select agent ISO path
   ansible.builtin.set_fact:
     gitups_agent_iso_path: "{{ gitups_agent_iso_find.files | sort(attribute='mtime', reverse=true) | map(attribute='path') | first }}"
   changed_when: false
 
-- name: Stage agent ISO into the BMC vmedia pool
+- name: Stage agent ISO for BMC boot
   ansible.builtin.copy:
     src: "{{ gitups_agent_iso_path }}"
     dest: "{{ gitups_host_state_dir }}/providers/{{ gitups_provider_name }}/bmc/vmedia/{{ gitups_current_cluster.name }}-agent.iso"
@@ -27,7 +27,7 @@
     mode: "0644"
   register: gitups_agent_iso_stage
 
-- name: Refresh libvirt vmedia pool after staging ISO
+- name: Refresh libvirt vmedia pool
   community.libvirt.virt_pool:
     name: "gitups-{{ gitups_provider_name }}-vmedia"
     command: refresh
@@ -35,11 +35,11 @@
     - gitups_agent_iso_stage.changed
     - gitups_current_provider.bmcRole == 'emulated'
 
-- name: Boot OCP cluster node via BMC
+- name: Boot node via BMC
   ansible.builtin.include_role:
     name: "boot_{{ gitups_current_provider.bmcRole }}"
 
-- name: Wait for openshift-install agent install-complete
+- name: Wait for agent install completion
   ansible.builtin.command:
     cmd: "{{ gitups_openshift_install_path }} agent wait-for install-complete --dir {{ gitups_ocp_installer_dir }}/work --log-level info"
   environment: "{{ gitups_ocp_install_env }}"
@@ -50,7 +50,7 @@
   delegate_to: localhost
   become: false
 
-- name: Persist kubeconfig path
+- name: Record kubeconfig path
   ansible.builtin.copy:
     dest: "{{ gitups_ocp_installer_dir }}/work/kubeconfig.path"
     mode: "0600"

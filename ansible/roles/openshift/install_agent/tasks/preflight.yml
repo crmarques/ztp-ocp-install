@@ -6,7 +6,7 @@
       - gitups_state_dir | length > 0
     fail_msg: "gitups_state_dir is required (gitups CLI passes it to ansible-playbook)"
 
-- name: Resolve hub cluster install context
+- name: Resolve agent install context
   ansible.builtin.set_fact:
     gitups_ocp_cluster_install: "{{ gitups_current_cluster.ocp.install }}"
     gitups_ocp_release: "{{ gitups_current_cluster.ocp.release }}"
@@ -20,7 +20,7 @@
     gitups_ocp_release_image_override: "{{ gitups_current_cluster.ocp.install.releaseImageOverride | default('') }}"
   changed_when: false
 
-- name: Find lingering openshift-install / oc processes from a prior apply
+- name: Find stale installer processes
   ansible.builtin.command:
     argv:
       - pgrep
@@ -33,7 +33,7 @@
   delegate_to: localhost
   become: false
 
-- name: Terminate lingering openshift-install / oc processes from a prior apply
+- name: Stop stale installer processes
   ansible.builtin.shell: |
     set -uo pipefail
     pids="{{ gitups_ocp_apply_lingering_procs.stdout_lines | join(' ') }}"
@@ -62,7 +62,7 @@
   delegate_to: localhost
   become: false
 
-- name: Read BMC credentials for Redfish auth
+- name: Read BMC credential file
   ansible.builtin.slurp:
     src: "{{ gitups_current_provider.bmc.auth.credentialRef }}"
   register: gitups_ocp_bmc_credentials_slurp
@@ -73,12 +73,12 @@
 
 - name: Parse BMC credentials
   ansible.builtin.set_fact:
-    gitups_ocp_bmc_credentials: "{{ gitups_ocp_bmc_credentials_slurp | gitups_parse_credential('hub BMC credentialRef ' ~ gitups_current_provider.bmc.auth.credentialRef) }}"
+    gitups_ocp_bmc_credentials: "{{ gitups_ocp_bmc_credentials_slurp | gitups_parse_credential('cluster BMC credentialRef ' ~ gitups_current_provider.bmc.auth.credentialRef) }}"
   no_log: true
   changed_when: false
   when: gitups_ocp_bmc_auth_enabled
 
-- name: Expose BMC username and password as facts
+- name: Publish BMC auth facts
   ansible.builtin.set_fact:
     gitups_ocp_bmc_username: "{{ gitups_ocp_bmc_credentials.username }}"
     gitups_ocp_bmc_password: "{{ gitups_ocp_bmc_credentials.password }}"
@@ -86,17 +86,17 @@
   changed_when: false
   when: gitups_ocp_bmc_auth_enabled
 
-- name: Resolve generated self-signed certificate requests
+- name: Select generated certificate requests
   ansible.builtin.set_fact:
     gitups_ocp_generated_self_signed_certificates: "{{ gitups_ocp_cluster_install.generatedSecrets | default([]) | selectattr('type', 'equalto', 'self-signed-certificate') | list }}"
   changed_when: false
 
-- name: Fail when install method is not agent
+- name: Validate agent install method
   ansible.builtin.fail:
     msg: "install_agent only supports install method 'agent', got '{{ gitups_ocp_cluster_install.method | default('<unset>') }}'"
   when: (gitups_ocp_cluster_install.method | default('')) != 'agent'
 
-- name: Resolve openshift-install binary
+- name: Locate openshift-install
   ansible.builtin.shell: "command -v {{ gitups_openshift_install | quote }}"
   args:
     executable: /bin/sh
@@ -106,7 +106,7 @@
   delegate_to: localhost
   become: false
 
-- name: Resolve openshift-install absolute path
+- name: Resolve openshift-install path
   ansible.builtin.set_fact:
     gitups_openshift_install_path: "{{ gitups_openshift_install_lookup.stdout | trim }}"
   changed_when: false
@@ -119,7 +119,7 @@
   delegate_to: localhost
   become: false
 
-- name: Validate openshift-install version matches release
+- name: Validate openshift-install release
   ansible.builtin.assert:
     that:
       - gitups_ocp_release.version | length > 0

@@ -1,5 +1,5 @@
 ---
-- name: Validate external API records resolve when name resolution is external
+- name: Validate external API DNS
   ansible.builtin.command:
     argv:
       - getent
@@ -11,7 +11,7 @@
   changed_when: false
   when: gitups_current_cluster.network.nameResolution.mode == 'external'
 
-- name: Create external network requirements directory
+- name: Create external network state directory
   ansible.builtin.file:
     path: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}"
     state: directory
@@ -20,7 +20,7 @@
     mode: "0755"
   when: gitups_current_cluster.network.nameResolution.mode == 'external' or gitups_current_cluster.network.loadBalancer.external | default(false) | bool
 
-- name: Record external network requirements
+- name: Record external network expectations
   ansible.builtin.copy:
     dest: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}/external-network.yml"
     owner: root

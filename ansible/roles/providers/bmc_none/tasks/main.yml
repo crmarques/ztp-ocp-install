@@ -1,5 +1,5 @@
 ---
-- name: BMC role for provider {{ gitups_current_provider.name }} is none
+- name: Skip provider BMC service for {{ gitups_current_provider.name }}
   ansible.builtin.debug:
-    msg: "Provider {{ gitups_current_provider.name }} (kind {{ gitups_current_provider.kind }}) has no external BMC; skipping BMC tasks."
+    msg: "Provider {{ gitups_current_provider.name }} (kind {{ gitups_current_provider.kind }}) has no provider BMC service."
   changed_when: false

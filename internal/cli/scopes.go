@@ -30,7 +30,7 @@ var clustersScope = scopeSpec{
 
 var allScope = scopeSpec{
 	name:               "all",
-	short:              "Install and configure infrastructure, all OpenShift clusters, and hub components",
+	short:              "Apply infrastructure, OpenShift clusters, and hub components",
 	phaseNames:         []string{"provider", "cluster", "clusters"},
 	applyPlaybook:      "playbooks/targets/all/apply.yml",
 	artifactsBaseName:  "all",

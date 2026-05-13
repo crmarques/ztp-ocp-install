@@ -1,19 +1,19 @@
 ---
-- name: Stop and remove mirror registry container
+- name: Remove mirror registry container
   containers.podman.podman_container:
     name: "gitups-mirror-registry-{{ gitups_current_mirror_registry.name }}"
     state: absent
   when: gitups_current_mirror_registry is not none
   failed_when: false
 
-- name: Remove mirror registry trust anchor
+- name: Remove mirror registry CA trust
   ansible.builtin.file:
     path: "/etc/pki/ca-trust/source/anchors/gitups-mirror-{{ gitups_current_mirror_registry.host }}.crt"
     state: absent
   register: gitups_mirror_registry_trust_remove
   when: gitups_current_mirror_registry is not none
 
-- name: Refresh host CA trust store after mirror registry removal
+- name: Refresh host CA trust store
   ansible.builtin.command:
     argv:
       - update-ca-trust
@@ -22,7 +22,7 @@
     - gitups_mirror_registry_trust_remove.changed
   changed_when: gitups_mirror_registry_trust_remove.changed
 
-- name: Remove mirror registry state directory (full destroy)
+- name: Remove mirror registry state directory
   ansible.builtin.file:
     path: "{{ gitups_host_state_dir }}/mirror-registry/{{ gitups_current_mirror_registry.name }}"
     state: absent
@@ -30,7 +30,7 @@
     - gitups_current_mirror_registry is not none
     - not (gitups_keep_mirrored_images | default(false) | bool)
 
-- name: Remove mirror registry transient state (preserve data volume)
+- name: Remove mirror registry transient files
   ansible.builtin.file:
     path: "{{ gitups_host_state_dir }}/mirror-registry/{{ gitups_current_mirror_registry.name }}/{{ item }}"
     state: absent
@@ -47,14 +47,14 @@
     - gitups_current_mirror_registry is not none
     - gitups_keep_mirrored_images | default(false) | bool
 
-- name: Report retained mirror registry data volume
+- name: Report retained mirror registry data
   ansible.builtin.debug:
     msg: "Retained mirror registry data volume at {{ gitups_host_state_dir }}/mirror-registry/{{ gitups_current_mirror_registry.name }}/data"
   when:
     - gitups_current_mirror_registry is not none
     - gitups_keep_mirrored_images | default(false) | bool
 
-- name: Remove mirror-registry parent directory if empty
+- name: Remove empty mirror-registry directory
   ansible.builtin.command:
     argv:
       - rmdir

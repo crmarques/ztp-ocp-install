@@ -1,19 +1,19 @@
 ---
-- name: Read rendered install-config.yaml
+- name: Read rendered install config
   ansible.builtin.slurp:
     src: "{{ gitups_ocp_install_config_path }}"
   register: gitups_install_config_slurp
   delegate_to: localhost
   become: false
 
-- name: Read rendered agent-config.yaml
+- name: Read rendered agent config
   ansible.builtin.slurp:
     src: "{{ gitups_ocp_agent_config_path }}"
   register: gitups_agent_config_slurp
   delegate_to: localhost
   become: false
 
-- name: Build effective install-config
+- name: Build effective install config
   ansible.builtin.set_fact:
     gitups_effective_install_config: >-
       {{
@@ -44,18 +44,18 @@
   no_log: true
   changed_when: false
 
-- name: Build effective agent-config
+- name: Build effective agent config
   ansible.builtin.set_fact:
     gitups_effective_agent_config: "{{ gitups_agent_config_slurp.content | b64decode | from_yaml }}"
   changed_when: false
 
-- name: Resolve agent boot artifact settings
+- name: Resolve boot artifact settings
   ansible.builtin.set_fact:
     gitups_ocp_minimal_iso: "{{ gitups_effective_agent_config.minimalISO | default(false) | bool }}"
     gitups_ocp_boot_artifacts_http_port: "{{ gitups_current_provider.bootArtifactsHttp.port | int }}"
   changed_when: false
 
-- name: Collect imageDigestSources mirror endpoints
+- name: Collect image mirror endpoints
   ansible.builtin.set_fact:
     gitups_ocp_mirror_endpoints: >-
       {{
@@ -66,7 +66,7 @@
       }}
   changed_when: false
 
-- name: Probe imageDigestSources mirror reachability
+- name: Probe image mirror reachability
   block:
     - name: Probe each mirror endpoint over TCP
       ansible.builtin.wait_for:
@@ -86,14 +86,14 @@
           in the Environment for a connected install.
   when: gitups_ocp_mirror_endpoints | length > 0
 
-- name: Fail when disconnected install has no local release image override
+- name: Validate disconnected release image
   ansible.builtin.fail:
     msg: "disconnected installs require a local release image override from ocpInstall.registries.imageDigestSources"
   when:
     - gitups_ocp_install.disconnected | default(false) | bool
     - gitups_ocp_release_image_override | length == 0
 
-- name: Resolve OpenShift install command environment
+- name: Build openshift-install environment
   ansible.builtin.set_fact:
     gitups_ocp_install_env: >-
       {{

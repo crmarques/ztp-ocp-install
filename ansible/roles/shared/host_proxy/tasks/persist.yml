@@ -1,5 +1,5 @@
 ---
-- name: Configure proxy on the provider host
+- name: Persist proxy settings on host
   when: gitups_proxy_enabled
   block:
     - name: Render /etc/environment proxy lines
@@ -189,6 +189,6 @@
 # commands hit a now-absent (or auth-mismatched) proxy and fail with 407.
 # Same teardown is invoked from providers/destroy.yml so `destroy infra`
 # returns the host to its pre-gitups state.
-- name: Strip stale proxy configuration when proxy is disabled
+- name: Remove stale proxy settings when disabled
   ansible.builtin.import_tasks: cleanup.yml
   when: not gitups_proxy_enabled

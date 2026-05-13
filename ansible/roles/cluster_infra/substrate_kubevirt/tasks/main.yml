@@ -1,6 +1,6 @@
 ---
 
-- name: KubeVirt substrate is not yet implemented
+- name: Fail until KubeVirt substrate support is implemented
   ansible.builtin.fail:
     msg: |
       substrate_kubevirt is a scaffold. To enable, extend

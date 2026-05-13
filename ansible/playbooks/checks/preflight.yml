@@ -1,5 +1,5 @@
 ---
-- name: Gitups read-only controller and provider preflight
+- name: Check provider host prerequisites
   hosts: gitups_provider_hosts:gitups_infra_hosts:gitups_ocp_hosts
   gather_subset:
     - "!all"
@@ -9,23 +9,23 @@
   environment: "{{ gitups_proxy_env | default({}) }}"
 
   pre_tasks:
-    - name: Select provider for current host when available
+    - name: Select provider for this host
       ansible.builtin.set_fact:
         gitups_current_provider: "{{ gitups_providers | selectattr('name', 'equalto', gitups_provider_name) | first }}"
       changed_when: false
       when: gitups_provider_name is defined
 
   tasks:
-    - name: Build proxy facts for downstream tasks
+    - name: Resolve proxy settings
       ansible.builtin.import_role:
         name: host_proxy
         tasks_from: facts
 
-    - name: Verify host is reachable over configured transport
+    - name: Verify Ansible transport
       ansible.builtin.ping:
       changed_when: false
 
-    - name: Check sudo availability without escalating
+    - name: Check passwordless sudo
       ansible.builtin.command:
         argv:
           - sudo
@@ -35,12 +35,12 @@
       changed_when: false
       failed_when: false
 
-    - name: Report sudo availability
+    - name: Report sudo status
       ansible.builtin.debug:
         msg: >-
           sudo={{ 'passwordless' if gitups_preflight_sudo.rc == 0 else 'password-required-or-unavailable' }}
 
-    - name: Check provider package manager commands
+    - name: Detect package manager
       ansible.builtin.command:
         argv:
           - sh
@@ -50,17 +50,17 @@
       changed_when: false
       failed_when: false
 
-    - name: Report provider package manager
+    - name: Report package manager
       ansible.builtin.debug:
         msg: "packageManager={{ gitups_preflight_package_manager.stdout | default('missing') }}"
 
-    - name: Check KVM device when libvirt is declared
+    - name: Check KVM device for libvirt providers
       ansible.builtin.stat:
         path: /dev/kvm
       register: gitups_preflight_kvm
       when: gitups_current_provider is defined and gitups_current_provider.kind == 'libvirt'
 
-    - name: Report KVM device
+    - name: Report KVM status
       ansible.builtin.debug:
         msg: "/dev/kvm={{ gitups_preflight_kvm.stat.exists | default(false) }}"
       when: gitups_current_provider is defined and gitups_current_provider.kind == 'libvirt'

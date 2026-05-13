@@ -1,5 +1,5 @@
 ---
-- name: Install OpenShift cluster via openshift-install agent
+- name: Install cluster with openshift-install agent
   hosts: gitups_ocp_hosts
   gather_subset:
     - "!all"
@@ -8,13 +8,13 @@
   environment: "{{ gitups_proxy_env | default({}) }}"
 
   pre_tasks:
-    - name: Gather remote-root environment for openshift-install lookup
+    - name: Gather remote environment
       ansible.builtin.setup:
         gather_subset:
           - "!all"
           - env
 
-    - name: Build cluster context
+    - name: Resolve cluster context
       ansible.builtin.import_role:
         name: context_cluster
 

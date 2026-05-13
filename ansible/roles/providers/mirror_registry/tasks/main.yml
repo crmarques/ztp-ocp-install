@@ -1,17 +1,17 @@
 ---
-- name: Install packages, create state dirs, persist requirements snapshots
+- name: Prepare mirror registry host
   ansible.builtin.import_tasks: prepare-host.yml
 
-- name: Materialise registry credentials, htpasswd, TLS material, host CA trust
+- name: Materialise mirror registry secrets
   ansible.builtin.import_tasks: credentials.yml
 
-- name: Resolve and pull the registry server image (local-first, public fallback)
+- name: Resolve mirror registry image
   ansible.builtin.import_tasks: image.yml
 
-- name: Run the registry container and assert it stays healthy
+- name: Run mirror registry container
   ansible.builtin.import_tasks: container.yml
 
-- name: Mirror upstream images into the local registry
+- name: Mirror required images
   ansible.builtin.include_tasks: mirror-images.yml
   when:
     - not ansible_check_mode

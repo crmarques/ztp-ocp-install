@@ -1,42 +1,42 @@
 ---
-- name: Tear down Gitups provider-scoped infrastructure
+- name: Destroy provider services
   hosts: gitups_provider_hosts
   gather_facts: false
   become: true
   environment: "{{ gitups_proxy_env | default({}) }}"
 
   pre_tasks:
-    - name: Build provider context
+    - name: Resolve provider context
       ansible.builtin.import_role:
         name: context_provider
 
   tasks:
-    - name: Build proxy facts for downstream tasks
+    - name: Resolve proxy settings
       ansible.builtin.import_role:
         name: host_proxy
         tasks_from: facts
 
-    - name: Destroy mirror registry role
+    - name: Destroy mirror registry
       ansible.builtin.import_role:
         name: mirror_registry
         tasks_from: destroy.yml
 
-    - name: Destroy boot-artifacts HTTP role
+    - name: Destroy boot artifacts HTTP service
       ansible.builtin.import_role:
         name: boot_artifacts_http
         tasks_from: destroy.yml
 
-    - name: Destroy BMC role for current provider kind
+    - name: Destroy provider BMC service
       ansible.builtin.include_role:
         name: "bmc_{{ gitups_current_provider.bmcRole }}"
         tasks_from: destroy.yml
 
-    - name: Destroy managed load balancer role
+    - name: Destroy managed load balancers
       ansible.builtin.import_role:
         name: load_balancer_haproxy
         tasks_from: destroy.yml
 
-    - name: Destroy managed forward proxy role
+    - name: Destroy managed proxy
       ansible.builtin.import_role:
         name: proxy_squid
         tasks_from: destroy.yml
@@ -51,7 +51,7 @@
         name: host_proxy
         tasks_from: cleanup
 
-    - name: Remove Gitups host state root if empty
+    - name: Remove empty host state root
       ansible.builtin.command:
         argv:
           - rmdir

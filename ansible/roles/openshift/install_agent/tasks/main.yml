@@ -1,15 +1,15 @@
 ---
-- name: Validate prerequisites and resolve install context
+- name: Resolve install context
   ansible.builtin.import_tasks: preflight.yml
 
-- name: Materialise install secrets and merge into effective configs
+- name: Materialise install secrets
   ansible.builtin.import_tasks: secrets.yml
 
-- name: Build effective install-config / agent-config and validate mirrors
+- name: Build effective installer configs
   ansible.builtin.import_tasks: effective-config.yml
 
-- name: Generate the agent ISO and stage rootfs boot artifacts
+- name: Generate agent ISO
   ansible.builtin.import_tasks: agent-iso.yml
 
-- name: Boot the cluster node via BMC and wait for install completion
+- name: Boot node and wait for install
   ansible.builtin.import_tasks: boot-and-wait.yml

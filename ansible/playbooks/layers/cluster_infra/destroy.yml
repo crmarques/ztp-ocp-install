@@ -1,27 +1,27 @@
 ---
-- name: Tear down Gitups per-cluster infrastructure
+- name: Destroy cluster infrastructure
   hosts: gitups_infra_hosts
   gather_facts: false
   become: true
   environment: "{{ gitups_proxy_env | default({}) }}"
 
   pre_tasks:
-    - name: Build cluster context
+    - name: Resolve cluster context
       ansible.builtin.import_role:
         name: context_cluster
 
   tasks:
-    - name: Build proxy facts for downstream tasks
+    - name: Resolve proxy settings
       ansible.builtin.import_role:
         name: host_proxy
         tasks_from: facts
 
-    - name: Unplumb managed load balancer VIPs from the cluster bridge
+    - name: Detach managed load balancer VIPs
       ansible.builtin.include_role:
         name: network_vips
         tasks_from: destroy.yml
 
-    - name: Force-stop libvirt domains for current cluster
+    - name: Stop libvirt domains
       community.libvirt.virt:
         name: "{{ gitups_current_cluster.name }}-{{ item.name }}"
         state: destroyed
@@ -31,7 +31,7 @@
         label: "{{ item.name }}"
       when: gitups_current_cluster.provider.kind == 'libvirt'
 
-    - name: Undefine libvirt domains for current cluster
+    - name: Undefine libvirt domains
       community.libvirt.virt:
         command: undefine
         name: "{{ gitups_current_cluster.name }}-{{ item.name }}"
@@ -54,7 +54,7 @@
       failed_when: false
       when: gitups_current_cluster.provider.kind == 'libvirt'
 
-    - name: Close boot artifacts HTTP firewall port in the libvirt zone
+    - name: Close boot artifacts HTTP port
       ansible.posix.firewalld:
         zone: libvirt
         port: "{{ gitups_current_cluster.provider.bootArtifactsHttp.port | int }}/tcp"
@@ -67,7 +67,7 @@
         - gitups_firewalld_state.rc | default(1) == 0
         - gitups_current_cluster.provider.bootArtifactsHttp.enabled | default(false) | bool
 
-    - name: Tear down libvirt network for current cluster
+    - name: Remove libvirt network
       community.libvirt.virt_net:
         name: "{{ gitups_current_cluster.provider.virtualization.libvirt.network }}"
         state: absent
@@ -76,7 +76,7 @@
         - gitups_current_cluster.provider.kind == 'libvirt'
         - (gitups_current_cluster.provider.virtualization.libvirt.network | default('')) | length > 0
 
-    - name: Remove managed hosts-file block for current cluster
+    - name: Remove managed hosts-file block
       ansible.builtin.blockinfile:
         path: /etc/hosts
         marker: "# {mark} GITUPS {{ gitups_current_cluster.name }} hosts"

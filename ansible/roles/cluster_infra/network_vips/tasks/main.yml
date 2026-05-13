@@ -1,6 +1,6 @@
 ---
 
-- name: Resolve cluster managed load balancer VIPs against libvirt bridges
+- name: Select cluster VIPs for libvirt bridges
   ansible.builtin.set_fact:
     gitups_cluster_vips_lb_bindings: >-
       {{
@@ -13,7 +13,7 @@
       }}
   changed_when: false
 
-- name: Compute libvirt VIP attachments matching cluster bridges
+- name: Match VIPs to libvirt bridges
   ansible.builtin.set_fact:
     gitups_cluster_vips_targets: >-
       {{
@@ -32,7 +32,7 @@
   loop_control:
     label: "{{ item.libvirt.bridge | default('?') }} {{ item.cidr }}"
 
-- name: Plumb cluster load balancer VIPs onto libvirt bridges
+- name: Attach load balancer VIPs
   ansible.builtin.command:
     argv:
       - ip

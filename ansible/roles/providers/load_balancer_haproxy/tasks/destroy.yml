@@ -1,5 +1,5 @@
 ---
-- name: Remove managed HAProxy containers
+- name: Remove HAProxy containers
   containers.podman.podman_container:
     name: "gitups-haproxy-{{ item.name }}"
     state: absent
@@ -7,7 +7,7 @@
   loop_control:
     label: "{{ item.name }}"
 
-- name: Remove managed load balancer state directories
+- name: Remove load balancer state directories
   ansible.builtin.file:
     path: "{{ gitups_host_state_dir }}/load-balancers/{{ item.name }}"
     state: absent
@@ -15,7 +15,7 @@
   loop_control:
     label: "{{ item.name }}"
 
-- name: Remove load-balancers parent directory if empty
+- name: Remove empty load-balancers directory
   ansible.builtin.command:
     argv:
       - rmdir
@@ -24,7 +24,7 @@
   failed_when: false
   changed_when: gitups_lb_parent_rm.rc == 0
 
-- name: Remove Gitups sysctl drop-in for HAProxy
+- name: Remove HAProxy sysctl drop-in
   ansible.builtin.file:
     path: /etc/sysctl.d/99-gitups-haproxy.conf
     state: absent

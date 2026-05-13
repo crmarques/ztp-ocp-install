@@ -29,7 +29,7 @@ func newScopeCheckCmd(scope scopeSpec, stdout io.Writer, stderr io.Writer) *cobr
 	hostStateDir = defaultHostStateDir
 	cmd := &cobra.Command{
 		Use:   "check",
-		Short: "Run preflight checks for the " + scope.name + " scope",
+		Short: "Check " + scope.name + " prerequisites",
 		Args:  cobra.NoArgs,
 	}
 	cf := addCommonFlags(cmd)
@@ -116,7 +116,7 @@ func newScopeApplyCmd(scope scopeSpec, stdin io.Reader, stdout io.Writer, stderr
 	hostStateDir = defaultHostStateDir
 	cmd := &cobra.Command{
 		Use:   "apply",
-		Short: "Converge the " + scope.name + " scope",
+		Short: "Apply " + scope.name + " desired state",
 		Args:  cobra.NoArgs,
 	}
 	cf := addCommonFlags(cmd)
@@ -239,7 +239,7 @@ func newScopeDestroyCmd(scope scopeSpec, stdin io.Reader, stdout io.Writer, stde
 	hostStateDir = defaultHostStateDir
 	cmd := &cobra.Command{
 		Use:   "destroy",
-		Short: "Tear down the " + scope.name + " scope",
+		Short: "Destroy " + scope.name + " runtime state",
 		Args:  cobra.NoArgs,
 	}
 	cf := addCommonFlags(cmd)

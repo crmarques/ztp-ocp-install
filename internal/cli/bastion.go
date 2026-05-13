@@ -14,7 +14,7 @@ func newBastionCheckCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 	hostStateDir := defaultHostStateDir
 	cmd := &cobra.Command{
 		Use:   "check",
-		Short: "Verify bastion (controller) dependencies are available",
+		Short: "Check controller dependencies",
 		Args:  cobra.NoArgs,
 	}
 	cf := addCommonFlags(cmd)
@@ -62,7 +62,7 @@ func newBastionApplyCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *co
 	secretsDir = defaultSecretsDir()
 	cmd := &cobra.Command{
 		Use:   "apply",
-		Short: "Install bastion (controller) prerequisites",
+		Short: "Install controller prerequisites",
 		Args:  cobra.NoArgs,
 	}
 	cf := addCommonFlags(cmd)
