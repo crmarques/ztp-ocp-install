@@ -20,6 +20,16 @@ func managedProxyIsolationEnabled(infra v1alpha1.ClusterInfrastructure, provider
 	return primaryLibvirtMachineNetwork(infra).Libvirt != nil
 }
 
+// managedProxyClientURL is the VM-facing client URL for the managed Squid:
+// hosted at the libvirt-network gateway, which is reachable from any VM on
+// that bridge. This URL is embedded in install-config.yaml and any other
+// VM-facing config — VMs reach Squid by sending traffic at the gateway IP,
+// which Squid (bound via host networking) answers on the host.
+//
+// Hosts (the bastion / providers / infra hosts running ansible tasks) cannot
+// use this URL during bootstrap, because the gateway IP only becomes a local
+// address once substrate_libvirt brings up the bridge — and host_proxy needs
+// the URL to install libvirt itself. Hosts use managedProxyClientHostURL.
 func managedProxyClientURL(infra v1alpha1.ClusterInfrastructure, provider v1alpha1.InfrastructureProvider, env *v1alpha1.Environment) string {
 	if !managedProxyIsolationEnabled(infra, provider, env) {
 		return ""
@@ -36,7 +46,41 @@ func managedProxyClientURL(infra v1alpha1.ClusterInfrastructure, provider v1alph
 	return fmt.Sprintf("http://%s:%d", network.Gateway, port)
 }
 
+// managedProxyClientHostURL is the host-facing client URL for the managed
+// Squid: hosted at the proxy host's SSH address. By definition this address
+// is routable before libvirt comes up (it's how ansible reaches the host in
+// the first place), so host_proxy can write a working HTTP(S)_PROXY into
+// /etc/dnf/dnf.conf and the systemd drop-in even on the first run, before
+// substrate_libvirt has created the libvirt bridge.
+func managedProxyClientHostURL(infra v1alpha1.ClusterInfrastructure, provider v1alpha1.InfrastructureProvider, env *v1alpha1.Environment) string {
+	if !managedProxyIsolationEnabled(infra, provider, env) {
+		return ""
+	}
+	squid := v1alpha1.ProviderProxySquid(provider)
+	host, ok := provider.Spec.Hosts[squid.HostRef.Name]
+	if !ok || host.SSH == nil || host.SSH.Address == "" {
+		return ""
+	}
+	port := squid.Port
+	if port == 0 {
+		port = v1alpha1.DefaultSquidPort
+	}
+	return fmt.Sprintf("http://%s:%d", host.SSH.Address, port)
+}
+
 func managedProxyClientURLForState(state v1alpha1.State, env *v1alpha1.Environment) string {
+	return managedProxyClientURLForStateUsing(state, env, managedProxyClientURL)
+}
+
+func managedProxyClientHostURLForState(state v1alpha1.State, env *v1alpha1.Environment) string {
+	return managedProxyClientURLForStateUsing(state, env, managedProxyClientHostURL)
+}
+
+func managedProxyClientURLForStateUsing(
+	state v1alpha1.State,
+	env *v1alpha1.Environment,
+	builder func(v1alpha1.ClusterInfrastructure, v1alpha1.InfrastructureProvider, *v1alpha1.Environment) string,
+) string {
 	if env == nil {
 		return ""
 	}
@@ -51,7 +95,7 @@ func managedProxyClientURLForState(state v1alpha1.State, env *v1alpha1.Environme
 	for _, name := range names {
 		infra := byName[name]
 		provider := closureProvider(infra, providers)
-		if url := managedProxyClientURL(infra, provider, env); url != "" {
+		if url := builder(infra, provider, env); url != "" {
 			return url
 		}
 	}

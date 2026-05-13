@@ -282,6 +282,25 @@ that step. Once `gitups apply infra` provisions Squid, every subsequent
 phase (provider-host package/image pulls, install-config rendering, agent
 install) routes through it.
 
+Hosts and VMs reach managed Squid at different addresses. Gitups renders
+two client URLs:
+
+- **Host URL** — `http://<proxy.squid.hostRef SSH address>:<port>`. Written
+  by `host_proxy` into `/etc/dnf/dnf.conf`, `/etc/environment`, the systemd
+  drop-in, and `pip.conf`. Routable on every host before libvirt is
+  installed, so the very first dnf install (which installs libvirt itself)
+  succeeds via the proxy.
+- **VM URL** — `http://<machineNetwork.gateway>:<port>`. Embedded in
+  `install-config.yaml` so the OpenShift cluster sends runtime egress
+  through the libvirt-bridge gateway, where Squid (bound via host
+  networking) answers. The bridge becomes a local address only after
+  `substrate_libvirt` brings up the libvirt network — which is too late
+  for the host-side dnf installs the host URL handles.
+
+For external proxies (no `spec.proxy.squid`) both URLs collapse to the
+same user-configured `spec.proxy.http` / `spec.proxy.https`, so the split
+is invisible.
+
 ## Save And Generate Secrets
 
 Secret material the workspace consumes:

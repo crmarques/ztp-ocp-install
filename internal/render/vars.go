@@ -32,9 +32,21 @@ type EnvironmentOCPInstallVars struct {
 	Proxy        *ProxyVars          `yaml:"proxy,omitempty" json:"proxy,omitempty"`
 }
 
+// ProxyVars carries the two-URL proxy model. HTTP / HTTPS are the
+// host-facing URLs (host_proxy writes them into /etc/dnf/dnf.conf,
+// /etc/environment, the systemd drop-in, etc.) and must be reachable from
+// every host during bootstrap. VMHTTP / VMHTTPS are the VM-facing URLs
+// (used inside install-config.yaml so the OpenShift cluster reaches the
+// proxy at runtime). For an external proxy both pairs collapse to the
+// same user-configured URL; for the managed Squid case they differ — the
+// host URL points at the proxy host's SSH address (routable before
+// libvirt is installed) and the VM URL points at the libvirt-bridge
+// gateway (routable once the network is up).
 type ProxyVars struct {
 	HTTP         string   `yaml:"http,omitempty" json:"http,omitempty"`
 	HTTPS        string   `yaml:"https,omitempty" json:"https,omitempty"`
+	VMHTTP       string   `yaml:"vmHttp,omitempty" json:"vmHttp,omitempty"`
+	VMHTTPS      string   `yaml:"vmHttps,omitempty" json:"vmHttps,omitempty"`
 	NoProxy      []string `yaml:"noProxy,omitempty" json:"noProxy,omitempty"`
 	ProxyAuthRef string   `yaml:"proxyAuthRef,omitempty" json:"proxyAuthRef,omitempty"`
 }
@@ -413,12 +425,16 @@ func ocpInstallEnvVars(state v1alpha1.State, env *v1alpha1.Environment, secretsD
 		return result
 	}
 	if eff := proxy.Resolve(state, env); eff != nil {
-		fallbackURL := managedProxyClientURLForState(state, env)
-		httpProxy, httpsProxy := effectiveProxyURLs(eff, fallbackURL)
-		if httpProxy != "" || httpsProxy != "" || len(eff.NoProxy) > 0 || eff.Auth.Name != "" {
+		hostFallback := managedProxyClientHostURLForState(state, env)
+		vmFallback := managedProxyClientURLForState(state, env)
+		httpProxy, httpsProxy := effectiveProxyURLs(eff, hostFallback)
+		vmHTTP, vmHTTPS := effectiveProxyURLs(eff, vmFallback)
+		if httpProxy != "" || httpsProxy != "" || vmHTTP != "" || vmHTTPS != "" || len(eff.NoProxy) > 0 || eff.Auth.Name != "" {
 			result.Proxy = &ProxyVars{
 				HTTP:         httpProxy,
 				HTTPS:        httpsProxy,
+				VMHTTP:       vmHTTP,
+				VMHTTPS:      vmHTTPS,
 				NoProxy:      append([]string(nil), eff.NoProxy...),
 				ProxyAuthRef: resolvedSecretPath(eff.Auth.Name, secretsDir, env),
 			}
@@ -460,7 +476,11 @@ func forwardProxyRunVars(state v1alpha1.State, env *v1alpha1.Environment, secret
 		return nil
 	}
 	imageRef := componentImageURLs(env, v1alpha1.ComponentCategoryProxy, v1alpha1.ComponentTypeSquid)
-	fallbackURL := managedProxyClientURLForState(state, env)
+	// proxy_squid runs ON the Squid host and uses this URL for its
+	// /etc/hosts pin (when a hostname-form URL would otherwise fail to
+	// resolve). The host-facing URL is the right input — its hostname
+	// matches what host_proxy writes into HTTP(S)_PROXY on every host.
+	fallbackURL := managedProxyClientHostURLForState(state, env)
 	clientURL := eff.HTTP
 	if clientURL == "" {
 		clientURL = eff.HTTPS

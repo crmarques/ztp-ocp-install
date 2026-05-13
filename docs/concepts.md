@@ -66,6 +66,28 @@ Otherwise the proxy URL is external. On Gitups-managed libvirt networks only,
 the managed proxy path also disables direct VM NAT egress so cluster VMs leave
 through Squid.
 
+### Managed-Squid Two-URL Model
+
+For the managed-Squid case Gitups derives **two** proxy URLs from the same
+Squid deployment, because hosts and VMs can't reach Squid at the same address:
+
+- **Host URL** — `http://<squid-host-ssh-address>:<port>`. Written by
+  `host_proxy` into `/etc/dnf/dnf.conf`, `/etc/environment`, the systemd
+  drop-in, and `pip.conf` on every host (bastion, providers, infra, OCP).
+  Uses the SSH address gitups already knows works on this host (since
+  ansible reached it that way), so it's routable before libvirt is
+  installed — solving the bootstrap chicken-and-egg where host_proxy must
+  configure a proxy that host_libvirt needs to install libvirt itself.
+- **VM URL** — `http://<libvirt-network-gateway>:<port>`. Embedded in
+  `install-config.yaml` so the OpenShift cluster reaches Squid at runtime.
+  VMs sit on the libvirt bridge and naturally reach Squid (bound via host
+  networking) by sending traffic at the gateway IP.
+
+For an **external proxy** both URLs collapse to the same user-configured
+URL, so the split is invisible. Internally the values surface as
+`gitups_ocp_install.proxy.http` / `.https` (host) and `.vmHttp` / `.vmHttps`
+(VM) in the ansible vars file.
+
 ## Future: Multi-Cluster Topology
 
 Forward-looking architecture leaves room for one cluster to host ACM and

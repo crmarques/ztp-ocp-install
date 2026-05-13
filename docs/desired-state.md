@@ -136,6 +136,19 @@ provisions authenticated Squid on that host and materializes its htpasswd
 from the same `auth.proxyAuthRef`. If no provider declares `proxy.squid`, the
 proxy URLs are treated as external.
 
+For the managed-Squid case Gitups renders **two** client URLs from the same
+deployment: a **host URL** (`http://<squid-host-ssh-address>:<port>`) used by
+host-level config — `/etc/dnf/dnf.conf`, `/etc/environment`, the systemd
+drop-in, `pip.conf` — and a **VM URL** (`http://<libvirt-network-gateway>:<port>`)
+embedded in `install-config.yaml` for the runtime cluster. The split exists
+because the libvirt-bridge gateway only becomes a local address on the host
+once `substrate_libvirt` brings up the network, but `host_proxy` runs before
+that to enable the initial dnf installs. For an external proxy both URLs
+collapse to the same user-configured URL, so the split is invisible. Internally
+the values surface as `gitups_ocp_install.proxy.http` / `.https` (host) and
+`.vmHttp` / `.vmHttps` (VM) in the ansible vars file. See
+[`concepts.md`](concepts.md#managed-squid-two-url-model) for the rationale.
+
 `Environment.spec.registries.mirror` declares the OpenShift mirror endpoint
 and trust material. It is required when `ocpInstallType: disconnected` and
 optional alongside `connected` when only release content is mirrored.

@@ -390,16 +390,23 @@ func TestRenderManagedProxyRunVarsAndLibvirtIsolation(t *testing.T) {
 		"name: proxy-render-provider",
 		"providerRef: proxy-render-provider",
 		"providerHostRef: host-01",
-		"url: http://192.168.166.1:3128",
+		// Host-facing URL (Squid host's SSH address) — used by host_proxy
+		// for /etc/dnf/dnf.conf and the systemd drop-in, and by proxy_squid
+		// itself for /etc/hosts pinning.
+		"url: http://10.0.0.1:3128",
 		"port: 3128",
 		"runtime: podman",
 		"credentialsSecretName: proxy-credentials",
 		"public: docker.io/openeuler/squid:7.5-oe2403sp3@sha256:8e16e4439a7c0d4e0e71092a1611bb89cea9929c30642c18ba991ba7a7524d87",
 		"egressRestrictedToProxy: true",
+		// VM-facing URL (libvirt bridge gateway) — embedded in
+		// install-config.yaml so the cluster reaches Squid at runtime.
 		"proxyURL: http://192.168.166.1:3128",
 		"proxyPort: 3128",
-		"http: http://192.168.166.1:3128",
-		"https: http://192.168.166.1:3128",
+		"http: http://10.0.0.1:3128",
+		"https: http://10.0.0.1:3128",
+		"vmHttp: http://192.168.166.1:3128",
+		"vmHttps: http://192.168.166.1:3128",
 		"name: squid",
 		"version: 7.5-oe2403sp3",
 	} {

@@ -30,8 +30,8 @@
         | combine(
             {
               'proxy': {
-                'httpProxy': gitups_proxy_http_effective,
-                'httpsProxy': gitups_proxy_https_effective,
+                'httpProxy': gitups_proxy_vm_http_effective,
+                'httpsProxy': gitups_proxy_vm_https_effective,
                 'noProxy': gitups_proxy_no,
               }
             }

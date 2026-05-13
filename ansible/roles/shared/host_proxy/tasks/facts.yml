@@ -49,6 +49,16 @@
         gitups_proxy_https | regex_replace('^([a-zA-Z][a-zA-Z0-9+.-]*://)([^@/]+@)?', '\1' ~ gitups_proxy_authority)
         if (gitups_proxy_https | length) > 0 else ''
       }}
+    gitups_proxy_vm_http_effective: >-
+      {{
+        gitups_proxy_vm_http | regex_replace('^([a-zA-Z][a-zA-Z0-9+.-]*://)([^@/]+@)?', '\1' ~ gitups_proxy_authority)
+        if (gitups_proxy_vm_http | length) > 0 else ''
+      }}
+    gitups_proxy_vm_https_effective: >-
+      {{
+        gitups_proxy_vm_https | regex_replace('^([a-zA-Z][a-zA-Z0-9+.-]*://)([^@/]+@)?', '\1' ~ gitups_proxy_authority)
+        if (gitups_proxy_vm_https | length) > 0 else ''
+      }}
   no_log: true
   changed_when: false
   when: gitups_proxy_enabled

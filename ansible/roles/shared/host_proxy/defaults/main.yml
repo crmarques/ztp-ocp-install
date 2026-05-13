@@ -1,6 +1,18 @@
 ---
+# Two-URL proxy model — see internal/render/proxy.go for the why.
+# http / https are the host-facing URLs that host_proxy writes into
+# /etc/dnf/dnf.conf, /etc/environment, and the systemd drop-in. They
+# must be reachable from every host during bootstrap, so for the managed
+# Squid case they target the Squid host's SSH address (routable before
+# libvirt is installed) rather than the libvirt-bridge gateway.
+# vmHttp / vmHttps are the VM-facing URLs that install_agent emits into
+# install-config.yaml so the OpenShift cluster reaches Squid at runtime
+# via the libvirt-bridge gateway. For an external proxy both pairs
+# collapse to the same user-configured URL.
 gitups_proxy_http: "{{ (gitups_ocp_install.proxy | default({})).http | default('') }}"
 gitups_proxy_https: "{{ (gitups_ocp_install.proxy | default({})).https | default('') }}"
+gitups_proxy_vm_http: "{{ (gitups_ocp_install.proxy | default({})).vmHttp | default((gitups_ocp_install.proxy | default({})).http | default('')) }}"
+gitups_proxy_vm_https: "{{ (gitups_ocp_install.proxy | default({})).vmHttps | default((gitups_ocp_install.proxy | default({})).https | default('')) }}"
 gitups_proxy_no: "{{ (gitups_ocp_install.proxy | default({})).noProxy | default([]) | join(',') }}"
 gitups_proxy_credentials_ref: "{{ (gitups_ocp_install.proxy | default({})).proxyAuthRef | default('') }}"
 
