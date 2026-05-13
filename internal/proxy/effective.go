@@ -69,8 +69,11 @@ func auto(state v1alpha1.State, env *v1alpha1.Environment) []string {
 			if ep.Address != "" {
 				out = append(out, ep.Address)
 			}
-			if ep.Hostname != "" {
-				out = append(out, strings.TrimPrefix(ep.Hostname, "*."))
+			if h := ep.Hostname; h != "" {
+				if strings.HasPrefix(h, "*.") {
+					h = h[1:]
+				}
+				out = append(out, h)
 			}
 		}
 	}
