@@ -247,8 +247,9 @@ type PackageDefinition struct {
 }
 
 type PackageMeta struct {
-	Name    string `yaml:"name" json:"name"`
-	Version string `yaml:"version" json:"version"`
+	Name        string `yaml:"name" json:"name"`
+	Version     string `yaml:"version" json:"version"`
+	Description string `yaml:"description,omitempty" json:"description,omitempty"`
 }
 
 type PackageDefinitionSpec struct {

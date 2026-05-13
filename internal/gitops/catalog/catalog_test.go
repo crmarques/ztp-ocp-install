@@ -11,7 +11,7 @@ import (
 func TestCatalogBuildFilesystem(t *testing.T) {
 	repoRoot, _ := filepath.Abs("..")
 	sources := []v1.PackageSource{
-		{Name: "local", Filesystem: &v1.PackageSourceFilesystem{Path: "../../../gitops-workspace/gitups-packages/packages"}},
+		{Name: "local", Filesystem: &v1.PackageSourceFilesystem{Path: "../../../gitups-packages/packages"}},
 	}
 	cat, err := catalog.Build(sources, repoRoot)
 	if err != nil {
