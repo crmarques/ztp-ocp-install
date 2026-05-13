@@ -8,50 +8,16 @@
     gitups_ocp_bmc_auth_enabled: "{{ (gitups_current_provider.bmc | default({})).auth is defined and (gitups_current_provider.bmc | default({})).auth.credentialRef | default('') | length > 0 }}"
   changed_when: false
 
-- name: Find stale installer processes
-  ansible.builtin.command:
-    argv:
-      - pgrep
-      - -f
-      - "--"
-      - "{{ gitups_ocp_installer_relative_work }}"
-  register: gitups_ocp_lingering_procs
-  failed_when: false
-  changed_when: false
-
 - name: Stop stale installer processes
-  ansible.builtin.shell: |
-    set -uo pipefail
-    pids="{{ gitups_ocp_lingering_procs.stdout_lines | join(' ') }}"
-    [ -n "$pids" ] || exit 0
-    alive() {
-      for p in $pids; do
-        kill -0 "$p" 2>/dev/null && return 0
-      done
-      return 1
-    }
-    kill -TERM $pids 2>/dev/null || true
-    for _ in 1 2 3 4 5 6 7 8 9 10; do
-      sleep 1
-      alive || exit 0
-    done
-    kill -KILL $pids 2>/dev/null || true
-    sleep 1
-    if alive; then
-      echo "could not terminate PIDs: $pids" >&2
-      exit 1
-    fi
-  args:
-    executable: /bin/bash
-  register: gitups_ocp_lingering_kill
-  changed_when: gitups_ocp_lingering_procs.rc == 0
-  when: gitups_ocp_lingering_procs.rc == 0
+  ansible.builtin.include_role:
+    name: process_cleanup
+  vars:
+    gitups_process_cleanup_pattern: "{{ gitups_ocp_installer_relative_work }}"
 
 - name: Read BMC credential file
   ansible.builtin.slurp:
     src: "{{ gitups_ocp_provider_bmc.auth.credentialRef }}"
   register: gitups_ocp_bmc_credentials_slurp
-  failed_when: false
   no_log: true
   delegate_to: localhost
   become: false

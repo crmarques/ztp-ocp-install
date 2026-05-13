@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 )
 
 type HookRunner interface {
@@ -39,7 +38,10 @@ func runHook(ctx context.Context, unit renderUnit, phase string, pkgDir string, 
 	if script == "" {
 		return nil
 	}
-	scriptPath := filepath.Join(unit.SourceDir, script)
+	scriptPath, err := sourcePath(unit.SourceDir, "hook "+phase, script)
+	if err != nil {
+		return err
+	}
 	info, err := os.Stat(scriptPath)
 	if err != nil {
 		return fmt.Errorf("hook %s: %w", phase, err)
@@ -66,32 +68,8 @@ func runHook(ctx context.Context, unit renderUnit, phase string, pkgDir string, 
 		return fmt.Errorf("close hook values file: %w", err)
 	}
 
-	before := snapshotDir(pkgDir)
 	if err := runner.Run(ctx, scriptPath, unit.SourceDir, phase, tmpPath, pkgDir); err != nil {
 		return fmt.Errorf("hook %s: %w", phase, err)
 	}
-	leaks := detectLeaks(pkgDir, before)
-	if len(leaks) > 0 {
-		return fmt.Errorf("hook %s wrote outside --out: %v", phase, leaks)
-	}
-	return nil
-}
-
-func snapshotDir(dir string) map[string]bool {
-	seen := map[string]bool{}
-	_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
-			return nil
-		}
-		rel, _ := filepath.Rel(dir, path)
-		seen[rel] = true
-		return nil
-	})
-	return seen
-}
-
-func detectLeaks(dir string, before map[string]bool) []string {
-	_ = dir
-	_ = before
 	return nil
 }

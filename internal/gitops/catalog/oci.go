@@ -31,6 +31,9 @@ func (r *OCIResolver) Resolve(s v1.PackageSource, _ string) (string, error) {
 	if len(r.PackageNames) == 0 {
 		return "", fmt.Errorf("source %q: oci resolver requires PackageNames (set from GitOpsPackageSet)", s.Name)
 	}
+	if s.OCI.Digest == "" {
+		return "", fmt.Errorf("source %q: oci.digest is required", s.Name)
+	}
 	root := filepath.Join(r.CacheDir, "oci", encodeRef(s.OCI))
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return "", fmt.Errorf("source %q: mkdir cache: %w", s.Name, err)

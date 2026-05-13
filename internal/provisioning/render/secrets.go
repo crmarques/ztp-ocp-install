@@ -176,9 +176,12 @@ func readUserPassFile(path, kind string) (userPass, error) {
 	if err != nil {
 		return userPass{}, fmt.Errorf("read %s at %s: %w", kind, path, err)
 	}
-	line := strings.TrimSpace(string(data))
+	line := strings.TrimRight(string(data), "\r\n")
 	if line == "" {
 		return userPass{}, fmt.Errorf("%s at %s is empty", kind, path)
+	}
+	if strings.ContainsAny(line, "\r\n") {
+		return userPass{}, fmt.Errorf("%s at %s must be a single username:password line", kind, path)
 	}
 	sep := strings.Index(line, ":")
 	if sep <= 0 || sep == len(line)-1 {

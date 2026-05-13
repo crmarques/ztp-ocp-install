@@ -14,7 +14,12 @@
   delegate_to: localhost
   become: false
 
-- name: Build merged authfile (upstream + local mirror)
+- name: Decode pull secret for authfile
+  ansible.builtin.set_fact:
+    gitups_mirror_registry_pull_secret: "{{ gitups_mirror_registry_pull_secret_raw.content | b64decode | from_json }}"
+  no_log: true
+
+- name: Write merged authfile
   ansible.builtin.copy:
     dest: "{{ gitups_mirror_registry_auth_dir }}/authfile.json"
     owner: root
@@ -23,10 +28,10 @@
     content: >-
       {{
         (
-          (gitups_mirror_registry_pull_secret_raw.content | b64decode | from_json)
+          gitups_mirror_registry_pull_secret
           | combine({
               'auths': (
-                ((gitups_mirror_registry_pull_secret_raw.content | b64decode | from_json).auths | default({}))
+                (gitups_mirror_registry_pull_secret.auths | default({}))
                 | combine({
                     gitups_current_mirror_registry.url: {
                       'auth': ((gitups_mirror_registry_credentials.username ~ ':' ~ gitups_mirror_registry_credentials.password) | b64encode),

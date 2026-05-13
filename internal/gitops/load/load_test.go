@@ -317,6 +317,27 @@ spec:
 	}
 }
 
+func TestPackageSetRejectsOCITagOnlySource(t *testing.T) {
+	path := writeFile(t, t.TempDir(), "gitops-package-set.yaml", `apiVersion: gitups.io/v1alpha1
+kind: GitOpsPackageSet
+metadata: {name: dsv}
+spec:
+  sources:
+    - name: remote
+      oci:
+        registry: ghcr.io/acme/gitups-packages
+        tag: v0.1.0
+  repositories: []
+`)
+	_, err := load.PackageSet(path)
+	if err == nil {
+		t.Fatal("expected tag-only oci source to be rejected")
+	}
+	if !strings.Contains(err.Error(), "oci.digest") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestExpandedPackageSetRejectsUnsafeRenderedPath(t *testing.T) {
 	path := writeFile(t, t.TempDir(), "gitops-package-set.yaml", `apiVersion: gitups.io/v1alpha1
 kind: GitOpsPackageSet

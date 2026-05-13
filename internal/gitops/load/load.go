@@ -308,8 +308,8 @@ func ValidatePackageSet(p *v1.GitOpsPackageSet) error {
 			if s.OCI.Registry == "" {
 				return fmt.Errorf("spec.sources[%d].oci.registry is required", i)
 			}
-			if s.OCI.Tag == "" && s.OCI.Digest == "" {
-				return fmt.Errorf("spec.sources[%d].oci: tag or digest is required", i)
+			if s.OCI.Digest == "" {
+				return fmt.Errorf("spec.sources[%d].oci.digest is required", i)
 			}
 		}
 		if s.Git != nil {

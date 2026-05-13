@@ -43,9 +43,15 @@ func renderKustomize(ctx context.Context, rp *v1.ResolvedPackage, unit renderUni
 	if ks == nil {
 		return fmt.Errorf("renderer=kustomize but spec.kustomize is nil")
 	}
-	base := filepath.Join(unit.SourceDir, ks.Base)
+	base, err := sourcePath(unit.SourceDir, "spec.kustomize.base", ks.Base)
+	if err != nil {
+		return err
+	}
 	if ks.ValuesTemplate != "" {
-		tmplPath := filepath.Join(unit.SourceDir, ks.ValuesTemplate)
+		tmplPath, err := sourcePath(unit.SourceDir, "spec.kustomize.valuesTemplate", ks.ValuesTemplate)
+		if err != nil {
+			return err
+		}
 		rendered, err := renderTemplateFile(tmplPath, tctx)
 		if err != nil {
 			return fmt.Errorf("kustomize values template: %w", err)

@@ -73,7 +73,10 @@ func (r *GitResolver) clone(g *v1.PackageSourceGit, dest string) error {
 	if err := os.RemoveAll(dest); err != nil {
 		return err
 	}
-	if err := exec.Command("git", "clone", "--quiet", g.URL, dest).Run(); err != nil {
+	clone := exec.Command("git", "clone", "--quiet", g.URL, dest)
+	clone.Stdout = r.Stdout
+	clone.Stderr = r.Stderr
+	if err := clone.Run(); err != nil {
 		return fmt.Errorf("git clone: %w", err)
 	}
 	co := exec.Command("git", "-C", dest, "checkout", "--quiet", g.Ref)

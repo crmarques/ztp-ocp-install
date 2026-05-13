@@ -131,11 +131,42 @@ func writeYAML(path string, value any) error {
 	if err != nil {
 		return fmt.Errorf("marshal %s: %w", path, err)
 	}
-	if err := os.WriteFile(path, data, 0o600); err != nil {
+	if err := atomicWriteFile(path, data, 0o600); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
-	if err := os.Chmod(path, 0o600); err != nil {
-		return fmt.Errorf("chmod %s: %w", path, err)
+	return nil
+}
+
+func atomicWriteFile(path string, data []byte, mode os.FileMode) error {
+	file, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-")
+	if err != nil {
+		return fmt.Errorf("create temp file: %w", err)
 	}
+	tempPath := file.Name()
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = os.Remove(tempPath)
+		}
+	}()
+	if err := file.Chmod(mode); err != nil {
+		_ = file.Close()
+		return fmt.Errorf("chmod temp file: %w", err)
+	}
+	if _, err := file.Write(data); err != nil {
+		_ = file.Close()
+		return fmt.Errorf("write temp file: %w", err)
+	}
+	if err := file.Sync(); err != nil {
+		_ = file.Close()
+		return fmt.Errorf("sync temp file: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close temp file: %w", err)
+	}
+	if err := os.Rename(tempPath, path); err != nil {
+		return fmt.Errorf("replace file: %w", err)
+	}
+	cleanup = false
 	return nil
 }

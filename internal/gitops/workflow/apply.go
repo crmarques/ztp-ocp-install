@@ -94,7 +94,7 @@ func ApplyBootstrapOnly(ctx context.Context, fp *v1.GitOpsPackageSet, prov *v1.G
 	for _, rp := range planned {
 		if rp.ApplyWave != currentWave {
 			if !opts.DryRun && len(waveReady) > 0 {
-				if err := waitForReadiness(ctx, kc, waveReady, opts.WaitTimeout, out); err != nil {
+				if err := waitForReadinessBestEffort(ctx, kc, waveReady, opts.WaitTimeout, out); err != nil {
 					return err
 				}
 			}
@@ -137,7 +137,7 @@ func ApplyBootstrapOnly(ctx context.Context, fp *v1.GitOpsPackageSet, prov *v1.G
 		}
 	}
 	if !opts.DryRun && len(waveReady) > 0 {
-		if err := waitForReadiness(ctx, kc, waveReady, opts.WaitTimeout, out); err != nil {
+		if err := waitForReadinessBestEffort(ctx, kc, waveReady, opts.WaitTimeout, out); err != nil {
 			return err
 		}
 	}
@@ -244,7 +244,7 @@ func readinessTargetsFor(rp *v1.ResolvedPackage, cat *catalog.Catalog) []readine
 	return out
 }
 
-func waitForReadiness(ctx context.Context, kc *cluster.KubeClient, targets []readinessTarget, timeout time.Duration, out io.Writer) error {
+func waitForReadinessBestEffort(ctx context.Context, kc *cluster.KubeClient, targets []readinessTarget, timeout time.Duration, out io.Writer) error {
 	out = writerOrDiscard(out)
 	seen := map[readinessTarget]bool{}
 	perTarget := timeout

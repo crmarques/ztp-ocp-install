@@ -61,7 +61,10 @@ func renderHelm(ctx context.Context, rp *v1.ResolvedPackage, unit renderUnit, pk
 
 	var valuesBody []byte
 	if hs.ValuesTemplate != "" {
-		tmplPath := filepath.Join(unit.SourceDir, hs.ValuesTemplate)
+		tmplPath, err := sourcePath(unit.SourceDir, "spec.helm.valuesTemplate", hs.ValuesTemplate)
+		if err != nil {
+			return err
+		}
 		rendered, err := renderTemplateFile(tmplPath, tctx)
 		if err != nil {
 			return fmt.Errorf("values template: %w", err)

@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import base64
@@ -16,9 +15,15 @@ def gitups_parse_credential(slurp_result, label="credential"):
     if content is None:
         raise AnsibleFilterError(f"{label}: slurp result missing 'content' field")
     try:
-        raw = base64.b64decode(content).decode("utf-8").strip()
+        raw = base64.b64decode(content).decode("utf-8").rstrip("\r\n")
     except (ValueError, UnicodeDecodeError) as err:
         raise AnsibleFilterError(f"{label}: base64/utf-8 decode failed: {err}")
+    if not raw:
+        raise AnsibleFilterError(f"{label}: must be a single username:password line")
+    if "\n" in raw or "\r" in raw:
+        raise AnsibleFilterError(
+            f"{label}: must be a single username:password line"
+        )
     if ":" not in raw:
         raise AnsibleFilterError(
             f"{label}: must be a single username:password line"

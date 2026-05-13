@@ -76,7 +76,10 @@ func renderOverlays(unit renderUnit, pkgDir string, tctx templateCtx) error {
 		overlays = []string{"overlays"}
 	}
 	for _, overlay := range overlays {
-		src := filepath.Join(unit.SourceDir, overlay)
+		src, err := sourcePath(unit.SourceDir, "overlay", overlay)
+		if err != nil {
+			return err
+		}
 		info, err := os.Stat(src)
 		if err != nil {
 			if os.IsNotExist(err) {
