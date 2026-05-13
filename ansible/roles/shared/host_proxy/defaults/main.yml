@@ -1,5 +1,5 @@
 ---
-# Two-URL proxy model (see internal/render/proxy.go): http/https are
+# Two-URL proxy model (see internal/provisioning/render/proxy.go): http/https are
 # host-facing; vmHttp/vmHttps are VM-facing (libvirt-bridge gateway).
 gitups_proxy_http: "{{ (gitups_ocp_install.proxy | default({})).http | default('') }}"
 gitups_proxy_https: "{{ (gitups_ocp_install.proxy | default({})).https | default('') }}"

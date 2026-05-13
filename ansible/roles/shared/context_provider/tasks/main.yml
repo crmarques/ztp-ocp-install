@@ -4,6 +4,16 @@
     gitups_current_provider: "{{ gitups_providers | selectattr('name', 'equalto', gitups_provider_name) | first }}"
   changed_when: false
 
+- name: Assert provider context resolved
+  ansible.builtin.assert:
+    that:
+      - gitups_current_provider is mapping
+      - (gitups_current_provider.name | default('')) == gitups_provider_name
+    fail_msg: >-
+      gitups_provider_name={{ gitups_provider_name }} did not match any entry in
+      gitups_providers. Available names: {{ gitups_providers | default([]) | map(attribute='name') | list }}.
+      Check that render projected this provider for the host {{ gitups_host_name | default('?') }}.
+
 - name: Select load balancers on this host
   ansible.builtin.set_fact:
     gitups_current_load_balancers: "{{ gitups_load_balancers | selectattr('providerRef', 'equalto', gitups_provider_name) | selectattr('placement.providerHostRef', 'equalto', gitups_host_name) | list }}"

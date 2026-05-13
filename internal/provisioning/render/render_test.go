@@ -45,7 +45,7 @@ func TestRenderResolvesFileBasedSecretsToSourcePath(t *testing.T) {
 }
 
 func TestRenderAllProducesGeneratedAnsibleArtifacts(t *testing.T) {
-	state, err := infra.LoadNormalizeValidate([]string{"../../examples/libvirt-redfish-lab-fleet"})
+	state, err := infra.LoadNormalizeValidate([]string{"../../../examples/libvirt-redfish-lab-fleet"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
@@ -149,7 +149,7 @@ func TestRenderAllProducesGeneratedAnsibleArtifacts(t *testing.T) {
 }
 
 func TestRenderEmitsBMCAuthCredentialRefWhenSet(t *testing.T) {
-	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/old/libvirt-1-host-1-sno-hub"})
+	state, err := infra.LoadNormalizeValidate([]string{"../../../test/e2e/old/libvirt-1-host-1-sno-hub"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
@@ -170,7 +170,7 @@ func TestRenderEmitsBMCAuthCredentialRefWhenSet(t *testing.T) {
 }
 
 func TestRenderInstallerAssets(t *testing.T) {
-	state, err := infra.LoadNormalizeValidate([]string{"../../examples/libvirt-redfish-lab-fleet"})
+	state, err := infra.LoadNormalizeValidate([]string{"../../../examples/libvirt-redfish-lab-fleet"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
@@ -239,7 +239,7 @@ func TestRenderInstallerAssets(t *testing.T) {
 func TestRenderInstallerOverrides(t *testing.T) {
 	dir := t.TempDir()
 	for _, name := range []string{"environment.yaml", "provider.yaml", "hub.yaml"} {
-		data, err := os.ReadFile(filepath.Join("../../examples/libvirt-redfish-lab-fleet", name))
+		data, err := os.ReadFile(filepath.Join("../../../examples/libvirt-redfish-lab-fleet", name))
 		if err != nil {
 			t.Fatalf("read %s: %v", name, err)
 		}
@@ -311,7 +311,7 @@ func TestRenderInstallerOverrides(t *testing.T) {
 }
 
 func TestRenderedArtifactsStayUnderStateDir(t *testing.T) {
-	state, err := infra.LoadNormalizeValidate([]string{"../../examples/libvirt-redfish-lab-fleet"})
+	state, err := infra.LoadNormalizeValidate([]string{"../../../examples/libvirt-redfish-lab-fleet"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
@@ -336,7 +336,7 @@ func TestRenderedArtifactsStayUnderStateDir(t *testing.T) {
 }
 
 func TestRenderMirrorRegistryRunVars(t *testing.T) {
-	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/old/local-libvirt-1-host-1-sno-hub"})
+	state, err := infra.LoadNormalizeValidate([]string{"../../../test/e2e/old/local-libvirt-1-host-1-sno-hub"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
@@ -414,7 +414,7 @@ func TestRenderManagedProxyRunVarsAndLibvirtIsolation(t *testing.T) {
 }
 
 func TestRenderOneHostTreatsLocalhostAsProviderHost(t *testing.T) {
-	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/old/local-libvirt-1-host-1-sno-hub"})
+	state, err := infra.LoadNormalizeValidate([]string{"../../../test/e2e/old/local-libvirt-1-host-1-sno-hub"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
@@ -435,14 +435,14 @@ func TestRenderOneHostTreatsLocalhostAsProviderHost(t *testing.T) {
 	if strings.Contains(inventory, "ansible_become:") {
 		t.Fatalf("provider root escalation belongs on mutating playbooks, not inventory\n%s", inventory)
 	}
-	playbook := readFile(t, "../../ansible/playbooks/layers/openshift/destroy-agent.yml")
+	playbook := readFile(t, "../../../ansible/playbooks/layers/openshift/destroy-agent.yml")
 	if !strings.Contains(playbook, "become: true") {
 		t.Fatalf("clusters destroy target must keep provider-host root escalation\n%s", playbook)
 	}
 }
 
 func TestRenderVarsExposeOCPInstallMetadata(t *testing.T) {
-	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/old/local-libvirt-1-host-1-sno-hub"})
+	state, err := infra.LoadNormalizeValidate([]string{"../../../test/e2e/old/local-libvirt-1-host-1-sno-hub"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
@@ -517,7 +517,7 @@ func TestRenderVarsExposeOCPInstallMetadata(t *testing.T) {
 }
 
 func TestOCPInstallRoleDoesNotBlockPublicRegistries(t *testing.T) {
-	tasksDir := "../../ansible/roles/openshift/install_agent/tasks"
+	tasksDir := "../../../ansible/roles/openshift/install_agent/tasks"
 	entries, err := os.ReadDir(tasksDir)
 	if err != nil {
 		t.Fatalf("read tasks dir: %v", err)
@@ -537,8 +537,8 @@ func TestOCPInstallRoleDoesNotBlockPublicRegistries(t *testing.T) {
 }
 
 func TestOCPInstallRoleDoesNotShadowEnvironmentInstallVars(t *testing.T) {
-	preflight := readFile(t, "../../ansible/roles/openshift/install_agent/tasks/preflight.yml")
-	secrets := readFile(t, "../../ansible/roles/openshift/install_agent/tasks/secrets.yml")
+	preflight := readFile(t, "../../../ansible/roles/openshift/install_agent/tasks/preflight.yml")
+	secrets := readFile(t, "../../../ansible/roles/openshift/install_agent/tasks/secrets.yml")
 	combined := preflight + "\n" + secrets
 	for _, expected := range []string{
 		"gitups_ocp_cluster_install: \"{{ gitups_current_cluster.ocp.install }}\"",
@@ -567,8 +567,8 @@ func TestOCPInstallRoleDoesNotShadowEnvironmentInstallVars(t *testing.T) {
 }
 
 func TestLibvirtSubstrateOpensBootArtifactsHTTPPort(t *testing.T) {
-	tasks := readFile(t, "../../ansible/roles/cluster_infra/substrate_libvirt/tasks/main.yml")
-	networkTemplate := readFile(t, "../../ansible/roles/cluster_infra/substrate_libvirt/templates/network.xml.j2")
+	tasks := readFile(t, "../../../ansible/roles/cluster_infra/substrate_libvirt/tasks/main.yml")
+	networkTemplate := readFile(t, "../../../ansible/roles/cluster_infra/substrate_libvirt/templates/network.xml.j2")
 	combined := tasks + "\n" + networkTemplate
 	for _, expected := range []string{
 		"<dhcp>",
@@ -604,7 +604,7 @@ func TestLibvirtSubstrateOpensBootArtifactsHTTPPort(t *testing.T) {
 }
 
 func TestClusterNetworkVipsOwnsVIPPlumbing(t *testing.T) {
-	apply := readFile(t, "../../ansible/roles/cluster_infra/network_vips/tasks/main.yml")
+	apply := readFile(t, "../../../ansible/roles/cluster_infra/network_vips/tasks/main.yml")
 	for _, expected := range []string{
 		"Attach load balancer VIPs",
 		"gitups_in_cidr",
@@ -614,11 +614,11 @@ func TestClusterNetworkVipsOwnsVIPPlumbing(t *testing.T) {
 			t.Fatalf("network_vips/tasks/main.yml missing %q\n%s", expected, apply)
 		}
 	}
-	destroy := readFile(t, "../../ansible/roles/cluster_infra/network_vips/tasks/destroy.yml")
+	destroy := readFile(t, "../../../ansible/roles/cluster_infra/network_vips/tasks/destroy.yml")
 	if !strings.Contains(destroy, "Detach load balancer VIPs") {
 		t.Fatalf("network_vips/tasks/destroy.yml missing unplumb task\n%s", destroy)
 	}
-	if _, err := os.Stat("../../ansible/roles/cluster_infra/network_vips/test_plugins/cidr.py"); err != nil {
+	if _, err := os.Stat("../../../ansible/roles/cluster_infra/network_vips/test_plugins/cidr.py"); err != nil {
 		t.Fatalf("network_vips/test_plugins/cidr.py must own the gitups_in_cidr plugin: %v", err)
 	}
 }
@@ -626,7 +626,7 @@ func TestClusterNetworkVipsOwnsVIPPlumbing(t *testing.T) {
 func TestRenderVarsExposeGeneratedSecrets(t *testing.T) {
 	dir := t.TempDir()
 	for _, name := range []string{"hub.yaml"} {
-		data, err := os.ReadFile(filepath.Join("../../examples/libvirt-redfish-lab-fleet", name))
+		data, err := os.ReadFile(filepath.Join("../../../examples/libvirt-redfish-lab-fleet", name))
 		if err != nil {
 			t.Fatalf("read %s: %v", name, err)
 		}
@@ -634,7 +634,7 @@ func TestRenderVarsExposeGeneratedSecrets(t *testing.T) {
 			t.Fatalf("write %s: %v", name, err)
 		}
 	}
-	providerData, err := os.ReadFile(filepath.Join("../../examples/libvirt-redfish-lab-fleet", "provider.yaml"))
+	providerData, err := os.ReadFile(filepath.Join("../../../examples/libvirt-redfish-lab-fleet", "provider.yaml"))
 	if err != nil {
 		t.Fatalf("read provider.yaml: %v", err)
 	}
@@ -721,10 +721,10 @@ spec:
 
 func TestRenderManagedNetworkDetails(t *testing.T) {
 	state, err := infra.LoadNormalizeValidate([]string{
-		"../../test/e2e/old/libvirt-1-host-1-sno-hub/cluster-infrastructure-hub.yaml",
-		"../../test/e2e/old/libvirt-1-host-1-sno-hub/ocp-cluster-hub.yaml",
-		"../../test/e2e/old/libvirt-1-host-1-sno-hub/provider.yaml",
-		"../../test/e2e/old/libvirt-1-host-1-sno-hub/environment.yaml",
+		"../../../test/e2e/old/libvirt-1-host-1-sno-hub/cluster-infrastructure-hub.yaml",
+		"../../../test/e2e/old/libvirt-1-host-1-sno-hub/ocp-cluster-hub.yaml",
+		"../../../test/e2e/old/libvirt-1-host-1-sno-hub/provider.yaml",
+		"../../../test/e2e/old/libvirt-1-host-1-sno-hub/environment.yaml",
 	})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
@@ -756,7 +756,7 @@ func TestRenderManagedNetworkDetails(t *testing.T) {
 }
 
 func TestRenderBareMetalProjectsPerMachineBMC(t *testing.T) {
-	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/old/baremetal-redfish-fleet"})
+	state, err := infra.LoadNormalizeValidate([]string{"../../../test/e2e/old/baremetal-redfish-fleet"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
@@ -791,7 +791,7 @@ func TestRenderBareMetalProjectsPerMachineBMC(t *testing.T) {
 }
 
 func TestRenderMultiProviderClosure(t *testing.T) {
-	state, err := infra.LoadNormalizeValidate([]string{"../../examples/baremetal-edge-lb-fleet"})
+	state, err := infra.LoadNormalizeValidate([]string{"../../../examples/baremetal-edge-lb-fleet"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
@@ -821,7 +821,7 @@ func TestRenderMultiProviderClosure(t *testing.T) {
 }
 
 func TestResolveInstallerInlinesSecretsIntoWorkCopies(t *testing.T) {
-	state, err := infra.LoadNormalizeValidate([]string{"../../test/e2e/old/local-libvirt-1-host-1-sno-hub"})
+	state, err := infra.LoadNormalizeValidate([]string{"../../../test/e2e/old/local-libvirt-1-host-1-sno-hub"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}
@@ -966,7 +966,7 @@ func TestLoadInstallerSecretsBakesProxyCredentialsIntoURLs(t *testing.T) {
 
 func TestE2EProxyInputRendersIntoOpenShiftInstallerFiles(t *testing.T) {
 	fixtureDir := t.TempDir()
-	copyYAMLFixture(t, "../../test/e2e/container-bastion-local-libvirt-sno", fixtureDir)
+	copyYAMLFixture(t, "../../../test/e2e/container-bastion-local-libvirt-sno", fixtureDir)
 
 	envPath := filepath.Join(fixtureDir, "environment.yaml")
 	envBody := readFile(t, envPath)
@@ -1055,7 +1055,7 @@ func TestE2EProxyInputRendersIntoOpenShiftInstallerFiles(t *testing.T) {
 }
 
 func TestOCPInstallCommandEnvironmentIncludesProxyEnv(t *testing.T) {
-	effectiveConfig := readFile(t, "../../ansible/roles/openshift/install_agent/tasks/effective-config.yml")
+	effectiveConfig := readFile(t, "../../../ansible/roles/openshift/install_agent/tasks/effective-config.yml")
 	for _, expected := range []string{
 		"gitups_proxy_env | default({})",
 		"| combine(",
@@ -1068,7 +1068,7 @@ func TestOCPInstallCommandEnvironmentIncludesProxyEnv(t *testing.T) {
 }
 
 func TestHostProxyFactsEscapesSlashInProxyCredentials(t *testing.T) {
-	facts := readFile(t, "../../ansible/roles/shared/host_proxy/tasks/facts.yml")
+	facts := readFile(t, "../../../ansible/roles/shared/host_proxy/tasks/facts.yml")
 	for _, expected := range []string{
 		"gitups_proxy_credentials.username | urlencode | replace('/', '%2F')",
 		"gitups_proxy_credentials.password | urlencode | replace('/', '%2F')",
@@ -1080,7 +1080,7 @@ func TestHostProxyFactsEscapesSlashInProxyCredentials(t *testing.T) {
 }
 
 func TestProviderBMCEmulatedPipInstallUsesPrivatePipConfig(t *testing.T) {
-	tasks := readFile(t, "../../ansible/roles/providers/bmc_emulated/tasks/main.yml")
+	tasks := readFile(t, "../../../ansible/roles/providers/bmc_emulated/tasks/main.yml")
 	for _, expected := range []string{
 		"dest: \"{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/pip.conf\"",
 		"PIP_CONFIG_FILE=\"$PIP_CONFIG\"",
@@ -1130,11 +1130,11 @@ func TestResolveInstallerFailsWhenSecretFileMissing(t *testing.T) {
 }
 
 func TestProviderDispatchCoversAllKinds(t *testing.T) {
-	clusterTasks := readFile(t, "../../ansible/playbooks/layers/cluster_infra/apply.yml")
+	clusterTasks := readFile(t, "../../../ansible/playbooks/layers/cluster_infra/apply.yml")
 	if !strings.Contains(clusterTasks, "substrate_{{ gitups_current_cluster.provider.substrateRole }}") {
 		t.Fatalf("cluster infra apply playbook missing substrate dispatch fragment\n%s", clusterTasks)
 	}
-	providerTasks := readFile(t, "../../ansible/playbooks/layers/providers/apply.yml")
+	providerTasks := readFile(t, "../../../ansible/playbooks/layers/providers/apply.yml")
 	for _, expected := range []string{
 		"proxy_squid",
 		"bmc_{{ gitups_current_provider.bmcRole }}",
@@ -1158,7 +1158,7 @@ func TestProviderDispatchCoversAllKinds(t *testing.T) {
 		"openshift/boot_emulated",
 		"openshift/boot_redfish",
 	} {
-		path := "../../ansible/roles/" + role + "/tasks/main.yml"
+		path := "../../../ansible/roles/" + role + "/tasks/main.yml"
 		if _, err := os.Stat(path); err != nil {
 			t.Fatalf("expected role tasks at %s: %v", path, err)
 		}
@@ -1166,7 +1166,7 @@ func TestProviderDispatchCoversAllKinds(t *testing.T) {
 }
 
 func TestProviderDestroyRemovesManagedProxyWithoutBroadNetworkBlocks(t *testing.T) {
-	destroy := readFile(t, "../../ansible/roles/providers/proxy_squid/tasks/destroy.yml")
+	destroy := readFile(t, "../../../ansible/roles/providers/proxy_squid/tasks/destroy.yml")
 	for _, expected := range []string{
 		"gitups_current_forward_proxy",
 		"gitups-squid-{{ gitups_current_forward_proxy.name }}",

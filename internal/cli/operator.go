@@ -11,7 +11,7 @@ import (
 
 	"github.com/crmarques/gitups/api/v1alpha1"
 	"github.com/crmarques/gitups/internal/embedded"
-	"github.com/crmarques/gitups/internal/render"
+	"github.com/crmarques/gitups/internal/provisioning/render"
 )
 
 func ansibleCorePinnedVersion() (string, error) {

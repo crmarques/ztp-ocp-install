@@ -3,15 +3,14 @@ package cli
 import (
 	"fmt"
 	"io"
-	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/crmarques/gitups/api/v1alpha1"
 	"github.com/crmarques/gitups/internal/ansible"
-	"github.com/crmarques/gitups/internal/orchestrate/provisioning"
-	"github.com/crmarques/gitups/internal/render"
+	"github.com/crmarques/gitups/internal/provisioning/render"
+	"github.com/crmarques/gitups/internal/workflow"
 )
 
 func newCheckCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
@@ -104,35 +103,27 @@ func newCheckAllCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 		if err := runHubCheck(stdout, state); err != nil {
 			return err
 		}
-		result, err := render.All(cf.stateDir, secretsDir, state)
-		if err != nil {
-			return failErr(1, err)
-		}
 		bundleDir, err := extractBundle(cf.stateDir)
 		if err != nil {
 			return failErr(1, err)
 		}
-		spec, err := provisioning.NewRunSpec(provisioning.RunSpecConfig{
-			Executable:    executable,
-			BundleDir:     bundleDir,
-			StateDir:      cf.stateDir,
-			SecretsDir:    secretsDir,
-			HostStateDir:  hostStateDir,
-			InventoryPath: result.InventoryPath,
-			VarsPath:      result.VarsPath,
-			Playbook:      "playbooks/checks/preflight.yml",
-			ArtifactsDir:  filepath.Join(result.ArtifactsDir, "preflight-all"),
-		})
+		runner := ansible.CommandRunner{Stdout: stdout, Stderr: stderr}
+		_, err = workflow.Run(c.Context(), workflow.RunOptions{
+			State:             state,
+			StateDir:          cf.stateDir,
+			SecretsDir:        secretsDir,
+			HostStateDir:      hostStateDir,
+			Executable:        executable,
+			BundleDir:         bundleDir,
+			Playbook:          "playbooks/checks/preflight.yml",
+			ArtifactsBaseName: "preflight-all",
+			DryRun:            dryRun,
+			Label:             "all check",
+		}, runner, stdout)
 		if err != nil {
 			return failErr(1, err)
 		}
-		runner := ansible.CommandRunner{Stdout: stdout, Stderr: stderr}
-		command := runner.Command(spec)
-		if dryRun {
-			fmt.Fprintf(stdout, "dry-run ansible command [all check]: %s\n", shellQuote(command))
-			return nil
-		}
-		return runner.Run(c.Context(), spec)
+		return nil
 	}
 	return cmd
 }
@@ -205,14 +196,14 @@ func newRenderClusterInstallFilesCmd(stdout io.Writer, _ io.Writer) *cobra.Comma
 			return failErr(1, err)
 		}
 		state = filterStateToClusters(state, names)
-		result, err := render.All(cf.stateDir, secretsDir, state)
+		result, err := workflow.RenderOnly(cf.stateDir, secretsDir, state)
 		if err != nil {
 			return failErr(1, err)
 		}
 		printTitle(stdout, "installer render")
 		printInstallerFiles(stdout, result)
 		if resolveSecrets {
-			resolved, err := render.ResolveInstaller(cf.stateDir, secretsDir, state)
+			resolved, err := workflow.ResolveInstaller(cf.stateDir, secretsDir, state)
 			if err != nil {
 				return failErr(1, err)
 			}

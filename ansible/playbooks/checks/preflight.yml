@@ -9,6 +9,24 @@
   environment: "{{ gitups_proxy_env | default({}) }}"
 
   pre_tasks:
+    # Schema-validate the rendered vars.yaml contract: the seven top-level
+    # keys gitups_render emits must all be defined. Catches render/Ansible
+    # drift early — see ansible/VARS_CONTRACT.md.
+    - name: Assert rendered vars contract
+      ansible.builtin.assert:
+        that:
+          - gitups_ocp_install is defined
+          - gitups_providers is iterable
+          - gitups_load_balancers is iterable
+          - gitups_mirror_registries is iterable
+          - gitups_clusters is iterable
+          - gitups_component_pins is iterable
+        fail_msg: >-
+          Rendered vars.yaml is missing required top-level facts. The render
+          contract in ansible/VARS_CONTRACT.md was changed without an Ansible
+          update, or vars.yaml was hand-edited. Re-run `gitups apply` (or
+          `gitups check`) from the Go binary to refresh.
+
     - name: Select provider for this host
       ansible.builtin.set_fact:
         gitups_current_provider: "{{ gitups_providers | selectattr('name', 'equalto', gitups_provider_name) | first }}"

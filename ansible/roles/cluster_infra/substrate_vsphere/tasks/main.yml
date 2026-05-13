@@ -5,5 +5,5 @@
     msg: |
       substrate_vsphere is a scaffold. To enable, extend
       InfrastructureProviderSpec.Machine.VSphere with host/datastore/folder fields
-      and project them in internal/render/vars.go, then implement the
+      and project them in internal/provisioning/render/vars.go, then implement the
       vCenter session + clone tasks here.

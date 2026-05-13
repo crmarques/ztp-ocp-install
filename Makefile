@@ -35,7 +35,14 @@ E2E_CASES = $(filter-out gitops,$(notdir $(patsubst %/,%,$(wildcard $(E2E_DIR)/*
 GITOPS_E2E_DIR ?= $(E2E_DIR)/gitops
 GITOPS_E2E_CASES = $(notdir $(patsubst %/,%,$(wildcard $(GITOPS_E2E_DIR)/*/)))
 
-.PHONY: all build sync-bundle test validate plan check check-gofmt ansible-syntax-check stale-term-check provider-swap-check check-e2e-deps check-e2e-case list-e2e-cases e2e-dry-run e2e e2e-gitops list-e2e-gitops-cases clean clean-e2e-state help
+.PHONY: all build sync-bundle test validate plan check check-gofmt ansible-syntax-check stale-term-check provider-swap-check cli-file-size-check check-e2e-deps check-e2e-case list-e2e-cases e2e-dry-run e2e e2e-render-baremetal e2e-gitops list-e2e-gitops-cases clean clean-e2e-state help
+
+# Architecture guardrail: keep internal/cli files thin so domain logic stays
+# in internal/workflow/ and internal/gitops/workflow/. The current observed
+# max (init.go ~391) is the floor; do not raise this without a deliberate
+# refactor justification. The intent is to catch new growth before files
+# turn into god files again.
+CLI_FILE_LINE_LIMIT ?= 400
 
 all: build
 
@@ -77,6 +84,7 @@ check: check-gofmt
 	$(MAKE) ansible-syntax-check
 	$(MAKE) stale-term-check
 	$(MAKE) provider-swap-check
+	$(MAKE) cli-file-size-check
 
 check-gofmt:
 	@test -z "$$(gofmt -l $(GOFMT_FILES))" || { gofmt -l $(GOFMT_FILES); exit 1; }
@@ -93,6 +101,19 @@ provider-swap-check:
 	diff -u examples/libvirt-redfish-fleet/environment.yaml examples/baremetal-redfish-fleet/environment.yaml
 	diff -u examples/libvirt-redfish-fleet/ocp-cluster-hub.yaml examples/baremetal-redfish-fleet/ocp-cluster-hub.yaml
 	diff -u examples/libvirt-redfish-fleet/ocp-cluster-managed-01.yaml examples/baremetal-redfish-fleet/ocp-cluster-managed-01.yaml
+
+# Reject CLI files that have grown past the thin-handler threshold. Excludes
+# test files so the lint targets production code only.
+cli-file-size-check:
+	@over=$$(find internal/cli -maxdepth 1 -type f -name '*.go' ! -name '*_test.go' -printf '%p\n' \
+		| while read -r f; do \
+			n=$$(wc -l <"$$f"); \
+			if [ "$$n" -gt $(CLI_FILE_LINE_LIMIT) ]; then printf '  %s lines\t%s\n' "$$n" "$$f"; fi; \
+		done); \
+	if [ -n "$$over" ]; then \
+		printf '%s\n' "internal/cli files over $(CLI_FILE_LINE_LIMIT) lines (move domain logic into internal/workflow/ or internal/gitops/workflow/):" "$$over"; \
+		exit 1; \
+	fi
 
 validate: build
 	$(BIN_DIR)/$(BINARY) check all -f examples/libvirt-redfish-fleet --state-dir $(STATE_DIR) --dry-run
@@ -115,6 +136,16 @@ e2e-dry-run: check-e2e-case check-e2e-deps build
 
 e2e: check-e2e-case check-e2e-deps build
 	$(E2E_APPLY_ALL) -f $(E2E_FIXTURE) --state-dir $(E2E_STATE_DIR) $(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
+
+# Render-only e2e for the baremetal-redfish fleet — exercises the
+# bare-metal provider dispatch path without requiring real Redfish
+# hardware. Produces inventory/vars/installer artifacts under
+# /tmp/gitups-baremetal-redfish-fleet and prints the Ansible command,
+# but never invokes ansible-playbook.
+e2e-render-baremetal: check-e2e-deps build
+	$(BIN_DIR)/$(BINARY) apply all -f examples/baremetal-redfish-fleet \
+		--state-dir /tmp/gitups-baremetal-redfish-fleet --dry-run \
+		$(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
 
 list-e2e-gitops-cases:
 	@printf '%s\n' 'Available gitops e2e cases:' $(addprefix '  ',$(GITOPS_E2E_CASES))
@@ -150,6 +181,7 @@ help:
 		'  check-e2e-deps   Check local e2e dependencies' \
 		'  e2e-dry-run         Render an e2e fixture and print Ansible command (requires CASE=<name>)' \
 		'  e2e                 Run an e2e fixture with sudo (requires CASE=<name>)' \
+		'  e2e-render-baremetal  Render-only e2e for examples/baremetal-redfish-fleet (no hardware needed)' \
 		'  list-e2e-gitops-cases  List available gitops e2e cases under test/e2e/gitops' \
 		'  e2e-gitops          Run gitops check/expand/render against a fixture (requires CASE=<name>)' \
 		'  clean               Remove workspace-local generated outputs' \

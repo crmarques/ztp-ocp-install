@@ -28,7 +28,7 @@ installer files, locks, or state output.
 | `cmd/gitups/` | Process entrypoint. |
 | `internal/cli/` | Cobra command wiring, flags, prompts, and user-facing output. Workflow and domain behavior should move out as it becomes reusable. |
 | `internal/infra/` | Desired-state loading, normalization, validation, and cross-layer state checks. |
-| `internal/render/` | Deterministic projection into installer inputs, Ansible inventory, Ansible vars, locks, and effective state. |
+| `internal/provisioning/render/` | Deterministic projection into installer inputs, Ansible inventory, Ansible vars, locks, and effective state. |
 | `internal/ansible/` | Ansible execution boundary and command construction. |
 | `internal/embedded/` | Build-time and runtime Ansible bundle embedding/extraction. |
 | `internal/gitops/load/` | GitOpsPackageSet and PackageDefinition loading. |

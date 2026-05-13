@@ -1,20 +1,16 @@
 package cli
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/crmarques/gitups/api/v1alpha1"
 	"github.com/crmarques/gitups/internal/ansible"
 	"github.com/crmarques/gitups/internal/orchestrate/provisioning"
-	"github.com/crmarques/gitups/internal/render"
+	"github.com/crmarques/gitups/internal/workflow"
 )
 
 func newScopeCheckCmd(scope scopeSpec, stdout io.Writer, stderr io.Writer) *cobra.Command {
@@ -53,36 +49,28 @@ func newScopeCheckCmd(scope scopeSpec, stdout io.Writer, stderr io.Writer) *cobr
 		if err := runScopeHostCheck(stdout, stderr, state, scope.phases(), secretsDir, hostStateDir); err != nil {
 			return err
 		}
-		result, err := render.All(cf.stateDir, secretsDir, state)
-		if err != nil {
-			return failErr(1, err)
-		}
 		bundleDir, err := extractBundle(cf.stateDir)
 		if err != nil {
 			return failErr(1, err)
 		}
-		spec, err := provisioning.NewRunSpec(provisioning.RunSpecConfig{
-			Executable:    executable,
-			BundleDir:     bundleDir,
-			StateDir:      cf.stateDir,
-			SecretsDir:    secretsDir,
-			HostStateDir:  hostStateDir,
-			InventoryPath: result.InventoryPath,
-			VarsPath:      result.VarsPath,
-			Playbook:      "playbooks/checks/preflight.yml",
-			Limit:         ansibleLimitForScope(scope.name),
-			ArtifactsDir:  filepath.Join(result.ArtifactsDir, "preflight-"+scope.name),
-		})
+		runner := ansible.CommandRunner{Stdout: stdout, Stderr: stderr}
+		_, err = workflow.Run(c.Context(), workflow.RunOptions{
+			State:             state,
+			StateDir:          cf.stateDir,
+			SecretsDir:        secretsDir,
+			HostStateDir:      hostStateDir,
+			Executable:        executable,
+			BundleDir:         bundleDir,
+			Playbook:          "playbooks/checks/preflight.yml",
+			Limit:             ansibleLimitForScope(scope.name),
+			ArtifactsBaseName: "preflight-" + scope.name,
+			DryRun:            dryRun,
+			Label:             scope.name + " check",
+		}, runner, stdout)
 		if err != nil {
 			return failErr(1, err)
 		}
-		runner := ansible.CommandRunner{Stdout: stdout, Stderr: stderr}
-		command := runner.Command(spec)
-		if dryRun {
-			fmt.Fprintf(stdout, "dry-run ansible command [%s check]: %s\n", scope.name, shellQuote(command))
-			return nil
-		}
-		return runner.Run(c.Context(), spec)
+		return nil
 	}
 	return cmd
 }
@@ -146,55 +134,42 @@ func newScopeApplyCmd(scope scopeSpec, stdin io.Reader, stdout io.Writer, stderr
 				return failErr(1, errors.New("apply aborted"))
 			}
 		}
-		result, err := render.All(cf.stateDir, secretsDir, state)
-		if err != nil {
-			return failErr(1, err)
-		}
 		bundleDir, err := extractBundle(cf.stateDir)
 		if err != nil {
 			return failErr(1, err)
 		}
-		printRenderResult(stdout, result)
-		fmt.Fprintf(stdout, "ansible bundle: %s\n", bundleDir)
 		hostStateDirAbs, err := provisioning.AbsHostStateDir(hostStateDir)
 		if err != nil {
 			return failErr(1, err)
 		}
-		pairs := []string{}
-		pairs = append(pairs, resolvedOCPBinaryPairs(selected, hostStateDirAbs)...)
+		pairs := resolvedOCPBinaryPairs(selected, hostStateDirAbs)
 		runner := ansible.CommandRunner{Stdout: stdout, Stderr: stderr}
-		spec, err := provisioning.NewRunSpec(provisioning.RunSpecConfig{
-			Executable:    executable,
-			BundleDir:     bundleDir,
-			StateDir:      cf.stateDir,
-			SecretsDir:    secretsDir,
-			HostStateDir:  hostStateDir,
-			InventoryPath: result.InventoryPath,
-			VarsPath:      result.VarsPath,
-			Playbook:      scope.applyPlaybook,
-			Limit:         ansibleLimitForScope(scope.name),
-			ExtraVarPairs: pairs,
-			ArtifactsDir:  filepath.Join(result.ArtifactsDir, scope.artifactsBaseName),
-			Check:         check,
-			AskBecomePass: askBecomePass,
-		})
+		if !dryRun {
+			printWorkflowStart(stdout, scope.name, selected, askBecomePass)
+		}
+		runResult, err := workflow.Run(c.Context(), workflow.RunOptions{
+			State:             state,
+			StateDir:          cf.stateDir,
+			SecretsDir:        secretsDir,
+			HostStateDir:      hostStateDir,
+			Executable:        executable,
+			BundleDir:         bundleDir,
+			Playbook:          scope.applyPlaybook,
+			Limit:             ansibleLimitForScope(scope.name),
+			ExtraVarPairs:     pairs,
+			ArtifactsBaseName: scope.artifactsBaseName,
+			Check:             check,
+			AskBecomePass:     askBecomePass,
+			DryRun:            dryRun,
+			Label:             scope.name + " apply",
+		}, runner, stdout)
 		if err != nil {
 			return failErr(1, err)
 		}
-		command := runner.Command(spec)
-		if dryRun {
-			fmt.Fprintf(stdout, "dry-run ansible command [%s apply]: %s\n", scope.name, shellQuote(command))
-			if scope.applyHubComponents {
-				printHubComponentsPlan(stdout, true)
-			}
-			return nil
-		}
-		printWorkflowStart(stdout, scope.name, selected, askBecomePass)
-		if err := runner.Run(c.Context(), spec); err != nil {
-			return failErr(1, err)
-		}
+		printRenderResult(stdout, runResult.Render)
+		fmt.Fprintf(stdout, "ansible bundle: %s\n", bundleDir)
 		if scope.applyHubComponents {
-			printHubComponentsPlan(stdout, false)
+			printHubComponentsPlan(stdout, dryRun)
 		}
 		return nil
 	}
@@ -247,50 +222,40 @@ func newScopeDestroyCmd(scope scopeSpec, stdin io.Reader, stdout io.Writer, stde
 				return failErr(1, errors.New("destroy aborted"))
 			}
 		}
-		result, err := render.All(cf.stateDir, secretsDir, state)
-		if err != nil {
-			return failErr(1, err)
-		}
 		bundleDir, err := extractBundle(cf.stateDir)
 		if err != nil {
 			return failErr(1, err)
 		}
-		printRenderResult(stdout, result)
-		fmt.Fprintf(stdout, "ansible bundle: %s\n", bundleDir)
 		hostStateDirAbs, err := provisioning.AbsHostStateDir(hostStateDir)
 		if err != nil {
 			return failErr(1, err)
 		}
-		pairs := []string{}
-		pairs = append(pairs, resolvedOCPBinaryPairs(selected, hostStateDirAbs)...)
+		pairs := resolvedOCPBinaryPairs(selected, hostStateDirAbs)
 		runner := ansible.CommandRunner{Stdout: stdout, Stderr: stderr}
-		spec, err := provisioning.NewRunSpec(provisioning.RunSpecConfig{
-			Executable:    executable,
-			BundleDir:     bundleDir,
-			StateDir:      cf.stateDir,
-			SecretsDir:    secretsDir,
-			HostStateDir:  hostStateDir,
-			InventoryPath: result.InventoryPath,
-			VarsPath:      result.VarsPath,
-			Playbook:      scope.destroyPlaybook,
-			Limit:         ansibleLimitForScope(scope.name),
-			ExtraVarPairs: pairs,
-			ArtifactsDir:  filepath.Join(result.ArtifactsDir, scope.artifactsBaseName+"-destroy"),
-			Check:         check,
-			AskBecomePass: askBecomePass,
-		})
+		if !dryRun {
+			printWorkflowStart(stdout, scope.name+" destroy", selected, askBecomePass)
+		}
+		runResult, err := workflow.Run(c.Context(), workflow.RunOptions{
+			State:             state,
+			StateDir:          cf.stateDir,
+			SecretsDir:        secretsDir,
+			HostStateDir:      hostStateDir,
+			Executable:        executable,
+			BundleDir:         bundleDir,
+			Playbook:          scope.destroyPlaybook,
+			Limit:             ansibleLimitForScope(scope.name),
+			ExtraVarPairs:     pairs,
+			ArtifactsBaseName: scope.artifactsBaseName + "-destroy",
+			Check:             check,
+			AskBecomePass:     askBecomePass,
+			DryRun:            dryRun,
+			Label:             scope.name + " destroy",
+		}, runner, stdout)
 		if err != nil {
 			return failErr(1, err)
 		}
-		command := runner.Command(spec)
-		if dryRun {
-			fmt.Fprintf(stdout, "dry-run ansible command [%s destroy]: %s\n", scope.name, shellQuote(command))
-			return nil
-		}
-		printWorkflowStart(stdout, scope.name+" destroy", selected, askBecomePass)
-		if err := runner.Run(c.Context(), spec); err != nil {
-			return failErr(1, err)
-		}
+		printRenderResult(stdout, runResult.Render)
+		fmt.Fprintf(stdout, "ansible bundle: %s\n", bundleDir)
 		return nil
 	}
 	return cmd
@@ -347,95 +312,4 @@ func resolvedOCPBinaryPairs(selected []Phase, hostStateDir string) []string {
 		return nil
 	}
 	return []string{"gitups_openshift_install=" + path}
-}
-
-func printApplySummary(w io.Writer, selected []Phase, askBecomePass bool, dryRun bool) {
-	printWorkflowSummary(w, "apply plan:", selected, askBecomePass, dryRun)
-}
-
-func printDestroySummary(w io.Writer, selected []Phase, askBecomePass bool, dryRun bool) {
-	printWorkflowSummary(w, "destroy plan:", selected, askBecomePass, dryRun)
-}
-
-func printWorkflowSummary(w io.Writer, title string, selected []Phase, askBecomePass bool, dryRun bool) {
-	fmt.Fprintln(w, title)
-	rootPhases := 0
-	for _, p := range selected {
-		marker := ""
-		if p.NeedsRoot {
-			marker = " [root]"
-			rootPhases++
-		}
-		fmt.Fprintf(w, "  - %s%s — %s\n", p.Name, marker, p.Description)
-	}
-	if rootPhases > 0 {
-		switch {
-		case dryRun:
-			fmt.Fprintln(w, "[root] phases require sudo escalation; this is a dry run, no commands execute.")
-		case askBecomePass && rootPhases > 1:
-			fmt.Fprintln(w, "[root] phases run as root on provider hosts; ansible will prompt once for the BECOME (sudo) password and reuse it for this workflow.")
-		case askBecomePass:
-			fmt.Fprintln(w, "[root] phases run as root on provider hosts; ansible will prompt for the BECOME (sudo) password.")
-		case os.Geteuid() == 0:
-			fmt.Fprintln(w, "[root] phases run as root on provider hosts; gitups is running as root, no BECOME password prompt needed.")
-		default:
-			fmt.Fprintln(w, "[root] phases run as root on provider hosts; --ask-become-pass=false requires passwordless sudo or an already-root connection user.")
-		}
-	}
-}
-
-func printWorkflowStart(w io.Writer, workflowName string, selected []Phase, askBecomePass bool) {
-	if len(selected) == 1 {
-		printPhaseStart(w, selected[0], askBecomePass)
-		return
-	}
-	if rootPhaseCount(selected) > 0 {
-		fmt.Fprintf(w, "\n>>> running workflow %q [root] — phases: %s\n", workflowName, phaseList(selected))
-		if askBecomePass {
-			fmt.Fprintln(w, ">>> ansible may prompt once for the sudo (BECOME) password for this workflow.")
-		}
-		return
-	}
-	fmt.Fprintf(w, "\n>>> running workflow %q — phases: %s\n", workflowName, phaseList(selected))
-}
-
-func printPhaseStart(w io.Writer, phase Phase, askBecomePass bool) {
-	if phase.NeedsRoot && askBecomePass {
-		fmt.Fprintf(w, "\n>>> running phase %q [root] — %s\n>>> ansible may prompt for the sudo (BECOME) password for this phase.\n", phase.Name, phase.Description)
-		return
-	}
-	fmt.Fprintf(w, "\n>>> running phase %q — %s\n", phase.Name, phase.Description)
-}
-
-func rootPhaseCount(selected []Phase) int {
-	count := 0
-	for _, p := range selected {
-		if p.NeedsRoot {
-			count++
-		}
-	}
-	return count
-}
-
-func phaseList(selected []Phase) string {
-	names := make([]string, 0, len(selected))
-	for _, p := range selected {
-		names = append(names, p.Name)
-	}
-	return strings.Join(names, ", ")
-}
-
-var askBecomePassDefault = func() bool { return os.Geteuid() != 0 }
-
-func confirm(in io.Reader, prompt io.Writer, message string) bool {
-	if in == nil {
-		return false
-	}
-	fmt.Fprint(prompt, message)
-	line, err := bufio.NewReader(in).ReadString('\n')
-	if err != nil && line == "" {
-		return false
-	}
-	answer := strings.TrimSpace(strings.ToLower(line))
-	return answer == "y" || answer == "yes"
 }

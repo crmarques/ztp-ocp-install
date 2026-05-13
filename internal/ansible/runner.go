@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -109,9 +110,66 @@ func (r CommandRunner) Run(ctx context.Context, spec RunSpec) error {
 		cmd.Env = appendPythonPath(cmd.Env, extra)
 	}
 	if err := cmd.Run(); err != nil {
+		// Close the log so the failure summary reads a flushed file.
+		_ = outputLog.Close()
+		summary := summarizeFailure(outputLogPath, defaultFailureTailLines)
+		if summary != "" {
+			return fmt.Errorf("run %s exited with error (output log: %s):\n%s\n  underlying error: %w",
+				command[0], outputLogPath, summary, err)
+		}
 		return fmt.Errorf("run %s (output log: %s): %w", command[0], outputLogPath, err)
 	}
 	return nil
+}
+
+// defaultFailureTailLines is the number of trailing lines read from the
+// Ansible output log on failure. Matches the architecture review's
+// recommendation of ~50 lines as the sweet spot between context and noise.
+const defaultFailureTailLines = 50
+
+// summarizeFailure reads the trailing lines of the artifact log and
+// extracts the failing task (last `TASK [...]` marker) and the first
+// `fatal: ...` reason, plus the raw tail. Returns empty string if the
+// log is unreadable so callers fall back to the plain error path.
+func summarizeFailure(logPath string, tailLines int) string {
+	body, err := os.ReadFile(logPath)
+	if err != nil {
+		return ""
+	}
+	text := string(body)
+	lines := strings.Split(strings.TrimRight(text, "\n"), "\n")
+	if len(lines) == 0 {
+		return ""
+	}
+	failingTask := ""
+	failureReason := ""
+	for _, line := range lines {
+		if strings.HasPrefix(line, "TASK [") {
+			failingTask = line
+		}
+		if strings.HasPrefix(line, "fatal:") && failureReason == "" {
+			failureReason = line
+		}
+	}
+	start := len(lines) - tailLines
+	if start < 0 {
+		start = 0
+	}
+	tail := strings.Join(lines[start:], "\n")
+	var b strings.Builder
+	if failingTask != "" {
+		b.WriteString("  failed task: " + failingTask + "\n")
+	}
+	if failureReason != "" {
+		b.WriteString("  failure: " + failureReason + "\n")
+	}
+	if tail != "" {
+		b.WriteString("  last " + strconv.Itoa(len(lines)-start) + " line(s) of output:\n")
+		for _, line := range strings.Split(tail, "\n") {
+			b.WriteString("    " + line + "\n")
+		}
+	}
+	return strings.TrimRight(b.String(), "\n")
 }
 
 func sudoUserSitePackages() string {

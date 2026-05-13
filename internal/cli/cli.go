@@ -11,7 +11,8 @@ import (
 
 	"github.com/crmarques/gitups/api/v1alpha1"
 	"github.com/crmarques/gitups/internal/embedded"
-	"github.com/crmarques/gitups/internal/render"
+	"github.com/crmarques/gitups/internal/provisioning/render"
+	"github.com/crmarques/gitups/internal/workflow"
 )
 
 const ansibleBundleDirName = "ansible-bundle"
@@ -109,18 +110,7 @@ func printRenderResult(stdout io.Writer, result render.Result) {
 	}
 }
 
-func shellQuote(args []string) string {
-	quoted := make([]string, 0, len(args))
-	for _, arg := range args {
-		if arg == "" {
-			quoted = append(quoted, "''")
-			continue
-		}
-		if strings.ContainsAny(arg, " \t\n'\"$`\\") {
-			quoted = append(quoted, "'"+strings.ReplaceAll(arg, "'", "'\\''")+"'")
-			continue
-		}
-		quoted = append(quoted, arg)
-	}
-	return strings.Join(quoted, " ")
-}
+// shellQuote is a thin alias for workflow.ShellQuote so existing CLI
+// callers (bastion etc.) stay short. The canonical implementation lives
+// in internal/workflow alongside Run().
+func shellQuote(args []string) string { return workflow.ShellQuote(args) }

@@ -82,3 +82,53 @@ exit 3
 		}
 	}
 }
+
+func TestSummarizeFailureExtractsTaskAndReason(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "out.log")
+	body := strings.Join([]string{
+		"PLAY [Apply provider services] *",
+		"TASK [Gathering Facts] *",
+		"ok: [host-a]",
+		"TASK [proxy_squid : Ensure container exists] *",
+		"fatal: [host-a]: FAILED! => {\"msg\": \"image pull failed\"}",
+		"PLAY RECAP *",
+		"host-a : ok=1 changed=0 unreachable=0 failed=1 skipped=0",
+	}, "\n") + "\n"
+	if err := os.WriteFile(logPath, []byte(body), 0o600); err != nil {
+		t.Fatalf("write log: %v", err)
+	}
+	got := summarizeFailure(logPath, 50)
+	if !strings.Contains(got, "TASK [proxy_squid : Ensure container exists]") {
+		t.Fatalf("summary missing failing TASK line:\n%s", got)
+	}
+	if !strings.Contains(got, "fatal: [host-a]") || !strings.Contains(got, "image pull failed") {
+		t.Fatalf("summary missing fatal reason:\n%s", got)
+	}
+	if !strings.Contains(got, "PLAY RECAP") {
+		t.Fatalf("summary should include tail lines (PLAY RECAP):\n%s", got)
+	}
+}
+
+func TestSummarizeFailureMissingFileReturnsEmpty(t *testing.T) {
+	if got := summarizeFailure("/nonexistent/path/out.log", 50); got != "" {
+		t.Fatalf("expected empty for missing file, got %q", got)
+	}
+}
+
+func TestSummarizeFailureRespectsTailBudget(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "big.log")
+	var b bytes.Buffer
+	for i := 0; i < 200; i++ {
+		b.WriteString("noise line\n")
+	}
+	if err := os.WriteFile(logPath, b.Bytes(), 0o600); err != nil {
+		t.Fatalf("write log: %v", err)
+	}
+	got := summarizeFailure(logPath, 5)
+	if strings.Count(got, "noise line") != 5 {
+		t.Fatalf("expected exactly 5 noise lines in tail, got %d:\n%s",
+			strings.Count(got, "noise line"), got)
+	}
+}
