@@ -1,4 +1,8 @@
 ---
+- name: Ensure libvirt host packages and service
+  ansible.builtin.import_role:
+    name: host_libvirt
+
 - name: Create libvirt storage directory
   ansible.builtin.file:
     path: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}/qemu"

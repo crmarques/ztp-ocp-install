@@ -6,10 +6,6 @@ spec:
   hosts:
     lab-host:
       ssh:
-        # The bastion runs in a container started with `--network host`, so
-        # `localhost` resolves to the libvirt host. The SSH user is omitted
-        # so Gitups defaults it to the invoking bastion user, which is the
-        # same non-root account as the host user in this case.
         address: localhost
         keyRef:
           name: provider-host-ssh
@@ -18,6 +14,7 @@ spec:
         - libvirt
         - container-runtime
         - hosts-file
+        - proxy
   machine:
     libvirt:
       hostRefs:
@@ -36,6 +33,10 @@ spec:
           diskGiB: 120
   loadBalancer:
     haProxy:
+      hostRef:
+        name: lab-host
+  proxy:
+    squid:
       hostRef:
         name: lab-host
   nameResolution:

@@ -16,6 +16,16 @@ spec:
       generated:
         credentials:
           username: admin
+    proxy-credentials:
+      generated:
+        credentials:
+          username: proxy
+  proxy:
+    noProxy:
+      - 192.168.132.0/24
+    auth:
+      proxyAuthRef:
+        name: proxy-credentials
   openshift:
     release:
       channel: stable-4.21

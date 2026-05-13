@@ -1,4 +1,8 @@
 ---
+- name: Ensure libvirt host packages and service
+  ansible.builtin.import_role:
+    name: host_libvirt
+
 - name: Resolve pinned sushy-tools version
   ansible.builtin.set_fact:
     gitups_sushy_tools_version: "{{ gitups_component_pins | selectattr('name', 'equalto', 'sushy-tools') | map(attribute='version') | first }}"
