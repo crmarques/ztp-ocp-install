@@ -44,7 +44,7 @@ operator explicitly declares `spec.registries`; otherwise none of that
 material reaches the rendered install-config or host runtime.
 
 When the operator declares `InfrastructureProvider.spec.registry.mirrorRegistry`,
-the `provider_mirror_registry` role installs the registry CA into the host
+the `mirror_registry` provider role installs the registry CA into the host
 trust store at `/etc/pki/ca-trust/source/anchors/gitups-mirror-<host>.crt`
 and runs `update-ca-trust`. This trust write is host-local: cluster-node
 trust still flows through the install-config `additionalTrustBundle` path.
@@ -53,7 +53,7 @@ The mirror htpasswd file is derived at apply time from a single-line
 never inlined into committed YAML or rendered manifests.
 
 When the operator declares `InfrastructureProvider.spec.proxy.squid`, the
-`provider_proxy_squid` role derives Squid htpasswd state from the single-line
+`proxy_squid` provider role derives Squid htpasswd state from the single-line
 `username:password` secret named by `spec.proxy.auth.proxyAuthRef`. The same
 secret is also used to inject credentialed installer proxy URLs into
 effective install-config work copies. Managed Squid requires authentication;

@@ -131,33 +131,33 @@ reconciled workload clusters remains possible without schema rework.
 
 ### Role taxonomy
 
-Every role name encodes layer, concern, and (when applicable) provider
-kind. ADR 0002 records the contract.
+Ansible roles are grouped by Gitups layer. ADR 0002 records the contract.
 
-| Prefix | Layer | Hosts |
+| Directory | Layer | Hosts |
 | --- | --- | --- |
-| `host_*` | provider-agnostic OS prep | `gitups_infra_hosts`, `gitups_provider_hosts` |
-| `network_*` | provider-agnostic networking | varies |
-| `cluster_*` | per-cluster substrate | `gitups_infra_hosts` |
-| `provider_*` | provider-scoped shared services | `gitups_provider_hosts` |
-| `ocp_*` | openshift-install agent install / boot / destroy | `gitups_ocp_hosts` |
+| `roles/bastion/` | controller-local setup | `localhost` |
+| `roles/shared/` | context and host helpers | varies |
+| `roles/providers/` | provider-scoped shared services | `gitups_provider_hosts` |
+| `roles/cluster_infra/` | per-cluster substrate and network state | `gitups_infra_hosts` |
+| `roles/openshift/` | openshift-install agent install / boot / destroy | `gitups_ocp_hosts` |
 
-Within `cluster_substrate_*`, `provider_bmc_*`, and `ocp_boot_*` the
-suffix is the provider kind: `libvirt`, `baremetal`, `vsphere`,
-`kubevirt` for substrates; `emulated`, `redfish`, `ipmi`, `none` for
-BMCs.
+Dynamic role names are local to their layer: `substrate_<role>` under
+`roles/cluster_infra/`, `bmc_<role>` under `roles/providers/`, and
+`boot_<role>` under `roles/openshift/`. Suffixes are provider or BMC
+realisation names: `libvirt`, `baremetal`, `vsphere`, `kubevirt` for
+substrates; `emulated`, `redfish`, `ipmi`, `none` for BMCs.
 
-`provider_mirror_registry` runs a docker/distribution server on the
-provider host that supplies `spec.registry.mirrorRegistry`. It executes in
-`provider-prepare.yml` **before** `network_lb_managed` so any
-local-mirrored image (HAProxy, future workloads) is reachable when its
-consumer pulls it on subsequent applies.
+`mirror_registry` runs a docker/distribution server on the provider host
+that supplies `spec.registry.mirrorRegistry`. It executes in
+`playbooks/layers/providers/apply.yml` **before** `load_balancer_haproxy`
+so any local-mirrored image (HAProxy, future workloads) is reachable when
+its consumer pulls it on subsequent applies.
 
-`provider_proxy_squid` runs authenticated Squid on the provider host that
-supplies `spec.proxy.squid`. It executes in `provider-prepare.yml` before
-`host_proxy`, `provider_mirror_registry`, and `network_lb_managed` so
+`proxy_squid` runs authenticated Squid on the provider host that supplies
+`spec.proxy.squid`. It executes in `playbooks/layers/providers/apply.yml`
+before `host_proxy`, `mirror_registry`, and `load_balancer_haproxy` so
 provider-host tasks can use the managed proxy after it exists. Libvirt egress
-isolation remains in `cluster_substrate_libvirt`: only Gitups-managed libvirt
+isolation remains in `substrate_libvirt`: only Gitups-managed libvirt
 networks that reference the managed proxy omit NAT.
 
 ### Provider dispatch
@@ -168,13 +168,13 @@ and per-provider Ansible vars. They drive dynamic role-name dispatch:
 | Var | Drives |
 | --- | --- |
 | `provider.kind` | machine flavor on the closure (`libvirt \| baremetal \| vsphere \| kubevirt`) |
-| `provider.substrateRole` | `role: cluster_substrate_<substrateRole>` |
-| `provider.bmcRole` | `role: provider_bmc_<bmcRole>` and `include_role: ocp_boot_<bmcRole>` |
-| `provider.bootArtifactsHttp.{enabled,bindAddress,port}` | gates `provider_boot_artifacts_http` |
+| `provider.substrateRole` | `role: substrate_<substrateRole>` from `roles/cluster_infra/` |
+| `provider.bmcRole` | `role: bmc_<bmcRole>` from `roles/providers/` and `include_role: boot_<bmcRole>` from `roles/openshift/` |
+| `provider.bootArtifactsHttp.{enabled,bindAddress,port}` | gates `boot_artifacts_http` |
 
 The kind→role mapping is one switch in `render.providerDispatch`. Every
 kind resolves to a real role; substrates with no external BMC use
-`provider_bmc_none` and `ocp_boot_none` so dispatch never fails to
+`bmc_none` and `boot_none` so dispatch never fails to
 resolve. Adding a new provider is four role files plus one switch case;
 no playbook edits.
 

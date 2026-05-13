@@ -1,4 +1,0 @@
----
-- name: Boot OCP cluster node via emulated Redfish (sushy-tools)
-  ansible.builtin.include_role:
-    name: ocp_boot_redfish

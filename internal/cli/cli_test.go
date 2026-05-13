@@ -934,7 +934,7 @@ func TestProviderApplyDryRunRendersAndPrintsAnsibleCommandsForAllPhases(t *testi
 		"- provider [root]",
 		"- cluster [root]",
 		"dry-run ansible command [infra apply]: ansible-playbook",
-		"playbooks/apply-infra.yml",
+		"playbooks/targets/infra/apply.yml",
 	} {
 		if !strings.Contains(output, expected) {
 			t.Fatalf("stdout missing %q\n%s", expected, output)
@@ -943,7 +943,7 @@ func TestProviderApplyDryRunRendersAndPrintsAnsibleCommandsForAllPhases(t *testi
 	if got := strings.Count(output, "--ask-become-pass"); got != 1 {
 		t.Fatalf("infra apply should ask become once, got %d prompts\n%s", got, output)
 	}
-	for _, unexpected := range []string{"clusters-install.yml", "gitops-publish.yml"} {
+	for _, unexpected := range []string{"layers/openshift/install-agent.yml", "gitops-publish.yml"} {
 		if strings.Contains(output, unexpected) {
 			t.Fatalf("provider apply leaked %q\n%s", unexpected, output)
 		}
@@ -1065,7 +1065,7 @@ func TestInfraApplyDryRunRespectsScope(t *testing.T) {
 		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
 	}
 	output := stdout.String()
-	if !strings.Contains(output, "playbooks/apply-infra.yml") {
+	if !strings.Contains(output, "playbooks/targets/infra/apply.yml") {
 		t.Fatalf("infra apply playbook missing in dry-run output:\n%s", output)
 	}
 	for _, leakedCluster := range []string{"hub", "managed-02"} {
@@ -1090,8 +1090,8 @@ func TestClustersApplyDryRunOnlyRunsClustersScope(t *testing.T) {
 		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
 	}
 	output := stdout.String()
-	if !strings.Contains(output, "playbooks/apply-clusters.yml") {
-		t.Fatalf("stdout missing apply-clusters.yml: %s", output)
+	if !strings.Contains(output, "playbooks/targets/clusters/apply.yml") {
+		t.Fatalf("stdout missing clusters target apply playbook: %s", output)
 	}
 	for _, cluster := range []string{"hub", "managed-01", "managed-02"} {
 		path := filepath.Join("clusters-bootstrap.git", cluster, "openshift", "install-config.yaml")
@@ -1099,7 +1099,7 @@ func TestClustersApplyDryRunOnlyRunsClustersScope(t *testing.T) {
 			t.Fatalf("clusters apply must render %s installer assets:\n%s", cluster, output)
 		}
 	}
-	for _, leaked := range []string{"provider-prepare.yml", "cluster-prepare.yml", "clusters-install.yml", "gitops-publish.yml"} {
+	for _, leaked := range []string{"layers/providers/apply.yml", "layers/cluster_infra/apply.yml", "gitops-publish.yml"} {
 		if strings.Contains(output, leaked) {
 			t.Fatalf("clusters-scope apply leaked %s:\n%s", leaked, output)
 		}
@@ -1154,7 +1154,7 @@ func TestHubApplySelectsHubClusterWithoutClusterInstall(t *testing.T) {
 			t.Fatalf("stdout missing %q\n%s", expected, output)
 		}
 	}
-	for _, leaked := range []string{"rendered:", "playbooks/apply-clusters.yml", "dry-run ansible command"} {
+	for _, leaked := range []string{"rendered:", "playbooks/targets/clusters/apply.yml", "dry-run ansible command"} {
 		if strings.Contains(output, leaked) {
 			t.Fatalf("hub component apply should not run cluster installation today; leaked %q\n%s", leaked, output)
 		}
@@ -1178,7 +1178,7 @@ func TestApplyAllDryRunIncludesReservedHubStep(t *testing.T) {
 	for _, expected := range []string{
 		"all apply",
 		"hub cluster",
-		"playbooks/apply-all.yml",
+		"playbooks/targets/all/apply.yml",
 		"no declarative hub component schema is implemented yet",
 	} {
 		if !strings.Contains(output, expected) {
@@ -1209,11 +1209,11 @@ func TestClustersApplyDryRunUsesAnsibleBecomePrompt(t *testing.T) {
 	if !strings.Contains(stdout.String(), "dry-run ansible command [clusters apply]: ansible-playbook") {
 		t.Fatalf("stdout must use the clusters scope playbook\n%s", stdout.String())
 	}
-	if !strings.Contains(stdout.String(), "playbooks/apply-clusters.yml") {
-		t.Fatalf("stdout missing apply-clusters wrapper playbook\n%s", stdout.String())
+	if !strings.Contains(stdout.String(), "playbooks/targets/clusters/apply.yml") {
+		t.Fatalf("stdout missing clusters target apply playbook\n%s", stdout.String())
 	}
-	if strings.Contains(stdout.String(), "playbooks/clusters-install.yml") {
-		t.Fatalf("clusters apply should run through apply-clusters.yml, not directly through clusters-install.yml\n%s", stdout.String())
+	if strings.Contains(stdout.String(), "playbooks/layers/openshift/install-agent.yml") {
+		t.Fatalf("clusters apply should run through target playbook, not directly through openshift layer\n%s", stdout.String())
 	}
 }
 

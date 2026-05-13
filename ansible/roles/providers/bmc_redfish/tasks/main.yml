@@ -1,0 +1,81 @@
+---
+
+- name: Aggregate bare-metal BMC endpoints for current provider
+  ansible.builtin.set_fact:
+    gitups_provider_bmc_endpoints: >-
+      {{
+        gitups_clusters
+        | selectattr('provider.kind', 'equalto', 'baremetal')
+        | map(attribute='ocp.nodes') | flatten
+        | selectattr('bareMetal', 'defined')
+        | rejectattr('bareMetal', 'equalto', None)
+        | list
+      }}
+  changed_when: false
+
+- name: Fail when no bare-metal BMC endpoints are projected
+  ansible.builtin.assert:
+    that:
+      - gitups_provider_bmc_endpoints | length > 0
+    fail_msg: "bmc_redfish selected but no machines declare bareMetal.bmc; verify ClusterInfrastructure.spec.machines.<name>.bareMetal.bmc"
+
+- name: Create provider state directory
+  ansible.builtin.file:
+    path: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Verify each BMC credential file exists
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ gitups_provider_bmc_endpoints | map(attribute='bareMetal.credentialRef') | select('truthy') | unique | list }}"
+  register: gitups_provider_bmc_credential_stats
+
+- name: Fail when any BMC credential is missing
+  ansible.builtin.fail:
+    msg: "Missing BMC credentials at {{ item.item }} for provider {{ gitups_current_provider.name }}"
+  loop: "{{ gitups_provider_bmc_credential_stats.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: not (item.stat.exists | default(false))
+
+- name: Probe each BMC service root
+  ansible.builtin.uri:
+    url: "{{ item.bareMetal.address | regex_replace('^redfish-virtualmedia\\+', '') | regex_replace('/Systems/.*$', '/') }}"
+    method: GET
+    status_code: [200, 401]
+    return_content: false
+    validate_certs: "{{ not (item.bareMetal.disableCertificateVerification | default(false)) }}"
+  loop: "{{ gitups_provider_bmc_endpoints }}"
+  loop_control:
+    label: "{{ item.name }} ({{ item.bareMetal.address }})"
+  register: gitups_provider_bmc_probes
+  failed_when: false
+
+- name: Fail when any BMC is unreachable
+  ansible.builtin.fail:
+    msg: "BMC for machine {{ item.item.name }} at {{ item.item.bareMetal.address }} is unreachable; status={{ item.status | default('none') }}"
+  loop: "{{ gitups_provider_bmc_probes.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  when: (item.status | default(0)) not in [200, 401]
+
+- name: Write per-provider BMC manifest
+  ansible.builtin.copy:
+    dest: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc.yml"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      provider: {{ gitups_current_provider.name }}
+      kind: {{ gitups_current_provider.kind }}
+      bmcRole: {{ gitups_current_provider.bmcRole }}
+      machines:
+      {% for node in gitups_provider_bmc_endpoints %}
+        - name: {{ node.name }}
+          address: {{ node.bareMetal.address }}
+          credentialRef: {{ node.bareMetal.credentialRef | default('') }}
+          disableCertificateVerification: {{ node.bareMetal.disableCertificateVerification | default(false) }}
+      {% endfor %}

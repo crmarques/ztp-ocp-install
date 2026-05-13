@@ -433,9 +433,9 @@ func TestRenderOneHostTreatsLocalhostAsProviderHost(t *testing.T) {
 	if strings.Contains(inventory, "ansible_become:") {
 		t.Fatalf("provider root escalation belongs on mutating playbooks, not inventory\n%s", inventory)
 	}
-	playbook := readFile(t, "../../ansible/playbooks/clusters-destroy.yml")
+	playbook := readFile(t, "../../ansible/playbooks/layers/openshift/destroy-agent.yml")
 	if !strings.Contains(playbook, "become: true") {
-		t.Fatalf("clusters-destroy.yml must keep provider-host root escalation\n%s", playbook)
+		t.Fatalf("clusters destroy target must keep provider-host root escalation\n%s", playbook)
 	}
 }
 
@@ -515,7 +515,7 @@ func TestRenderVarsExposeOCPInstallMetadata(t *testing.T) {
 }
 
 func TestOCPInstallRoleDoesNotBlockPublicRegistries(t *testing.T) {
-	tasksDir := "../../ansible/roles/ocp_install_agent/tasks"
+	tasksDir := "../../ansible/roles/openshift/install_agent/tasks"
 	entries, err := os.ReadDir(tasksDir)
 	if err != nil {
 		t.Fatalf("read tasks dir: %v", err)
@@ -528,15 +528,15 @@ func TestOCPInstallRoleDoesNotBlockPublicRegistries(t *testing.T) {
 		body := readFile(t, filepath.Join(tasksDir, e.Name()))
 		for _, unexpected := range blockers {
 			if strings.Contains(body, unexpected) {
-				t.Fatalf("ocp_install_agent/%s contains public-registry blocking behavior %q\n%s", e.Name(), unexpected, body)
+				t.Fatalf("install_agent/%s contains public-registry blocking behavior %q\n%s", e.Name(), unexpected, body)
 			}
 		}
 	}
 }
 
 func TestOCPInstallRoleDoesNotShadowEnvironmentInstallVars(t *testing.T) {
-	preflight := readFile(t, "../../ansible/roles/ocp_install_agent/tasks/preflight.yml")
-	secrets := readFile(t, "../../ansible/roles/ocp_install_agent/tasks/secrets.yml")
+	preflight := readFile(t, "../../ansible/roles/openshift/install_agent/tasks/preflight.yml")
+	secrets := readFile(t, "../../ansible/roles/openshift/install_agent/tasks/secrets.yml")
 	combined := preflight + "\n" + secrets
 	for _, expected := range []string{
 		"gitups_ocp_cluster_install: \"{{ gitups_current_cluster.ocp.install }}\"",
@@ -547,7 +547,7 @@ func TestOCPInstallRoleDoesNotShadowEnvironmentInstallVars(t *testing.T) {
 		"gitups_ocp_cluster_install.additionalTrustBundleRef",
 	} {
 		if !strings.Contains(combined, expected) {
-			t.Fatalf("ocp_install_agent must use cluster install fact %q\n%s", expected, combined)
+			t.Fatalf("install_agent must use cluster install fact %q\n%s", expected, combined)
 		}
 	}
 	for _, unexpected := range []string{
@@ -559,13 +559,13 @@ func TestOCPInstallRoleDoesNotShadowEnvironmentInstallVars(t *testing.T) {
 		"gitups_ocp_install.additionalTrustBundleRef",
 	} {
 		if strings.Contains(combined, unexpected) {
-			t.Fatalf("ocp_install_agent shadows environment install vars with %q\n%s", unexpected, combined)
+			t.Fatalf("install_agent shadows environment install vars with %q\n%s", unexpected, combined)
 		}
 	}
 }
 
 func TestLibvirtSubstrateOpensBootArtifactsHTTPPort(t *testing.T) {
-	tasks := readFile(t, "../../ansible/roles/cluster_substrate_libvirt/tasks/main.yml")
+	tasks := readFile(t, "../../ansible/roles/cluster_infra/substrate_libvirt/tasks/main.yml")
 	for _, expected := range []string{
 		"<dhcp>",
 		"<host mac='{{ node.macAddress }}'",
@@ -581,7 +581,7 @@ func TestLibvirtSubstrateOpensBootArtifactsHTTPPort(t *testing.T) {
 		"port: \"{{ gitups_current_cluster.provider.virtualization.libvirt.proxyPort | int }}/tcp\"",
 	} {
 		if !strings.Contains(tasks, expected) {
-			t.Fatalf("cluster_substrate_libvirt is missing %q\n%s", expected, tasks)
+			t.Fatalf("substrate_libvirt is missing %q\n%s", expected, tasks)
 		}
 	}
 	for _, leak := range []string{
@@ -594,28 +594,28 @@ func TestLibvirtSubstrateOpensBootArtifactsHTTPPort(t *testing.T) {
 		"--change-interface=",
 	} {
 		if strings.Contains(tasks, leak) {
-			t.Fatalf("cluster_substrate_libvirt still references %q — extraction is incomplete", leak)
+			t.Fatalf("substrate_libvirt still references %q — extraction is incomplete", leak)
 		}
 	}
 }
 
 func TestClusterNetworkVipsOwnsVIPPlumbing(t *testing.T) {
-	apply := readFile(t, "../../ansible/roles/cluster_network_vips/tasks/main.yml")
+	apply := readFile(t, "../../ansible/roles/cluster_infra/network_vips/tasks/main.yml")
 	for _, expected := range []string{
 		"Plumb cluster load balancer VIPs onto libvirt bridges",
 		"gitups_in_cidr",
 		"gitups_load_balancers",
 	} {
 		if !strings.Contains(apply, expected) {
-			t.Fatalf("cluster_network_vips/tasks/main.yml missing %q\n%s", expected, apply)
+			t.Fatalf("network_vips/tasks/main.yml missing %q\n%s", expected, apply)
 		}
 	}
-	destroy := readFile(t, "../../ansible/roles/cluster_network_vips/tasks/destroy.yml")
+	destroy := readFile(t, "../../ansible/roles/cluster_infra/network_vips/tasks/destroy.yml")
 	if !strings.Contains(destroy, "Unplumb managed load balancer VIPs from the cluster bridge") {
-		t.Fatalf("cluster_network_vips/tasks/destroy.yml missing unplumb task\n%s", destroy)
+		t.Fatalf("network_vips/tasks/destroy.yml missing unplumb task\n%s", destroy)
 	}
-	if _, err := os.Stat("../../ansible/roles/cluster_network_vips/test_plugins/cidr.py"); err != nil {
-		t.Fatalf("cluster_network_vips/test_plugins/cidr.py must own the gitups_in_cidr plugin: %v", err)
+	if _, err := os.Stat("../../ansible/roles/cluster_infra/network_vips/test_plugins/cidr.py"); err != nil {
+		t.Fatalf("network_vips/test_plugins/cidr.py must own the gitups_in_cidr plugin: %v", err)
 	}
 }
 
@@ -1036,7 +1036,7 @@ func TestE2EProxyInputRendersIntoOpenShiftInstallerFiles(t *testing.T) {
 }
 
 func TestOCPInstallCommandEnvironmentIncludesProxyEnv(t *testing.T) {
-	effectiveConfig := readFile(t, "../../ansible/roles/ocp_install_agent/tasks/effective-config.yml")
+	effectiveConfig := readFile(t, "../../ansible/roles/openshift/install_agent/tasks/effective-config.yml")
 	for _, expected := range []string{
 		"gitups_proxy_env | default({})",
 		"| combine(",
@@ -1049,7 +1049,7 @@ func TestOCPInstallCommandEnvironmentIncludesProxyEnv(t *testing.T) {
 }
 
 func TestHostProxyFactsEscapesSlashInProxyCredentials(t *testing.T) {
-	facts := readFile(t, "../../ansible/roles/host_proxy/tasks/facts.yml")
+	facts := readFile(t, "../../ansible/roles/shared/host_proxy/tasks/facts.yml")
 	for _, expected := range []string{
 		"gitups_proxy_credentials.username | urlencode | replace('/', '%2F')",
 		"gitups_proxy_credentials.password | urlencode | replace('/', '%2F')",
@@ -1061,7 +1061,7 @@ func TestHostProxyFactsEscapesSlashInProxyCredentials(t *testing.T) {
 }
 
 func TestProviderBMCEmulatedPipInstallUsesPrivatePipConfig(t *testing.T) {
-	tasks := readFile(t, "../../ansible/roles/provider_bmc_emulated/tasks/main.yml")
+	tasks := readFile(t, "../../ansible/roles/providers/bmc_emulated/tasks/main.yml")
 	for _, expected := range []string{
 		"dest: \"{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/pip.conf\"",
 		"PIP_CONFIG_FILE=\"$PIP_CONFIG\"",
@@ -1071,11 +1071,11 @@ func TestProviderBMCEmulatedPipInstallUsesPrivatePipConfig(t *testing.T) {
 		"executable: /bin/bash",
 	} {
 		if !strings.Contains(tasks, expected) {
-			t.Fatalf("provider_bmc_emulated pip install missing %q\n%s", expected, tasks)
+			t.Fatalf("bmc_emulated pip install missing %q\n%s", expected, tasks)
 		}
 	}
 	if strings.Contains(tasks, "--proxy") {
-		t.Fatalf("provider_bmc_emulated must not pass proxy credentials on pip argv\n%s", tasks)
+		t.Fatalf("bmc_emulated must not pass proxy credentials on pip argv\n%s", tasks)
 	}
 }
 
@@ -1111,33 +1111,33 @@ func TestResolveInstallerFailsWhenSecretFileMissing(t *testing.T) {
 }
 
 func TestProviderDispatchCoversAllKinds(t *testing.T) {
-	clusterTasks := readFile(t, "../../ansible/playbooks/cluster-prepare.yml")
-	if !strings.Contains(clusterTasks, "cluster_substrate_{{ gitups_current_cluster.provider.substrateRole }}") {
-		t.Fatalf("cluster-prepare.yml missing substrate dispatch fragment\n%s", clusterTasks)
+	clusterTasks := readFile(t, "../../ansible/playbooks/layers/cluster_infra/apply.yml")
+	if !strings.Contains(clusterTasks, "substrate_{{ gitups_current_cluster.provider.substrateRole }}") {
+		t.Fatalf("cluster infra apply playbook missing substrate dispatch fragment\n%s", clusterTasks)
 	}
-	providerTasks := readFile(t, "../../ansible/playbooks/provider-prepare.yml")
+	providerTasks := readFile(t, "../../ansible/playbooks/layers/providers/apply.yml")
 	for _, expected := range []string{
-		"provider_proxy_squid",
-		"provider_bmc_{{ gitups_current_provider.bmcRole }}",
+		"proxy_squid",
+		"bmc_{{ gitups_current_provider.bmcRole }}",
 		"gitups_current_provider.bootArtifactsHttp.enabled",
 	} {
 		if !strings.Contains(providerTasks, expected) {
-			t.Fatalf("provider-prepare.yml missing dispatch fragment %q\n%s", expected, providerTasks)
+			t.Fatalf("providers apply playbook missing dispatch fragment %q\n%s", expected, providerTasks)
 		}
 	}
-	if strings.Index(providerTasks, "provider_proxy_squid") > strings.Index(providerTasks, "name: host_proxy") {
-		t.Fatalf("provider-prepare.yml must run managed Squid before host_proxy\n%s", providerTasks)
+	if strings.Index(providerTasks, "proxy_squid") > strings.Index(providerTasks, "name: host_proxy") {
+		t.Fatalf("providers apply playbook must run managed Squid before host_proxy\n%s", providerTasks)
 	}
 	for _, role := range []string{
-		"cluster_substrate_libvirt",
-		"cluster_substrate_baremetal",
-		"provider_bmc_emulated",
-		"provider_bmc_redfish",
-		"provider_bmc_none",
-		"provider_proxy_squid",
-		"provider_boot_artifacts_http",
-		"ocp_boot_emulated",
-		"ocp_boot_redfish",
+		"cluster_infra/substrate_libvirt",
+		"cluster_infra/substrate_baremetal",
+		"providers/bmc_emulated",
+		"providers/bmc_redfish",
+		"providers/bmc_none",
+		"providers/proxy_squid",
+		"providers/boot_artifacts_http",
+		"openshift/boot_emulated",
+		"openshift/boot_redfish",
 	} {
 		path := "../../ansible/roles/" + role + "/tasks/main.yml"
 		if _, err := os.Stat(path); err != nil {
@@ -1147,7 +1147,7 @@ func TestProviderDispatchCoversAllKinds(t *testing.T) {
 }
 
 func TestProviderDestroyRemovesManagedProxyWithoutBroadNetworkBlocks(t *testing.T) {
-	destroy := readFile(t, "../../ansible/playbooks/provider-destroy.yml")
+	destroy := readFile(t, "../../ansible/roles/providers/proxy_squid/tasks/destroy.yml")
 	for _, expected := range []string{
 		"gitups_current_forward_proxy",
 		"gitups-squid-{{ gitups_current_forward_proxy.name }}",
@@ -1155,7 +1155,7 @@ func TestProviderDestroyRemovesManagedProxyWithoutBroadNetworkBlocks(t *testing.
 		"Remove managed Squid state directory",
 	} {
 		if !strings.Contains(destroy, expected) {
-			t.Fatalf("provider-destroy.yml missing managed proxy cleanup %q\n%s", expected, destroy)
+			t.Fatalf("proxy_squid destroy task missing managed proxy cleanup %q\n%s", expected, destroy)
 		}
 	}
 	for _, unexpected := range []string{
@@ -1165,7 +1165,7 @@ func TestProviderDestroyRemovesManagedProxyWithoutBroadNetworkBlocks(t *testing.
 		"--direct",
 	} {
 		if strings.Contains(destroy, unexpected) {
-			t.Fatalf("provider-destroy.yml contains broad network rule %q\n%s", unexpected, destroy)
+			t.Fatalf("proxy_squid destroy task contains broad network rule %q\n%s", unexpected, destroy)
 		}
 	}
 }

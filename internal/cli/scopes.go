@@ -14,8 +14,8 @@ var infraScope = scopeSpec{
 	name:              "infra",
 	short:             "Install and configure InfrastructureProvider and ClusterInfrastructure",
 	phaseNames:        []string{"provider", "cluster"},
-	applyPlaybook:     "playbooks/apply-infra.yml",
-	destroyPlaybook:   "playbooks/destroy-infra.yml",
+	applyPlaybook:     "playbooks/targets/infra/apply.yml",
+	destroyPlaybook:   "playbooks/targets/infra/destroy.yml",
 	artifactsBaseName: "infra",
 }
 
@@ -23,8 +23,8 @@ var clustersScope = scopeSpec{
 	name:              "clusters",
 	short:             "Install and configure managed OpenShift clusters via openshift-install agent",
 	phaseNames:        []string{"clusters"},
-	applyPlaybook:     "playbooks/apply-clusters.yml",
-	destroyPlaybook:   "playbooks/clusters-destroy.yml",
+	applyPlaybook:     "playbooks/targets/clusters/apply.yml",
+	destroyPlaybook:   "playbooks/targets/clusters/destroy.yml",
 	artifactsBaseName: "clusters",
 }
 
@@ -32,7 +32,7 @@ var allScope = scopeSpec{
 	name:               "all",
 	short:              "Install and configure infrastructure, all OpenShift clusters, and hub components",
 	phaseNames:         []string{"provider", "cluster", "clusters"},
-	applyPlaybook:      "playbooks/apply-all.yml",
+	applyPlaybook:      "playbooks/targets/all/apply.yml",
 	artifactsBaseName:  "all",
 	applyHubComponents: true,
 }

@@ -16,19 +16,19 @@ type Phase struct {
 var phases = map[string]Phase{
 	"provider": {
 		Name:          "provider",
-		ApplyPlaybook: "playbooks/provider-prepare.yml",
+		ApplyPlaybook: "playbooks/layers/providers/apply.yml",
 		NeedsRoot:     true,
 		Description:   "provision provider-scoped services (BMC emulator, boot-artifacts HTTP, mirror registry, managed HAProxy) and host runtime state",
 	},
 	"cluster": {
 		Name:          "cluster",
-		ApplyPlaybook: "playbooks/cluster-prepare.yml",
+		ApplyPlaybook: "playbooks/layers/cluster_infra/apply.yml",
 		NeedsRoot:     true,
 		Description:   "provision per-cluster substrate (libvirt domains and networks, managed name resolution, /etc/hosts records, VIP plumbing)",
 	},
 	"clusters": {
 		Name:          "clusters",
-		ApplyPlaybook: "playbooks/clusters-install.yml",
+		ApplyPlaybook: "playbooks/layers/openshift/install-agent.yml",
 		NeedsRoot:     true,
 		Description:   "run openshift-install agent against the cluster nodes (boots via Redfish, manages the libvirt domain, writes per-cluster install state)",
 	},

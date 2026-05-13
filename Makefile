@@ -19,16 +19,16 @@ COLLECTIONS_REQUIREMENTS = $(ANSIBLE_SRC_DIR)/collections/requirements.yml
 EMBED_COLLECTIONS_DIR = $(EMBED_BUNDLE_DIR)/collections
 COLLECTIONS_STAMP = $(EMBED_COLLECTIONS_DIR)/.stamp
 GOFMT_FILES = $(shell find . -path './internal/embedded/bundle' -prune -o -name '*.go' -print)
-ANSIBLE_SYNTAX_ENV = ANSIBLE_LOCAL_TEMP=/tmp/gitups-ansible-local ANSIBLE_REMOTE_TEMP=/tmp/gitups-ansible-remote ANSIBLE_ROLES_PATH=ansible/roles ANSIBLE_COLLECTIONS_PATH=internal/embedded/bundle/collections ANSIBLE_FILTER_PLUGINS=ansible/filter_plugins
+ANSIBLE_ROLE_PATHS = ansible/roles/bastion:ansible/roles/shared:ansible/roles/providers:ansible/roles/cluster_infra:ansible/roles/openshift
+ANSIBLE_SYNTAX_ENV = ANSIBLE_LOCAL_TEMP=/tmp/gitups-ansible-local ANSIBLE_REMOTE_TEMP=/tmp/gitups-ansible-remote ANSIBLE_ROLES_PATH=$(ANSIBLE_ROLE_PATHS) ANSIBLE_COLLECTIONS_PATH=internal/embedded/bundle/collections ANSIBLE_FILTER_PLUGINS=ansible/filter_plugins
 ANSIBLE_SYNTAX_PLAYBOOKS = \
-	ansible/playbooks/preflight.yml \
-	ansible/playbooks/apply-all.yml \
-	ansible/playbooks/apply-infra.yml \
-	ansible/playbooks/apply-clusters.yml \
-	ansible/playbooks/destroy-infra.yml \
-	ansible/playbooks/clusters-destroy.yml \
-	ansible/playbooks/provider-prepare.yml \
-	ansible/playbooks/setup-controller-clis.yml
+	ansible/playbooks/checks/preflight.yml \
+	ansible/playbooks/targets/all/apply.yml \
+	ansible/playbooks/targets/infra/apply.yml \
+	ansible/playbooks/targets/infra/destroy.yml \
+	ansible/playbooks/targets/clusters/apply.yml \
+	ansible/playbooks/targets/clusters/destroy.yml \
+	ansible/playbooks/targets/bastion/apply-clis.yml
 
 E2E_CASES = $(filter-out gitops,$(notdir $(patsubst %/,%,$(wildcard $(E2E_DIR)/*/))))
 

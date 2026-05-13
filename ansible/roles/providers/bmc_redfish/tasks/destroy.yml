@@ -1,0 +1,4 @@
+---
+- name: External Redfish BMC provider has no shared service state
+  ansible.builtin.debug:
+    msg: "Provider {{ gitups_current_provider.name }} uses external Redfish BMC endpoints; skipping provider BMC destroy."

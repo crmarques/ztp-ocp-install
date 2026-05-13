@@ -42,7 +42,7 @@ func PlaceholderInstallerSecrets(ocp v1alpha1.OCPCluster) InstallerSecrets {
 
 // LoadInstallerSecrets reads secret material from the local secrets directory
 // (and from file-backed Environment keys) for one OCP cluster. It mirrors the
-// ocp_install_agent Ansible role: pull secret + ssh key + optional trust
+// install_agent Ansible role: pull secret + ssh key + optional trust
 // bundle, with mirror-registry auth merged into the pull secret and proxy
 // credentials baked into proxy URLs.
 func LoadInstallerSecrets(state v1alpha1.State, ocp v1alpha1.OCPCluster, secretsDir string) (InstallerSecrets, error) {

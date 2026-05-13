@@ -1,0 +1,3 @@
+---
+- import_playbook: ../../layers/cluster_infra/destroy.yml
+- import_playbook: ../../layers/providers/destroy.yml

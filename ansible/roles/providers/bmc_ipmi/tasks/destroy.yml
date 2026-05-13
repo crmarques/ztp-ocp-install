@@ -1,0 +1,4 @@
+---
+- name: External IPMI BMC provider has no shared service state
+  ansible.builtin.debug:
+    msg: "Provider {{ gitups_current_provider.name }} uses external IPMI BMC endpoints; skipping provider BMC destroy."

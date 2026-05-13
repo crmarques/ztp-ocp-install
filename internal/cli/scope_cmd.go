@@ -76,11 +76,11 @@ func newScopeCheckCmd(scope scopeSpec, stdout io.Writer, stderr io.Writer) *cobr
 		spec := ansible.RunSpec{
 			Executable:        executable,
 			AnsibleCfg:        filepath.Join(bundleDir, embedded.AnsibleCfgRelPath),
-			RolesPath:         filepath.Join(bundleDir, embedded.RolesRelPath),
+			RolesPath:         embedded.RolesPath(bundleDir),
 			CollectionsPath:   filepath.Join(bundleDir, embedded.CollectionsRelPath),
 			FilterPluginsPath: filepath.Join(bundleDir, embedded.FilterPluginsRelPath),
 			Inventory:         result.InventoryPath,
-			Playbook:          filepath.Join(bundleDir, "playbooks/preflight.yml"),
+			Playbook:          filepath.Join(bundleDir, "playbooks/checks/preflight.yml"),
 			Limit:             ansibleLimitForScope(scope.name),
 			ExtraVars:         result.VarsPath,
 			ExtraVarPairs: []string{
@@ -192,7 +192,7 @@ func newScopeApplyCmd(scope scopeSpec, stdin io.Reader, stdout io.Writer, stderr
 		spec := ansible.RunSpec{
 			Executable:        executable,
 			AnsibleCfg:        filepath.Join(bundleDir, embedded.AnsibleCfgRelPath),
-			RolesPath:         filepath.Join(bundleDir, embedded.RolesRelPath),
+			RolesPath:         embedded.RolesPath(bundleDir),
 			CollectionsPath:   filepath.Join(bundleDir, embedded.CollectionsRelPath),
 			FilterPluginsPath: filepath.Join(bundleDir, embedded.FilterPluginsRelPath),
 			Inventory:         result.InventoryPath,
@@ -302,7 +302,7 @@ func newScopeDestroyCmd(scope scopeSpec, stdin io.Reader, stdout io.Writer, stde
 		spec := ansible.RunSpec{
 			Executable:        executable,
 			AnsibleCfg:        filepath.Join(bundleDir, embedded.AnsibleCfgRelPath),
-			RolesPath:         filepath.Join(bundleDir, embedded.RolesRelPath),
+			RolesPath:         embedded.RolesPath(bundleDir),
 			CollectionsPath:   filepath.Join(bundleDir, embedded.CollectionsRelPath),
 			FilterPluginsPath: filepath.Join(bundleDir, embedded.FilterPluginsRelPath),
 			Inventory:         result.InventoryPath,

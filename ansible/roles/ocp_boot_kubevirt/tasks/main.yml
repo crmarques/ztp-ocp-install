@@ -1,5 +1,0 @@
----
-
-- name: KubeVirt hub boot is not yet implemented
-  ansible.builtin.fail:
-    msg: "ocp_boot_kubevirt is a scaffold; pair with cluster_substrate_kubevirt when adding OpenShift Virtualization support."

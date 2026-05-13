@@ -1,3 +1,0 @@
----
-- import_playbook: cluster-destroy.yml
-- import_playbook: provider-destroy.yml

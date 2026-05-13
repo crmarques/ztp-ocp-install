@@ -1,0 +1,72 @@
+---
+- name: Stop sushy-emulator service for current provider
+  ansible.builtin.systemd_service:
+    name: "gitups-sushy-{{ gitups_current_provider.name }}.service"
+    state: stopped
+    enabled: false
+  register: gitups_sushy_stop
+  failed_when: false
+  changed_when: gitups_sushy_stop.changed | default(false)
+
+- name: Check firewalld state on provider host
+  ansible.builtin.command:
+    argv:
+      - firewall-cmd
+      - --state
+  register: gitups_bmc_firewalld_state
+  changed_when: false
+  failed_when: false
+
+- name: Close Redfish port on provider host firewall
+  ansible.posix.firewalld:
+    port: "{{ gitups_current_provider.bmc.port | int }}/tcp"
+    state: disabled
+    permanent: true
+    immediate: true
+  when: gitups_bmc_firewalld_state.rc | default(1) == 0
+
+- name: Stop vmedia HTTP server for current provider
+  ansible.builtin.systemd_service:
+    name: "gitups-vmedia-{{ gitups_current_provider.name }}.service"
+    state: stopped
+    enabled: false
+  register: gitups_vmedia_stop
+  failed_when: false
+  changed_when: gitups_vmedia_stop.changed | default(false)
+
+- name: Remove sushy-emulator systemd unit
+  ansible.builtin.file:
+    path: "/etc/systemd/system/gitups-sushy-{{ gitups_current_provider.name }}.service"
+    state: absent
+  register: gitups_sushy_unit_remove
+
+- name: Remove vmedia HTTP systemd unit
+  ansible.builtin.file:
+    path: "/etc/systemd/system/gitups-vmedia-{{ gitups_current_provider.name }}.service"
+    state: absent
+  register: gitups_vmedia_unit_remove
+
+- name: Reload systemd after removing BMC units
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when: gitups_sushy_unit_remove.changed or gitups_vmedia_unit_remove.changed
+
+- name: Destroy libvirt vmedia pool for current provider
+  community.libvirt.virt_pool:
+    name: "gitups-{{ gitups_current_provider.name }}-vmedia"
+    state: absent
+  failed_when: false
+
+- name: Remove BMC emulator state for current provider
+  ansible.builtin.file:
+    path: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}"
+    state: absent
+
+- name: Remove providers parent directory if empty
+  ansible.builtin.command:
+    argv:
+      - rmdir
+      - "{{ gitups_host_state_dir }}/providers"
+  register: gitups_providers_parent_rm
+  failed_when: false
+  changed_when: gitups_providers_parent_rm.rc == 0

@@ -27,7 +27,7 @@ func TestProviderCheckRunsAnsiblePreflight(t *testing.T) {
 	}
 	out := stdout.String()
 	for _, expected := range []string{
-		"playbooks/preflight.yml",
+		"playbooks/checks/preflight.yml",
 		"dry-run ansible command [infra check]:",
 	} {
 		if !strings.Contains(out, expected) {
@@ -54,7 +54,7 @@ func TestClustersCheckRunsAnsiblePreflightWithOpenshiftCLIs(t *testing.T) {
 	out := stdout.String()
 	for _, expected := range []string{
 		"openshift-install on PATH",
-		"playbooks/preflight.yml",
+		"playbooks/checks/preflight.yml",
 	} {
 		if !strings.Contains(out, expected) {
 			t.Fatalf("clusters check missing %q\n%s", expected, out)
@@ -212,7 +212,7 @@ func TestBastionApplyDryRunPlansCLIsFromState(t *testing.T) {
 	out := stdout.String()
 	for _, expected := range []string{
 		"install OCP CLIs",
-		"setup-controller-clis.yml",
+		"playbooks/targets/bastion/apply-clis.yml",
 		"gitups_openshift_release_version=4.21.12",
 		"gitups_clis_install_dir=" + wantInstallDir,
 	} {

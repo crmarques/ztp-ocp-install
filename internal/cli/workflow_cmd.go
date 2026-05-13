@@ -127,11 +127,11 @@ func newCheckAllCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 		spec := ansible.RunSpec{
 			Executable:        executable,
 			AnsibleCfg:        filepath.Join(bundleDir, embedded.AnsibleCfgRelPath),
-			RolesPath:         filepath.Join(bundleDir, embedded.RolesRelPath),
+			RolesPath:         embedded.RolesPath(bundleDir),
 			CollectionsPath:   filepath.Join(bundleDir, embedded.CollectionsRelPath),
 			FilterPluginsPath: filepath.Join(bundleDir, embedded.FilterPluginsRelPath),
 			Inventory:         result.InventoryPath,
-			Playbook:          filepath.Join(bundleDir, "playbooks/preflight.yml"),
+			Playbook:          filepath.Join(bundleDir, "playbooks/checks/preflight.yml"),
 			ExtraVars:         result.VarsPath,
 			ExtraVarPairs: []string{
 				"gitups_state_dir=" + stateDirAbs,

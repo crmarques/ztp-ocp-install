@@ -1,6 +1,0 @@
----
-gitups_host_prepare_packages:
-  - python3
-  - python3-pip
-  - tar
-  - gzip

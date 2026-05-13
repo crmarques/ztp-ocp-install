@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 //go:embed all:bundle
@@ -15,7 +16,21 @@ const bundleRoot = "bundle"
 
 const AnsibleCfgRelPath = "ansible.cfg"
 
-const RolesRelPath = "roles"
+var RoleRelPaths = []string{
+	filepath.Join("roles", "bastion"),
+	filepath.Join("roles", "shared"),
+	filepath.Join("roles", "providers"),
+	filepath.Join("roles", "cluster_infra"),
+	filepath.Join("roles", "openshift"),
+}
+
+func RolesPath(bundleDir string) string {
+	paths := make([]string, 0, len(RoleRelPaths))
+	for _, rel := range RoleRelPaths {
+		paths = append(paths, filepath.Join(bundleDir, rel))
+	}
+	return strings.Join(paths, string(os.PathListSeparator))
+}
 
 const CollectionsRelPath = "collections"
 

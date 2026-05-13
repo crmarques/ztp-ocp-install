@@ -1,0 +1,29 @@
+---
+- name: Select provider for current host
+  ansible.builtin.set_fact:
+    gitups_current_provider: "{{ gitups_providers | selectattr('name', 'equalto', gitups_provider_name) | first }}"
+  changed_when: false
+
+- name: Select managed load balancers for current host
+  ansible.builtin.set_fact:
+    gitups_current_load_balancers: "{{ gitups_load_balancers | selectattr('providerRef', 'equalto', gitups_provider_name) | selectattr('placement.providerHostRef', 'equalto', gitups_host_name) | list }}"
+  changed_when: false
+
+- name: Select mirror registry for current host
+  ansible.builtin.set_fact:
+    gitups_current_mirror_registry: "{{ (gitups_mirror_registries | default([]) | selectattr('providerRef', 'equalto', gitups_provider_name) | selectattr('providerHostRef', 'equalto', gitups_host_name) | list | first) | default(None) }}"
+  changed_when: false
+
+- name: Select forward proxy for current host
+  ansible.builtin.set_fact:
+    gitups_current_forward_proxy: "{{ (gitups_forward_proxies | default([]) | selectattr('providerRef', 'equalto', gitups_provider_name) | selectattr('providerHostRef', 'equalto', gitups_host_name) | list | first) | default(None) }}"
+  changed_when: false
+
+- name: Publish provider context
+  ansible.builtin.set_fact:
+    gitups_provider_ctx:
+      provider: "{{ gitups_current_provider }}"
+      loadBalancers: "{{ gitups_current_load_balancers }}"
+      mirrorRegistry: "{{ gitups_current_mirror_registry }}"
+      forwardProxy: "{{ gitups_current_forward_proxy }}"
+  changed_when: false

@@ -172,7 +172,7 @@ func (s controllerCLIInstallSpec) PlannedCommand() []string {
 	return []string{
 		s.Executable,
 		"-i", filepath.Join(bundleDir, controllerCLILocalInventory),
-		filepath.Join(bundleDir, "playbooks", "setup-controller-clis.yml"),
+		filepath.Join(bundleDir, "playbooks", "targets", "bastion", "apply-clis.yml"),
 		"-e", "gitups_openshift_release_version=" + s.OCPReleaseVersion,
 		"-e", "gitups_clis_install_dir=" + s.InstallDir,
 	}
@@ -192,7 +192,7 @@ func runControllerCLIInstall(ctx context.Context, stdin io.Reader, stdout io.Wri
 	args := []string{
 		spec.Executable,
 		"-i", filepath.Join(bundleDirAbs, controllerCLILocalInventory),
-		filepath.Join(bundleDirAbs, "playbooks", "setup-controller-clis.yml"),
+		filepath.Join(bundleDirAbs, "playbooks", "targets", "bastion", "apply-clis.yml"),
 		"-e", "gitups_openshift_release_version=" + spec.OCPReleaseVersion,
 		"-e", "gitups_clis_install_dir=" + spec.InstallDir,
 	}
@@ -203,7 +203,7 @@ func runControllerCLIInstall(ctx context.Context, stdin io.Reader, stdout io.Wri
 	cmd.Stdin = stdin
 	ansibleEnv := map[string]string{
 		"ANSIBLE_CONFIG":           filepath.Join(bundleDir, embedded.AnsibleCfgRelPath),
-		"ANSIBLE_ROLES_PATH":       filepath.Join(bundleDir, embedded.RolesRelPath),
+		"ANSIBLE_ROLES_PATH":       embedded.RolesPath(bundleDir),
 		"ANSIBLE_COLLECTIONS_PATH": filepath.Join(bundleDir, embedded.CollectionsRelPath),
 		"ANSIBLE_FILTER_PLUGINS":   filepath.Join(bundleDir, embedded.FilterPluginsRelPath),
 	}

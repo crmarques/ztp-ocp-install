@@ -1,9 +1,0 @@
----
-
-- name: IPMI BMC is not yet implemented
-  ansible.builtin.fail:
-    msg: |
-      provider_bmc_ipmi is a scaffold. To enable, model IPMI endpoints on
-      MachineBareMetalSpec.BMC (protocol: ipmi) and implement the ipmitool
-      based power/media commands here. Most lab and modern bare metal
-      should use provider_bmc_redfish instead.

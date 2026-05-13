@@ -1,0 +1,89 @@
+---
+- name: Tear down Gitups per-cluster infrastructure
+  hosts: gitups_infra_hosts
+  gather_facts: false
+  become: true
+  environment: "{{ gitups_proxy_env | default({}) }}"
+
+  pre_tasks:
+    - name: Build cluster context
+      ansible.builtin.import_role:
+        name: context_cluster
+
+  tasks:
+    - name: Build proxy facts for downstream tasks
+      ansible.builtin.import_role:
+        name: host_proxy
+        tasks_from: facts
+
+    - name: Unplumb managed load balancer VIPs from the cluster bridge
+      ansible.builtin.include_role:
+        name: network_vips
+        tasks_from: destroy.yml
+
+    - name: Force-stop libvirt domains for current cluster
+      community.libvirt.virt:
+        name: "{{ gitups_current_cluster.name }}-{{ item.name }}"
+        state: destroyed
+      failed_when: false
+      loop: "{{ gitups_current_cluster.provider.nodes | default([]) }}"
+      loop_control:
+        label: "{{ item.name }}"
+      when: gitups_current_cluster.provider.kind == 'libvirt'
+
+    - name: Undefine libvirt domains for current cluster
+      community.libvirt.virt:
+        command: undefine
+        name: "{{ gitups_current_cluster.name }}-{{ item.name }}"
+        flags:
+          - remove_all_storage
+          - keep_nvram
+      failed_when: false
+      loop: "{{ gitups_current_cluster.provider.nodes | default([]) }}"
+      loop_control:
+        label: "{{ item.name }}"
+      when: gitups_current_cluster.provider.kind == 'libvirt'
+
+    - name: Check firewalld state
+      ansible.builtin.command:
+        argv:
+          - firewall-cmd
+          - --state
+      register: gitups_firewalld_state
+      changed_when: false
+      failed_when: false
+      when: gitups_current_cluster.provider.kind == 'libvirt'
+
+    - name: Close boot artifacts HTTP firewall port in the libvirt zone
+      ansible.posix.firewalld:
+        zone: libvirt
+        port: "{{ gitups_current_cluster.provider.bootArtifactsHttp.port | int }}/tcp"
+        state: disabled
+        permanent: true
+        immediate: true
+      failed_when: false
+      when:
+        - gitups_current_cluster.provider.kind == 'libvirt'
+        - gitups_firewalld_state.rc | default(1) == 0
+        - gitups_current_cluster.provider.bootArtifactsHttp.enabled | default(false) | bool
+
+    - name: Tear down libvirt network for current cluster
+      community.libvirt.virt_net:
+        name: "{{ gitups_current_cluster.provider.virtualization.libvirt.network }}"
+        state: absent
+      failed_when: false
+      when:
+        - gitups_current_cluster.provider.kind == 'libvirt'
+        - (gitups_current_cluster.provider.virtualization.libvirt.network | default('')) | length > 0
+
+    - name: Remove managed hosts-file block for current cluster
+      ansible.builtin.blockinfile:
+        path: /etc/hosts
+        marker: "# {mark} GITUPS {{ gitups_current_cluster.name }} hosts"
+        state: absent
+      when: gitups_current_cluster.network.nameResolution.mode == 'managed'
+
+    - name: Remove cluster state directory
+      ansible.builtin.file:
+        path: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}"
+        state: absent

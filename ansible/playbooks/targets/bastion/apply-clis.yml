@@ -1,0 +1,11 @@
+---
+- name: Install OpenShift CLIs on the controller host
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  become: false
+
+  tasks:
+    - name: Install OCP CLIs at requested release
+      ansible.builtin.import_role:
+        name: ocp_clis

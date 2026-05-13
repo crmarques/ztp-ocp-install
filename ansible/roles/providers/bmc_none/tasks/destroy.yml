@@ -1,0 +1,4 @@
+---
+- name: Provider has no external BMC service state
+  ansible.builtin.debug:
+    msg: "Provider {{ gitups_current_provider.name }} has no provider BMC service; skipping provider BMC destroy."
