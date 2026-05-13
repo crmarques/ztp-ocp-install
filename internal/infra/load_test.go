@@ -61,7 +61,7 @@ func TestLoadNormalizeValidateExamples(t *testing.T) {
 }
 
 func TestLoadNormalizeValidateOneHostSample(t *testing.T) {
-	state, err := LoadNormalizeValidate([]string{"../../test/e2e/container-bastion-local-libvirt-sno"})
+	state, err := LoadNormalizeValidate([]string{"../../test/e2e/sno-libvirt"})
 	if err != nil {
 		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
 	}

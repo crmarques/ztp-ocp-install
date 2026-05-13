@@ -1,12 +1,12 @@
 apiVersion: gitups.io/v1alpha1
 kind: OCPCluster
 metadata:
-  name: sno-libvirt
+  name: 3-nodes-ocp-libvirt
 spec:
   role: managed
-  topology: single-node
+  topology: multi-node
   infrastructureRef:
-    name: sno-libvirt
+    name: 3-nodes-ocp-libvirt
   install:
     method: agent
   networking:
@@ -17,4 +17,8 @@ spec:
       - 172.30.0.0/16
   nodes:
     master-0:
+      role: control-plane
+    master-1:
+      role: control-plane
+    master-2:
       role: control-plane

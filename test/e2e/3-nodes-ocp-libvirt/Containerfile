@@ -1,4 +1,4 @@
-# Minimal bastion image for the sno-libvirt e2e case.
+# Minimal bastion image for the 3-nodes-ocp-libvirt e2e case.
 #
 # Gitups installs the managed Ansible runtime, OpenShift CLIs, and provider
 # host dependencies. The image carries only bootstrap tools needed before
@@ -7,7 +7,7 @@
 #
 # Build:
 #   podman build -t gitups-bastion \
-#     -f test/e2e/sno-libvirt/Containerfile \
+#     -f test/e2e/3-nodes-ocp-libvirt/Containerfile \
 #     --build-arg UID=$(id -u) \
 #     --build-arg GID=$(id -g) \
 #     --build-arg USER=$(id -un) \

@@ -212,7 +212,7 @@ has a clear ownership boundary in the generated tree.
 
 E2E case fixtures are test assets, not canonical UX examples. Case names
 describe bastion location and substrate shape, for example
-`container-bastion-local-libvirt-sno`; OCP install mode (connected vs.
+`sno-libvirt`; OCP install mode (connected vs.
 disconnected) is documented in each case's `README.md` rather than
 encoded in the directory name. The canonical UX examples live under `examples/`. Cross-case operator
 guidance lives in `test/README.md`; per-case detail lives in

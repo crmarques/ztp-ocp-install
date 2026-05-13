@@ -4,7 +4,7 @@ title: Quickstart
 
 # Quickstart
 
-The fastest end-to-end path is `test/e2e/container-bastion-local-libvirt-sno`: a single SNO
+The fastest end-to-end path is `test/e2e/sno-libvirt`: a single SNO
 hub modeled as a libvirt-managed VM on one host, with Redfish BMC emulation and a
 local registry mirror (disconnected install).
 
@@ -30,14 +30,14 @@ make build
 ## Dry Run
 
 ```text
-bin/gitups check bastion -f test/e2e/container-bastion-local-libvirt-sno
-bin/gitups check infra -f test/e2e/container-bastion-local-libvirt-sno --state-dir /tmp/gitups-container-bastion-local-libvirt-sno --dry-run
-bin/gitups check clusters -f test/e2e/container-bastion-local-libvirt-sno --state-dir /tmp/gitups-container-bastion-local-libvirt-sno --dry-run
-bin/gitups check hub -f test/e2e/container-bastion-local-libvirt-sno --state-dir /tmp/gitups-container-bastion-local-libvirt-sno
-bin/gitups apply infra -f test/e2e/container-bastion-local-libvirt-sno --state-dir /tmp/gitups-container-bastion-local-libvirt-sno --dry-run
-bin/gitups render installer -f test/e2e/container-bastion-local-libvirt-sno --state-dir /tmp/gitups-container-bastion-local-libvirt-sno
-bin/gitups apply clusters -f test/e2e/container-bastion-local-libvirt-sno --state-dir /tmp/gitups-container-bastion-local-libvirt-sno --dry-run
-bin/gitups apply hub -f test/e2e/container-bastion-local-libvirt-sno --state-dir /tmp/gitups-container-bastion-local-libvirt-sno --dry-run
+bin/gitups check bastion -f test/e2e/sno-libvirt
+bin/gitups check infra -f test/e2e/sno-libvirt --state-dir /tmp/gitups-sno-libvirt --dry-run
+bin/gitups check clusters -f test/e2e/sno-libvirt --state-dir /tmp/gitups-sno-libvirt --dry-run
+bin/gitups check hub -f test/e2e/sno-libvirt --state-dir /tmp/gitups-sno-libvirt
+bin/gitups apply infra -f test/e2e/sno-libvirt --state-dir /tmp/gitups-sno-libvirt --dry-run
+bin/gitups render installer -f test/e2e/sno-libvirt --state-dir /tmp/gitups-sno-libvirt
+bin/gitups apply clusters -f test/e2e/sno-libvirt --state-dir /tmp/gitups-sno-libvirt --dry-run
+bin/gitups apply hub -f test/e2e/sno-libvirt --state-dir /tmp/gitups-sno-libvirt --dry-run
 ```
 
 The dry run renders state and prints the Ansible command for each scope without
@@ -67,10 +67,10 @@ before booting.
 ## Apply
 
 ```text
-bin/gitups apply bastion -f test/e2e/container-bastion-local-libvirt-sno --yes
-bin/gitups apply infra -f test/e2e/container-bastion-local-libvirt-sno --state-dir /tmp/gitups-container-bastion-local-libvirt-sno --yes
-bin/gitups apply clusters -f test/e2e/container-bastion-local-libvirt-sno --state-dir /tmp/gitups-container-bastion-local-libvirt-sno --yes
-bin/gitups apply hub -f test/e2e/container-bastion-local-libvirt-sno --state-dir /tmp/gitups-container-bastion-local-libvirt-sno
+bin/gitups apply bastion -f test/e2e/sno-libvirt --yes
+bin/gitups apply infra -f test/e2e/sno-libvirt --state-dir /tmp/gitups-sno-libvirt --yes
+bin/gitups apply clusters -f test/e2e/sno-libvirt --state-dir /tmp/gitups-sno-libvirt --yes
+bin/gitups apply hub -f test/e2e/sno-libvirt --state-dir /tmp/gitups-sno-libvirt
 ```
 
 Each mutating `apply` target validates first, renders state, prints the phase

@@ -1,10 +1,10 @@
 apiVersion: gitups.io/v1alpha1
 kind: ClusterInfrastructure
 metadata:
-  name: container-bastion-local-libvirt-sno
+  name: sno-libvirt
 spec:
   providerRefs:
-    - name: container-bastion-local-libvirt-sno-emulated-bare-metal
+    - name: sno-libvirt-emulated-bare-metal
   networks:
     primary:
       cidr: 192.168.132.0/24

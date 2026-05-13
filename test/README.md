@@ -19,7 +19,7 @@ install mode (connected vs. disconnected) is documented in each case's
 
 Current cases:
 
-- `container-bastion-local-libvirt-sno` — Gitups CLI runs inside a UBI9
+- `sno-libvirt` — Gitups CLI runs inside a UBI9
   container; libvirt host is the same machine, reached as `localhost` via
   `podman run --network host`; one SNO cluster.
 
@@ -31,9 +31,9 @@ inputs; they are not maintained as runnable cases or user documentation.
 ```text
 make build
 make list-e2e-cases
-make e2e-dry-run CASE=container-bastion-local-libvirt-sno
-make e2e         CASE=container-bastion-local-libvirt-sno
-make clean-e2e-state CASE=container-bastion-local-libvirt-sno
+make e2e-dry-run CASE=sno-libvirt
+make e2e         CASE=sno-libvirt
+make clean-e2e-state CASE=sno-libvirt
 ```
 
 The user-facing equivalent is plain `gitups`:

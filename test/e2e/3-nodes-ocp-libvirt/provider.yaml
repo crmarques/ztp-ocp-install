@@ -1,7 +1,7 @@
 apiVersion: gitups.io/v1alpha1
 kind: InfrastructureProvider
 metadata:
-  name: sno-libvirt-emulated-bare-metal
+  name: 3-nodes-ocp-libvirt-emulated-bare-metal
 spec:
   hosts:
     lab-host:
@@ -27,9 +27,9 @@ spec:
           credentialRef:
             name: bmc-credentials
       machineProfiles:
-        sno:
-          cpu: 9
-          memoryMiB: 19456
+        compact-control-plane:
+          cpu: 4
+          memoryMiB: 16384
           diskGiB: 120
   loadBalancer:
     haProxy:
@@ -44,5 +44,5 @@ spec:
       hostRefs:
         - name: lab-host
       additionalIngressHosts:
-        - console-openshift-console.apps.sno-libvirt.gitups.test
-        - oauth-openshift.apps.sno-libvirt.gitups.test
+        - console-openshift-console.apps.3-nodes-ocp-libvirt.gitups.test
+        - oauth-openshift.apps.3-nodes-ocp-libvirt.gitups.test

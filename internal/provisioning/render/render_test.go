@@ -966,7 +966,7 @@ func TestLoadInstallerSecretsBakesProxyCredentialsIntoURLs(t *testing.T) {
 
 func TestE2EProxyInputRendersIntoOpenShiftInstallerFiles(t *testing.T) {
 	fixtureDir := t.TempDir()
-	copyYAMLFixture(t, "../../../test/e2e/container-bastion-local-libvirt-sno", fixtureDir)
+	copyYAMLFixture(t, "../../../test/e2e/sno-libvirt", fixtureDir)
 
 	envPath := filepath.Join(fixtureDir, "environment.yaml")
 	envBody := readFile(t, envPath)
@@ -1033,7 +1033,7 @@ func TestE2EProxyInputRendersIntoOpenShiftInstallerFiles(t *testing.T) {
 	if strings.Contains(varsFile, "gitups_forward_proxies:") || strings.Contains(varsFile, "egressRestrictedToProxy: true") {
 		t.Fatalf("external proxy must not render managed proxy or libvirt isolation\n%s", varsFile)
 	}
-	asset := installerAssetFor(result.InstallerAssets, "container-bastion-local-libvirt-sno")
+	asset := installerAssetFor(result.InstallerAssets, "sno-libvirt")
 	noProxy := []string{"192.168.132.0/24", "localhost", "127.0.0.1", ".gitups.test", ".svc", ".cluster.local"}
 	assertInstallConfigProxy(t, asset.InstallConfigPath, "http://proxy.gitups.test:3128", "https://secure-proxy.gitups.test:8443", noProxy)
 	if safeConfig := readFile(t, asset.InstallConfigPath); strings.Contains(safeConfig, "proxy%20user") || strings.Contains(safeConfig, "pass%2Fword") {
@@ -1044,7 +1044,7 @@ func TestE2EProxyInputRendersIntoOpenShiftInstallerFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolveInstaller returned error: %v", err)
 	}
-	resolvedAsset := installerAssetFor(resolved.InstallerAssets, "container-bastion-local-libvirt-sno")
+	resolvedAsset := installerAssetFor(resolved.InstallerAssets, "sno-libvirt")
 	assertInstallConfigProxy(
 		t,
 		resolvedAsset.EffectiveInstallConfigPath,

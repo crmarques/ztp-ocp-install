@@ -1,9 +1,10 @@
-# SNO On Libvirt (Containerized Bastion)
+# 3-Node OCP On Libvirt (Containerized Bastion)
 
-Provisions one OpenShift SNO cluster on the local libvirt host while the
-Gitups controller runs inside a UBI9 container. Default is a direct connected
-install; the same case can route through an explicit forward proxy or a
-Gitups-managed Squid by declaring it in desired state.
+Provisions one 3-node compact OpenShift cluster (3 control-plane nodes, no
+dedicated workers) on the local libvirt host while the Gitups controller runs
+inside a UBI9 container. Default is a direct connected install; the same case
+can route through an explicit forward proxy or a Gitups-managed Squid by
+declaring it in desired state.
 
 ## Shape
 
@@ -11,8 +12,8 @@ Gitups-managed Squid by declaring it in desired state.
 | --- | --- |
 | Bastion | UBI9 container, host UID/GID, non-root user |
 | Provider host | Same machine, reached by SSH as `localhost` through `--network host` |
-| Cluster | SNO on libvirt bridge `vbr-cb-sno` |
-| Network | `192.168.132.0/24`, API/API-int `.10`, Ingress `.11`, node `.20` |
+| Cluster | 3 control-plane nodes on libvirt bridge `vbr-cb-3n` |
+| Network | `192.168.133.0/24`, API/API-int `.10`, Ingress `.11`, nodes `.20`-`.22` |
 | Install mode | Connected direct by default; routes through a proxy when `Environment.spec.proxy` is set |
 
 ## Case-Specific Operator Input
@@ -24,10 +25,14 @@ this case needs hardware virtualization exposed on the host:
 test -c /dev/kvm
 ```
 
+Three VMs are launched on the same host, each sized by the
+`compact-control-plane` profile (`provider.yaml`). Confirm the lab host has
+enough headroom (default: 4 vCPU + 16 GiB RAM + 120 GiB disk per node).
+
 ## Bring Up The Bastion
 
 ```bash
-CASE=sno-libvirt
+CASE=3-nodes-ocp-libvirt
 ```
 
 Then follow the [shared bastion-container setup](../containerized-bastion.md):
@@ -35,7 +40,7 @@ Then follow the [shared bastion-container setup](../containerized-bastion.md):
 1. Optional proxy env vars for the container build.
 2. Build and start the bastion container.
 3. `podman exec` into it and set the bastion env vars (remember to re-export
-   `CASE=sno-libvirt` inside the container).
+   `CASE=3-nodes-ocp-libvirt` inside the container).
 4. Bootstrap bastion dependencies (`gitups apply bastion --yes`).
 
 ## Create And Edit Desired State
@@ -60,8 +65,8 @@ Review these user-specific fields:
 | File | Field |
 | --- | --- |
 | `environment.yaml` | `spec.baseDomain`, OpenShift release, optional proxy, secret sources under `spec.secrets` |
-| `provider.yaml` | `spec.hosts.lab-host.ssh.address`, optional `ssh.user`, `libvirtURI`, BMC port |
-| `infra.yaml` | CIDR, bridge name, VIPs, node IP, MAC address |
+| `provider.yaml` | `spec.hosts.lab-host.ssh.address`, optional `ssh.user`, `libvirtURI`, BMC port, `compact-control-plane` profile sizing |
+| `infra.yaml` | CIDR, bridge name, VIPs, per-node IPs, MAC addresses |
 
 For the standard local-container path, leave `provider.yaml` with
 `ssh.address: localhost` and no `ssh.user`; Gitups defaults the SSH user to the
@@ -77,7 +82,7 @@ proxy:
   http: http://proxy.example.test:3128
   https: http://proxy.example.test:3128
   noProxy:
-    - 192.168.132.0/24
+    - 192.168.133.0/24
 ```
 
 Gitups auto-extends `noProxy` with cluster-local endpoints (service/cluster
@@ -227,7 +232,7 @@ gitups check infra -f "$WORKSPACE"
 If the host user has passwordless sudo, add `--ask-become-pass=false` to the
 two `apply` commands.
 
-## Install The SNO Cluster
+## Install The 3-Node Cluster
 
 `render installer` writes `install-config.yaml` and `agent-config.yaml` with
 placeholder strings in place of pull secret, SSH key, and trust bundle. Add
@@ -244,8 +249,8 @@ gitups apply clusters -f "$WORKSPACE" --yes
 ```
 
 `apply clusters` regenerates the `work/` copies, renders the agent installer
-assets, boots `master-0` through the emulated Redfish BMC, and waits for
-`openshift-install agent wait-for install-complete`.
+assets, boots all three masters through the emulated Redfish BMC, and waits
+for `openshift-install agent wait-for install-complete`.
 
 ## Verify
 
@@ -259,6 +264,8 @@ oc get clusteroperators
 gitups check infra -f "$WORKSPACE"
 gitups check clusters -f "$WORKSPACE"
 ```
+
+`oc get nodes` should list three `Ready` control-plane nodes.
 
 ## Tear Down
 

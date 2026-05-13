@@ -1,7 +1,7 @@
 apiVersion: gitups.io/v1alpha1
 kind: Environment
 metadata:
-  name: sno-libvirt
+  name: 3-nodes-ocp-libvirt
 spec:
   baseDomain: gitups.test
   ocpInstallType: connected
@@ -22,7 +22,7 @@ spec:
           username: proxy
   proxy:
     noProxy:
-      - 192.168.132.0/24
+      - 192.168.133.0/24
     auth:
       proxyAuthRef:
         name: proxy-credentials
