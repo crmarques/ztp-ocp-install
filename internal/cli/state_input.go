@@ -11,10 +11,16 @@ import (
 	"github.com/crmarques/gitups/internal/infra"
 )
 
-const bootstrapRepoName = "clusters-bootstrap.git"
+// Bootstrap repos live under <state-dir>/git-repos/<name>/. Only declarative
+// GitOps-publishable content lives here; runtime work output (secrets,
+// installer logs, agent ISO) is kept under a separate runtime/ root.
+const (
+	bootstrapRepoParent = "git-repos"
+	bootstrapRepoName   = "clusters-bootstrap"
+)
 
 func bootstrapRepoDir(stateDir string) string {
-	return filepath.Join(stateDir, bootstrapRepoName)
+	return filepath.Join(stateDir, bootstrapRepoParent, bootstrapRepoName)
 }
 
 func loadDesiredState(cf *commonFlags) (v1alpha1.State, error) {

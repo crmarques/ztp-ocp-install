@@ -150,9 +150,10 @@ gitups_clusters:
         generatedSecrets: [...]          # SelfSignedCertificate machinery
         localRegistry: {...}             # disconnected only
       installer:                         # paths inside the rendered tree
-        relativeDir: <path>
+        relativeDir: <path>               # clusters-bootstrap.git/<cluster>/openshift (publishable)
         relativeInstallConfigPath: <path>
         relativeAgentConfigPath: <path>
+        relativeWorkDir: <path>           # runtime/<cluster>/installer (local-only, openshift-install --dir)
       nodes: [...]                       # OCPClusterNodeVars
     provider: {...}                      # ProviderVars (per-cluster closure)
     network: {...}                       # ClusterNetworkVars

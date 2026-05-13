@@ -41,7 +41,7 @@ func newInitWorkspaceCmd(stdout io.Writer) *cobra.Command {
 	stateDir = defaultStateDir()
 	cmd := &cobra.Command{
 		Use:   "workspace --cluster-name <name> --provider <provider>",
-		Short: "Create a clusters-bootstrap.git workspace with Gitups input files",
+		Short: "Create a clusters-bootstrap workspace with Gitups input files (under <state-dir>/git-repos/)",
 		Args:  cobra.NoArgs,
 	}
 	cmd.Flags().StringVar(&clusterName, "cluster-name", "", "cluster name to scaffold")

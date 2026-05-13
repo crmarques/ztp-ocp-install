@@ -185,7 +185,7 @@ func newRenderClusterInstallFilesCmd(stdout io.Writer, _ io.Writer) *cobra.Comma
 	cf := addCommonFlags(cmd)
 	cmd.Flags().StringVar(&clusterScope, "scope", "", "comma-separated OCPCluster names to render")
 	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material (env: GITUPS_SECRETS_DIR)")
-	cmd.Flags().BoolVar(&resolveSecrets, "resolve-secrets", false, "also write effective install-config.yaml/agent-config.yaml under each cluster's openshift/work/ directory with secret material inlined for direct openshift-install consumption (mode 0600)")
+	cmd.Flags().BoolVar(&resolveSecrets, "resolve-secrets", false, "also write effective install-config.yaml/agent-config.yaml under each cluster's runtime installer directory (state-dir/runtime/<cluster>/installer/) with secret material inlined for direct openshift-install consumption (mode 0600)")
 	cmd.RunE = func(_ *cobra.Command, _ []string) error {
 		state, err := loadDesiredState(cf)
 		if err != nil {

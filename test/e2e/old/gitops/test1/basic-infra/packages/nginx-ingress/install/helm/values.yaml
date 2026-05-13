@@ -1,6 +1,0 @@
-controller:
-  service:
-    type: ClusterIP
-  ingressClassResource:
-    name: nginx
-    default: true

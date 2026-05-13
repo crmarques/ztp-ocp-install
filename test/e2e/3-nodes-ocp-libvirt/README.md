@@ -50,7 +50,7 @@ edit the generated files by hand instead; the copied files are the known-good
 target state for the local-container layout.
 
 ```bash
-WORKSPACE="$GITUPS_STATE_DIR/clusters-bootstrap.git/$CASE/gitups"
+WORKSPACE="$GITUPS_STATE_DIR/git-repos/clusters-bootstrap/$CASE/gitups"
 
 gitups init workspace \
   --cluster-name "$CASE" \
@@ -234,11 +234,13 @@ two `apply` commands.
 
 ## Install The 3-Node Cluster
 
-`render installer` writes `install-config.yaml` and `agent-config.yaml` with
-placeholder strings in place of pull secret, SSH key, and trust bundle. Add
-`--resolve-secrets` to also write `openshift/work/{install,agent}-config.yaml`
-with secret material inlined (mode `0600`) — the form `openshift-install`
-consumes.
+`render installer` writes `install-config.yaml` and `agent-config.yaml` under
+`git-repos/clusters-bootstrap/<cluster>/openshift/` with placeholder strings in place
+of pull secret, SSH key, and trust bundle (this tree is the GitOps-publishable
+declarative source). Add `--resolve-secrets` to also write
+`runtime/<cluster>/installer/{install,agent}-config.yaml` with secret material
+inlined (mode `0600`) — the form `openshift-install` consumes. The runtime
+tree never leaves local state.
 
 ```bash
 gitups check clusters -f "$WORKSPACE"
@@ -248,9 +250,10 @@ gitups apply clusters -f "$WORKSPACE" --dry-run
 gitups apply clusters -f "$WORKSPACE" --yes
 ```
 
-`apply clusters` regenerates the `work/` copies, renders the agent installer
-assets, boots all three masters through the emulated Redfish BMC, and waits
-for `openshift-install agent wait-for install-complete`.
+`apply clusters` regenerates the runtime installer copies under
+`runtime/<cluster>/installer/`, renders the agent installer assets, boots all
+three masters through the emulated Redfish BMC, and waits for
+`openshift-install agent wait-for install-complete`.
 
 ## Verify
 

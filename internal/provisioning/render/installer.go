@@ -11,6 +11,17 @@ import (
 	"github.com/crmarques/gitups/internal/proxy"
 )
 
+// BootstrapRepoRelativeDir is the path under <state-dir> where the
+// GitOps-publishable declarative bootstrap repo lives. Runtime build
+// artifacts (secrets, installer logs, agent ISO) MUST NOT be written
+// under this prefix.
+const BootstrapRepoRelativeDir = "git-repos/clusters-bootstrap"
+
+// RuntimeRelativeDir is the path under <state-dir> for local-only runtime
+// artifacts (effective configs with secrets, .openshift_install* logs,
+// agent ISO, auth/, boot-artifacts/). Never published to git.
+const RuntimeRelativeDir = "runtime"
+
 type InstallerAsset struct {
 	ClusterName                string
 	Method                     string
@@ -25,8 +36,14 @@ type InstallerAsset struct {
 func InstallerAssets(stateDir string, state v1alpha1.State) []InstallerAsset {
 	assets := make([]InstallerAsset, 0, len(state.OCPClusters))
 	for _, ocp := range state.OCPClusters {
-		dir := filepath.Join(stateDir, "clusters-bootstrap.git", ocp.Metadata.Name, "openshift")
-		workDir := filepath.Join(dir, "work")
+		// Dir is the git-tracked declarative tree (placeholders only, safe to
+		// publish to a GitOps provider). WorkDir is local-only runtime state
+		// for openshift-install: effective configs with secrets inlined,
+		// `.openshift_install*` logs/state, agent ISO, auth/, boot-artifacts.
+		// Keep these on separate roots so the bootstrap repo never collects
+		// secrets or build output.
+		dir := filepath.Join(stateDir, BootstrapRepoRelativeDir, ocp.Metadata.Name, "openshift")
+		workDir := filepath.Join(stateDir, RuntimeRelativeDir, ocp.Metadata.Name, "installer")
 		assets = append(assets, InstallerAsset{
 			ClusterName:                ocp.Metadata.Name,
 			Method:                     ocp.Spec.Install.Method,

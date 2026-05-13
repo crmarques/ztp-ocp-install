@@ -82,9 +82,11 @@ func All(stateDir, secretsDir string, state v1alpha1.State) (Result, error) {
 }
 
 // ResolveInstaller writes install-config.yaml / agent-config.yaml under each
-// cluster's openshift/work/ directory with secrets inlined from secretsDir.
-// Returned paths contain real credentials; the safe placeholder copies under
-// openshift/ stay untouched.
+// cluster's runtime installer directory (state-dir/runtime/<cluster>/installer/)
+// with secrets inlined from secretsDir. Returned paths contain real credentials
+// and live outside the bootstrap repo so the GitOps-publishable tree stays
+// secret-free; the safe placeholder copies under
+// state-dir/git-repos/clusters-bootstrap/<cluster>/openshift/ stay untouched.
 func ResolveInstaller(stateDir, secretsDir string, state v1alpha1.State) (Result, error) {
 	result := Result{InstallerAssets: InstallerAssets(stateDir, state)}
 	for _, ocp := range state.OCPClusters {

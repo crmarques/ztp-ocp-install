@@ -1,7 +1,7 @@
 ---
 - name: Locate agent ISO
   ansible.builtin.find:
-    paths: "{{ gitups_ocp_installer_dir }}/work"
+    paths: "{{ gitups_ocp_installer_work_dir }}"
     patterns: "agent.*.iso"
     file_type: file
   register: gitups_agent_iso_find
@@ -10,7 +10,7 @@
 
 - name: Validate agent ISO exists
   ansible.builtin.fail:
-    msg: "openshift-install did not produce an agent ISO under {{ gitups_ocp_installer_dir }}/work"
+    msg: "openshift-install did not produce an agent ISO under {{ gitups_ocp_installer_work_dir }}"
   when: gitups_agent_iso_find.matched == 0
 
 - name: Select agent ISO path
@@ -41,7 +41,7 @@
 
 - name: Wait for agent install completion
   ansible.builtin.command:
-    cmd: "{{ gitups_openshift_install_path }} agent wait-for install-complete --dir {{ gitups_ocp_installer_dir }}/work --log-level info"
+    cmd: "{{ gitups_openshift_install_path }} agent wait-for install-complete --dir {{ gitups_ocp_installer_work_dir }} --log-level info"
   environment: "{{ gitups_ocp_install_env }}"
   async: "{{ gitups_ocp_install_timeout_seconds }}"
   poll: 300
@@ -52,9 +52,9 @@
 
 - name: Record kubeconfig path
   ansible.builtin.copy:
-    dest: "{{ gitups_ocp_installer_dir }}/work/kubeconfig.path"
+    dest: "{{ gitups_ocp_installer_work_dir }}/kubeconfig.path"
     mode: "0600"
-    content: "{{ gitups_ocp_installer_dir }}/work/auth/kubeconfig\n"
+    content: "{{ gitups_ocp_installer_work_dir }}/auth/kubeconfig\n"
   when: gitups_ocp_install_wait.rc == 0
   delegate_to: localhost
   become: false

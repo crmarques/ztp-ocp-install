@@ -88,6 +88,7 @@ type OCPInstallerVars struct {
 	RelativeDir               string `yaml:"relativeDir" json:"relativeDir"`
 	RelativeInstallConfigPath string `yaml:"relativeInstallConfigPath" json:"relativeInstallConfigPath"`
 	RelativeAgentConfigPath   string `yaml:"relativeAgentConfigPath" json:"relativeAgentConfigPath"`
+	RelativeWorkDir           string `yaml:"relativeWorkDir" json:"relativeWorkDir"`
 }
 
 type OCPClusterNodeVars struct {

@@ -42,7 +42,7 @@ func discoverStateDir() (string, bool) {
 		return "", false
 	}
 	for i := 0; i < 32; i++ {
-		info, err := os.Stat(filepath.Join(dir, bootstrapRepoName))
+		info, err := os.Stat(filepath.Join(dir, bootstrapRepoParent, bootstrapRepoName))
 		if err == nil && info.IsDir() {
 			return dir, true
 		}

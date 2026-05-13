@@ -32,7 +32,7 @@ func TestInitWorkspaceGeneratesBootstrapRepo(t *testing.T) {
 		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
 	}
 	output := stdout.String()
-	clusterDir := filepath.Join(stateDir, "clusters-bootstrap.git", "ocp-bm-01")
+	clusterDir := filepath.Join(stateDir, "git-repos", "clusters-bootstrap", "ocp-bm-01")
 	for _, expected := range []string{
 		filepath.Join(clusterDir, "gitups", "environment.yaml"),
 		filepath.Join(clusterDir, "gitups", "provider.yaml"),
@@ -47,7 +47,7 @@ func TestInitWorkspaceGeneratesBootstrapRepo(t *testing.T) {
 			t.Fatalf("expected %s: %v", expected, err)
 		}
 	}
-	if _, err := os.Stat(filepath.Join(stateDir, "clusters-bootstrap.git", ".git")); err != nil {
+	if _, err := os.Stat(filepath.Join(stateDir, "git-repos", "clusters-bootstrap", ".git")); err != nil {
 		t.Fatalf("expected initialized git repo: %v", err)
 	}
 }
@@ -77,7 +77,7 @@ func TestRenderClusterInstallFilesUsesBootstrapRepoByDefault(t *testing.T) {
 		t.Fatalf("render code got %d, stderr: %s", code, stderr.String())
 	}
 	for _, name := range []string{"install-config.yaml", "agent-config.yaml"} {
-		path := filepath.Join(stateDir, "clusters-bootstrap.git", "ocp-bm-01", "openshift", name)
+		path := filepath.Join(stateDir, "git-repos", "clusters-bootstrap", "ocp-bm-01", "openshift", name)
 		if _, err := os.Stat(path); err != nil {
 			t.Fatalf("expected rendered %s: %v", path, err)
 		}
@@ -126,7 +126,7 @@ func TestStatusDiscoversStateDirFromNestedCwd(t *testing.T) {
 	}, nil, &stdout, &stderr); code != 0 {
 		t.Fatalf("init code=%d, stderr=%s", code, stderr.String())
 	}
-	nested := filepath.Join(stateDir, "clusters-bootstrap.git", "ocp-bm-01", "gitups")
+	nested := filepath.Join(stateDir, "git-repos", "clusters-bootstrap", "ocp-bm-01", "gitups")
 	t.Chdir(nested)
 	stdout.Reset()
 	stderr.Reset()
@@ -1064,7 +1064,7 @@ func TestInfraApplyDryRunRespectsScope(t *testing.T) {
 		t.Fatalf("infra apply playbook missing in dry-run output:\n%s", output)
 	}
 	for _, leakedCluster := range []string{"hub", "managed-02"} {
-		path := filepath.Join("clusters-bootstrap.git", leakedCluster, "openshift", "install-config.yaml")
+		path := filepath.Join("git-repos", "clusters-bootstrap", leakedCluster, "openshift", "install-config.yaml")
 		if strings.Contains(output, path) {
 			t.Fatalf("scoped infra apply leaked installer for %s:\n%s", leakedCluster, output)
 		}
@@ -1089,7 +1089,7 @@ func TestClustersApplyDryRunOnlyRunsClustersScope(t *testing.T) {
 		t.Fatalf("stdout missing clusters target apply playbook: %s", output)
 	}
 	for _, cluster := range []string{"hub", "managed-01", "managed-02"} {
-		path := filepath.Join("clusters-bootstrap.git", cluster, "openshift", "install-config.yaml")
+		path := filepath.Join("git-repos", "clusters-bootstrap", cluster, "openshift", "install-config.yaml")
 		if !strings.Contains(output, path) {
 			t.Fatalf("clusters apply must render %s installer assets:\n%s", cluster, output)
 		}
@@ -1114,12 +1114,12 @@ func TestRenderClusterInstallFilesRespectsScope(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code got %d, stderr: %s", code, stderr.String())
 	}
-	selected := filepath.Join(stateDir, "clusters-bootstrap.git", "managed-01", "openshift", "install-config.yaml")
+	selected := filepath.Join(stateDir, "git-repos", "clusters-bootstrap", "managed-01", "openshift", "install-config.yaml")
 	if _, err := os.Stat(selected); err != nil {
 		t.Fatalf("expected selected installer file %s: %v", selected, err)
 	}
 	for _, skipped := range []string{"hub", "managed-02"} {
-		path := filepath.Join(stateDir, "clusters-bootstrap.git", skipped, "openshift", "install-config.yaml")
+		path := filepath.Join(stateDir, "git-repos", "clusters-bootstrap", skipped, "openshift", "install-config.yaml")
 		if _, err := os.Stat(path); err == nil {
 			t.Fatalf("unexpected installer file for unselected cluster %s", skipped)
 		}

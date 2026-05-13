@@ -107,8 +107,8 @@ and proxy secret exist — see the case README.
 After the case-specific `gitups destroy` steps, on the bastion:
 
 ```bash
-rm -rf "$GITUPS_STATE_DIR/clusters-bootstrap.git/$CASE" \
-       "$GITUPS_STATE_DIR/clusters/$CASE"
+rm -rf "$GITUPS_STATE_DIR/git-repos/clusters-bootstrap/$CASE" \
+       "$GITUPS_STATE_DIR/runtime/$CASE"
 ```
 
 The bastion machine itself stays — Gitups does not manage its lifecycle.

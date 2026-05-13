@@ -103,7 +103,7 @@ func printClusterStatus(stdout io.Writer, state v1alpha1.State, stateDir string)
 		}
 		detail := fmt.Sprintf("role=%s topology=%s install=%s", role, ocp.Spec.Topology, ocp.Spec.Install.Method)
 		printOK(stdout, name, detail)
-		installer := filepath.Join(stateDir, "clusters-bootstrap.git", name, "openshift", "install-config.yaml")
+		installer := filepath.Join(bootstrapRepoDir(stateDir), name, "openshift", "install-config.yaml")
 		if fileExists(installer) {
 			printOK(stdout, "  installer", installer)
 		} else {
@@ -143,7 +143,7 @@ func nextStepHints(repoExists, stateLoaded bool, state v1alpha1.State, stateDir 
 func clustersMissingInstaller(state v1alpha1.State, stateDir string) []string {
 	var missing []string
 	for _, ocp := range state.OCPClusters {
-		path := filepath.Join(stateDir, "clusters-bootstrap.git", ocp.Metadata.Name, "openshift", "install-config.yaml")
+		path := filepath.Join(bootstrapRepoDir(stateDir), ocp.Metadata.Name, "openshift", "install-config.yaml")
 		if !fileExists(path) {
 			missing = append(missing, ocp.Metadata.Name)
 		}

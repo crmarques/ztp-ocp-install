@@ -2,7 +2,8 @@
 - name: Resolve agent destroy context
   ansible.builtin.set_fact:
     gitups_ocp_installer_dir: "{{ gitups_state_dir }}/{{ gitups_current_cluster.ocp.installer.relativeDir }}"
-    gitups_ocp_installer_relative_work: "{{ gitups_current_cluster.ocp.installer.relativeDir }}/work"
+    gitups_ocp_installer_work_dir: "{{ gitups_state_dir }}/{{ gitups_current_cluster.ocp.installer.relativeWorkDir }}"
+    gitups_ocp_installer_relative_work: "{{ gitups_current_cluster.ocp.installer.relativeWorkDir }}"
     gitups_ocp_provider_bmc: "{{ gitups_current_provider.bmc | default({}) }}"
     gitups_ocp_bmc_auth_enabled: "{{ (gitups_current_provider.bmc | default({})).auth is defined and (gitups_current_provider.bmc | default({})).auth.credentialRef | default('') | length > 0 }}"
   changed_when: false
@@ -78,5 +79,5 @@
 
 - name: Remove installer work directory
   ansible.builtin.file:
-    path: "{{ gitups_ocp_installer_dir }}/work"
+    path: "{{ gitups_ocp_installer_work_dir }}"
     state: absent

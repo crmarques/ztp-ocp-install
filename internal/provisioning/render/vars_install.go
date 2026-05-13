@@ -167,15 +167,24 @@ func subjectAltName(dnsNames, ipAddresses []string) string {
 
 func ocpInstallerVars(clusterName string) OCPInstallerVars {
 	dir := installerRelativeDir(clusterName)
+	workDir := installerRelativeWorkDir(clusterName)
 	return OCPInstallerVars{
 		RelativeDir:               dir,
 		RelativeInstallConfigPath: dir + "/install-config.yaml",
 		RelativeAgentConfigPath:   dir + "/agent-config.yaml",
+		RelativeWorkDir:           workDir,
 	}
 }
 
 func installerRelativeDir(clusterName string) string {
-	return "clusters-bootstrap.git/" + clusterName + "/openshift"
+	return BootstrapRepoRelativeDir + "/" + clusterName + "/openshift"
+}
+
+// installerRelativeWorkDir is the local-only runtime tree consumed by
+// openshift-install. Kept outside the bootstrap repo so the repo only
+// contains declarative config safe to push to a Git provider.
+func installerRelativeWorkDir(clusterName string) string {
+	return RuntimeRelativeDir + "/" + clusterName + "/installer"
 }
 
 func ocpClusterNodes(item v1alpha1.ClusterInfrastructure, ocp v1alpha1.OCPCluster, env *v1alpha1.Environment, secretsDir string) []OCPClusterNodeVars {

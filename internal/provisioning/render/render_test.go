@@ -180,7 +180,7 @@ func TestRenderInstallerAssets(t *testing.T) {
 		t.Fatalf("render All returned error: %v", err)
 	}
 	asset := result.InstallerAssets[0]
-	if got, want := asset.InstallConfigPath, filepath.Join(stateDir, "clusters-bootstrap.git", "hub", "openshift", "install-config.yaml"); got != want {
+	if got, want := asset.InstallConfigPath, filepath.Join(stateDir, "git-repos", "clusters-bootstrap", "hub", "openshift", "install-config.yaml"); got != want {
 		t.Fatalf("install-config path got %q, want %q", got, want)
 	}
 	installConfig := readFile(t, asset.InstallConfigPath)
@@ -867,9 +867,12 @@ func TestResolveInstallerInlinesSecretsIntoWorkCopies(t *testing.T) {
 		t.Fatalf("expected one resolved installer asset, got %d", len(resolved.InstallerAssets))
 	}
 	asset := resolved.InstallerAssets[0]
-	expectedWork := filepath.Join(stateDir, "clusters-bootstrap.git", state.OCPClusters[0].Metadata.Name, "openshift", "work", "install-config.yaml")
+	expectedWork := filepath.Join(stateDir, "runtime", state.OCPClusters[0].Metadata.Name, "installer", "install-config.yaml")
 	if got := asset.EffectiveInstallConfigPath; got != expectedWork {
 		t.Fatalf("effective install-config path got %q, want %q", got, expectedWork)
+	}
+	if rel, err := filepath.Rel(filepath.Join(stateDir, "git-repos", "clusters-bootstrap"), asset.EffectiveInstallConfigPath); err == nil && !strings.HasPrefix(rel, "..") {
+		t.Fatalf("effective install-config must live outside the bootstrap repo, got %q", asset.EffectiveInstallConfigPath)
 	}
 	workDirInfo, err := os.Stat(asset.WorkDir)
 	if err != nil {

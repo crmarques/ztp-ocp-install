@@ -77,14 +77,18 @@ The provisioning handoff from Go to Ansible is the rendered state directory:
 | `gitups.lock.yaml` | Go | Reproducibility and review |
 | `ansible/inventory.yaml` | Go | Ansible only |
 | `ansible/vars.yaml` | Go | Ansible only |
-| `openshift/<cluster>/install-config.yaml` | Go | Reviewable safe installer input |
-| `openshift/<cluster>/agent-config.yaml` | Go | Reviewable safe installer input |
-| `openshift/<cluster>/work/` | Go or Ansible apply-time materialization | Direct `openshift-install` execution |
+| `git-repos/clusters-bootstrap/<cluster>/openshift/install-config.yaml` | Go | Reviewable safe installer input (GitOps-publishable) |
+| `git-repos/clusters-bootstrap/<cluster>/openshift/agent-config.yaml` | Go | Reviewable safe installer input (GitOps-publishable) |
+| `runtime/<cluster>/installer/` | Go or Ansible apply-time materialization | Direct `openshift-install` execution (local only) |
 
-Safe installer files do not contain secret bytes. Effective work files may
-contain resolved pull secrets, SSH keys, mirror credentials, proxy
-credentials, or trust material and must remain under local state with
-restricted permissions.
+The `git-repos/clusters-bootstrap/` tree is the declarative source intended
+for publication to a Git provider; it MUST NOT contain secret bytes, build
+artifacts, or installer logs. Apply-time materialization (effective
+install/agent configs with resolved secrets, `.openshift_install*` logs
+and state, agent ISOs, `auth/`, `boot-artifacts/`, `rendezvousIP`) lives
+under a sibling `runtime/` tree with restricted permissions and is never
+pushed. `git-repos/` is the umbrella for any additional bootstrap or
+publishable repos that may be added later (e.g. fleet-wide GitOps content).
 
 ## Extension Points
 

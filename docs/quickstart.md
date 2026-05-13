@@ -46,22 +46,24 @@ changing the host.
 ## Installer Render Output
 
 `gitups render installer` writes two artifacts per `OCPCluster` under
-`<state-dir>/clusters-bootstrap.git/<cluster>/openshift/`:
+`<state-dir>/git-repos/clusters-bootstrap/<cluster>/openshift/`:
 
 - `install-config.yaml` and `agent-config.yaml` with placeholder strings
   (`<gitups-ssh-key-ref:...>`, `gitups-secret-ref:...`) in place of secret
-  material. These are safe to inspect.
-- With `--resolve-secrets`, an additional `work/install-config.yaml` and
-  `work/agent-config.yaml` are produced. These have the pull secret, SSH key,
-  additional trust bundle, mirror-registry auth, and proxy credentials inlined
-  from `--secrets-dir` (default `$GITUPS_SECRETS_DIR` or `~/.gitups/secrets`),
+  material. These are safe to inspect and are the GitOps-publishable source.
+- With `--resolve-secrets`, effective copies are written under
+  `<state-dir>/runtime/<cluster>/installer/install-config.yaml` and
+  `agent-config.yaml`. These have the pull secret, SSH key, additional trust
+  bundle, mirror-registry auth, and proxy credentials inlined from
+  `--secrets-dir` (default `$GITUPS_SECRETS_DIR` or `~/.gitups/secrets`),
   written mode `0600`, and are the files `openshift-install agent create
   image` consumes. Treat them as credentials and keep them off version
-  control.
+  control — they live outside the bootstrap repo for exactly that reason.
 
-`gitups apply clusters` rewrites `work/install-config.yaml` and
-`work/agent-config.yaml` at apply time, so the `--resolve-secrets` step is
-optional and only needed when you want to inspect the effective config
+`gitups apply clusters` rewrites the runtime
+`installer/install-config.yaml` and `installer/agent-config.yaml` at apply
+time, so the `--resolve-secrets` step is optional and only needed when you
+want to inspect the effective config
 before booting.
 
 ## Apply
