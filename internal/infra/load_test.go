@@ -277,6 +277,69 @@ func TestNormalizeDefaultsRemoteHostUserToInvokingUser(t *testing.T) {
 	}
 }
 
+func TestValidationRejectsMultipleEnvironments(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "case.yaml"), validStateYAML("multi-env", "multi-env-provider", "192.168.170.0/24", "192.168.170.10", "192.168.170.11", "192.168.170.20"))
+	writeFile(t, filepath.Join(dir, "second-env.yaml"), `apiVersion: gitups.io/v1alpha1
+kind: Environment
+metadata:
+  name: env-second
+spec:
+  baseDomain: other.example
+  ocpInstallType: connected
+  secrets:
+    openshift-pull-secret:
+      file: ./pull-secret
+    cluster-admin-key:
+      file: ./ssh-key.pub
+`)
+	_, err := LoadNormalizeValidate([]string{dir})
+	if err == nil {
+		t.Fatal("expected validation error for multiple Environment documents")
+	}
+	if !strings.Contains(err.Error(), "exactly one Environment is supported") {
+		t.Fatalf("expected single-Environment error, got %v", err)
+	}
+}
+
+func TestValidationRejectsMissingEnvironment(t *testing.T) {
+	dir := t.TempDir()
+	body := validStateYAML("no-env", "no-env-provider", "192.168.171.0/24", "192.168.171.10", "192.168.171.11", "192.168.171.20")
+	envStart := strings.Index(body, "apiVersion: gitups.io/v1alpha1\nkind: Environment")
+	envEnd := strings.Index(body, "---\napiVersion: gitups.io/v1alpha1\nkind: InfrastructureProvider")
+	if envStart < 0 || envEnd < 0 {
+		t.Fatalf("fixture is missing the Environment header it should strip")
+	}
+	body = body[envEnd+len("---\n"):]
+	writeFile(t, filepath.Join(dir, "case.yaml"), body)
+	_, err := LoadNormalizeValidate([]string{dir})
+	if err == nil {
+		t.Fatal("expected validation error when no Environment is supplied")
+	}
+	if !strings.Contains(err.Error(), "at least one Environment is required") {
+		t.Fatalf("expected at-least-one-Environment error, got %v", err)
+	}
+}
+
+func TestValidationAcceptsManyOfShareableKinds(t *testing.T) {
+	state, err := LoadNormalizeValidate([]string{"../../examples/libvirt-redfish-lab-fleet"})
+	if err != nil {
+		t.Fatalf("LoadNormalizeValidate returned error: %v", err)
+	}
+	if got := len(state.Environments); got != 1 {
+		t.Fatalf("expected exactly 1 Environment, got %d", got)
+	}
+	if got := len(state.InfrastructureProviders); got < 2 {
+		t.Fatalf("expected multiple InfrastructureProviders, got %d", got)
+	}
+	if got := len(state.ClusterInfrastructures); got < 2 {
+		t.Fatalf("expected multiple ClusterInfrastructures, got %d", got)
+	}
+	if got := len(state.OCPClusters); got < 2 {
+		t.Fatalf("expected multiple OCPClusters, got %d", got)
+	}
+}
+
 func TestValidationRejectsDuplicateNames(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "first.yaml"), validStateYAML("duplicate", "provider-a", "192.168.151.0/24", "192.168.151.10", "192.168.151.11", "192.168.151.20"))
