@@ -78,15 +78,15 @@ func newBastionApplyCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *co
 			}
 			state = loaded
 		}
-		plan, err := controllerBootstrapPlan()
-		if err != nil {
-			return failErr(1, err)
-		}
-		cliSpec := planControllerCLIInstall(state, cf.stateDir, defaultControllerCLIInstallDir())
 		proxyEnv, err := resolveProxyEnv(state, secretsDir)
 		if err != nil {
 			return failErr(1, err)
 		}
+		plan, err := controllerBootstrapPlan(len(proxyEnv) > 0)
+		if err != nil {
+			return failErr(1, err)
+		}
+		cliSpec := planControllerCLIInstall(state, cf.stateDir, defaultControllerCLIInstallDir())
 
 		printTitle(stdout, "bastion apply")
 		fmt.Fprintf(stdout, "ansible-core target: managed venv at %s\n", ansibleVenvDir())

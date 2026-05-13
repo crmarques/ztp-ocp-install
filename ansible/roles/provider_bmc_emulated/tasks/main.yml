@@ -121,22 +121,103 @@
     cmd: "python3 -m venv --system-site-packages {{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/venv"
     creates: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/venv/bin/python"
 
-- name: Probe installed sushy-tools version inside virtualenv
-  ansible.builtin.command:
-    cmd: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/venv/bin/pip show sushy-tools"
-  register: gitups_bmc_sushy_show
+- name: Find installed sushy-tools dist-info inside virtualenv
+  ansible.builtin.find:
+    paths: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/venv/lib"
+    patterns: "sushy_tools-{{ gitups_sushy_tools_version }}.dist-info"
+    recurse: true
+    file_type: directory
+  register: gitups_bmc_venv_sushy_dirs
   changed_when: false
-  failed_when: false
+
+- name: Stat sushy-emulator executable inside virtualenv
+  ansible.builtin.stat:
+    path: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/venv/bin/sushy-emulator"
+  register: gitups_bmc_sushy_emulator_stat
+  changed_when: false
+
+- name: Resolve whether sushy-tools must be installed into virtualenv
+  ansible.builtin.set_fact:
+    gitups_bmc_sushy_install_needed: >-
+      {{
+        (gitups_bmc_venv_sushy_dirs.files | default([]) | length) == 0
+        or not (gitups_bmc_sushy_emulator_stat.stat.exists | default(false))
+      }}
+  changed_when: false
+
+- name: Stage pip proxy config for sushy-tools install
+  ansible.builtin.copy:
+    dest: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/pip.conf"
+    content: |
+      [global]
+      proxy = {{ gitups_proxy_primary }}
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  when:
+    - gitups_bmc_sushy_install_needed | bool
+    - gitups_proxy_enabled | default(false)
 
 - name: Install pinned sushy-tools into virtualenv
-  ansible.builtin.command:
-    cmd: >-
-      {{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/venv/bin/pip
-      install --ignore-installed --no-deps
-      sushy-tools=={{ gitups_sushy_tools_version }}
-  when: >-
-    gitups_bmc_sushy_show.rc != 0
-    or ('Version: ' ~ gitups_sushy_tools_version) not in gitups_bmc_sushy_show.stdout
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      PIP_CONFIG="{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/pip.conf"
+      [ -r "$PIP_CONFIG" ] || PIP_CONFIG=/dev/null
+      env \
+        -u HTTP_PROXY -u HTTPS_PROXY -u NO_PROXY \
+        -u http_proxy -u https_proxy -u no_proxy \
+        PIP_CONFIG_FILE="$PIP_CONFIG" \
+        "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/venv/bin/pip" install \
+        --ignore-installed --no-deps \
+        "sushy-tools=={{ gitups_sushy_tools_version }}" 2>&1 \
+        | sed -E 's|://[^@/]+@|://***@|g'
+    executable: /bin/bash
+  register: gitups_bmc_pip_install
+  changed_when: gitups_bmc_pip_install.rc == 0
+  failed_when: false
+  when: gitups_bmc_sushy_install_needed | bool
+
+- name: Remove staged pip proxy files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/.pip-proxy-url"
+    - "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/pip.conf"
+
+- name: List venv site-packages after install
+  ansible.builtin.find:
+    paths: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/venv/lib"
+    patterns: "sushy_tools-{{ gitups_sushy_tools_version }}.dist-info"
+    recurse: true
+    file_type: directory
+  register: gitups_bmc_venv_sushy_dirs
+  changed_when: false
+
+- name: Stat sushy-emulator executable after install
+  ansible.builtin.stat:
+    path: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/venv/bin/sushy-emulator"
+  register: gitups_bmc_sushy_emulator_stat
+  changed_when: false
+
+- name: Assert sushy-tools install succeeded
+  ansible.builtin.assert:
+    that:
+      - (not (gitups_bmc_sushy_install_needed | bool)) or gitups_bmc_pip_install.rc | default(1) == 0
+      - (gitups_bmc_venv_sushy_dirs.files | default([]) | length) > 0
+      - gitups_bmc_sushy_emulator_stat.stat.exists | default(false)
+    fail_msg: >-
+      sushy-tools=={{ gitups_sushy_tools_version }} did not land in the venv.
+      install_needed={{ gitups_bmc_sushy_install_needed | default('unknown') }};
+      proxy_enabled={{ gitups_proxy_enabled | default(false) }};
+      proxy_auth_ref_present={{ (gitups_proxy_credentials_ref | default('') | length) > 0 }};
+      pip_rc={{ gitups_bmc_pip_install.rc | default('skipped') }};
+      pip_output_head={{ (gitups_bmc_pip_install.stdout | default('')).split('\n')[:3] | join(' | ') }};
+      pip_output_tail={{ (gitups_bmc_pip_install.stdout | default('')).split('\n')[-3:] | join(' | ') }};
+      venv_sushy_dirs={{ gitups_bmc_venv_sushy_dirs.files | map(attribute='path') | list }};
+      sushy_emulator_exists={{ gitups_bmc_sushy_emulator_stat.stat.exists | default(false) }}.
 
 - name: Verify sushy-emulator can import libvirt
   ansible.builtin.command:

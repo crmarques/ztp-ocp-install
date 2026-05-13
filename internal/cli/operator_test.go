@@ -97,7 +97,7 @@ func stubBastionLookPathAlwaysOK(t *testing.T) {
 }
 
 func TestControllerBootstrapPlanVenvModeStaysUserOwned(t *testing.T) {
-	plan, err := controllerBootstrapPlan()
+	plan, err := controllerBootstrapPlan(false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -123,6 +123,18 @@ func TestControllerBootstrapPlanVenvModeStaysUserOwned(t *testing.T) {
 	pipInstall := strings.Join(venvSteps[2].cmd, " ")
 	if !strings.Contains(pipInstall, "ansible-core==") {
 		t.Fatalf("expected pinned ansible-core install, got %s", pipInstall)
+	}
+}
+
+func TestSudoPackageInstallCmdPreservesProxyOnlyWhenRequested(t *testing.T) {
+	base := []string{"dnf", "install", "-y", "python3.12"}
+	withoutProxy := strings.Join(sudoPackageInstallCmd(base, false), " ")
+	if strings.Contains(withoutProxy, "--preserve-env") {
+		t.Fatalf("sudo command without state proxy must not preserve ambient proxy env: %s", withoutProxy)
+	}
+	withProxy := strings.Join(sudoPackageInstallCmd(base, true), " ")
+	if !strings.Contains(withProxy, "--preserve-env="+sudoPreservedProxyVars) {
+		t.Fatalf("sudo command with state proxy must preserve resolved proxy env: %s", withProxy)
 	}
 }
 

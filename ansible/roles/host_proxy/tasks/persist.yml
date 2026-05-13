@@ -36,6 +36,28 @@
       no_log: "{{ (gitups_proxy_credentials_ref | length) > 0 }}"
       when: (gitups_proxy_credentials_ref | length) == 0
 
+    # When credentials_ref is set, we deliberately skip writing the proxy
+    # URL to /etc/environment and /etc/profile.d (would leak creds into
+    # 0644 world-readable files). But if a prior run wrote those files
+    # with a bare URL — back when creds_ref was empty — they survive and
+    # are loaded by sshd/PAM into every login shell. That stale bare URL
+    # then beats /root/.pip/pip.conf (env vars win), so pip tunnels with
+    # no Proxy-Authorization header and Squid replies 407. Strip them so
+    # only the 0600 systemd drop-in supplies the credentialed URL.
+    - name: Remove stale /etc/environment proxy block when creds_ref is set
+      ansible.builtin.blockinfile:
+        path: /etc/environment
+        marker: "# {mark} ANSIBLE MANAGED BLOCK gitups-proxy"
+        state: absent
+      failed_when: false
+      when: (gitups_proxy_credentials_ref | length) > 0
+
+    - name: Remove stale /etc/profile.d/gitups-proxy.sh when creds_ref is set
+      ansible.builtin.file:
+        path: /etc/profile.d/gitups-proxy.sh
+        state: absent
+      when: (gitups_proxy_credentials_ref | length) > 0
+
     - name: Stat dnf.conf
       ansible.builtin.stat:
         path: /etc/dnf/dnf.conf

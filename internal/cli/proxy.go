@@ -143,3 +143,37 @@ func mergeEnv(base []string, extra map[string]string) []string {
 	}
 	return out
 }
+
+func mergeBootstrapEnv(base []string, extra map[string]string) []string {
+	return mergeEnv(stripProxyEnv(base), extra)
+}
+
+func stripProxyEnv(env []string) []string {
+	if len(env) == 0 {
+		return env
+	}
+	out := make([]string, 0, len(env))
+	for _, kv := range env {
+		eq := strings.IndexByte(kv, '=')
+		if eq <= 0 {
+			out = append(out, kv)
+			continue
+		}
+		if _, ok := bootstrapProxyEnvKeys[kv[:eq]]; ok {
+			continue
+		}
+		out = append(out, kv)
+	}
+	return out
+}
+
+var bootstrapProxyEnvKeys = map[string]struct{}{
+	"HTTP_PROXY":  {},
+	"HTTPS_PROXY": {},
+	"NO_PROXY":    {},
+	"http_proxy":  {},
+	"https_proxy": {},
+	"no_proxy":    {},
+	"ALL_PROXY":   {},
+	"all_proxy":   {},
+}

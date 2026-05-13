@@ -48,7 +48,7 @@ func resolvePython312() (string, bool) {
 	return "", false
 }
 
-func python312InstallCmd() []string {
+func python312InstallCmd(preserveProxyEnv bool) []string {
 	type pkgMgr struct {
 		bin  string
 		args []string
@@ -64,20 +64,25 @@ func python312InstallCmd() []string {
 			return pm.args
 		}
 		if _, err := exec.LookPath("sudo"); err == nil {
-			return append([]string{"sudo", "--preserve-env=" + sudoPreservedProxyVars}, pm.args...)
+			return sudoPackageInstallCmd(pm.args, preserveProxyEnv)
 		}
 		return pm.args
 	}
 	return nil
 }
 
-// sudoPreservedProxyVars lists the proxy env vars carried through `sudo` so
-// privileged steps (package installs, become tasks) reach mirrors when the
-// caller is behind a proxy declared in Environment.spec.proxy. Mirrors the
-// keys produced by resolveProxyEnv.
+func sudoPackageInstallCmd(args []string, preserveProxyEnv bool) []string {
+	out := []string{"sudo"}
+	if preserveProxyEnv {
+		out = append(out, "--preserve-env="+sudoPreservedProxyVars)
+	}
+	return append(out, args...)
+}
+
+// sudoPreservedProxyVars mirrors the proxy keys produced by resolveProxyEnv.
 const sudoPreservedProxyVars = "HTTP_PROXY,HTTPS_PROXY,NO_PROXY,http_proxy,https_proxy,no_proxy"
 
-func controllerBootstrapPlan() ([]bootstrapStep, error) {
+func controllerBootstrapPlan(preserveProxyEnv bool) ([]bootstrapStep, error) {
 	pin, err := ansibleCorePinnedVersion()
 	if err != nil {
 		return nil, err
@@ -85,7 +90,7 @@ func controllerBootstrapPlan() ([]bootstrapStep, error) {
 	python, found := resolvePython312()
 	var steps []bootstrapStep
 	if !found {
-		installCmd := python312InstallCmd()
+		installCmd := python312InstallCmd(preserveProxyEnv)
 		if installCmd == nil {
 			return nil, fmt.Errorf("python3.12 not found; install it manually or ensure dnf or apt-get is available")
 		}
@@ -122,7 +127,7 @@ func runBootstrapPlan(ctx context.Context, stdin io.Reader, stdout io.Writer, st
 		run.Stdout = stdout
 		run.Stderr = stderr
 		run.Stdin = stdin
-		run.Env = mergeEnv(os.Environ(), extraEnv)
+		run.Env = mergeBootstrapEnv(os.Environ(), extraEnv)
 		if err := run.Run(); err != nil {
 			return failErr(1, fmt.Errorf("%s: %w", step.label, err))
 		}
@@ -205,7 +210,7 @@ func runControllerCLIInstall(ctx context.Context, stdin io.Reader, stdout io.Wri
 	for k, v := range extraEnv {
 		ansibleEnv[k] = v
 	}
-	cmd.Env = mergeEnv(os.Environ(), ansibleEnv)
+	cmd.Env = mergeBootstrapEnv(os.Environ(), ansibleEnv)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("run controller-clis playbook: %w", err)
 	}

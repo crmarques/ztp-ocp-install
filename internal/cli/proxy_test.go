@@ -187,3 +187,58 @@ func TestMergeEnvOverridesDuplicates(t *testing.T) {
 		t.Fatalf("NO_PROXY not added: %q", seen["NO_PROXY"])
 	}
 }
+
+func TestMergeBootstrapEnvStripsAmbientProxyEnv(t *testing.T) {
+	base := []string{
+		"HOME=/root",
+		"HTTP_PROXY=http://proxy.example.test:3128",
+		"HTTPS_PROXY=http://proxy.example.test:3128",
+		"NO_PROXY=localhost",
+		"http_proxy=http://proxy.example.test:3128",
+		"https_proxy=http://proxy.example.test:3128",
+		"no_proxy=localhost",
+		"ALL_PROXY=http://proxy.example.test:3128",
+		"all_proxy=http://proxy.example.test:3128",
+		"PATH=/usr/bin",
+	}
+	got := mergeBootstrapEnv(base, nil)
+	seen := map[string]string{}
+	for _, kv := range got {
+		eq := strings.IndexByte(kv, '=')
+		if eq > 0 {
+			seen[kv[:eq]] = kv[eq+1:]
+		}
+	}
+	if seen["HOME"] != "/root" || seen["PATH"] != "/usr/bin" {
+		t.Fatalf("unrelated env keys lost: %+v", seen)
+	}
+	for key := range bootstrapProxyEnvKeys {
+		if _, ok := seen[key]; ok {
+			t.Fatalf("ambient proxy key %s was not stripped: %+v", key, seen)
+		}
+	}
+}
+
+func TestMergeBootstrapEnvUsesResolvedProxyEnv(t *testing.T) {
+	base := []string{"HOME=/root", "HTTP_PROXY=http://proxy.example.test:3128", "PATH=/usr/bin"}
+	got := mergeBootstrapEnv(base, map[string]string{
+		"HTTP_PROXY": "http://proxy.lab.test:3128",
+		"NO_PROXY":   "localhost,127.0.0.1",
+	})
+	seen := map[string]string{}
+	for _, kv := range got {
+		eq := strings.IndexByte(kv, '=')
+		if eq > 0 {
+			seen[kv[:eq]] = kv[eq+1:]
+		}
+	}
+	if seen["HTTP_PROXY"] != "http://proxy.lab.test:3128" {
+		t.Fatalf("resolved HTTP_PROXY not applied: %+v", seen)
+	}
+	if seen["NO_PROXY"] != "localhost,127.0.0.1" {
+		t.Fatalf("resolved NO_PROXY not applied: %+v", seen)
+	}
+	if seen["HOME"] != "/root" || seen["PATH"] != "/usr/bin" {
+		t.Fatalf("unrelated env keys lost: %+v", seen)
+	}
+}

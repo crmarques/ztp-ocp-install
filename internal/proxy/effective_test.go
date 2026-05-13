@@ -41,7 +41,7 @@ func TestResolveAutoExtendsNoProxy(t *testing.T) {
 				},
 				Endpoints: v1alpha1.ClusterEndpointsSpec{
 					API:     &v1alpha1.EndpointSpec{Address: "192.168.130.10"},
-					Ingress: &v1alpha1.EndpointSpec{Address: "192.168.130.11"},
+					Ingress: &v1alpha1.EndpointSpec{Address: "192.168.130.11", Hostname: "*.apps.hub.example.test"},
 				},
 			},
 		}},
@@ -75,9 +75,15 @@ func TestResolveAutoExtendsNoProxy(t *testing.T) {
 		"192.168.130.0/24", "192.168.130.10", "192.168.130.11",
 		"10.128.0.0/14", "172.30.0.0/16",
 		"mirror.example.test", "10.0.0.1",
+		".apps.hub.example.test",
 	} {
 		if !contains(eff.NoProxy, want) {
 			t.Fatalf("missing %q in %q", want, strings.Join(eff.NoProxy, ","))
+		}
+	}
+	for _, unwanted := range []string{"*.apps.hub.example.test"} {
+		if contains(eff.NoProxy, unwanted) {
+			t.Fatalf("wildcard entry %q must be stripped: %q", unwanted, strings.Join(eff.NoProxy, ","))
 		}
 	}
 }

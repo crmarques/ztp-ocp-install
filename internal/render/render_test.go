@@ -1048,6 +1048,37 @@ func TestOCPInstallCommandEnvironmentIncludesProxyEnv(t *testing.T) {
 	}
 }
 
+func TestHostProxyFactsEscapesSlashInProxyCredentials(t *testing.T) {
+	facts := readFile(t, "../../ansible/roles/host_proxy/tasks/facts.yml")
+	for _, expected := range []string{
+		"gitups_proxy_credentials.username | urlencode | replace('/', '%2F')",
+		"gitups_proxy_credentials.password | urlencode | replace('/', '%2F')",
+	} {
+		if !strings.Contains(facts, expected) {
+			t.Fatalf("host_proxy facts must escape slash in proxy userinfo; missing %q\n%s", expected, facts)
+		}
+	}
+}
+
+func TestProviderBMCEmulatedPipInstallUsesPrivatePipConfig(t *testing.T) {
+	tasks := readFile(t, "../../ansible/roles/provider_bmc_emulated/tasks/main.yml")
+	for _, expected := range []string{
+		"dest: \"{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/pip.conf\"",
+		"PIP_CONFIG_FILE=\"$PIP_CONFIG\"",
+		"-u HTTP_PROXY -u HTTPS_PROXY -u NO_PROXY",
+		"-u http_proxy -u https_proxy -u no_proxy",
+		"venv/bin/sushy-emulator",
+		"executable: /bin/bash",
+	} {
+		if !strings.Contains(tasks, expected) {
+			t.Fatalf("provider_bmc_emulated pip install missing %q\n%s", expected, tasks)
+		}
+	}
+	if strings.Contains(tasks, "--proxy") {
+		t.Fatalf("provider_bmc_emulated must not pass proxy credentials on pip argv\n%s", tasks)
+	}
+}
+
 func TestResolveInstallerFailsWhenSecretFileMissing(t *testing.T) {
 	secretsDir := t.TempDir()
 	state := v1alpha1.State{

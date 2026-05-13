@@ -59,23 +59,26 @@ package selection for the provider stack is intentionally left to Gitups.
 
 Leave this section unset for direct internet access.
 
-The container build and the first `gitups apply bastion` run before any Gitups
-desired state exists, so they use the standard process proxy environment.
+The container build uses the standard process proxy environment. Replace the
+placeholder URL before exporting these variables; do not copy
+`proxy.example.test` as-is.
 
 ```bash
-export HTTP_PROXY=http://proxy.example.test:3128
-export HTTPS_PROXY=http://proxy.example.test:3128
-export NO_PROXY=localhost,127.0.0.1,::1,.gitups.test,192.168.132.0/24,10.128.0.0/14,172.30.0.0/16
-export http_proxy="$HTTP_PROXY"
-export https_proxy="$HTTPS_PROXY"
-export no_proxy="$NO_PROXY"
+# export HTTP_PROXY=http://proxy.example.test:3128
+# export HTTPS_PROXY=http://proxy.example.test:3128
+# export NO_PROXY=localhost,127.0.0.1,::1,.gitups.test,192.168.132.0/24,10.128.0.0/14,172.30.0.0/16
+# export http_proxy="$HTTP_PROXY"
+# export https_proxy="$HTTPS_PROXY"
+# export no_proxy="$NO_PROXY"
 ```
 
-After the workspace exists, Gitups uses `Environment.spec.proxy` for bastion
-CLI downloads, provider-host package/image pulls, generated
-`install-config.yaml`, and `openshift-install`. Use bare proxy URLs there. If
-the proxy requires authentication, set `auth.proxyAuthRef.name` and write the
-credentials with `gitups secret set`; do not embed credentials in the URL.
+`gitups apply bastion` strips ambient proxy variables and uses
+`Environment.spec.proxy` only when desired state is passed with `-f`. In
+proxied environments, create the workspace and proxy secret first, then run
+`gitups apply bastion -f "$WORKSPACE" --yes`. Use bare proxy URLs in desired
+state. If the proxy requires authentication, set `auth.proxyAuthRef.name` and
+write the credentials with `gitups secret set`; do not embed credentials in the
+URL.
 
 ## Start A Fresh Bastion
 
@@ -145,7 +148,9 @@ BASTION_HOME="/home/$(id -un)"
 The first check is expected to report missing tools in a fresh container. The
 apply command installs the Gitups-managed Ansible runtime. Release-specific
 OpenShift CLIs are installed after the workspace exists, because the release
-version comes from desired state.
+version comes from desired state. In an externally proxied environment, skip the
+no-state apply here and run the workspace-scoped bastion apply after
+`environment.yaml` and the proxy secret exist.
 
 ```bash
 gitups check bastion || true

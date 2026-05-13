@@ -28,8 +28,8 @@
   ansible.builtin.set_fact:
     gitups_proxy_authority: >-
       {{
-        (gitups_proxy_credentials.username | urlencode) ~ ':' ~
-        (gitups_proxy_credentials.password | urlencode) ~ '@'
+        (gitups_proxy_credentials.username | urlencode | replace('/', '%2F')) ~ ':' ~
+        (gitups_proxy_credentials.password | urlencode | replace('/', '%2F')) ~ '@'
         if (gitups_proxy_credentials_ref | length) > 0
         else ''
       }}
