@@ -1,12 +1,3 @@
-// Bindings phase: materializes capability bindings declared on consumer
-// PackageRefs into a consumer-side ResolvedPackage and a provider-side
-// ResolvedPackage per env repo that references the provider's generic repo.
-//
-// This runs after the main resolve loop so provider install ResolvedValues
-// are available when we compute `input:<key>` exports. Resolved binding
-// units reuse `resolveOne` so descriptor defaults, placeholder scanning,
-// and prior-fill preservation all behave identically to ordinary resources.
-
 package resolve
 
 import (
@@ -242,9 +233,6 @@ func lookupRequire(def *v1.PackageDefinition, capability string) *v1.CapabilityR
 	return nil
 }
 
-// findProvider locates the PackageRef in the named generic repo whose
-// resolved instance matches and returns its catalog entry, template, and
-// resolved instance name.
 func findProvider(p *v1.GitOpsPackageSet, cat *catalog.Catalog, repoName, instance string) (catalog.Entry, string, string, error) {
 	for _, r := range p.Spec.Repositories {
 		if r.Type != v1.RepoTypeKubernetesResources || r.RepoRef != nil || r.Name != repoName {
@@ -264,9 +252,6 @@ func findProvider(p *v1.GitOpsPackageSet, cat *catalog.Catalog, repoName, instan
 	return catalog.Entry{}, "", "", fmt.Errorf("generic repo %q not declared in GitOpsPackageSet", repoName)
 }
 
-// fullyQualifiedTemplate returns the consumer's template string as written
-// in its PackageRef. We use the declared form so ResolvedPackage.Template
-// matches what the user wrote.
 func fullyQualifiedTemplate(entry catalog.Entry, declared string) string {
 	if declared != "" {
 		return declared
@@ -274,9 +259,9 @@ func fullyQualifiedTemplate(entry catalog.Entry, declared string) string {
 	return entry.Source + "/" + entry.Def.Metadata.Name
 }
 
-// computeExportValues resolves each export to a concrete value (or sentinel)
-// for one binding × env pair. Secret exports sync across both sides by
-// preferring any non-sentinel prior fill on either side.
+// computeExportValues resolves each export per binding x env pair. Secret
+// exports sync across consumer/provider by preferring any non-sentinel prior
+// fill on either side.
 func computeExportValues(
 	exports []v1.CapabilityExport,
 	bindingValues map[string]any,

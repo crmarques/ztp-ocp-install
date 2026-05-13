@@ -88,10 +88,6 @@
         path: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}"
         state: absent
 
-    # cluster_infra/apply.yml installs host_proxy on infra_hosts; strip the
-    # same artifacts on destroy. Safe to run even when infra_hosts overlap
-    # provider_hosts (cleanup is idempotent and providers/destroy.yml runs
-    # the same teardown afterwards).
     - name: Strip host-level proxy configuration
       ansible.builtin.import_role:
         name: host_proxy

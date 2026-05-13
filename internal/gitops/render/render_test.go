@@ -12,9 +12,6 @@ import (
 	"github.com/crmarques/gitups/internal/gitops/resolve"
 )
 
-// stubHelmRunner returns a canned install.yaml per chart so tests don't shell
-// out to the real `helm` binary. Output is stable across runs (hermetic) and
-// small enough to diff.
 type stubHelmRunner struct{}
 
 var stubHelmOutputs = map[string]string{
@@ -36,9 +33,6 @@ func (stubHelmRunner) Template(ctx context.Context, req render.HelmTemplateReque
 	return header + body, nil
 }
 
-// TestRenderRuns drives expand and render end-to-end against the pinned
-// internal/testdata/dsv/gitops-package-set.yaml fixture and the sibling
-// gitups-packages catalog.
 func TestRenderRuns(t *testing.T) {
 	repoRoot, err := filepath.Abs("..")
 	if err != nil {
@@ -49,10 +43,6 @@ func TestRenderRuns(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load package set: %v", err)
 	}
-	// baseDir stays at tests/e2e so the fixture's relative source path
-	// (../../../gitups-packages/packages) resolves to the sibling catalog; the
-	// fixture itself lives one level deeper but is byte-identical to the
-	// workspace copy that e2e runs against.
 	baseDir := filepath.Join(repoRoot, "tests/e2e")
 	cat, err := catalog.Build(p.Spec.Sources, baseDir)
 	if err != nil {

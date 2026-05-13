@@ -1,9 +1,9 @@
 # Code Quality Skill
 
-Use this skill when adding, modifying, deleting, or reviewing Go code in this
-repo to keep the source clean and idiomatic, and to guarantee that no unused
-parameters, functions, methods, types, variables, imports, or fields are
-left behind.
+Use this skill when adding, modifying, deleting, or reviewing code in this
+repo (Go, Python, shell, Ansible YAML, Jinja2 templates) to keep the source
+clean and idiomatic, and to guarantee that no unused parameters, functions,
+methods, types, variables, imports, or fields are left behind.
 
 ## Load First
 
@@ -52,21 +52,40 @@ removed symbol.
   premature interface, generic helper, or options struct introduced
   "just in case".
 - No comments by default. Code is the documentation; names and
-  structure must carry the meaning. A comment is allowed only when
-  the *why* is non-obvious to a future reader who has the code in
-  front of them — a hidden constraint, a subtle invariant, or a
-  workaround whose intent cannot be inferred from the code itself.
+  structure must carry the meaning. Applies to all languages in this
+  repo (Go `//`, Python/shell/YAML/Jinja2 `#`, multi-line forms).
   Specifically forbidden:
-  - Comments that restate what the code already says.
+  - Comments that explain, restate, or re-narrate what the code does.
+    A reader can read the code; the comment adds noise, not signal.
   - "Fix"/"bug"/"after refactor"/"changed because…" notes left over
     from edits. The diff and commit history record that. Delete the
     comment and rely on the surrounding code reading cleanly.
-  - `// removed`, `// kept for compatibility`, `// see PR #…`,
+  - `// removed`, `# kept for compatibility`, `// see PR #…`,
     or `// TODO` markers that do not point to a tracked work item.
-  - Block comments above a function that re-narrate its body.
-  If a comment seems necessary, first try renaming, splitting, or
-  restructuring the code so it is self-explanatory; only write the
-  comment when that fails.
+  - Block comments above a function/task/play that re-narrate its body.
+  - Header banners ("# ===== Section =====") or decorative dividers.
+  A comment is allowed only in these narrow cases:
+  1. **Non-obvious *why***: a hidden constraint, subtle invariant, or
+     workaround whose intent cannot be inferred from the code (e.g.
+     "openEuler squid 7.5 refuses to run as root — must set UID 1000").
+     If the *why* fits in the code (rename a var, split a function,
+     extract a constant), do that first and skip the comment.
+  2. **Section separator inside a long file** where the structure is
+     otherwise hard to scan — a single short label (`# --- defaults`
+     or `// --- request handling`), not a paragraph. Prefer splitting
+     the file if it is long enough to need many separators.
+  3. **Variable/option enumeration**: when a value is one of a small
+     fixed set and the set is not obvious from types or schema, list
+     the allowed values next to the declaration (e.g.
+     `mode: standalone  # standalone | hub | spoke`). Do not write
+     this for free-form strings or values the type system already
+     constrains.
+  Knowledge that explains *why a class of bug exists* (incidents,
+  upstream quirks, environmental gotchas) belongs in
+  `.agents/knowledge/`, not in source comments. When you discover such
+  knowledge, write or update a knowledge file and link it from
+  `.agents/knowledge/KNOWLEDGE.md`; do not duplicate the explanation
+  inline in the code.
 
 ## Method
 

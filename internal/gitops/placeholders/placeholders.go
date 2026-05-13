@@ -1,5 +1,5 @@
-// Package placeholders defines the sentinel string for unfilled values and
-// utilities to locate them inside a resolvedValues tree.
+// Package placeholders defines the sentinel string for unfilled values
+// and utilities to locate them inside a resolvedValues tree.
 package placeholders
 
 import (
@@ -10,8 +10,6 @@ import (
 	v1 "github.com/crmarques/gitups/api/v1alpha1"
 )
 
-// Sentinel is re-exported for callers that don't want to depend on the api
-// package directly.
 const Sentinel = v1.PlaceholderSentinel
 
 // Contains reports whether v holds the sentinel string anywhere in its tree.
@@ -35,10 +33,10 @@ func Contains(v any) bool {
 	return false
 }
 
-// Scan walks resolvedValues for an instance and appends a Placeholder entry
-// for every sentinel string found. Paths use the shape
-// `spec.resolved.packages[<instance>].resolvedValues.<dotted.path>`; array indices are
-// appended as `[n]`. Output is sorted by path for determinism.
+// Scan returns a Placeholder entry for every sentinel string in values.
+// Output paths have shape
+// spec.resolved.packages[<instance>].resolvedValues.<dotted.path>[<n>...]
+// and are sorted for determinism.
 func Scan(instance string, values map[string]any, reasons map[string]string, sensitive map[string]bool, generators map[string]*v1.Generator) []v1.Placeholder {
 	root := fmt.Sprintf("spec.resolved.packages[%s].resolvedValues", instance)
 	var out []v1.Placeholder
@@ -74,12 +72,9 @@ func walk(prefix string, v any, out *[]v1.Placeholder, reasons map[string]string
 	}
 }
 
-// lookup finds reason/sensitive/generator metadata for a path by trying
-// exact match first and then progressively shorter prefixes (trimming
-// bracket indices and dotted segments). Lets input authors annotate a
-// top-level input like "addressPools" even when the actual sentinel
-// lives at addressPools[0].cidrs[0]. Generators only resolve at exact
-// or prefix match — they do not need a reason to be present.
+// lookup tries an exact match first, then progressively shorter
+// prefixes (trimming trailing [n] or .segment) so an annotation on
+// "addressPools" still applies to sentinels at addressPools[0].cidrs[0].
 func lookup(key string, reasons map[string]string, sensitive map[string]bool, generators map[string]*v1.Generator) (string, bool, *v1.Generator) {
 	if r, ok := reasons[key]; ok {
 		return r, sensitive[key], generators[key]
@@ -89,7 +84,6 @@ func lookup(key string, reasons map[string]string, sensitive map[string]bool, ge
 	}
 	cur := key
 	for cur != "" {
-		// trim trailing [n]
 		if i := strings.LastIndexByte(cur, '['); i >= 0 && strings.HasSuffix(cur, "]") {
 			cur = cur[:i]
 			if r, ok := reasons[cur]; ok {
@@ -100,7 +94,6 @@ func lookup(key string, reasons map[string]string, sensitive map[string]bool, ge
 			}
 			continue
 		}
-		// trim trailing .segment
 		if i := strings.LastIndexByte(cur, '.'); i >= 0 {
 			cur = cur[:i]
 			if r, ok := reasons[cur]; ok {
@@ -117,7 +110,6 @@ func lookup(key string, reasons map[string]string, sensitive map[string]bool, ge
 }
 
 func stripRoot(path string) string {
-	// find ".resolvedValues." and return the remainder
 	const marker = ".resolvedValues."
 	idx := strings.Index(path, marker)
 	if idx < 0 {

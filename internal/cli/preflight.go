@@ -150,9 +150,6 @@ func stateNeedsLibvirt(state v1alpha1.State) bool {
 	return false
 }
 
-// stateNeedsLocalLibvirt returns true when at least one libvirt provider has no
-// remote SSH hosts for its machine HostRefs — meaning libvirt runs on the
-// controller itself and /dev/kvm must be present locally.
 func stateNeedsLocalLibvirt(state v1alpha1.State) bool {
 	for _, p := range state.InfrastructureProviders {
 		libvirt := v1alpha1.ProviderMachineLibvirt(p)
@@ -166,8 +163,6 @@ func stateNeedsLocalLibvirt(state v1alpha1.State) bool {
 	return false
 }
 
-// providerLibvirtIsRemote reports whether every libvirt machine HostRef on the
-// provider resolves to an SSH host — i.e. libvirt runs entirely off-controller.
 func providerLibvirtIsRemote(p v1alpha1.InfrastructureProvider) bool {
 	libvirt := v1alpha1.ProviderMachineLibvirt(p)
 	if libvirt == nil || len(libvirt.HostRefs) == 0 {

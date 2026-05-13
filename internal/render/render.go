@@ -81,13 +81,10 @@ func All(stateDir, secretsDir string, state v1alpha1.State) (Result, error) {
 	return result, nil
 }
 
-// ResolveInstaller materializes "effective" install-config.yaml and
-// agent-config.yaml under each cluster's openshift/work/ directory with
-// secret material (pull secret, ssh key, trust bundle, mirror auth, proxy
-// credentials) inlined from secretsDir. The placeholder copies written by
-// All() under openshift/ stay untouched and remain the safe-to-inspect
-// artifacts. Callers should treat the returned paths as containing real
-// credentials and protect them accordingly.
+// ResolveInstaller writes install-config.yaml / agent-config.yaml under each
+// cluster's openshift/work/ directory with secrets inlined from secretsDir.
+// Returned paths contain real credentials; the safe placeholder copies under
+// openshift/ stay untouched.
 func ResolveInstaller(stateDir, secretsDir string, state v1alpha1.State) (Result, error) {
 	result := Result{InstallerAssets: InstallerAssets(stateDir, state)}
 	for _, ocp := range state.OCPClusters {

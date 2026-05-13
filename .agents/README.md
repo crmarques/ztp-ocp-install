@@ -19,7 +19,7 @@ and coding agents. Load only the specs and skills needed for the current task.
 | `repo-stewardship` | Changing repository layout, generated-output boundaries, tests, or security hygiene |
 | `security-analysis` | Reviewing secrets, credentials, permissions, command execution, supply chain, or TLS/trust handling |
 | `go-dependencies` | Adding, upgrading, replacing, or removing Go module dependencies |
-| `code-quality` | Adding, modifying, deleting, or reviewing Go code |
+| `code-quality` | Adding, modifying, deleting, or reviewing code (Go, Python, shell, Ansible YAML, Jinja2) |
 | `implementation-validation` | Final validation before completing implementation work |
 
 ## Knowledge Base

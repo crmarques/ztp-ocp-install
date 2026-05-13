@@ -36,11 +36,6 @@ func defaultStateDir() string {
 	return filepath.Join(defaultGitupsUserDir(), "state")
 }
 
-// discoverStateDir walks up from the working directory looking for the
-// `clusters-bootstrap.git` directory created by `gitups init workspace`.
-// If found, its parent is the inferred state-dir, letting operators run
-// every subsequent command without re-passing --state-dir. Returns
-// (path, true) when discovered, ("", false) otherwise.
 func discoverStateDir() (string, bool) {
 	dir, err := os.Getwd()
 	if err != nil {

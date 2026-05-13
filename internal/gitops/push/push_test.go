@@ -9,13 +9,9 @@ import (
 	"testing"
 )
 
-// fakeGit records every invocation and returns canned responses.
-// Matching on the first arg after `-C <dir>` is enough for the
-// handful of commands push.go runs (`init`, `remote`, `add`, `status`,
-// `commit`, `push`).
 type fakeGit struct {
 	calls      [][]string
-	statusBody string // returned on `status --porcelain`
+	statusBody string
 }
 
 func (f *fakeGit) Run(_ context.Context, dir string, args ...string) (string, error) {
@@ -70,16 +66,12 @@ func TestPushHappyPath(t *testing.T) {
 	if len(plans) != 2 {
 		t.Fatalf("plans: want 2, got %d", len(plans))
 	}
-	// Alphabetical ordering is part of the contract.
 	if plans[0].RepoName != "basic-infra" || plans[1].RepoName != "basic-infra-dev" {
 		t.Errorf("order: %v", plans)
 	}
-	// Provider was consulted in alphabetical order.
 	if got := prov.calls; len(got) != 2 || got[0] != "myorg/basic-infra" || got[1] != "myorg/basic-infra-dev" {
 		t.Errorf("provider calls: %v", got)
 	}
-	// Each repo should have run init, set-url, add, status, commit, push.
-	// The first arg of each call is the working dir; check key verbs.
 	verbs := map[string]int{}
 	for _, c := range git.calls {
 		if len(c) < 2 {
@@ -100,7 +92,7 @@ func TestPushSkipsCommitWhenClean(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(repo, ".git"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	git := &fakeGit{statusBody: ""} // clean tree
+	git := &fakeGit{statusBody: ""}
 	prov := &fakeProvider{host: "h", owner: "o"}
 	var buf bytes.Buffer
 
@@ -115,7 +107,6 @@ func TestPushSkipsCommitWhenClean(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Push: %v", err)
 	}
-	// No `commit` in the calls because status was empty.
 	for _, c := range git.calls {
 		if len(c) >= 2 && c[1] == "commit" {
 			t.Fatalf("unexpected commit call: %v", c)
@@ -124,7 +115,6 @@ func TestPushSkipsCommitWhenClean(t *testing.T) {
 	if !strings.Contains(buf.String(), "no changes to commit in svc") {
 		t.Errorf("missing 'no changes' line: %q", buf.String())
 	}
-	// `git init` must be skipped when .git exists.
 	for _, c := range git.calls {
 		if len(c) >= 2 && c[1] == "init" {
 			t.Fatalf("unexpected init on existing repo: %v", c)

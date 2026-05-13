@@ -70,11 +70,8 @@
   changed_when: false
   when: gitups_proxy_enabled
 
-# When proxy is disabled, explicitly blank the standard env vars rather
-# than yielding {}. sshd/systemd may have stale HTTP(S)_PROXY exports from
-# a previous run when proxy was enabled; the file-level cleanup below
-# can't unset those for already-spawned processes, so we override at the
-# task-environment layer to keep this run from inheriting them.
+# When disabled, blank the env vars explicitly (not {}) to override stale
+# HTTP(S)_PROXY exports inherited from sshd/systemd of a prior enabled run.
 - name: Build proxy environment facts
   ansible.builtin.set_fact:
     gitups_proxy_env: >-

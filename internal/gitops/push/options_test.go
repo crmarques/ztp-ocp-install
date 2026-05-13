@@ -76,7 +76,6 @@ func TestCloneURL(t *testing.T) {
 }
 
 func TestInjectCredentials(t *testing.T) {
-	// no token: unchanged
 	got, err := InjectCredentials("https://github.com/myorg/repo.git", "", "")
 	if err != nil {
 		t.Fatal(err)
@@ -84,7 +83,6 @@ func TestInjectCredentials(t *testing.T) {
 	if got != "https://github.com/myorg/repo.git" {
 		t.Errorf("no-token URL changed: %q", got)
 	}
-	// with token and default user
 	got, err = InjectCredentials("https://github.com/myorg/repo.git", "", "abc123")
 	if err != nil {
 		t.Fatal(err)
@@ -93,7 +91,6 @@ func TestInjectCredentials(t *testing.T) {
 	if got != want {
 		t.Errorf("default-user URL = %q, want %q", got, want)
 	}
-	// explicit user (e.g. oauth2 for gitlab)
 	got, err = InjectCredentials("https://gitlab.example.com/g/r.git", "oauth2", "glpat-xyz")
 	if err != nil {
 		t.Fatal(err)

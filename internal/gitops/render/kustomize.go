@@ -10,18 +10,14 @@ import (
 	v1 "github.com/crmarques/gitups/api/v1alpha1"
 )
 
-// KustomizeBuildRequest carries inputs needed to produce install.yaml for a
-// Kustomize-rendered package.
 type KustomizeBuildRequest struct {
-	Base string // absolute path to the base kustomize dir
+	Base string
 }
 
-// KustomizeRunner abstracts kustomize invocation so tests can stub it.
 type KustomizeRunner interface {
 	Build(ctx context.Context, req KustomizeBuildRequest) (string, error)
 }
 
-// ExecKustomizeRunner shells out to the `kustomize` binary.
 type ExecKustomizeRunner struct {
 	Bin string
 }
@@ -48,8 +44,6 @@ func renderKustomize(ctx context.Context, rp *v1.ResolvedPackage, unit renderUni
 		return fmt.Errorf("renderer=kustomize but spec.kustomize is nil")
 	}
 	base := filepath.Join(unit.SourceDir, ks.Base)
-	// Optional values overlay template: rendered into <base>/values.env.yaml
-	// for the user to wire in via patches; the renderer does not auto-patch.
 	if ks.ValuesTemplate != "" {
 		tmplPath := filepath.Join(unit.SourceDir, ks.ValuesTemplate)
 		rendered, err := renderTemplateFile(tmplPath, tctx)
@@ -64,6 +58,6 @@ func renderKustomize(ctx context.Context, rp *v1.ResolvedPackage, unit renderUni
 	if err != nil {
 		return err
 	}
-	_ = rp // reserved for future use (labels, annotations)
+	_ = rp
 	return os.WriteFile(filepath.Join(pkgDir, "install.yaml"), []byte(out), 0o644)
 }

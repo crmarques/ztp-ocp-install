@@ -1,8 +1,5 @@
-// Package render implements stage 2 of gitups: consume a GitOpsPackageSet and
-// write a split-layout output tree (one directory per logical repo).
-//
-// The renderer never reads GitOpsPackageSet directly; it operates on the resolved
-// GitOpsPackageSet produced by package resolve.
+// Package render consumes a resolved GitOpsPackageSet and writes a
+// split-layout output tree (one directory per logical repo).
 package render
 
 import (
@@ -22,14 +19,6 @@ import (
 	"github.com/crmarques/gitups/internal/gitops/safepath"
 )
 
-// managedScriptTemplateValues builds the template context the SRC's
-// managed-script overlay consumes. Inputs come from the original
-// authoring descriptor (scripts/ dir on disk, pinned scriptImage / SA)
-// and from the unit's ResolvedValues (namespace + the full original
-// value map serialised verbatim as valuesJSON so the script body reads
-// exactly what it did under the retired built-in wrapper). Called at
-// render time only; ResolvedValues is never mutated so placeholder
-// tracking stays per-field on the source unit.
 func managedScriptTemplateValues(rp *v1.ResolvedPackage, origUnit catalog.Unit) (map[string]any, error) {
 	namespace, _ := rp.ResolvedValues["namespace"].(string)
 	if namespace == "" {
@@ -59,9 +48,6 @@ func managedScriptTemplateValues(rp *v1.ResolvedPackage, origUnit catalog.Unit) 
 	}, nil
 }
 
-// readManagedScriptBodies returns a deterministic filename→body map for
-// every *.sh file in dir. Subdirectories and non-shell files are
-// ignored.
 func readManagedScriptBodies(dir string) (map[string]any, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -86,32 +72,17 @@ func readManagedScriptBodies(dir string) (map[string]any, error) {
 	return out, nil
 }
 
-// Options controls Render behavior.
 type Options struct {
-	OutputPath        string
-	KubectlContext    string
-	AllowPlaceholders bool
-	Helm              HelmRunner
-	Kustomize         KustomizeRunner
-	Hooks             HookRunner
-	SourcePackageSet  string // optional path to the input GitOpsPackageSet for traceability copy
-	// SuppressPackageSetCopy disables writing gitops-package-set.yaml at the top of
-	// OutputPath. Set by the workspace-layout CLI where the authoritative
-	// GitOpsPackageSet lives one level up and re-writing it here would clobber
-	// the user's formatting/comments.
+	OutputPath             string
+	KubectlContext         string
+	AllowPlaceholders      bool
+	Helm                   HelmRunner
+	Kustomize              KustomizeRunner
+	Hooks                  HookRunner
+	SourcePackageSet       string
 	SuppressPackageSetCopy bool
-	// PreserveExtras, when true, keeps existing top-level entries in OutputPath
-	// that the renderer did not produce (e.g. sibling gitops-package-set.yaml /
-	// gitops-package-set.yaml managed by the CLI workspace). Only entries matching
-	// a rendered repo dir or trace file are replaced. Defaults to false, which
-	// preserves legacy nuke-and-rename behavior for callers that own the whole
-	// tree.
-	PreserveExtras bool
-	// Prune, used together with PreserveExtras, removes top-level directories
-	// in OutputPath that are not one of the repos emitted by this render pass.
-	// Workspace-managed files (gitops-package-set.yaml / gitops-package-set.yaml) are
-	// always preserved. No effect when PreserveExtras is false.
-	Prune bool
+	PreserveExtras         bool
+	Prune                  bool
 }
 
 // Render writes the full output tree for fp under opts.OutputPath. It renders
@@ -141,8 +112,6 @@ func Render(ctx context.Context, fp *v1.GitOpsPackageSet, cat *catalog.Catalog, 
 		return fmt.Errorf("outputPath is empty; set --out or spec.resolved.repository.outputPath")
 	}
 
-	// Collect per-repo package sets so we can write top-level kustomization
-	// and READMEs after per-package rendering.
 	byRepo := map[string][]*v1.ResolvedPackage{}
 
 	tempDir, err := os.MkdirTemp(filepath.Dir(absOrCwd(opts.OutputPath)), ".gitups-render-")
@@ -180,10 +149,6 @@ func Render(ctx context.Context, fp *v1.GitOpsPackageSet, cat *catalog.Catalog, 
 		return err
 	}
 
-	// Service-resources repos carry no install/resource units, so
-	// byRepo has no entry for them; emit the skeleton manually
-	// (README.md + empty kustomization.yaml). The pruning pass later
-	// needs to know these repos exist.
 	for i := range fp.Spec.Resolved.Repositories {
 		r := &fp.Spec.Resolved.Repositories[i]
 		if r.Type != v1.RepoTypeServiceResources {
@@ -202,7 +167,6 @@ func Render(ctx context.Context, fp *v1.GitOpsPackageSet, cat *catalog.Catalog, 
 		if err := writeServiceResourcesREADME(repoDir, r, fp); err != nil {
 			return fmt.Errorf("service-resources repo %s: write README: %w", r.Name, err)
 		}
-		// Register in byRepo so the --prune pass keeps it.
 		if _, ok := byRepo[r.Name]; !ok {
 			byRepo[r.Name] = nil
 		}
@@ -263,11 +227,6 @@ func Render(ctx context.Context, fp *v1.GitOpsPackageSet, cat *catalog.Catalog, 
 	return nil
 }
 
-// swapEntries moves every top-level entry from src into dst, replacing any
-// existing same-named entry in dst. Entries in dst that have no counterpart in
-// src are left alone. Not fully atomic across entries (rename is atomic within
-// a single entry); the trade-off is that siblings the caller maintains in dst
-// are preserved.
 func swapEntries(src, dst string) error {
 	if err := os.MkdirAll(dst, 0o755); err != nil {
 		return fmt.Errorf("mkdir %s: %w", dst, err)
@@ -293,8 +252,6 @@ func swapEntries(src, dst string) error {
 	return nil
 }
 
-// pruneOrphanDirs removes top-level directories under dst whose names are not
-// in keep. Files (gitops-package-set.yaml / gitops-package-set.yaml) are always left alone.
 func pruneOrphanDirs(dst string, keep map[string]bool) error {
 	entries, err := os.ReadDir(dst)
 	if err != nil {
@@ -366,9 +323,6 @@ type renderUnit struct {
 	Readiness []v1.ReadinessCheck
 }
 
-// controllerDomainFor maps a controller Role to its owning package
-// directory domain. Every controller kind implements its intents under
-// exactly one domain so the mapping is a small lookup.
 func controllerDomainFor(kind v1.Role) string {
 	switch kind {
 	case v1.RoleKRC:
@@ -380,12 +334,6 @@ func controllerDomainFor(kind v1.Role) string {
 }
 
 func renderUnitFor(rp *v1.ResolvedPackage, entry catalog.Entry, cat *catalog.Catalog) (renderUnit, error) {
-	// Controller-routed units: the unit's render shape (templates +
-	// renderer) is owned by the controller package's intent
-	// implementation, but the readiness checks stay on the original
-	// authoring descriptor — they describe the workload object the
-	// cluster must wait for, not the controller itself (the controller's
-	// own readiness is checked during apply-phase handoff).
 	if rp.Controller != nil && rp.Controller.Intent != "" {
 		ctrlEntry, ok := cat.Lookup(rp.Controller.Template)
 		if !ok {
@@ -394,13 +342,9 @@ func renderUnitFor(rp *v1.ResolvedPackage, entry catalog.Entry, cat *catalog.Cat
 		domain := controllerDomainFor(rp.Controller.Kind)
 		u, domainOK := ctrlEntry.LookupDomainUnit(domain, rp.Controller.Intent)
 		if !domainOK {
-			// Bootstrap-sync intents (e.g. declarest's sync-policy)
-			// declare their CLI invocation under spec.cli.intents but
-			// do not ship an intent directory — the rendered shape is
-			// the CR itself (from the controller's own resources/).
-			// Fall through to the regular resource template for
-			// render; the Controller pointer still drives apply-time
-			// CLI invocation.
+			// Bootstrap-sync intents declare CLI invocation under
+			// spec.cli.intents but ship no intent directory; render the
+			// CR from the resource template, apply-time CLI still fires.
 			if rp.UnitType == v1.UnitTypeResource {
 				u2, ok2 := entry.LookupDomainUnit(rp.Domain, rp.ResourceTemplate)
 				if !ok2 {
@@ -421,11 +365,9 @@ func renderUnitFor(rp *v1.ResolvedPackage, entry catalog.Entry, cat *catalog.Cat
 			return renderUnit{}, fmt.Errorf("%s package %q does not implement intent %q",
 				domain, ctrlEntry.Def.Metadata.Name, rp.Controller.Intent)
 		}
-		// managed-resource is interface passthrough: the CR body comes
-		// from the PROVIDER's resources/<resourceTemplate>/ directory,
-		// not from the SRC's intent directory. The SRC's intent dir
-		// just declares "I can reconcile CRs for this intent"; the CR
-		// shape lives with the service that owns the interface.
+		// managed-resource is interface passthrough: CR body comes from
+		// the provider's resources/<resourceTemplate>/ dir, not the
+		// SRC's intent dir which only declares reconcilability.
 		if rp.Controller.Intent == "managed-resource" {
 			orig, ok := entry.LookupDomainUnit(v1.DomainResources, rp.ResourceTemplate)
 			if !ok {
@@ -498,7 +440,6 @@ func renderUnitFor(rp *v1.ResolvedPackage, entry catalog.Entry, cat *catalog.Cat
 	}
 }
 
-// renderPackage dispatches on renderer type, runs hooks, and writes overlays.
 func renderPackage(ctx context.Context, rp *v1.ResolvedPackage, entry catalog.Entry, cat *catalog.Catalog, pkgDir string, fp *v1.GitOpsPackageSet, opts Options) error {
 	unit, err := renderUnitFor(rp, entry, cat)
 	if err != nil {
@@ -606,7 +547,6 @@ func writeRepoToplevel(tempDir string, byRepo map[string][]*v1.ResolvedPackage, 
 			return fmt.Errorf("repo %s: write kustomization: %w", repo, err)
 		}
 
-		// README
 		var b strings.Builder
 		fmt.Fprintf(&b, "# %s\n\nRepo rendered by gitups from GitOpsPackageSet %q.\n\n",
 			repo, fp.Metadata.Name)
@@ -650,11 +590,6 @@ func writeKustomization(path string, resources []string) error {
 	return os.WriteFile(path, body, 0o644)
 }
 
-// writePackageKustomization writes a kustomization.yaml listing every .yaml
-// file in pkgDir except values.yaml (which is human-readable helm inputs, not
-// a k8s manifest) and kustomization.yaml itself. It also emits
-// commonAnnotations carrying the resolved apply-wave and readiness checks so
-// every manifest in the package is labeled without needing to re-parse YAML.
 func writePackageKustomization(pkgDir string, rp *v1.ResolvedPackage, unit renderUnit, tctx templateCtx) error {
 	entries, err := os.ReadDir(pkgDir)
 	if err != nil {
@@ -704,9 +639,6 @@ func writePackageKustomization(pkgDir string, rp *v1.ResolvedPackage, unit rende
 	return os.WriteFile(filepath.Join(pkgDir, "kustomization.yaml"), body, 0o644)
 }
 
-// expandReadiness walks each readiness entry and renders its template-bearing
-// fields (Name, Namespace) through the same template context the renderer
-// uses for overlays. Kind and Condition are treated as literals.
 func expandReadiness(checks []v1.ReadinessCheck, tctx templateCtx) ([]v1.ReadinessCheck, error) {
 	out := make([]v1.ReadinessCheck, len(checks))
 	for i, c := range checks {
@@ -727,8 +659,6 @@ func expandReadiness(checks []v1.ReadinessCheck, tctx templateCtx) ([]v1.Readine
 	return out, nil
 }
 
-// encodeReadiness serializes readiness checks as compact JSON, suitable for
-// an annotation value.
 func encodeReadiness(checks []v1.ReadinessCheck) (string, error) {
 	b, err := json.Marshal(checks)
 	if err != nil {
@@ -737,10 +667,6 @@ func encodeReadiness(checks []v1.ReadinessCheck) (string, error) {
 	return string(b), nil
 }
 
-// writeServiceResourcesREADME emits a small marker README for a
-// skeleton service-resources repo. Declarest authors payload files
-// here (e.g. `orgs/acme.json`, `repos/acme/gitops.json`) matching the
-// bundle's logical path layout; gitups does not author those payloads.
 func writeServiceResourcesREADME(dir string, r *v1.ResolvedRepository, fp *v1.GitOpsPackageSet) error {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# %s\n\n", r.Name)

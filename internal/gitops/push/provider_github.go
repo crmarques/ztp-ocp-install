@@ -7,9 +7,6 @@ import (
 	"strings"
 )
 
-// githubProvider speaks the GitHub REST v3 API. Works against
-// github.com (https://api.github.com) and GitHub Enterprise
-// (https://<host>/api/v3) by inspecting the configured host.
 type githubProvider struct {
 	cfg ProviderConfig
 }

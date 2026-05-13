@@ -12,30 +12,15 @@ import (
 	v1 "github.com/crmarques/gitups/api/v1alpha1"
 )
 
-// OCIResolver materializes an OCI package source by shelling out to `oras`.
-// The driver pulls per-package artifacts (one per package referenced by the
-// GitOpsPackageSet) into <CacheDir>/oci/<encoded-ref>/, then exposes that
-// directory as a filesystem catalog root.
-//
-// `oras` is chosen over a Go OCI client to keep gitups dependency-light and
-// to match the pattern used elsewhere (helm, kustomize, KRC binaries are
-// invoked, not vendored).
+// OCIResolver materializes an OCI package source by shelling out to `oras`,
+// pulling one artifact per package name into <CacheDir>/oci/<encoded-ref>/.
 type OCIResolver struct {
-	// CacheDir is the absolute path where pulled artifacts live. Required.
-	CacheDir string
-
-	// Stdout/Stderr capture oras output. nil disables forwarding.
-	Stdout io.Writer
-	Stderr io.Writer
-
-	// PackageNames lists the package names that should be pulled for this
-	// source. The resolver pulls <Registry>/<name>:<Tag>|@<Digest> for each
-	// entry. When empty the resolver returns an error since there is no way
-	// to enumerate packages from a registry without a per-package list.
+	CacheDir     string
+	Stdout       io.Writer
+	Stderr       io.Writer
 	PackageNames []string
 }
 
-// Resolve implements catalog.SourceResolver.
 func (r *OCIResolver) Resolve(s v1.PackageSource, _ string) (string, error) {
 	if s.OCI == nil {
 		return "", fmt.Errorf("source %q: oci sub-block is nil", s.Name)

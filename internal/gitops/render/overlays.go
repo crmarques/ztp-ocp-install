@@ -12,10 +12,6 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// templateCtx is the root object passed to every text/template rendered by
-// gitups (helm values templates, overlays, kustomize value overlays). Dotted
-// access `.Values.foo.bar` pulls from resolvedValues; `.Instance`, `.Env`, and
-// `.Context` are convenience fields.
 type templateCtx struct {
 	Values           map[string]any
 	Instance         string
@@ -27,9 +23,6 @@ type templateCtx struct {
 	Context          string
 }
 
-// funcMap is the minimal helper set exposed to package authors. Kept small on
-// purpose — packages should derive most shaping from resolvedValues rather
-// than template logic.
 var funcMap = template.FuncMap{
 	"toYaml": func(v any) (string, error) {
 		b, err := yaml.Marshal(v)
@@ -77,8 +70,6 @@ func renderTemplateFile(path string, ctx templateCtx) (string, error) {
 	return renderTemplateString(filepath.Base(path), string(body), ctx)
 }
 
-// renderOverlays walks each configured overlays directory and writes templates
-// text/template into pkgDir with the .tmpl suffix stripped.
 func renderOverlays(unit renderUnit, pkgDir string, tctx templateCtx) error {
 	overlays := unit.Overlays
 	if len(overlays) == 0 {

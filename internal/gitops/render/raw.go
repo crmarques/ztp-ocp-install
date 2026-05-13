@@ -11,9 +11,6 @@ import (
 	v1 "github.com/crmarques/gitups/api/v1alpha1"
 )
 
-// renderRaw copies every regular file under entry.Dir/raw/ into pkgDir. Files
-// ending in .tmpl are rendered through Go text/template with tctx first and
-// their suffix stripped.
 func renderRaw(ctx context.Context, rp *v1.ResolvedPackage, unit renderUnit, pkgDir string, tctx templateCtx) error {
 	_ = rp
 	_ = ctx
@@ -21,9 +18,6 @@ func renderRaw(ctx context.Context, rp *v1.ResolvedPackage, unit renderUnit, pkg
 	info, err := os.Stat(src)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// renderer=raw with no raw/ dir is valid for packages that emit
-			// manifests exclusively via overlays (env-specific config packages,
-			// stubs). Overlays run after this function returns.
 			return nil
 		}
 		return fmt.Errorf("renderer=raw requires %s: %w", src, err)

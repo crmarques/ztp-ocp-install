@@ -1,5 +1,4 @@
-// Package catalog resolves package sources to PackageDefinitions. v0.1 only
-// supports the filesystem source driver.
+// Package catalog resolves package sources to PackageDefinitions.
 package catalog
 
 import (
@@ -13,10 +12,6 @@ import (
 	"github.com/crmarques/gitups/internal/gitops/load"
 )
 
-// validateProvisioningStyle enforces the "crd" | "script" contract on
-// resource descriptors. Install descriptors may not declare a non-default
-// provisioningStyle — install units always use their own renderer. When
-// style is "script", the descriptor must ship scripts/provision.sh.
 func validateProvisioningStyle(descPath string, install bool, unitDir string, spec v1.PackageDescriptorSpec) error {
 	style := spec.ProvisioningStyle
 	if style == "" || style == v1.ProvisioningStyleCRD {
@@ -47,9 +42,6 @@ func validateProvisioningStyle(descPath string, install bool, unitDir string, sp
 	return nil
 }
 
-// validateReadiness verifies static shape on every readiness entry: kind,
-// name, and condition are required. Name and namespace may be template
-// strings (evaluated at render time) so we only enforce non-emptiness here.
 func validateReadiness(descPath string, checks []v1.ReadinessCheck) error {
 	for i, c := range checks {
 		if c.Kind == "" {
@@ -65,9 +57,6 @@ func validateReadiness(descPath string, checks []v1.ReadinessCheck) error {
 	return nil
 }
 
-// validateExportFrom accepts the small grammar documented on
-// v1.CapabilityExport.From: "input:<key>", "binding:<key>", or the literal
-// "placeholder". <key> must be non-empty and may be dotted.
 func validateExportFrom(from string) error {
 	switch {
 	case from == "placeholder":
@@ -86,34 +75,22 @@ func validateExportFrom(from string) error {
 	return nil
 }
 
-// Entry pairs a resolved PackageDefinition with the absolute source directory
-// it was loaded from (needed later by the renderer to find overlays, raw
-// manifests, and scripts). Units are keyed by domain (install, resources,
-// kubernetes-resource-controller, service-resource-controller) and then by
-// sub-name (renderer / template / intent).
+// Entry pairs a resolved PackageDefinition with the absolute source dir it
+// was loaded from. Units are keyed by domain then sub-name (renderer /
+// template / intent).
 type Entry struct {
-	Source     string // source name (e.g. "local")
-	SourceRoot string // absolute path to the source root
-	Dir        string // absolute path to the package dir
+	Source     string
+	SourceRoot string
+	Dir        string
 	Def        *v1.PackageDefinition
 	Domains    map[string]map[string]Unit
 }
 
-// Installs returns the install-domain units (renderer → Unit) for this
-// entry. Nil-safe convenience accessor kept in lockstep with Domains.
-func (e Entry) Installs() map[string]Unit { return e.Domains[v1.DomainInstall] }
-
-// Resources returns the resources-domain units (template → Unit).
-func (e Entry) Resources() map[string]Unit { return e.Domains[v1.DomainResources] }
-
-// KRCIntents returns the KRC-domain intent implementations (intent → Unit).
+func (e Entry) Installs() map[string]Unit   { return e.Domains[v1.DomainInstall] }
+func (e Entry) Resources() map[string]Unit  { return e.Domains[v1.DomainResources] }
 func (e Entry) KRCIntents() map[string]Unit { return e.Domains[v1.DomainKRC] }
-
-// SRCIntents returns the SRC-domain intent implementations (intent → Unit).
 func (e Entry) SRCIntents() map[string]Unit { return e.Domains[v1.DomainSRC] }
 
-// LookupDomainUnit returns the Unit in the given domain/sub-name pair, or
-// false if the package doesn't implement it.
 func (e Entry) LookupDomainUnit(domain, subName string) (Unit, bool) {
 	units, ok := e.Domains[domain]
 	if !ok {
@@ -129,9 +106,6 @@ type Unit struct {
 	Descriptor v1.PackageDescriptorSpec
 }
 
-// knownDomains is the closed set of top-level package directories gitups
-// understands. Any other top-level dir (other than the always-allowed
-// bookkeeping entries below) is a load error so typos fail fast.
 var knownDomains = map[string]struct{}{
 	v1.DomainInstall:   {},
 	v1.DomainResources: {},
@@ -139,29 +113,12 @@ var knownDomains = map[string]struct{}{
 	v1.DomainSRC:       {},
 }
 
-// ignoredDirs are top-level package directories that the catalog loader
-// silently skips. They carry no runtime meaning but are valid package-local
-// conventions (e.g. the `tests/` smoke-test harness shipped with a package,
-// or `.git`/`.github` when a package is later extracted to its own repo).
 var ignoredDirs = map[string]struct{}{
 	"tests":   {},
 	".git":    {},
 	".github": {},
 }
 
-// isLooseFile is a top-level entry we don't treat as a domain directory —
-// package.yaml and README are always present; anything else alongside them
-// must be a known domain dir.
-func isLooseEntry(name string) bool {
-	switch name {
-	case "package.yaml", "README.md", "values.schema.json",
-		"CHANGELOG.md", "LICENSE", ".gitignore", ".gitattributes":
-		return true
-	}
-	return false
-}
-
-// Catalog indexes entries by their qualified name: "<source>/<package>".
 type Catalog struct {
 	entries map[string]Entry
 }
@@ -171,8 +128,6 @@ func (c *Catalog) Lookup(qualified string) (Entry, bool) {
 	return e, ok
 }
 
-// Qualified returns the sorted list of qualified names present in the catalog.
-// Useful for deterministic diagnostics.
 func (c *Catalog) Qualified() []string {
 	out := make([]string, 0, len(c.entries))
 	for k := range c.entries {
@@ -182,23 +137,15 @@ func (c *Catalog) Qualified() []string {
 	return out
 }
 
-// SourceResolver materializes a non-filesystem source into a local
-// directory the catalog walker can read. Implementations are registered
-// with RegisterSourceResolver. baseDir is provided for relative-path
-// resolution of any cache locations the resolver chooses.
+// SourceResolver materializes a non-filesystem source into a local directory.
 type SourceResolver func(s v1.PackageSource, baseDir string) (root string, err error)
 
 var sourceResolvers = map[string]SourceResolver{}
 
-// RegisterSourceResolver wires a non-filesystem driver (oci, git) into
-// catalog.Build. Filesystem is handled inline.
 func RegisterSourceResolver(kind string, r SourceResolver) {
 	sourceResolvers[kind] = r
 }
 
-// Build walks every source referenced by the GitOpsPackageSet and returns a
-// populated Catalog. Filesystem paths are resolved relative to baseDir;
-// oci and git sources are materialized via the registered SourceResolvers.
 func Build(sources []v1.PackageSource, baseDir string) (*Catalog, error) {
 	c := &Catalog{entries: map[string]Entry{}}
 	for _, s := range sources {
@@ -255,7 +202,7 @@ func loadFilesystemSource(c *Catalog, name, root string) error {
 		pkgDir := filepath.Join(root, e.Name())
 		pkgYAML := filepath.Join(pkgDir, "package.yaml")
 		if _, err := os.Stat(pkgYAML); err != nil {
-			continue // directory isn't a package
+			continue
 		}
 		def, err := load.PackageDefinition(pkgYAML)
 		if err != nil {
@@ -344,9 +291,6 @@ func loadFilesystemSource(c *Catalog, name, root string) error {
 	return nil
 }
 
-// loadDomains walks every top-level entry under pkgDir, treats unknown
-// entries as an error, and loads each known-domain directory into a
-// sub-map keyed by unit sub-name (renderer / template / intent).
 func loadDomains(pkgDir string) (map[string]map[string]Unit, error) {
 	entries, err := os.ReadDir(pkgDir)
 	if err != nil {
@@ -355,11 +299,6 @@ func loadDomains(pkgDir string) (map[string]map[string]Unit, error) {
 	out := map[string]map[string]Unit{}
 	for _, e := range entries {
 		if !e.IsDir() {
-			if !isLooseEntry(e.Name()) {
-				// Unknown loose files (not package.yaml/README) are allowed;
-				// they are harmless package-local notes. Only top-level
-				// directories carry domain meaning.
-			}
 			continue
 		}
 		name := e.Name()
@@ -380,9 +319,6 @@ func loadDomains(pkgDir string) (map[string]map[string]Unit, error) {
 	return out, nil
 }
 
-// validateRoleDomains ties the declared role to the domain directories
-// present on disk. A role claim must be matched by the corresponding
-// domain dir (and no conflicting counterpart).
 func validateRoleDomains(source string, def *v1.PackageDefinition, domains map[string]map[string]Unit) error {
 	_, hasKRC := domains[v1.DomainKRC]
 	_, hasSRC := domains[v1.DomainSRC]

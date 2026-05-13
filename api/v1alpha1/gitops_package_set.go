@@ -83,9 +83,7 @@ type Extends struct {
 	Ref    string `yaml:"ref,omitempty" json:"ref,omitempty"`
 }
 
-// PackageSource selects exactly one structural sub-block: filesystem, oci, or git.
-// Presence of the sub-block is the discriminator (no `type:` string), per the
-// authoritative R3 rule on structural-only discriminators.
+// exactly one of filesystem/oci/git must be set; presence is the discriminator (no type field)
 type PackageSource struct {
 	Name       string                   `yaml:"name" json:"name"`
 	Filesystem *PackageSourceFilesystem `yaml:"filesystem,omitempty" json:"filesystem,omitempty"`
@@ -97,17 +95,14 @@ type PackageSourceFilesystem struct {
 	Path string `yaml:"path" json:"path"`
 }
 
-// PackageSourceOCI pulls a per-package OCI artifact from a registry. Either
-// Tag or Digest must be set (digest preferred for immutability).
+// exactly one of Tag/Digest must be set; Digest preferred for immutability
 type PackageSourceOCI struct {
 	Registry string `yaml:"registry" json:"registry"`
 	Tag      string `yaml:"tag,omitempty" json:"tag,omitempty"`
 	Digest   string `yaml:"digest,omitempty" json:"digest,omitempty"`
 }
 
-// PackageSourceGit clones a git repository at the given Ref (tag or commit
-// SHA; branches are rejected). Path locates the catalog inside the clone,
-// defaulting to "packages".
+// Ref must be a tag or commit SHA (branches are rejected); Path defaults to "packages"
 type PackageSourceGit struct {
 	URL  string `yaml:"url" json:"url"`
 	Ref  string `yaml:"ref" json:"ref"`

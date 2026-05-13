@@ -14,25 +14,16 @@ import (
 	"github.com/crmarques/gitups/internal/gitops/safepath"
 )
 
-// GitResolver materializes a git package source by shallow-cloning the
-// repository at the requested ref into a cache directory and returning the
-// inner package path.
-//
-// Refs must be tags or commit SHAs; branch names are rejected so the source
-// is reproducible. The cache key is (URL, Ref); subsequent resolves with the
-// same cache key skip the clone if the working tree is already present.
+// GitResolver materializes a git package source by shallow-cloning at the
+// requested ref. Refs must be tags or commit SHAs; branches are rejected.
 type GitResolver struct {
-	// CacheDir is the absolute path where clones live. Required.
 	CacheDir string
-
-	// Stdout/Stderr capture git output. nil disables forwarding.
-	Stdout io.Writer
-	Stderr io.Writer
+	Stdout   io.Writer
+	Stderr   io.Writer
 }
 
 var commitSHARe = regexp.MustCompile(`^[0-9a-f]{7,64}$`)
 
-// Resolve implements catalog.SourceResolver.
 func (r *GitResolver) Resolve(s v1.PackageSource, _ string) (string, error) {
 	if s.Git == nil {
 		return "", fmt.Errorf("source %q: git sub-block is nil", s.Name)
@@ -78,7 +69,7 @@ func (r *GitResolver) clone(g *v1.PackageSourceGit, dest string) error {
 	if err := cmd.Run(); err == nil {
 		return nil
 	}
-	// Fallback: full fetch + checkout when --branch refuses (e.g. raw SHA).
+	// --branch refuses raw SHAs; retry with full clone + checkout.
 	if err := os.RemoveAll(dest); err != nil {
 		return err
 	}
@@ -94,9 +85,6 @@ func (r *GitResolver) clone(g *v1.PackageSourceGit, dest string) error {
 	return nil
 }
 
-// rejectBranchRef rules out anything that looks like a moving target.
-// Acceptable: full or short commit SHAs, anything starting with a leading
-// `v` or containing a `/` (assumed to be a tag like `pkg/<name>/v0.1.0`).
 func rejectBranchRef(ref string) error {
 	if ref == "" {
 		return fmt.Errorf("ref is required")

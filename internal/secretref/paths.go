@@ -37,9 +37,8 @@ func ResolveKeyFilePath(file, envSourceDir string) (string, error) {
 	return filepath.Clean(filepath.Join(envSourceDir, file)), nil
 }
 
-// ResolvePath returns the local filesystem path for a declared SecretRef.
-// File-sourced secrets resolve to their declared source path. Generated secrets
-// and non-file secrets resolve inside secretsDir.
+// ResolvePath returns the path for a declared SecretRef: file-sourced
+// secrets resolve to their declared path; others resolve inside secretsDir.
 func ResolvePath(name string, env *v1alpha1.Environment, secretsDir string) string {
 	if name == "" {
 		return ""

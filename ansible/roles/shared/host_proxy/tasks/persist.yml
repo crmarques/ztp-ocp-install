@@ -36,14 +36,8 @@
       no_log: "{{ (gitups_proxy_credentials_ref | length) > 0 }}"
       when: (gitups_proxy_credentials_ref | length) == 0
 
-    # When credentials_ref is set, we deliberately skip writing the proxy
-    # URL to /etc/environment and /etc/profile.d (would leak creds into
-    # 0644 world-readable files). But if a prior run wrote those files
-    # with a bare URL — back when creds_ref was empty — they survive and
-    # are loaded by sshd/PAM into every login shell. That stale bare URL
-    # then beats /root/.pip/pip.conf (env vars win), so pip tunnels with
-    # no Proxy-Authorization header and Squid replies 407. Strip them so
-    # only the 0600 systemd drop-in supplies the credentialed URL.
+    # Strip bare-URL leftovers from older runs; env vars from /etc/environment
+    # beat /root/.pip/pip.conf, causing pip to skip Proxy-Authorization → 407.
     - name: Remove stale /etc/environment proxy block when creds_ref is set
       ansible.builtin.blockinfile:
         path: /etc/environment
@@ -111,22 +105,9 @@
           proxy = {{ gitups_proxy_primary }}
       no_log: "{{ (gitups_proxy_credentials_ref | length) > 0 }}"
 
-    # No containers.conf.d drop-in is rendered, deliberately. Podman
-    # reads system-wide drop-ins for ROOTLESS invocations too, so a
-    # 0600 file (which is what we'd need to hide a credentialed proxy
-    # URL) breaks every non-root `podman` on the host with "permission
-    # denied"; a 0644 file would leak the URL-embedded password to any
-    # local user. Instead, gitups containers receive HTTP_PROXY via
-    # the play-level `environment: gitups_proxy_env` block: the
-    # ansible task running `podman run`/`podman pull` inherits the env
-    # vars, and podman's default `--http-proxy=true` propagates them
-    # into the container. This treatment is uniform across the
-    # managed-Squid case and the bring-your-own authenticated external
-    # proxy case — the URL form is identical, the wire behaviour is
-    # identical, and credentials never land in a podman config file.
-    #
-    # Removing here also cleans up the 0600 file written by older
-    # versions of this role (which broke rootless `podman` on the host).
+    # No containers.conf.d drop-in is written: podman reads it for rootless
+    # too, so 0600 breaks non-root `podman` and 0644 leaks credentials.
+    # Containers get HTTP_PROXY via play-level gitups_proxy_env instead.
     - name: Remove legacy containers.conf proxy drop-in
       ansible.builtin.file:
         path: /etc/containers/containers.conf.d/10-gitups-proxy.conf
@@ -145,11 +126,8 @@
       when: gitups_proxy_legacy_containers_conf.stat.exists
       failed_when: false
 
-    # An even older version of this role locked the main containers.conf
-    # to 0600 to hide credentials. Credentials no longer land in any
-    # podman config file (see drop-in note above), so restore the distro
-    # default mode — otherwise regular users lose the ability to run
-    # `podman info`.
+    # Older versions locked containers.conf to 0600 to hide credentials;
+    # restore 0644 so non-root users can run `podman info`.
     - name: Restore distro mode on /etc/containers/containers.conf
       ansible.builtin.file:
         path: /etc/containers/containers.conf
@@ -183,24 +161,17 @@
         daemon_reexec: true
       when: gitups_proxy_systemd_dropin.changed
 
-    # Fail fast when the host-facing proxy URL is unreachable from this
-    # host. Without this probe, a misconfigured proxy surfaces later as
-    # an opaque "Failed to download packages" inside the first dnf task.
-    # dnf's --setopt=timeout only governs HTTP-layer reads, not TCP
-    # connect, so a silently-dropped SYN would otherwise hang dnf even
-    # with its own timeouts set.
+    # Fail fast: dnf's --setopt=timeout doesn't cover TCP connect, so a
+    # silently-dropped SYN would hang the first dnf task without a probe.
     - name: Verify proxy TCP reachability
       ansible.builtin.wait_for:
         host: "{{ gitups_proxy_primary | urlsplit('hostname') }}"
         port: "{{ gitups_proxy_primary | urlsplit('port') | default(3128, true) }}"
         timeout: 10
 
-# When proxy is disabled (or removed from env), strip every artifact a
-# previous run wrote. Without this, systemd's DefaultEnvironment drop-in
-# keeps injecting HTTPS_PROXY into every sshd-started session, so ansible
-# commands hit a now-absent (or auth-mismatched) proxy and fail with 407.
-# Same teardown is invoked from providers/destroy.yml so `destroy infra`
-# returns the host to its pre-gitups state.
+# Strip prior artifacts when disabled: systemd's DefaultEnvironment keeps
+# injecting HTTPS_PROXY into sshd sessions otherwise, so later ansible runs
+# hit a now-absent proxy and fail with 407.
 - name: Remove stale proxy settings when disabled
   ansible.builtin.import_tasks: cleanup.yml
   when: not gitups_proxy_enabled

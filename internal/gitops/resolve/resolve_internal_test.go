@@ -7,10 +7,6 @@ import (
 	"github.com/crmarques/gitups/internal/gitops/catalog"
 )
 
-// TestResolveOneCarriesGeneratorOnPlaceholder is the focused unit test
-// for the generator-on-placeholder wiring added with apply-time
-// autogen. It bypasses Expand so the assertion stays small and
-// independent of any sibling-repo fixtures.
 func TestResolveOneCarriesGeneratorOnPlaceholder(t *testing.T) {
 	gen := &v1.Generator{Kind: v1.GeneratorRandomBase64, Length: 32}
 	def := &v1.PackageDefinition{

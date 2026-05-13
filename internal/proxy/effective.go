@@ -7,10 +7,9 @@ import (
 	"github.com/crmarques/gitups/api/v1alpha1"
 )
 
-// Effective is the resolved proxy configuration. NoProxy is the union of
-// operator-supplied entries (kept in original order) and the auto-derived
-// cluster-local set, deduplicated. A nil *Effective means no proxy is
-// configured for the environment.
+// Effective is the resolved proxy. NoProxy is the deduplicated union of
+// operator-supplied entries (in declared order) and auto-derived
+// cluster-local entries. A nil *Effective means no proxy is configured.
 type Effective struct {
 	HTTP    string
 	HTTPS   string
@@ -18,12 +17,10 @@ type Effective struct {
 	Auth    v1alpha1.SecretRef
 }
 
-// IsManaged reports whether desired state asks Gitups to provision the
-// proxy (any InfrastructureProvider supplies spec.proxy.squid). A managed
-// proxy only exists after the bastion has stood it up, so callers that run
-// before that — bastion bootstrap — must not route through it. When no
-// provider supplies a proxy, any Environment.spec.proxy is external and is
-// already reachable.
+// IsManaged reports whether Gitups provisions the proxy itself
+// (any provider supplies spec.proxy.squid). A managed proxy only exists
+// after the bastion has stood it up, so bastion-bootstrap callers must
+// not route through it.
 func IsManaged(state v1alpha1.State) bool {
 	for _, p := range state.InfrastructureProviders {
 		if v1alpha1.ProviderProxySquid(p) != nil {
@@ -33,10 +30,9 @@ func IsManaged(state v1alpha1.State) bool {
 	return false
 }
 
-// Resolve returns the effective proxy for env, computed once from state.
-// Returns nil when env is nil or has no proxy block. Callers pass the result
-// down to renderers and CLI helpers; recomputing per call site would risk
-// drift between consumers.
+// Resolve computes the effective proxy for env once and returns nil when
+// env is nil or has no proxy block. Compute once and pass the result down
+// to renderers to avoid drift between call sites.
 func Resolve(state v1alpha1.State, env *v1alpha1.Environment) *Effective {
 	if env == nil || env.Spec.Proxy == nil {
 		return nil
@@ -128,8 +124,7 @@ func merge(user, auto []string) []string {
 	return out
 }
 
-// MirrorHost returns the host portion of a mirror registry URL by stripping
-// the trailing :port. Empty input yields empty output.
+// MirrorHost returns the host portion of url, stripping the trailing :port.
 func MirrorHost(url string) string {
 	if idx := strings.LastIndex(url, ":"); idx > 0 {
 		return url[:idx]

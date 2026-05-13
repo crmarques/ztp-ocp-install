@@ -1,7 +1,5 @@
 // Package resolve expands a GitOpsPackageSet into the same object with
-// spec.resolved populated. It merges descriptor defaults with user overrides,
-// topologically sorts by dependsOn, scans for unfilled placeholders, and
-// preserves user edits on re-expand.
+// spec.resolved populated.
 package resolve
 
 import (
@@ -14,22 +12,13 @@ import (
 	"github.com/crmarques/gitups/internal/gitops/placeholders"
 )
 
-// Options controls Expand behavior.
 type Options struct {
-	// Prior is an optional previously-expanded GitOpsPackageSet whose user edits
-	// should be preserved on re-expand. Nil on first run.
-	Prior *v1.GitOpsPackageSet
-	// Force re-derives defaults from the catalog, but still preserves
-	// user-authored fills at paths that are placeholders in the fresh expansion.
-	Force bool
-	// OutputPath seeds spec.resolved.repository.outputPath. If Prior is set, its value
-	// wins unless empty.
-	OutputPath string
-	// ExtendedFrom is written advisorily into spec.resolved.
+	Prior        *v1.GitOpsPackageSet
+	Force        bool
+	OutputPath   string
 	ExtendedFrom *v1.ExtendedFrom
 }
 
-// Expand returns a GitOpsPackageSet with spec.resolved populated.
 func Expand(p *v1.GitOpsPackageSet, cat *catalog.Catalog, opts Options) (*v1.GitOpsPackageSet, error) {
 	envKey := p.Spec.EnvKey
 	if envKey == "" {
@@ -131,19 +120,13 @@ type ref struct {
 	unit             catalog.Unit
 	values           map[string]any
 	roleOverride     v1.Role
-	// binding-only: extra reason text applied to placeholders at the given
-	// input-key paths, sensitivity flag overrides, a ResolvedPackage.Binding
-	// origin marker, and extra dependsOn strings to append.
-	extraReasons   map[string]string
-	extraSensitive map[string]bool
-	binding        *v1.BindingOrigin
-	extraDependsOn []string
+	extraReasons     map[string]string
+	extraSensitive   map[string]bool
+	binding          *v1.BindingOrigin
+	extraDependsOn   []string
 }
 
 func collectRefs(p *v1.GitOpsPackageSet, cat *catalog.Catalog, envKey string) ([]ref, []v1.ResolvedRepository, error) {
-	// Generic-style kubernetes-resources repos are those with no
-	// repoRef. Indexed by name so env repos can derive a default
-	// package list when the user leaves packages[] empty.
 	genericByName := map[string]v1.RepositoryDecl{}
 	for _, repo := range p.Spec.Repositories {
 		if repo.Type == v1.RepoTypeKubernetesResources && repo.RepoRef == nil {
@@ -167,14 +150,10 @@ func collectRefs(p *v1.GitOpsPackageSet, cat *catalog.Catalog, envKey string) ([
 			RepoRef:           cloneRepoRef(repo.RepoRef),
 			ManagedServiceRef: msr,
 		})
-		// Service-resources repos carry no install/resource units —
-		// they are declarest payload skeletons the user edits
-		// directly. The renderer emits a README + empty kustomization.
 		if repo.Type == v1.RepoTypeServiceResources {
 			continue
 		}
 		if repo.RepoRef == nil {
-			// Generic: collects install refs from packages[].
 			for pi, pr := range repo.Packages {
 				r, err := installRef(repoName, pr, cat)
 				if err != nil {
@@ -188,9 +167,6 @@ func collectRefs(p *v1.GitOpsPackageSet, cat *catalog.Catalog, envKey string) ([
 			}
 			continue
 		}
-		// Env: collects resource refs. Inherits packages[] from the
-		// referenced generic repo when the env repo leaves packages[]
-		// empty.
 		packages := repo.Packages
 		if len(packages) == 0 {
 			base, ok := genericByName[repo.RepoRef.Name]
@@ -295,10 +271,6 @@ func resourceInstance(packageInstance, template, name string) string {
 	return packageInstance + "-" + template + "-" + name
 }
 
-// renderedDirFor returns the rendered sub-path for a ref, derived from its
-// domain + unit type. Install units render under install/<method>; every
-// other domain renders under <domain>/<sub-name>/<resource-name> where the
-// sub-name is the resource template (resources/) or intent name (KRC/SRC).
 func renderedDirFor(r ref) string {
 	switch r.unitType {
 	case v1.UnitTypeInstall:
@@ -325,7 +297,6 @@ func cloneManagedServiceRef(in *v1.ManagedServiceRef) *v1.ManagedServiceRef {
 	return &out
 }
 
-// topoSort orders refs so that every dependency precedes its dependent.
 func topoSort(refs []ref) ([]ref, error) {
 	byName := map[string][]int{}
 	for i, r := range refs {

@@ -11,13 +11,6 @@ import (
 	v1 "github.com/crmarques/gitups/api/v1alpha1"
 )
 
-// renderOLM emits operator-group.yaml + subscription.yaml for an OLM-rendered
-// package. The namespace manifest is expected from the package's
-// overlays/namespace.yaml.tmpl (shared pattern across renderers).
-//
-// Package defaults come from package.yaml `spec.olm`. Per-instance overrides
-// live under resolvedValues.olm.{channel, startingCSV, source, sourceNamespace,
-// installPlanApproval, operatorGroupScope}.
 func renderOLM(ctx context.Context, rp *v1.ResolvedPackage, unit renderUnit, pkgDir string, tctx templateCtx) error {
 	_ = ctx
 	_ = tctx
@@ -76,8 +69,6 @@ func renderOLM(ctx context.Context, rp *v1.ResolvedPackage, unit renderUnit, pkg
 	return nil
 }
 
-// olmResolved carries the package-spec defaults after per-instance overrides
-// under resolvedValues.olm.* have been merged on top.
 type olmResolved struct {
 	Channel             string
 	Source              string

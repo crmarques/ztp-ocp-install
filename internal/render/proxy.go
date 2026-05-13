@@ -20,16 +20,9 @@ func managedProxyIsolationEnabled(infra v1alpha1.ClusterInfrastructure, provider
 	return primaryLibvirtMachineNetwork(infra).Libvirt != nil
 }
 
-// managedProxyClientURL is the VM-facing client URL for the managed Squid:
-// hosted at the libvirt-network gateway, which is reachable from any VM on
-// that bridge. This URL is embedded in install-config.yaml and any other
-// VM-facing config — VMs reach Squid by sending traffic at the gateway IP,
-// which Squid (bound via host networking) answers on the host.
-//
-// Hosts (the bastion / providers / infra hosts running ansible tasks) cannot
-// use this URL during bootstrap, because the gateway IP only becomes a local
-// address once substrate_libvirt brings up the bridge — and host_proxy needs
-// the URL to install libvirt itself. Hosts use managedProxyClientHostURL.
+// managedProxyClientURL returns the VM-facing client URL (libvirt-bridge
+// gateway) embedded in install-config.yaml. Hosts must use the host URL
+// instead because the gateway IP only exists after libvirt is up.
 func managedProxyClientURL(infra v1alpha1.ClusterInfrastructure, provider v1alpha1.InfrastructureProvider, env *v1alpha1.Environment) string {
 	if !managedProxyIsolationEnabled(infra, provider, env) {
 		return ""
@@ -46,12 +39,9 @@ func managedProxyClientURL(infra v1alpha1.ClusterInfrastructure, provider v1alph
 	return fmt.Sprintf("http://%s:%d", network.Gateway, port)
 }
 
-// managedProxyClientHostURL is the host-facing client URL for the managed
-// Squid: hosted at the proxy host's SSH address. By definition this address
-// is routable before libvirt comes up (it's how ansible reaches the host in
-// the first place), so host_proxy can write a working HTTP(S)_PROXY into
-// /etc/dnf/dnf.conf and the systemd drop-in even on the first run, before
-// substrate_libvirt has created the libvirt bridge.
+// managedProxyClientHostURL returns the host-facing client URL (proxy host's
+// SSH address) — routable before libvirt is up, so host_proxy can write a
+// working HTTP(S)_PROXY into /etc/dnf/dnf.conf during the first run.
 func managedProxyClientHostURL(infra v1alpha1.ClusterInfrastructure, provider v1alpha1.InfrastructureProvider, env *v1alpha1.Environment) string {
 	if !managedProxyIsolationEnabled(infra, provider, env) {
 		return ""

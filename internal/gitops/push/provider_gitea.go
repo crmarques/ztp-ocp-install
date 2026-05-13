@@ -7,9 +7,6 @@ import (
 	"strings"
 )
 
-// giteaProvider speaks the Gitea REST v1 API. Shape mirrors the GitHub
-// provider (owner-type toggles between /orgs and /user endpoints)
-// because Gitea historically modelled itself on the GitHub API.
 type giteaProvider struct {
 	cfg ProviderConfig
 }

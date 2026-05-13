@@ -5,8 +5,7 @@ gitups_forward_proxy_auth_dir: "{{ gitups_forward_proxy_root }}/auth"
 gitups_forward_proxy_cache_dir: "{{ gitups_forward_proxy_root }}/cache"
 gitups_forward_proxy_logs_dir: "{{ gitups_forward_proxy_root }}/logs"
 gitups_forward_proxy_container_name: "gitups-squid-{{ gitups_current_forward_proxy.name }}"
-# Matches the `squid` user baked into the hardcoded openEuler Squid image
-# (api/v1alpha1/infrastructure.go: DefaultSquidImageRef). Update both together
-# if the image changes.
+# openEuler Squid 7.5 refuses to run as root — must use the image's
+# baked-in squid user (UID 1000). Sync with DefaultSquidImageRef.
 gitups_forward_proxy_runtime_uid: "1000"
 gitups_forward_proxy_runtime_gid: "1000"

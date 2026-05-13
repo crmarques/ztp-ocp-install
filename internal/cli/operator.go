@@ -79,7 +79,6 @@ func sudoPackageInstallCmd(args []string, preserveProxyEnv bool) []string {
 	return append(out, args...)
 }
 
-// sudoPreservedProxyVars mirrors the proxy keys produced by resolveProxyEnv.
 const sudoPreservedProxyVars = "HTTP_PROXY,HTTPS_PROXY,NO_PROXY,http_proxy,https_proxy,no_proxy"
 
 func controllerBootstrapPlan(preserveProxyEnv bool) ([]bootstrapStep, error) {

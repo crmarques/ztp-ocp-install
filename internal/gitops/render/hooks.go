@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 )
 
-// HookRunner abstracts script execution for tests.
 type HookRunner interface {
 	Run(ctx context.Context, script string, workDir string, phase string, valuesFile string, outDir string) error
 }
@@ -49,7 +48,6 @@ func runHook(ctx context.Context, unit renderUnit, phase string, pkgDir string, 
 		return fmt.Errorf("hook %s: %s is not executable", phase, scriptPath)
 	}
 
-	// Serialize values as JSON for bash/jq consumption.
 	tmp, err := os.CreateTemp("", "gitups-hook-*.json")
 	if err != nil {
 		return err
@@ -79,7 +77,6 @@ func runHook(ctx context.Context, unit renderUnit, phase string, pkgDir string, 
 	return nil
 }
 
-// snapshotDir returns a set of file paths under dir, relative to dir.
 func snapshotDir(dir string) map[string]bool {
 	seen := map[string]bool{}
 	_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
@@ -93,8 +90,6 @@ func snapshotDir(dir string) map[string]bool {
 	return seen
 }
 
-// detectLeaks is currently a stub — snapshotDir already scopes to pkgDir so
-// leakage detection happens at a higher level. Exposed for future tightening.
 func detectLeaks(dir string, before map[string]bool) []string {
 	_ = dir
 	_ = before

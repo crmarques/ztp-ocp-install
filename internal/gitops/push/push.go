@@ -9,8 +9,6 @@ import (
 	"sort"
 )
 
-// Plan describes what Push intends to do for one rendered repo. The
-// CLI uses it to print a structured summary; tests assert on it.
 type Plan struct {
 	RepoName   string
 	RemoteName string
@@ -19,20 +17,16 @@ type Plan struct {
 	Created    bool
 }
 
-// Config holds the non-option wiring needed by Push: the workspace
-// layout, the provider (stubbable), the git runner (stubbable), and an
-// output sink for progress lines.
 type Config struct {
 	WorkspaceRoot string
-	RepoNames     []string // rendered repo dirs (top-level of WorkspaceRoot)
+	RepoNames     []string
 	Provider      Provider
 	Git           GitRunner
 	Out           io.Writer
 }
 
-// Push publishes each rendered repo dir to Config.Provider using the
-// supplied Options. Order is stable (alphabetical by repo name) so
-// output diffs cleanly across runs.
+// Push publishes each rendered repo dir to Config.Provider in stable
+// alphabetical order so output diffs cleanly across runs.
 func Push(ctx context.Context, cfg Config, opts Options, parsed ParsedBaseURL) ([]Plan, error) {
 	if cfg.Provider == nil {
 		return nil, fmt.Errorf("push: provider is nil")

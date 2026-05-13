@@ -17,10 +17,6 @@ func loadFixtures(t *testing.T) (*v1.GitOpsPackageSet, *catalog.Catalog) {
 	if err != nil {
 		t.Fatalf("load package set: %v", err)
 	}
-	// baseDir points at tests/e2e so the fixture's relative source path
-	// (../../../gitups-packages/packages) still resolves to the sibling
-	// catalog. The fixture file itself lives under internal/testdata/dsv
-	// so it is not advertised as a user-facing e2e case.
 	baseDir := filepath.Join(repoRoot, "tests/e2e")
 	cat, err := catalog.Build(prov.Spec.Sources, baseDir)
 	if err != nil {
@@ -69,8 +65,6 @@ func TestExpandDerivesEnvResourcesFromRepoRef(t *testing.T) {
 	if got["metallb-config-default"] != "basic-infra-dsv/packages/metallb/resources/config/default" {
 		t.Fatalf("derived metallb config path: %q", got["metallb-config-default"])
 	}
-	// KRC synthesis places one managed-repo unit per output repo (except
-	// the KRC's own generic) inside the KRC env repo.
 	wantManaged := "gitops-controllers-dsv/packages/argocd/kubernetes-resource-controller/managed-repo/basic-infra-dsv"
 	if got["argocd-managed-repo-basic-infra-dsv"] != wantManaged {
 		t.Fatalf("KRC managed-repo(basic-infra-dsv) path: %q", got["argocd-managed-repo-basic-infra-dsv"])
@@ -84,9 +78,6 @@ func TestExpandPlaceholders(t *testing.T) {
 		t.Fatalf("expand: %v", err)
 	}
 
-	// Each synthesised managed-repo unit carries a repoURL placeholder;
-	// the fixture produces one per output repo except gitops-controllers
-	// itself (the KRC's own generic).
 	want := map[string]bool{
 		"spec.resolved.packages[argocd-managed-repo-basic-infra].resolvedValues.repoURL":            false,
 		"spec.resolved.packages[argocd-managed-repo-basic-infra-dsv].resolvedValues.repoURL":        false,
@@ -183,9 +174,6 @@ func TestExpandForcePreservesPlaceholderFills(t *testing.T) {
 
 func TestExpandRepeatedExplicitResources(t *testing.T) {
 	prov, cat := loadFixtures(t)
-	// Rebuilds the repository set from scratch; clear the controllers
-	// assignment inherited from the base fixture so expand does not
-	// try to validate it against the synthetic repos below.
 	prov.Spec.Controllers = nil
 	prov.Spec.Repositories = []v1.RepositoryDecl{
 		{

@@ -8,9 +8,6 @@ import (
 	"github.com/crmarques/gitups/internal/gitops/resolve"
 )
 
-// withBinding attaches an argocd ↔ gitea binding to the argocd entry in the
-// dsv package set. Reused by every binding test so the wiring is authored in
-// one place.
 func withBinding(prov *v1.GitOpsPackageSet, bindingName string) {
 	for ri := range prov.Spec.Repositories {
 		repo := &prov.Spec.Repositories[ri]
@@ -32,9 +29,6 @@ func withBinding(prov *v1.GitOpsPackageSet, bindingName string) {
 	}
 }
 
-// findBindingUnits returns the consumer and all provider ResolvedPackages for
-// bindingName, indexed by their instance. Consumer entries get the
-// "consumer" side key, providers are keyed by instance.
 func findBindingUnits(fp *v1.GitOpsPackageSet, bindingName string) (consumer *v1.ResolvedPackage, providers []*v1.ResolvedPackage) {
 	for i := range fp.Spec.Resolved.Packages {
 		rp := &fp.Spec.Resolved.Packages[i]
@@ -53,10 +47,6 @@ func findBindingUnits(fp *v1.GitOpsPackageSet, bindingName string) (consumer *v1
 
 func TestExpandBindingFanOutPerEnv(t *testing.T) {
 	prov, cat := loadFixtures(t)
-	// Replace repositories with a minimal shape so we can author multiple env
-	// siblings of support-services without triggering default-resource
-	// collisions from the broader fixture. Each env carries empty explicit
-	// Packages so nothing auto-derives off the generic's defaults.
 	prov.Spec.Repositories = []v1.RepositoryDecl{
 		{
 			Name: "support-services",
@@ -108,19 +98,13 @@ func TestExpandBindingFanOutPerEnv(t *testing.T) {
 		t.Fatalf("expand: %v", err)
 	}
 	_, providers := findBindingUnits(fp, "argocd-gitea-bot")
-	// Only one env repo references the actual provider instance "gitea" —
-	// support-services-alt hosts gitea-alt. Fan-out still produces one unit
-	// per env repo that references the provider's generic repo: two envs.
 	if len(providers) != 2 {
 		t.Fatalf("expected 2 provider units (one per env repo referencing provider generic), got %d", len(providers))
 	}
-	// Fan-out ordering must be stable: sorted by env repo name.
 	if providers[0].Repository >= providers[1].Repository {
 		t.Errorf("provider units must be ordered by env repo name, got %q then %q",
 			providers[0].Repository, providers[1].Repository)
 	}
-	// Identical instance names across envs would collide — the env-repo
-	// suffix in resource names keeps them distinct.
 	if providers[0].Instance == providers[1].Instance {
 		t.Errorf("provider instances should be env-scoped, got duplicate %q", providers[0].Instance)
 	}
@@ -140,7 +124,6 @@ func TestExpandBindingExportPropagation(t *testing.T) {
 	}
 	provider := providers[0]
 
-	// Non-secret exports are literal and identical on both sides.
 	if got := provider.ResolvedValues["url"]; got != consumer.ResolvedValues["repoURL"] {
 		t.Errorf("url export mismatch: provider=%v consumer=%v", got, consumer.ResolvedValues["repoURL"])
 	}
@@ -151,7 +134,6 @@ func TestExpandBindingExportPropagation(t *testing.T) {
 		t.Errorf("expected provider.username=argocd-bot, got %v", got)
 	}
 
-	// Secret exports render as the placeholder sentinel on both sides.
 	if got := provider.ResolvedValues["token"]; got != v1.PlaceholderSentinel {
 		t.Errorf("expected provider.token to be placeholder, got %v", got)
 	}
@@ -218,7 +200,6 @@ func TestExpandBindingRejectsUnresolvedProvider(t *testing.T) {
 func TestExpandBindingRejectsMissingBindingValue(t *testing.T) {
 	prov, cat := loadFixtures(t)
 	withBinding(prov, "argocd-gitea-bot")
-	// Drop the binding.values.username the provider export expects.
 	for ri := range prov.Spec.Repositories {
 		repo := &prov.Spec.Repositories[ri]
 		if repo.Name != "gitops-controllers" {
@@ -239,8 +220,6 @@ func TestExpandBindingRejectsMissingBindingValue(t *testing.T) {
 func TestExpandBindingRejectsDuplicateBindingName(t *testing.T) {
 	prov, cat := loadFixtures(t)
 	withBinding(prov, "dup")
-	// Wire a second consumer in gitops-controllers-{{.Env}} reusing the same
-	// binding name — must fail.
 	for ri := range prov.Spec.Repositories {
 		repo := &prov.Spec.Repositories[ri]
 		if repo.Name != "gitops-controllers-{{.Env}}" {

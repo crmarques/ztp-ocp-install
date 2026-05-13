@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/x509"
 	"encoding/pem"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -97,8 +96,6 @@ func TestStatusDiscoversStateDirFromCwd(t *testing.T) {
 	}, nil, &stdout, &stderr); code != 0 {
 		t.Fatalf("init code=%d, stderr=%s", code, stderr.String())
 	}
-	// chdir into the workspace; status with NO --state-dir should still
-	// resolve the same bootstrap repo via discovery.
 	t.Chdir(stateDir)
 	stdout.Reset()
 	stderr.Reset()
@@ -129,8 +126,6 @@ func TestStatusDiscoversStateDirFromNestedCwd(t *testing.T) {
 	}, nil, &stdout, &stderr); code != 0 {
 		t.Fatalf("init code=%d, stderr=%s", code, stderr.String())
 	}
-	// chdir several levels deep into the bootstrap repo; discovery
-	// should still find the workspace root.
 	nested := filepath.Join(stateDir, "clusters-bootstrap.git", "ocp-bm-01", "gitups")
 	t.Chdir(nested)
 	stdout.Reset()
@@ -1330,6 +1325,3 @@ func TestClustersApplyYesSkipsConfirmationAndStopsBeforeAnsible(t *testing.T) {
 		t.Fatalf("--yes should skip confirmation, stderr: %s", stderr.String())
 	}
 }
-
-// keep io.Discard import live across tests for parity with prior file
-var _ = io.Discard

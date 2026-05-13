@@ -1,29 +1,3 @@
-// Command gitups drives the workspace-oriented GitOps-bootstrap flow.
-// The leaf factories below are adopted by top-level verb parents so each
-// invocation reads as `gitups <verb> gitops <name>`:
-//
-//	init     gitops <name> [-d <dir>]                                  scaffold GitOpsPackageSet
-//	expand   gitops <name> [-d <dir>] [--force]                        GitOpsPackageSet  -> expanded GitOpsPackageSet
-//	fill     gitops <name> [-d <dir>] --set <instance>.<path>=<value>  fill placeholders in expanded GitOpsPackageSet
-//	check    gitops <name> [-d <dir>]                                  validate GitOpsPackageSet and expanded GitOpsPackageSet
-//	plan     gitops <name> [-d <dir>] [--full]                         print apply plan without touching the cluster
-//	render   gitops <name> [-d <dir>] [--context c] [--allow-placeholders]
-//	                                                                   expanded GitOpsPackageSet -> repo tree
-//	push     gitops <name> --provider <p> --base-url <url> [-d <dir>]  push rendered repos to git
-//	apply    gitops <name> --to <ctx> [-d <dir>] [--dry-run] [--allow-placeholders]
-//	                                                                   apply each repo dir via the KRC-declared CLI
-//	wait     gitops <name> --to <ctx> [-d <dir>]                       wait for KRC handoff conditions
-//	diff     gitops <name> [-d <dir>]                                  drift report
-//	destroy  gitops <name> --to <ctx> [-d <dir>]                       reverse apply
-//
-// Each <name> owns a workspace at <dir>/<name>/ with user-authored
-// gitops-package-set.yaml and generated state under .gitups/.
-//
-// Apply and wait never hard-code a cluster binary. The selected KRC
-// package (via GitOpsPackageSet.spec.controllers.kubernetesResources) declares
-// spec.cli.binary and spec.cli.intents.<name>.args; gitups executes the
-// declared binary with the rendered args for each needed intent
-// (v1.IntentApply, v1.IntentGetJSON, v1.IntentWaitCondition, …).
 package cli
 
 import (
@@ -54,7 +28,6 @@ import (
 
 const defaultGitopsWorkspace = "./gitops-workspaces"
 
-// workspace holds the resolved filesystem paths for a named environment.
 type workspace struct {
 	Name               string
 	Root               string
@@ -233,10 +206,6 @@ func newGitopsCheckCmd() *cobra.Command {
 			fmt.Fprintf(out, "gitups: %s ok (%d source(s), %d repositories)\n",
 				ws.PackageSet, len(prov.Spec.Sources), len(prov.Spec.Repositories))
 
-			// Dry-expand the package set so catalog/resolve errors surface at
-			// `check` time rather than first appearing in `expand`. We pass
-			// nil prior so this is a pure validity probe, never touching the
-			// on-disk expanded GitOpsPackageSet.
 			baseDir := filepath.Dir(absPath(ws.PackageSet))
 			registerGitopsSourceResolvers(prov.Spec.Sources, packageNamesByTemplate(prov))
 			cat, err := catalog.Build(prov.Spec.Sources, baseDir)
@@ -339,11 +308,8 @@ func newGitopsRenderCmd() *cobra.Command {
 	return cmd
 }
 
-// verifyDeterminism re-renders the same expanded GitOpsPackageSet into a scratch
-// dir and compares against the workspace. Catches chart-side
-// non-determinism (auto-generated TLS certs, random IDs, timestamps)
-// inline at `render` time instead of deferring to `status`. Writes
-// a compact drift summary and returns an error so CI fails.
+// re-renders into a scratch dir and diffs against the workspace to catch chart-side
+// non-determinism (auto-generated TLS certs, random IDs, timestamps).
 func verifyDeterminism(ctx context.Context, fp *v1.GitOpsPackageSet, cat *catalog.Catalog, first render.Options, ws workspace, out writer) error {
 	scratchRoot, err := os.MkdirTemp("", "gitups-det-")
 	if err != nil {
@@ -362,8 +328,7 @@ func verifyDeterminism(ctx context.Context, fp *v1.GitOpsPackageSet, cat *catalo
 	if err != nil {
 		return fmt.Errorf("determinism diff: %w", err)
 	}
-	// Extras / orphan-dirs that come from PreserveExtras on the first
-	// run but not the second are expected — filter them.
+	// PreserveExtras runs only on the first pass, so extras/orphan-dirs are expected drift
 	filtered := drifts[:0]
 	for _, d := range drifts {
 		if d.Kind == "extra" || d.Kind == "orphan-dir" {
@@ -485,10 +450,6 @@ func newGitopsPushCmd() *cobra.Command {
 	return cmd
 }
 
-// resolvePushToken applies the documented precedence: --token flag,
-// GITUPS_PUSH_TOKEN, then provider-specific env vars. Keeping the
-// fallback lookup in main (not in internal/push) means the core push
-// package stays free of environment coupling and easier to unit-test.
 func resolvePushToken(flag, provider string) string {
 	if flag != "" {
 		return flag
@@ -507,9 +468,6 @@ func resolvePushToken(flag, provider string) string {
 	return ""
 }
 
-// renderedRepoNames returns the distinct set of rendered repo dirs
-// referenced by fp, in first-appearance order. Matches the apply-time
-// ordering so a `push` followed by `apply` walks the same list.
 func renderedRepoNames(fp *v1.GitOpsPackageSet) []string {
 	seen := map[string]bool{}
 	var out []string
@@ -566,9 +524,6 @@ func newGitopsApplyCmd() *cobra.Command {
 
 			out := cmd.ErrOrStderr()
 
-			// Load the GitOpsPackageSet: apply uses it to locate the KRC
-			// package (whose spec.cli declaration defines the cluster
-			// binary) and the SRC package.
 			provPath := filepath.Join(ws.Root, "gitops-package-set.yaml")
 			prov, err := load.PackageSet(provPath)
 			if err != nil {
@@ -618,12 +573,8 @@ func newGitopsApplyCmd() *cobra.Command {
 	return cmd
 }
 
-// applyFullTree applies each rendered repo in expanded GitOpsPackageSet ordering
-// via the KRC-declared apply intent. Used when no SRC is declared or
-// when --full is passed. Dependency ordering is implicit in
-// fp.Spec.Resolved.Packages' topo sort, so first-appearance per repo gives a
-// safe apply order. Service-resources repos (declarest payload
-// skeletons) are skipped — they are not K8s manifest trees.
+// applies each rendered repo in topo order via the KRC-declared apply intent;
+// service-resources repos (declarest payload skeletons) are skipped — not K8s manifest trees.
 func applyFullTree(cmd *cobra.Command, fp *v1.GitOpsPackageSet, ws workspace, kc *cluster.KubeClient, dryRun, waitCRDs bool, waitTimeout time.Duration, out writer) error {
 	skip := serviceResourcesRepoSet(fp)
 	seen := map[string]bool{}
@@ -662,22 +613,8 @@ func applyFullTree(cmd *cobra.Command, fp *v1.GitOpsPackageSet, ws workspace, kc
 	return nil
 }
 
-// applyBootstrapOnly applies only the bootstrap subset: every install,
-// every unit whose package role is KRC or SRC (their own instance /
-// config / repo-secret), and every unit with a Controller pointer
-// (KRC-synthesised managed-repo registrations + SRC-rewired
-// managed-script jobs). Everything else is left for the in-cluster KRC
-// to reconcile after the Applications it owns land in the cluster.
-//
-// Routing is per-unit, not per-repo, because the bootstrap subset
-// spans multiple repos and skips siblings within each one. The KRC's
-// declared apply intent lands every non-SRC unit; SRC-owned units go
-// through the declared SRC CLI.
-//
-// Between apply waves we gate progression on each preceding unit's
-// declared readiness checks via the KRC's wait-condition intent so
-// "configure gitea repo" can't fire before the gitea Deployment is
-// Available.
+// applies the bootstrap subset only (installs, KRC/SRC self resources, controller-owned units);
+// routing is per-unit because the subset spans repos and skips siblings; waves gate on readiness checks.
 func applyBootstrapOnly(cmd *cobra.Command, fp *v1.GitOpsPackageSet, prov *v1.GitOpsPackageSet, cat *catalog.Catalog, ws workspace, kc *cluster.KubeClient, dryRun, waitCRDs bool, waitTimeout time.Duration, out writer) error {
 	planned := bootstrapSubset(fp)
 	if len(planned) == 0 {
@@ -711,8 +648,6 @@ func applyBootstrapOnly(cmd *cobra.Command, fp *v1.GitOpsPackageSet, prov *v1.Gi
 
 	appliedRepos := map[string]bool{}
 	runner := cluster.DefaultCLIRunner{}
-	// Track which wave we're on so we can gate progression on
-	// readiness checks declared by prior-wave units.
 	currentWave := -1
 	var waveReady []readinessTarget
 	for _, rp := range planned {
@@ -732,11 +667,6 @@ func applyBootstrapOnly(cmd *cobra.Command, fp *v1.GitOpsPackageSet, prov *v1.Gi
 		if rp.Controller != nil && rp.Controller.Kind == v1.RoleSRC {
 			intent := rp.Controller.Intent
 			if intentSpec, ok := srcCLI.spec.Intents[intent]; ok {
-				// Bootstrap-sync intent: apply the rendered CR via
-				// the KRC-declared CLI so the in-cluster operator
-				// can take over later, then invoke the SRC's CLI
-				// for one immediate reconciliation using the
-				// rendered resource as input.
 				if err := applyUnitDir(cmd.Context(), kc, unitDir, dryRun, out); err != nil {
 					return err
 				}
@@ -744,8 +674,6 @@ func applyBootstrapOnly(cmd *cobra.Command, fp *v1.GitOpsPackageSet, prov *v1.Gi
 					return err
 				}
 			} else {
-				// CLI-only intent (e.g. managed-script): the SRC owns
-				// the apply entirely.
 				if err := invokeSRCCli(cmd.Context(), runner, srcCLI.spec, unitDir, kc.KubeContext(), rp, out, dryRun); err != nil {
 					return err
 				}
@@ -777,13 +705,9 @@ func applyBootstrapOnly(cmd *cobra.Command, fp *v1.GitOpsPackageSet, prov *v1.Gi
 	return nil
 }
 
-// writer narrows cobra's io.Writer to the subset we need. Eases testing.
 type writer interface{ Write([]byte) (int, error) }
 
-// applyUnitDir runs the KRC's apply (or apply-dry-run) intent against
-// dir with a single CRD-establishment retry. Gitups core knows nothing
-// about kubectl — the KRC's spec.cli.intents.apply template decides
-// what runs.
+// retries once after waiting for CRDs to establish — the first apply often races CRD registration
 func applyUnitDir(ctx context.Context, kc *cluster.KubeClient, dir string, dryRun bool, out writer) error {
 	run := func(label string) error {
 		fmt.Fprintf(out, "gitups: apply [%s]\n", label)
@@ -804,10 +728,6 @@ func applyUnitDir(ctx context.Context, kc *cluster.KubeClient, dir string, dryRu
 	return nil
 }
 
-// serviceResourcesRepoSet returns the set of rendered repo names whose
-// declared type is service-resources. Those repos carry declarest
-// resource-payload skeletons, not K8s manifests, so applyFullTree
-// skips them.
 func serviceResourcesRepoSet(fp *v1.GitOpsPackageSet) map[string]bool {
 	out := map[string]bool{}
 	for _, r := range fp.Spec.Resolved.Repositories {
@@ -818,38 +738,19 @@ func serviceResourcesRepoSet(fp *v1.GitOpsPackageSet) map[string]bool {
 	return out
 }
 
-// readinessTarget is one declared cluster-object readiness check
-// gitups must satisfy between apply waves. Sourced from a rendered
-// unit's .metadata.annotations["gitups.io/readiness"] annotation (the
-// JSON emitted by render.encodeReadiness).
 type readinessTarget struct {
 	Kind, Namespace, Name, Condition string
 }
 
-// readinessTargetsFor reads the just-rendered unit's readiness checks
-// from the catalog. Matches the ordering used by the renderer: unit's
-// own descriptor.readiness plus the owning package.yaml's
-// spec.readiness when the unit is the package's canonical install.
 func readinessTargetsFor(rp *v1.ResolvedPackage, cat *catalog.Catalog) []readinessTarget {
 	entry, ok := cat.Lookup(rp.Template)
 	if !ok {
 		return nil
 	}
-	tctx := map[string]string{
-		"Instance":         rp.Instance,
-		"PackageInstance":  rp.PackageInstance,
-		"ResourceTemplate": rp.ResourceTemplate,
-		"ResourceName":     rp.ResourceName,
-	}
-	_ = tctx // reserved for future template-aware readiness; today we
-	// only substitute no template tokens because live readiness lists
-	// in gitups-packages are all literal.
 	var checks []v1.ReadinessCheck
-	// Package-level readiness applies once per install.
 	if rp.UnitType == v1.UnitTypeInstall {
 		checks = append(checks, entry.Def.Spec.Readiness...)
 	}
-	// Per-unit readiness from the authoring descriptor.
 	if u, ok := entry.LookupDomainUnit(rp.Domain, rp.ResourceTemplate); ok {
 		checks = append(checks, u.Descriptor.Readiness...)
 	} else if u, ok := entry.LookupDomainUnit(v1.DomainInstall, rp.InstallMethod); ok {
@@ -865,16 +766,8 @@ func readinessTargetsFor(rp *v1.ResolvedPackage, cat *catalog.Catalog) []readine
 	return out
 }
 
-// waitForReadiness blocks on every target's wait-condition via the KRC
-// CLI. Duplicate targets (same kind/ns/name/condition) are collapsed.
-//
-// Readiness in gitups is forward-looking advice: an OLM-installed
-// operator's package-level readiness typically points at a CR instance
-// (argocd-server, keycloak-server) that only exists after a later
-// wave applies its instance CR. The gate is therefore best-effort —
-// if the object doesn't exist or the wait times out, we log and
-// continue rather than block bootstrap. The declared dependsOn DAG
-// stays the real ordering authority.
+// best-effort gate: package-level readiness often points at CRs that only exist after a later wave,
+// so wait failures are logged and skipped — the dependsOn DAG remains the real ordering authority.
 func waitForReadiness(ctx context.Context, kc *cluster.KubeClient, targets []readinessTarget, timeout time.Duration, out writer) error {
 	seen := map[readinessTarget]bool{}
 	perTarget := timeout
@@ -894,11 +787,6 @@ func waitForReadiness(ctx context.Context, kc *cluster.KubeClient, targets []rea
 	return nil
 }
 
-// newKubeClientFromGitOpsPackageSet resolves the GitOpsPackageSet's KRC assignment to
-// the KRC's spec.cli block and returns a cluster.KubeClient bound to
-// toContext. Returns a clear error when the KRC package has no
-// spec.cli or any needed intent is missing — surfaced early so apply
-// fails cleanly before touching the cluster.
 func newKubeClientFromGitOpsPackageSet(prov *v1.GitOpsPackageSet, cat *catalog.Catalog, toContext string) (*cluster.KubeClient, error) {
 	if prov.Spec.Controllers == nil || prov.Spec.Controllers.KubernetesResources == nil {
 		return nil, fmt.Errorf("spec.controllers.kubernetesResources is required — the KRC declares the cluster binary gitups uses")
@@ -931,18 +819,10 @@ func newKubeClientFromGitOpsPackageSet(prov *v1.GitOpsPackageSet, cat *catalog.C
 	return nil, fmt.Errorf("KRC instance %q not found in repo %q", a.Instance, a.Repo)
 }
 
-// invokeSRCCli renders ControllerCLI.Args from the fixed template
-// context and runs the SRC binary against unitDir. Namespace falls back
-// to the unit's resolved values; apply --dry-run passes the
-// `--dry-run=server` convention through by short-circuiting (we do not
-// assume every SRC CLI supports it).
 func invokeSRCCli(ctx context.Context, runner cluster.CLIRunner, spec *v1.ControllerCLI, unitDir, toContext string, rp *v1.ResolvedPackage, out writer, dryRun bool) error {
 	return invokeSRCCliWithArgs(ctx, runner, spec.Binary, spec.Args, unitDir, toContext, rp, out, dryRun)
 }
 
-// invokeSRCCliWithArgs runs an SRC binary with the given args template,
-// shared by the default (CLI-only) and per-intent (bootstrap-sync)
-// invocation paths.
 func invokeSRCCliWithArgs(ctx context.Context, runner cluster.CLIRunner, binary string, argsTmpl []string, unitDir, toContext string, rp *v1.ResolvedPackage, out writer, dryRun bool) error {
 	if dryRun {
 		fmt.Fprintf(out, "gitups: [dry-run] %s (skipped: SRC CLI has no uniform --dry-run contract) [%s]\n", binary, unitDir)
@@ -965,12 +845,7 @@ func invokeSRCCliWithArgs(ctx context.Context, runner cluster.CLIRunner, binary 
 	return nil
 }
 
-// compatibilityWarnings probes the target cluster's Kubernetes server
-// version (via the KRC's server-version intent) and cross-checks it
-// against each planned package's declared spec.compatibility.kubernetes
-// list. Returns a slice of human-readable strings to print at apply
-// start. Never blocks apply — the strictest guarantee we offer today is
-// "visible at the top of the run".
+// advisory only — never blocks apply
 func compatibilityWarnings(ctx context.Context, cat *catalog.Catalog, planned []*v1.ResolvedPackage, kc *cluster.KubeClient) []string {
 	serverVer := kubeServerMinor(ctx, kc)
 	if serverVer == "" {
@@ -1000,9 +875,6 @@ func compatibilityWarnings(ctx context.Context, cat *catalog.Catalog, planned []
 	return out
 }
 
-// kubeServerMinor returns a string like "1.35" for the target
-// cluster. Empty on any error. Uses the KRC's server-version intent,
-// so gitups core carries no kubectl knowledge.
 func kubeServerMinor(ctx context.Context, kc *cluster.KubeClient) string {
 	body, err := kc.ServerVersion(ctx)
 	if err != nil {
@@ -1011,11 +883,8 @@ func kubeServerMinor(ctx context.Context, kc *cluster.KubeClient) string {
 	return cluster.ParseServerMinor(body)
 }
 
-// k8sVersionSatisfies applies a minimal compatibility grammar: each
-// constraint is ">=1.N", "<1.N", "<=1.N", ">1.N", "==1.N", or plain
-// "1.N". All constraints must match. Grammars outside this set are
-// conservatively treated as "matched" so we don't false-alarm users on
-// unfamiliar syntax — the check is a hint, not a gate.
+// supported constraint syntax: ">=1.N", "<1.N", "<=1.N", ">1.N", "==1.N", or plain "1.N";
+// unrecognised grammars are treated as matched so the check stays a hint, not a false-alarm gate.
 func k8sVersionSatisfies(server string, constraints []string) bool {
 	sMaj, sMin := parseMajorMinor(server)
 	if sMaj == 0 {
@@ -1080,10 +949,6 @@ func parseMajorMinor(s string) (maj, min int) {
 	return maj, min
 }
 
-// writeBootstrapPlan emits a one-line summary of direct vs deferred
-// units plus an indented list of the direct set in apply order, so the
-// user can see up-front what gitups owns before handoff. Large plans
-// (>30) are truncated; re-run with `gitups plan` for a full listing.
 func writeBootstrapPlan(out writer, fp *v1.GitOpsPackageSet, planned []*v1.ResolvedPackage) {
 	total := len(fp.Spec.Resolved.Packages)
 	deferred := total - len(planned)
@@ -1101,9 +966,6 @@ func writeBootstrapPlan(out writer, fp *v1.GitOpsPackageSet, planned []*v1.Resol
 	}
 }
 
-// planUnitTag renders a compact descriptor of what kind of unit this
-// is for plan output: "install/<renderer>", "resource/<template>",
-// "<role>/self", or "<controller>/<intent>".
 func planUnitTag(rp *v1.ResolvedPackage) string {
 	switch {
 	case rp.Controller != nil:
@@ -1119,9 +981,6 @@ func planUnitTag(rp *v1.ResolvedPackage) string {
 	return rp.UnitType
 }
 
-// bootstrapSubset picks every ResolvedPackage gitups apply must own
-// directly: installs, controller-owned (KRC/SRC-synthesised or rewired)
-// units, and the KRC/SRC packages' own resources.
 func bootstrapSubset(fp *v1.GitOpsPackageSet) []*v1.ResolvedPackage {
 	var out []*v1.ResolvedPackage
 	for i := range fp.Spec.Resolved.Packages {
@@ -1138,15 +997,11 @@ func bootstrapSubset(fp *v1.GitOpsPackageSet) []*v1.ResolvedPackage {
 	return out
 }
 
-// srcCLIBundle pairs a ControllerCLI spec with its owning package name
-// for diagnostic messages.
 type srcCLIBundle struct {
 	spec      *v1.ControllerCLI
 	ownerName string
 }
 
-// srcCLIForPlan returns the SRC's CLI spec if the plan contains any
-// SRC-owned unit. The spec comes from the SRC package's PackageDefinition.
 func srcCLIForPlan(cat *catalog.Catalog, prov *v1.GitOpsPackageSet, plan []*v1.ResolvedPackage) (srcCLIBundle, string, error) {
 	hasSRCOwned := false
 	for _, rp := range plan {
@@ -1188,19 +1043,11 @@ func srcCLIForPlan(cat *catalog.Catalog, prov *v1.GitOpsPackageSet, plan []*v1.R
 	return srcCLIBundle{}, "", fmt.Errorf("SRC instance %q not found in repo %q", a.Instance, a.Repo)
 }
 
-// buildGitOpsPackageSetCatalog resolves the catalog for the given package set
-// relative to the workspace root. Mirrors the same interpretation of
-// relative source paths used by `gitups expand`.
 func buildGitOpsPackageSetCatalog(prov *v1.GitOpsPackageSet, ws workspace) (*catalog.Catalog, error) {
 	registerGitopsSourceResolvers(prov.Spec.Sources, packageNamesByTemplate(prov))
 	return catalog.Build(prov.Spec.Sources, ws.Root)
 }
 
-// registerGitopsSourceResolvers wires OCI and git drivers into the catalog
-// loader, scoped to the package names referenced by the current source set.
-// Called from every gitops verb that builds a catalog so the per-call
-// PackageNames can change between invocations. Filesystem sources are
-// resolved inline by the catalog package.
 func registerGitopsSourceResolvers(sources []v1.PackageSource, names map[string][]string) {
 	cacheDir := filepath.Join(defaultStateDir(), "gitops", "sources")
 	for _, s := range sources {
@@ -1224,9 +1071,6 @@ func registerGitopsSourceResolvers(sources []v1.PackageSource, names map[string]
 	}
 }
 
-// packageNamesFromExpandedPackageSet extracts the package basenames referenced
-// per-source from a GitOpsPackageSet. Same shape rules as the
-// GitOpsPackageSet-input form.
 func packageNamesFromExpandedPackageSet(fp *v1.GitOpsPackageSet) map[string][]string {
 	out := map[string]map[string]struct{}{}
 	for _, pkg := range fp.Spec.Resolved.Packages {
@@ -1253,9 +1097,6 @@ func packageNamesFromExpandedPackageSet(fp *v1.GitOpsPackageSet) map[string][]st
 	return flat
 }
 
-// packageNamesByTemplate extracts the package basenames referenced under
-// each source name. Templates have the shape `<source-name>/<package-name>`;
-// the OCI driver uses these to pull per-package artifacts from a registry.
 func packageNamesByTemplate(prov *v1.GitOpsPackageSet) map[string][]string {
 	out := map[string]map[string]struct{}{}
 	for _, repo := range prov.Spec.Repositories {
@@ -1285,9 +1126,7 @@ func packageNamesByTemplate(prov *v1.GitOpsPackageSet) map[string][]string {
 }
 
 func waitForCRDsEstablished(ctx context.Context, kc *cluster.KubeClient, out interface{ Write([]byte) (int, error) }) error {
-	// On a fresh cluster no CRDs exist yet; waiting with --all emits
-	// "no matching resources found" which looks like a failure but is
-	// benign. Probe first and skip cleanly in that case.
+	// kubectl wait --all on a CRD-less cluster reports "no matching resources" — skip cleanly
 	if !crdsExist(ctx, kc) {
 		fmt.Fprintf(out, "gitups: no CRDs yet on %s; skipping establishment wait\n", kc.KubeContext())
 		return nil
@@ -1295,9 +1134,6 @@ func waitForCRDsEstablished(ctx context.Context, kc *cluster.KubeClient, out int
 	return kc.WaitCRDsEstablished(ctx, 60*time.Second, out)
 }
 
-// crdsExist returns true when the cluster has at least one CRD. Used
-// to skip the --all establishment wait on fresh clusters where the
-// underlying wait command would otherwise emit a false-alarm error.
 func crdsExist(ctx context.Context, kc *cluster.KubeClient) bool {
 	body, err := kc.ListCRDs(ctx)
 	if err != nil {
@@ -1335,8 +1171,6 @@ func newGitopsWaitCmd() *cobra.Command {
 				return fmt.Errorf("%s has metadata.name %q but workspace is %q",
 					ws.ExpandedPackageSet, fp.Metadata.Name, ws.Name)
 			}
-			// Load GitOpsPackageSet to resolve the KRC (whose spec.cli is
-			// the cluster binary gitups talks to).
 			provPath := filepath.Join(ws.Root, "gitops-package-set.yaml")
 			prov, err := load.PackageSet(provPath)
 			if err != nil {
@@ -1411,9 +1245,6 @@ func newGitopsStatusCmd() *cobra.Command {
 			if err := ensureBinaries(); err != nil {
 				return err
 			}
-			// Render into a scratch sibling dir so status never mutates the
-			// workspace. AllowPlaceholders so a half-filled expanded GitOpsPackageSet still
-			// produces a diff — status is a read-only probe.
 			scratchRoot, err := os.MkdirTemp("", "gitups-status-")
 			if err != nil {
 				return fmt.Errorf("create scratch: %w", err)
@@ -1455,11 +1286,6 @@ func newGitopsStatusCmd() *cobra.Command {
 	return cmd
 }
 
-// writeDriftDiff prints a small unified-diff block between rendered
-// (want) and workspace (have) so `status --diff` shows the offending
-// lines directly. Kept minimal — not a full diff library — because
-// typical renders diverge on a handful of lines and a massive dump is
-// noise. Larger diffs get truncated with a tail-count hint.
 func writeDriftDiff(out writer, want, have string, maxLines int) {
 	wantBody, werr := os.ReadFile(want)
 	haveBody, herr := os.ReadFile(have)
@@ -1469,8 +1295,6 @@ func writeDriftDiff(out writer, want, have string, maxLines int) {
 	wantLines := strings.Split(string(wantBody), "\n")
 	haveLines := strings.Split(string(haveBody), "\n")
 	var lines []string
-	// Simplified diff: find the first differing line, emit up to
-	// maxLines of "want" vs "have" blocks.
 	n := len(wantLines)
 	if len(haveLines) < n {
 		n = len(haveLines)
@@ -1479,7 +1303,6 @@ func writeDriftDiff(out writer, want, have string, maxLines int) {
 	for start < n && wantLines[start] == haveLines[start] {
 		start++
 	}
-	// Emit at most maxLines of context.
 	for i := start; i < len(wantLines); i++ {
 		if i >= start+maxLines {
 			lines = append(lines, fmt.Sprintf("      ... (+%d more lines in want)", len(wantLines)-i))
@@ -1499,16 +1322,11 @@ func writeDriftDiff(out writer, want, have string, maxLines int) {
 	}
 }
 
-// drift is a single entry in a status report.
 type drift struct {
-	Kind string // missing | modified | extra | orphan-dir
-	Path string // workspace-relative display path
+	Kind string // missing | modified | extra | orphan-dir | missing-dir
+	Path string
 }
 
-// diffWorkspace compares a freshly-rendered tree against the workspace's
-// rendered repo siblings. Top-level workspace files are ignored by
-// construction — only directory siblings
-// are walked.
 func diffWorkspace(wsRoot, rendered string) ([]drift, error) {
 	rEntries, err := os.ReadDir(rendered)
 	if err != nil {
@@ -1525,7 +1343,6 @@ func diffWorkspace(wsRoot, rendered string) ([]drift, error) {
 		rPath := filepath.Join(rendered, e.Name())
 		if _, err := os.Stat(wsPath); errors.Is(err, fs.ErrNotExist) {
 			drifts = append(drifts, drift{Kind: "missing-dir", Path: e.Name() + "/"})
-			// still enumerate files so the user sees what's missing
 		}
 		if err := compareRepoTree(rPath, wsPath, e.Name(), &drifts); err != nil {
 			return nil, err
@@ -1551,9 +1368,6 @@ func diffWorkspace(wsRoot, rendered string) ([]drift, error) {
 	return drifts, nil
 }
 
-// compareRepoTree walks every file under rendered and reports missing/modified
-// files in workspace, then walks workspace and reports files that rendered did
-// not produce.
 func compareRepoTree(rendered, workspace, prefix string, drifts *[]drift) error {
 	rFiles := map[string]bool{}
 	err := filepath.WalkDir(rendered, func(p string, d fs.DirEntry, err error) error {
@@ -1587,7 +1401,6 @@ func compareRepoTree(rendered, workspace, prefix string, drifts *[]drift) error 
 	if err != nil {
 		return err
 	}
-	// Workspace-only files: walk workspace even if it doesn't exist (noop).
 	if _, err := os.Stat(workspace); errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}
@@ -1606,8 +1419,6 @@ func compareRepoTree(rendered, workspace, prefix string, drifts *[]drift) error 
 	})
 }
 
-// scaffoldGitOpsPackageSet produces a minimal GitOpsPackageSet YAML carrying only metadata,
-// with commented-out examples to guide the user's first edit.
 func scaffoldGitOpsPackageSet(name string) string {
 	return fmt.Sprintf(`apiVersion: gitups.io/v1alpha1
 kind: GitOpsPackageSet
@@ -1676,18 +1487,8 @@ func ensureBinaries() error {
 	return nil
 }
 
-// currentKubectlContext used to shell out to `kubectl config
-// current-context`. It was used only as a best-effort default for the
-// rendered tree's `context` label — an advisory string stamped onto
-// the overlay kustomization. Now that gitups core carries no kubectl
-// knowledge, we leave the label empty when the user does not pass
-// `--context`; render still works and users can pass --context
-// explicitly when a stamped value is needed.
 func currentKubectlContext() string { return "" }
 
-// newGitopsPlanCmd prints the apply plan (bootstrap subset or full tree)
-// without touching the cluster. Useful for reviewing what gitups will
-// own, in what order, and what it will defer to the in-cluster KRC.
 func newGitopsPlanCmd() *cobra.Command {
 	var (
 		outputDir string
@@ -1757,7 +1558,6 @@ func newGitopsPlanCmd() *cobra.Command {
 			for _, rp := range planned {
 				fmt.Fprintf(out, "  [wave %d] %-48s (%s) → %s\n", rp.ApplyWave, rp.Instance, planUnitTag(rp), rp.RenderedPaths.Repo)
 			}
-			// Deferred set: everything not in planned, grouped by repo.
 			inPlan := map[string]bool{}
 			for _, rp := range planned {
 				inPlan[rp.Instance] = true
@@ -1780,12 +1580,6 @@ func newGitopsPlanCmd() *cobra.Command {
 	return cmd
 }
 
-// newGitopsFillCmd implements CLI-native placeholder filling. Accepts
-// repeated --set <instance>.<dotted.path>=<value> pairs; rewrites
-// .gitups/expanded/gitops-package-set.yaml in place with the supplied values dropped into
-// each package's resolvedValues. Clears the placeholders list when all
-// sentinels are resolved; leaves unfilled entries alone so `expand`
-// can re-emit them on the next pass.
 func newGitopsFillCmd() *cobra.Command {
 	var (
 		outputDir string
@@ -1833,12 +1627,10 @@ func newGitopsFillCmd() *cobra.Command {
 				}
 				fmt.Fprintf(out, "gitups: set %s.%s\n", inst, path)
 			}
-			// Re-scan placeholders so the summary reflects user fills.
 			var remaining []v1.Placeholder
 			for i := range fp.Spec.Resolved.Packages {
 				rp := &fp.Spec.Resolved.Packages[i]
 				if placeholders.Contains(rp.ResolvedValues) {
-					// Keep only the entries whose leaf is still a sentinel.
 					for _, ph := range fp.Spec.Resolved.Placeholders {
 						if strings.HasPrefix(ph.Path, fmt.Sprintf("spec.resolved.packages[%s].", rp.Instance)) {
 							remaining = append(remaining, ph)
@@ -1864,12 +1656,7 @@ func newGitopsFillCmd() *cobra.Command {
 	return cmd
 }
 
-// parseFillSet parses --set <instance>.<dotted.path>=<value>. Instance
-// ends at the first '.'; the rest up to '=' is the dotted path; the
-// rest is a string value. Integer / bool coercion is deliberately
-// NOT done here — descriptors declare types, and misaligned types in
-// resolvedValues would be silently wrong. Users who need a number can
-// edit .gitups/expanded/gitops-package-set.yaml directly.
+// values are stored as strings; descriptor types govern coercion downstream
 func parseFillSet(s string) (instance, path, value string, err error) {
 	eq := strings.IndexByte(s, '=')
 	if eq < 0 {
@@ -1889,9 +1676,7 @@ func parseFillSet(s string) (instance, path, value string, err error) {
 	return instance, path, value, nil
 }
 
-// setDottedPath writes v at the given dotted path, creating intermediate
-// maps as needed. Array indices are not supported (use edit-in-place
-// for nested arrays — intentional scope limit).
+// array indices not supported — edit YAML directly for nested arrays
 func setDottedPath(m map[string]any, path string, v any) error {
 	parts := strings.Split(path, ".")
 	cur := m
@@ -1916,14 +1701,6 @@ func setDottedPath(m map[string]any, path string, v any) error {
 	return nil
 }
 
-// newGitopsDestroyCmd tears down a bootstrap by inverting `gitups apply gitops`:
-// for every repo (in reverse apply order) it invokes the KRC-declared CLI's
-// delete-intent against the rendered tree. KRC packages opt in by adding an
-// `intents.delete.args` block to their package.yaml; without it, destroy is a
-// no-op that prints the manual `kubectl delete` commands the user should run.
-//
-// Repository archival (--archive-repos) is intentionally not automated because
-// the safe answer depends on the git provider's policy (deprecate vs delete).
 func newGitopsDestroyCmd() *cobra.Command {
 	var (
 		outputDir    string

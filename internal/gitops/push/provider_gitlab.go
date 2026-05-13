@@ -8,10 +8,6 @@ import (
 	"strings"
 )
 
-// gitlabProvider speaks the GitLab REST v4 API. It resolves the
-// namespace (group or user) by path, then creates the project under
-// that namespace. Subgroups are expressed in the owner path
-// ("group/subgroup") and passed through as-is.
 type gitlabProvider struct {
 	cfg ProviderConfig
 }
@@ -59,10 +55,8 @@ type gitlabNamespace struct {
 }
 
 func (p *gitlabProvider) create(ctx context.Context, owner, repo, visibility string) (string, error) {
-	// GitLab needs a namespace_id, not a path, on POST /projects. The
-	// /namespaces/:path lookup returns the id for both user and group
-	// namespaces (including subgroups), which is why we don't need a
-	// gitlab-specific owner-type flag.
+	// POST /projects needs namespace_id, not a path; /namespaces/:path resolves the id
+	// for both user and group namespaces (including subgroups).
 	nsURL := fmt.Sprintf("%s/namespaces/%s", p.apiBase(), url.PathEscape(owner))
 	var ns gitlabNamespace
 	status, body, err := doJSON(ctx, p.cfg.HTTP, http.MethodGet, nsURL, p.headers(), nil, &ns)

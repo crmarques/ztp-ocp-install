@@ -78,9 +78,6 @@ func TestDetectKind(t *testing.T) {
 	}
 }
 
-// TestGitOpsPackageSetResolvedNoExtends exercises the back-compat path: a GitOpsPackageSet
-// without spec.extends must load identically through GitOpsPackageSet and
-// GitOpsPackageSetResolved, with a nil ExtendedFrom trace.
 func TestGitOpsPackageSetResolvedNoExtends(t *testing.T) {
 	repoRoot, _ := filepath.Abs("..")
 	path := filepath.Join(repoRoot, "testdata/dsv/gitops-package-set.yaml")
@@ -111,9 +108,6 @@ func writeFile(t *testing.T, dir, name, body string) string {
 	return p
 }
 
-// TestGitOpsPackageSetResolvedExtendsMerge covers the core extends behavior: env
-// picks up base sources and repositories, merges values on matching packages,
-// appends env-only packages, and records ExtendedFrom.
 func TestGitOpsPackageSetResolvedExtendsMerge(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "basic-infra/gitops-package-set.yaml", `apiVersion: gitups.io/v1alpha1
@@ -175,9 +169,6 @@ spec:
 	}
 }
 
-// TestGitOpsPackageSetResolvedRejectsTransitiveExtends: a base GitOpsPackageSet cannot
-// itself declare spec.extends — we keep resolution to a single level so
-// state is easy to reason about.
 func TestGitOpsPackageSetResolvedRejectsTransitiveExtends(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "a/gitops-package-set.yaml", `apiVersion: gitups.io/v1alpha1
@@ -219,8 +210,6 @@ spec:
 	}
 }
 
-// TestGitOpsPackageSetResolvedRejectsGitSource defers git+ source support to a
-// follow-up; today it must fail with a clear, user-facing error.
 func TestGitOpsPackageSetResolvedRejectsGitSource(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "env/gitops-package-set.yaml", `apiVersion: gitups.io/v1alpha1
@@ -241,9 +230,6 @@ spec:
 	}
 }
 
-// TestGitOpsPackageSetResolvedSourceConflict: a source name that appears in both
-// base and env is ambiguous and must error rather than silently preferring
-// one side's definition.
 func TestGitOpsPackageSetResolvedSourceConflict(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "base/gitops-package-set.yaml", `apiVersion: gitups.io/v1alpha1

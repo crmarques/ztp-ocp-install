@@ -42,12 +42,9 @@ func TestScanSortsAndAnnotates(t *testing.T) {
 	if len(phs) != 2 {
 		t.Fatalf("want 2 placeholders, got %d: %+v", len(phs), phs)
 	}
-	// sorted by path
 	if phs[0].Path >= phs[1].Path {
 		t.Errorf("not sorted: %+v", phs)
 	}
-	// prefix-match reason lookup: the CIDR sentinel (deep in addressPools)
-	// should still receive the "CIDR" reason annotated on addressPools.
 	for _, ph := range phs {
 		if ph.Reason == "" {
 			t.Errorf("empty reason on %s", ph.Path)
@@ -72,7 +69,7 @@ func TestScanCarriesGenerator(t *testing.T) {
 	chartGen := &v1.Generator{Kind: v1.GeneratorUUID}
 	generators := map[string]*v1.Generator{
 		"adminPassword": gen,
-		"chart":         chartGen, // top-level prefix; chart.apiKey should resolve to it
+		"chart":         chartGen,
 	}
 
 	phs := placeholders.Scan("argocd", values, reasons, sensitive, generators)

@@ -10,28 +10,18 @@ import (
 	"strings"
 )
 
-// Provider is the minimum surface gitups needs from a git hosting
-// backend: check that a target repo exists, and optionally create it
-// when it does not. Returning the canonical clone URL lets the caller
-// build the push URL without re-assembling the host.
 type Provider interface {
 	Name() string
-	// EnsureRepo looks up repo under owner on the provider. When the
-	// repo is absent and createMissing is true, it creates it with the
-	// given visibility. Returns the canonical HTTPS clone URL.
 	EnsureRepo(ctx context.Context, owner, repo, visibility string, createMissing bool) (cloneURL string, err error)
 }
 
-// ProviderConfig carries the shared fields every provider needs.
 type ProviderConfig struct {
 	Base      ParsedBaseURL
 	Token     string
-	OwnerType string // "org" or "user"
+	OwnerType string // org | user
 	HTTP      *http.Client
 }
 
-// NewProvider returns a provider implementation for the given name.
-// Supported: "github", "gitlab", "gitea".
 func NewProvider(name string, cfg ProviderConfig) (Provider, error) {
 	if cfg.HTTP == nil {
 		cfg.HTTP = http.DefaultClient
@@ -53,10 +43,6 @@ func NewProvider(name string, cfg ProviderConfig) (Provider, error) {
 	}
 }
 
-// doJSON is a thin helper around net/http with JSON encode/decode so
-// each provider impl stays focused on its endpoints. The body argument
-// is marshaled when non-nil; result is decoded into out when out is
-// non-nil and the status code is in [200, 300).
 func doJSON(ctx context.Context, client *http.Client, method, url string, headers map[string]string, body, out any) (int, []byte, error) {
 	var reader io.Reader
 	if body != nil {
@@ -94,15 +80,10 @@ func doJSON(ctx context.Context, client *http.Client, method, url string, header
 	return resp.StatusCode, respBody, nil
 }
 
-// errMissingToken is returned when a provider needs credentials to
-// create a missing repo but none were supplied.
 func errMissingToken(name string) error {
 	return fmt.Errorf("%s: a token is required to create repositories; set --token or GITUPS_PUSH_TOKEN (or the provider env) or pass --create-missing=false", name)
 }
 
-// httpError builds a provider-prefixed error that includes the status
-// code and a truncated response body so misconfigured calls are easy to
-// diagnose without leaking full API payloads.
 func httpError(provider, action string, status int, body []byte) error {
 	snippet := string(body)
 	if len(snippet) > 512 {

@@ -1,12 +1,4 @@
 ---
-# Unconditionally strip every host-level proxy artifact this role may have
-# written. Safe to call when nothing is present (each task is idempotent and
-# tolerates missing files). Used from two places:
-#   - persist.yml, when proxy is disabled in the env spec (transition to off)
-#   - providers/destroy.yml, on `destroy infra` (restore host to pre-gitups
-#     state — otherwise systemd's DefaultEnvironment drop-in keeps pointing
-#     every new shell at a torn-down Squid, leaving the host with no
-#     internet route).
 - name: Remove proxy block from /etc/environment
   ansible.builtin.blockinfile:
     path: /etc/environment

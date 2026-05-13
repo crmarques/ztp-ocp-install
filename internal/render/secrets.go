@@ -14,10 +14,7 @@ import (
 	"github.com/crmarques/gitups/internal/secretref"
 )
 
-// InstallerSecrets holds the secret material that openshift-install expects
-// inlined inside install-config.yaml. Use LoadInstallerSecrets to populate
-// from the local secrets directory, or PlaceholderInstallerSecrets for the
-// safe-to-inspect rendering.
+// InstallerSecrets holds secret material inlined into install-config.yaml.
 type InstallerSecrets struct {
 	PullSecret  string
 	SSHKey      string
@@ -26,9 +23,8 @@ type InstallerSecrets struct {
 	ProxyHTTPS  string
 }
 
-// PlaceholderInstallerSecrets returns sentinel strings that mark where secret
-// material would land in the rendered install-config. They are safe to write
-// to disk and to inspect.
+// PlaceholderInstallerSecrets returns sentinel strings safe to write to disk
+// in place of real secret material.
 func PlaceholderInstallerSecrets(ocp v1alpha1.OCPCluster) InstallerSecrets {
 	out := InstallerSecrets{
 		PullSecret: pullSecretPlaceholder(ocp.Spec.Install.PullSecretRef.Name),
@@ -40,11 +36,9 @@ func PlaceholderInstallerSecrets(ocp v1alpha1.OCPCluster) InstallerSecrets {
 	return out
 }
 
-// LoadInstallerSecrets reads secret material from the local secrets directory
-// (and from file-backed Environment keys) for one OCP cluster. It mirrors the
-// install_agent Ansible role: pull secret + ssh key + optional trust
-// bundle, with mirror-registry auth merged into the pull secret and proxy
-// credentials baked into proxy URLs.
+// LoadInstallerSecrets reads secret material from secretsDir for one cluster,
+// merging mirror-registry auth into the pull secret and baking proxy
+// credentials into proxy URLs.
 func LoadInstallerSecrets(state v1alpha1.State, ocp v1alpha1.OCPCluster, secretsDir string) (InstallerSecrets, error) {
 	env := primaryEnvironment(state)
 	var out InstallerSecrets

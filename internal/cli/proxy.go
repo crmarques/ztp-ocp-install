@@ -12,15 +12,8 @@ import (
 	"github.com/crmarques/gitups/internal/proxy"
 )
 
-// resolveProxyEnv returns HTTP_PROXY/HTTPS_PROXY/NO_PROXY env values
-// derived from the first environment that defines spec.proxy. Credentials
-// referenced by spec.proxy.auth.proxyAuthRef are read from the resolved
-// secret path and url-encoded into the proxy URLs. Returns nil when no
-// environment declares a proxy, or when the proxy is Gitups-managed: the
-// bastion orchestrates managed-proxy provisioning, so it cannot route its
-// own bootstrap through a proxy that does not yet exist. External proxies
-// (no InfrastructureProvider supplies spec.proxy.squid) are already up and
-// are honoured.
+// returns nil when proxy is Gitups-managed: the bastion provisions that proxy, so
+// it cannot route its own bootstrap through a proxy that does not yet exist.
 func resolveProxyEnv(state v1alpha1.State, secretsDir string) (map[string]string, error) {
 	if proxy.IsManaged(state) {
 		return nil, nil
@@ -85,8 +78,6 @@ func injectProxyAuthority(rawURL, authority string) string {
 	return proxySchemeAuthorityRE.ReplaceAllString(rawURL, "${1}"+authority)
 }
 
-// proxySummary renders a one-line, credential-redacted view of the
-// effective proxy env for human-facing output.
 func proxySummary(env map[string]string) string {
 	if len(env) == 0 {
 		return ""

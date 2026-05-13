@@ -45,10 +45,8 @@ func InstallerConfig(state v1alpha1.State, ocp v1alpha1.OCPCluster) (map[string]
 	return InstallerConfigWithSecrets(state, ocp, PlaceholderInstallerSecrets(ocp))
 }
 
-// InstallerConfigWithSecrets renders install-config.yaml with the provided
-// secret material inlined into pullSecret, sshKey, and (when set)
-// additionalTrustBundle / proxy URLs. Pass PlaceholderInstallerSecrets to keep
-// the safe-to-inspect placeholders.
+// InstallerConfigWithSecrets renders install-config.yaml with secrets inlined.
+// Pass PlaceholderInstallerSecrets for safe-to-inspect placeholders.
 func InstallerConfigWithSecrets(state v1alpha1.State, ocp v1alpha1.OCPCluster, secrets InstallerSecrets) (map[string]any, error) {
 	infra, err := clusterInfrastructureForOCP(state, ocp)
 	if err != nil {

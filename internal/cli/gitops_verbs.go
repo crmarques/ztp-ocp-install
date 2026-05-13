@@ -6,11 +6,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// These top-level verb parents host gitops-only operations as `gitops <name>`
-// children. Each parent exists so the verb sits at the top of `--help`
-// alongside the provisioning verbs, rather than buried under a `gitops`
-// namespace.
-
 func newExpandCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "expand <target>",

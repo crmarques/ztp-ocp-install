@@ -12,23 +12,19 @@ import (
 	v1 "github.com/crmarques/gitups/api/v1alpha1"
 )
 
-// HelmTemplateRequest carries all inputs needed to produce install.yaml for a
-// Helm-rendered package.
 type HelmTemplateRequest struct {
 	Instance   string
 	Chart      string
 	Repo       string
 	Version    string
 	Namespace  string
-	ValuesFile string // absolute path to the rendered values.yaml
+	ValuesFile string
 }
 
-// HelmRunner abstracts helm invocation so tests can stub it.
 type HelmRunner interface {
 	Template(ctx context.Context, req HelmTemplateRequest) (string, error)
 }
 
-// ExecHelmRunner shells out to the `helm` binary.
 type ExecHelmRunner struct {
 	Bin string
 }
@@ -63,8 +59,6 @@ func renderHelm(ctx context.Context, rp *v1.ResolvedPackage, unit renderUnit, pk
 		return fmt.Errorf("renderer=helm but spec.helm is nil")
 	}
 
-	// 1. produce values.yaml — either via the package's values template, or by
-	//    marshalling resolvedValues directly if no template is set.
 	var valuesBody []byte
 	if hs.ValuesTemplate != "" {
 		tmplPath := filepath.Join(unit.SourceDir, hs.ValuesTemplate)
@@ -85,7 +79,6 @@ func renderHelm(ctx context.Context, rp *v1.ResolvedPackage, unit renderUnit, pk
 		return fmt.Errorf("write values.yaml: %w", err)
 	}
 
-	// 2. run helm template → install.yaml.
 	namespace, _ := rp.ResolvedValues["namespace"].(string)
 	if namespace == "" {
 		namespace = "default"

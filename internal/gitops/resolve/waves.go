@@ -1,9 +1,3 @@
-// Apply-wave computation: assigns gitups.io/apply-wave values to every
-// ResolvedPackage based on the unified dependsOn DAG. Runs after the main
-// resolve loop *and* the bindings pass so binding-synthesized edges
-// participate. Controller-agnostic: render emits a neutral annotation and
-// controller packages translate it via their own overlays.
-
 package resolve
 
 import (
@@ -14,9 +8,6 @@ import (
 	v1 "github.com/crmarques/gitups/api/v1alpha1"
 )
 
-// computeApplyWaves walks every ResolvedPackage in fp, topo-sorts by
-// DependsOn (resolved through the same alias set as topoSort uses for refs),
-// and writes the resulting wave back onto each ResolvedPackage.
 func computeApplyWaves(fp *v1.GitOpsPackageSet) error {
 	n := len(fp.Spec.Resolved.Packages)
 	if n == 0 {
@@ -85,8 +76,6 @@ func computeApplyWaves(fp *v1.GitOpsPackageSet) error {
 	return nil
 }
 
-// buildPackageAliasIndex mirrors topoSort's alias scheme but runs over the
-// final ResolvedPackage list (which includes binding-synthesized units).
 func buildPackageAliasIndex(pkgs []v1.ResolvedPackage) map[string][]int {
 	byName := map[string][]int{}
 	for i, rp := range pkgs {
@@ -110,9 +99,6 @@ func buildPackageAliasIndex(pkgs []v1.ResolvedPackage) map[string][]int {
 	return byName
 }
 
-// packageNameFromTemplate returns the trailing "<package>" segment of a
-// catalog-qualified template "<source>/<package>". Falls back to the whole
-// string if no slash is present.
 func packageNameFromTemplate(template string) string {
 	if idx := strings.LastIndex(template, "/"); idx >= 0 {
 		return template[idx+1:]

@@ -1,5 +1,4 @@
-// Package load handles YAML decoding and schema-level validation of on-disk
-// gitups documents.
+// Package load decodes and validates on-disk gitups YAML documents.
 package load
 
 import (
@@ -15,7 +14,6 @@ import (
 	"github.com/crmarques/gitups/internal/gitops/safepath"
 )
 
-// DetectKind reads a file and returns its TypeMeta without full unmarshal.
 func DetectKind(path string) (v1.TypeMeta, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -28,8 +26,7 @@ func DetectKind(path string) (v1.TypeMeta, error) {
 	return tm, nil
 }
 
-// PackageSet loads and validates a GitOpsPackageSet as it lies on disk,
-// without resolving spec.extends.
+// PackageSet loads a GitOpsPackageSet without resolving spec.extends.
 func PackageSet(path string) (*v1.GitOpsPackageSet, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -48,17 +45,10 @@ func PackageSet(path string) (*v1.GitOpsPackageSet, error) {
 	return &p, nil
 }
 
-// PackageSetResolved loads a GitOpsPackageSet and, if it declares
-// spec.extends, merges it with its base object so expand/render see a single
-// effective object. The returned package set never carries spec.extends; the advisory trace is
-// returned separately for persistence in expanded GitOpsPackageSet.
-//
-// Rules:
-//   - Only one level of extends is allowed (base must not itself have extends).
-//   - sources merge by appending base entries not present in env; duplicate
-//     source names error.
-//   - repositories merge by name, with env entries replacing base entries.
-//   - metadata and spec.envKey always come from the env GitOpsPackageSet.
+// PackageSetResolved loads a GitOpsPackageSet and merges it with the base
+// declared via spec.extends. Only one level of extends is supported. Sources
+// merge by name (duplicates error); repositories merge by name with env
+// entries replacing base. The returned set never carries spec.extends.
 func PackageSetResolved(path string) (*v1.GitOpsPackageSet, *v1.ExtendedFrom, error) {
 	env, err := PackageSet(path)
 	if err != nil {
@@ -98,9 +88,6 @@ func PackageSetResolved(path string) (*v1.GitOpsPackageSet, *v1.ExtendedFrom, er
 	return merged, &v1.ExtendedFrom{Source: ext.Source, Ref: ext.Ref}, nil
 }
 
-// mergeGitOpsPackageSets returns a new effective GitOpsPackageSet: env metadata + envKey,
-// sources = base ++ env (by name, no collisions), repositories replaced by
-// name with env entries appending after inherited base entries.
 func mergeGitOpsPackageSets(base, env *v1.GitOpsPackageSet) (*v1.GitOpsPackageSet, error) {
 	out := &v1.GitOpsPackageSet{
 		APIVersion: env.APIVersion,
@@ -140,8 +127,6 @@ func mergeGitOpsPackageSets(base, env *v1.GitOpsPackageSet) (*v1.GitOpsPackageSe
 	return out, nil
 }
 
-// deepMergeMaps overlays src onto dst. Nil inputs are treated as empty. Maps
-// merge recursively; other types replace. Neither input is mutated.
 func deepMergeMaps(dst, src map[string]any) map[string]any {
 	if dst == nil && src == nil {
 		return nil
@@ -273,7 +258,6 @@ func childMap(m map[string]any, key string) map[string]any {
 	return child
 }
 
-// ExpandedPackageSet loads and validates an expanded GitOpsPackageSet.
 func ExpandedPackageSet(path string) (*v1.GitOpsPackageSet, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -289,7 +273,6 @@ func ExpandedPackageSet(path string) (*v1.GitOpsPackageSet, error) {
 	return &fp, nil
 }
 
-// PackageDefinition loads and validates a package.yaml.
 func PackageDefinition(path string) (*v1.PackageDefinition, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -308,7 +291,6 @@ func PackageDefinition(path string) (*v1.PackageDefinition, error) {
 	return &pd, nil
 }
 
-// PackageDescriptor loads and validates an install/resource descriptor.
 func PackageDescriptor(path string) (*v1.PackageDescriptor, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -343,9 +325,6 @@ func ValidatePackageSet(p *v1.GitOpsPackageSet) error {
 	if p.Metadata.Name == "" {
 		return fmt.Errorf("metadata.name is required")
 	}
-	// Empty sources/repositories are allowed at the schema level so that the
-	// `init` scaffold round-trips through `check`. `expand` enforces
-	// non-empty before rendering; see IsScaffold.
 	names := map[string]bool{}
 	for i, s := range p.Spec.Sources {
 		if s.Name == "" {
@@ -393,10 +372,6 @@ func ValidatePackageSet(p *v1.GitOpsPackageSet) error {
 		}
 	}
 	repoNames := map[string]bool{}
-	// Repository names may carry the literal "{{.Env}}" token at this
-	// stage; we record both the raw and (when present) the prefix-only
-	// form so controller references can be checked against the on-disk
-	// name the user typed.
 	for i, r := range p.Spec.Repositories {
 		if r.Name == "" {
 			return fmt.Errorf("spec.repositories[%d].name is required", i)
@@ -442,10 +417,6 @@ func ValidatePackageSet(p *v1.GitOpsPackageSet) error {
 			if r.ManagedServiceRef.Instance == "" {
 				return fmt.Errorf("spec.repositories[%d] (%s): managedServiceRef.instance is required", i, r.Name)
 			}
-			if !repoNames[r.ManagedServiceRef.Repo] {
-				// forward reference is OK in the loader (ordering-independent);
-				// defer existence check to a second pass.
-			}
 		default:
 			return fmt.Errorf("spec.repositories[%d].type %q invalid (supported: %q, %q)", i, r.Type, v1.RepoTypeKubernetesResources, v1.RepoTypeServiceResources)
 		}
@@ -453,7 +424,6 @@ func ValidatePackageSet(p *v1.GitOpsPackageSet) error {
 	if err := validateControllers(p.Spec.Controllers, repoNames); err != nil {
 		return err
 	}
-	// Second pass: managedServiceRef.repo existence.
 	for i, r := range p.Spec.Repositories {
 		if r.Type != v1.RepoTypeServiceResources || r.ManagedServiceRef == nil {
 			continue
@@ -465,10 +435,6 @@ func ValidatePackageSet(p *v1.GitOpsPackageSet) error {
 	return nil
 }
 
-// validateControllers checks the schema-level shape of the Controllers
-// block: every referenced repo must exist in spec.repositories. Role /
-// domain consistency is enforced later by expand once the catalog is
-// loaded.
 func validateControllers(c *v1.Controllers, repoNames map[string]bool) error {
 	if c == nil {
 		return nil
@@ -542,17 +508,8 @@ func validRenderer(r string) bool {
 	return false
 }
 
-// validateRepoName enforces that a repository name, once {{.Env}} is
-// substituted, will be safe to embed in Kubernetes resource names
-// (DNS-1123-ish) and on a filesystem path. Accepts the literal
-// "{{.Env}}" token and lowercase alphanumerics + hyphen + dot. Rejects
-// slashes, uppercase letters, underscores, and leading/trailing hyphen
-// or dot.
-//
-// Why at check time: KRC projections (e.g. ArgoCD Applications) use the
-// repo name verbatim as a resource name. A slash in the repo name turns
-// into "invalid resource name: may not contain '/'" at apply time, half
-// a run in. A char-set probe catches it before any files are written.
+// validateRepoName ensures a repo name (post-{{.Env}} substitution) is safe
+// to embed as a Kubernetes resource name and filesystem path.
 func validateRepoName(name string) error {
 	const maxLen = 253
 	stripped := strings.ReplaceAll(name, "{{.Env}}", "x")
@@ -565,7 +522,6 @@ func validateRepoName(name string) error {
 	for i, r := range stripped {
 		switch {
 		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-', r == '.':
-			// ok
 		default:
 			return fmt.Errorf("illegal character %q at position %d (lowercase alphanumeric, '-', '.', and the literal '{{.Env}}' token only)", r, i)
 		}
@@ -580,9 +536,6 @@ func validateRepoName(name string) error {
 	return nil
 }
 
-// validateCompatibility enforces shape for the optional compatibility
-// block. Semver grammar is not parsed here; apply-time validation
-// against the target cluster is where typos surface.
 func validateCompatibility(pd *v1.PackageDefinition) error {
 	c := pd.Spec.Compatibility
 	if c == nil {
@@ -596,9 +549,8 @@ func validateCompatibility(pd *v1.PackageDefinition) error {
 	return nil
 }
 
-// IsScaffold reports whether a GitOpsPackageSet still carries the init-time empty
-// sources/repositories. Used by `expand` to refuse rendering and by `check`
-// to distinguish scaffold state from a malformed file.
+// IsScaffold reports whether a GitOpsPackageSet still carries the init-time
+// empty sources/repositories.
 func IsScaffold(p *v1.GitOpsPackageSet) bool {
 	return len(p.Spec.Sources) == 0 && len(p.Spec.Repositories) == 0
 }
@@ -720,9 +672,6 @@ func ValidatePackageDefinition(pd *v1.PackageDefinition) error {
 	return nil
 }
 
-// validateControllerCLI enforces CLI shape rules per role: SRC must
-// declare a binary, workloads must not declare cli, KRC may optionally
-// declare one. Args are validated lazily at apply-render time.
 func validateControllerCLI(pd *v1.PackageDefinition) error {
 	cli := pd.Spec.CLI
 	switch pd.Spec.Role {
@@ -739,11 +688,6 @@ func validateControllerCLI(pd *v1.PackageDefinition) error {
 	return nil
 }
 
-// validateReadinessShape runs on every role. Controllers (KRC/SRC) MUST
-// declare at least one readiness check so gitups apply knows when to
-// hand off. Workloads MAY declare readiness — when present it is
-// validated for shape and consumed downstream (e.g. binding-synthesised
-// units reference the provider's readiness).
 func validateReadinessShape(pd *v1.PackageDefinition) error {
 	if pd.Spec.Role == v1.RoleKRC || pd.Spec.Role == v1.RoleSRC {
 		if len(pd.Spec.Readiness) == 0 {
@@ -758,9 +702,6 @@ func validateReadinessShape(pd *v1.PackageDefinition) error {
 	return nil
 }
 
-// validateDeclarestBundle enforces shape for a package's advisory
-// declarest metadata-bundle declaration. The field is informational —
-// gitups core never fetches the bundle — so the check is purely shape.
 func validateDeclarestBundle(pd *v1.PackageDefinition) error {
 	db := pd.Spec.DeclarestBundle
 	if db == nil {
@@ -806,9 +747,6 @@ func ValidatePackageDescriptor(d *v1.PackageDescriptor) error {
 	return validateRenderable("spec", d.Spec.Renderer, d.Spec.OLM, d.Spec.Helm, d.Spec.Kustomize)
 }
 
-// validateGenerator enforces the closed Generator.Kind set and per-kind
-// length bounds. Bounds match internal/secrets so an invalid descriptor
-// fails at load time rather than at apply time.
 func validateGenerator(prefix string, g v1.Generator) error {
 	switch g.Kind {
 	case v1.GeneratorRandomHex:
@@ -869,7 +807,6 @@ func validateRenderable(prefix, renderer string, olm *v1.OLMSpec, helm *v1.HelmS
 			return fmt.Errorf("%s.kustomize.base is required", prefix)
 		}
 	case v1.RendererRaw:
-		// no extra block required
 	default:
 		return fmt.Errorf("%s.renderer %q invalid (olm | kustomize | helm | raw)", prefix, renderer)
 	}

@@ -1,9 +1,3 @@
-// Controllers phase: materializes KRC managed-repo units from
-// GitOpsPackageSet.spec.controllers.kubernetesResources and rewires script-style
-// resource units through the SRC's managed-script intent. Runs after
-// resolveBindings so every install/resource/binding unit is already in
-// the expanded GitOpsPackageSet before we synthesise controller-owned wrappers.
-
 package resolve
 
 import (
@@ -53,9 +47,6 @@ func resolveControllers(
 
 	krcGenericRepo := assignment.Repo
 
-	// KRC env repos are the env repos that reference the KRC's generic
-	// repo via repoRef. Each receives one managed-repo unit per output
-	// repo (except the KRC's generic).
 	var krcEnvRepos []v1.RepositoryDecl
 	for _, r := range p.Spec.Repositories {
 		if r.Type == v1.RepoTypeKubernetesResources && r.RepoRef != nil && r.RepoRef.Name == krcGenericRepo {
@@ -67,10 +58,7 @@ func resolveControllers(
 			krcGenericRepo)
 	}
 
-	// Unique output repo names in deterministic order (same order as
-	// spec.repositories). Env-substituted names. Service-resources
-	// repos are skipped: they are declarest payload repos reconciled
-	// by the SRC, not Application targets for the KRC.
+	// Service-resources repos are reconciled by the SRC, not by the KRC.
 	var outputRepos []string
 	seen := map[string]bool{}
 	for _, r := range p.Spec.Repositories {
@@ -90,8 +78,7 @@ func resolveControllers(
 		krcEnvRepoName := substituteEnv(envRepo.Name, envKey)
 		for _, target := range outputRepos {
 			if target == krcGenericRepo {
-				// KRC install lives here — gitups direct-applies it
-				// during bootstrap; the KRC cannot reconcile itself.
+				// KRC cannot reconcile its own install; bootstrap applies it directly.
 				continue
 			}
 			resName := target
@@ -127,17 +114,9 @@ func resolveControllers(
 	return allPhs, nil
 }
 
-// rewireManagedScripts annotates every resource unit whose authoring
-// descriptor declared `provisioningStyle: script` with a Controller
-// pointing at the selected SRC's managed-script intent. The unit keeps
-// its identity, ResolvedValues, and render path so placeholder tracking
-// (e.g. binding-synthesised provider secret fills) continues to work on
-// a per-field basis. The render pipeline consumes the Controller pointer
-// at emit time and redirects the overlay lookup into the SRC package.
-//
-// Requires GitOpsPackageSet.spec.controllers.serviceResources when any
-// script-style unit is present; errors early otherwise so user mistakes
-// surface before render.
+// rewireManagedScripts points every script-style resource unit at the SRC's
+// managed-script intent without mutating the unit's identity or values, so
+// per-field placeholder tracking is preserved.
 func rewireManagedScripts(p *v1.GitOpsPackageSet, cat *catalog.Catalog, fp *v1.GitOpsPackageSet) error {
 	var scriptIdx []int
 	for i := range fp.Spec.Resolved.Packages {
@@ -190,16 +169,8 @@ func rewireManagedScripts(p *v1.GitOpsPackageSet, cat *catalog.Catalog, fp *v1.G
 	return nil
 }
 
-// rewireSRCIntents tags every resource unit whose template name is a
-// declared bootstrap-sync intent on the selected SRC. The unit stays a
-// regular K8s resource (kubectl applies it at bootstrap), but the
-// Controller pointer directs gitups apply to also invoke the SRC CLI
-// with the intent's args template — the "apply the CR, then run one
-// immediate bootstrap sync so the in-cluster operator's readiness isn't
-// on the critical path" flow.
-//
-// No-op when the GitOpsPackageSet declares no service-resources controller or
-// when the SRC declares no `spec.cli.intents`.
+// rewireSRCIntents tags resource units whose template matches an SRC
+// bootstrap-sync intent: gitups apply also invokes the SRC CLI for these.
 func rewireSRCIntents(p *v1.GitOpsPackageSet, cat *catalog.Catalog, fp *v1.GitOpsPackageSet) error {
 	if p.Spec.Controllers == nil || p.Spec.Controllers.ServiceResources == nil {
 		return nil
@@ -233,9 +204,6 @@ func rewireSRCIntents(p *v1.GitOpsPackageSet, cat *catalog.Catalog, fp *v1.GitOp
 	return nil
 }
 
-// findControllerPackage resolves spec.controllers.{kubernetes,service}Resources
-// to a catalog entry. Same shape as findProvider (bindings) but surfaces a
-// clearer error when the repo or instance cannot be located.
 func findControllerPackage(p *v1.GitOpsPackageSet, cat *catalog.Catalog, repoName, instance string) (catalog.Entry, string, string, error) {
 	for _, r := range p.Spec.Repositories {
 		if r.Type != v1.RepoTypeKubernetesResources || r.RepoRef != nil || r.Name != repoName {

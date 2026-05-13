@@ -41,11 +41,8 @@
         name: proxy_squid
         tasks_from: destroy.yml
 
-    # Strip host-level proxy artifacts (/etc/environment block, systemd
-    # drop-in, dnf/yum/pip proxy lines, etc.) AFTER proxy_squid destroy,
-    # so the host stops routing through a Squid that no longer exists.
-    # Must run last among proxy steps — earlier role destroys may still
-    # need outbound HTTP via gitups_proxy_env on the task environment.
+    # Must run AFTER proxy_squid destroy and last among proxy steps —
+    # earlier role destroys still need outbound HTTP via gitups_proxy_env.
     - name: Strip host-level proxy configuration
       ansible.builtin.import_role:
         name: host_proxy
