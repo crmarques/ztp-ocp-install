@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	v1 "github.com/crmarques/gitups/api/v1alpha1"
-	"github.com/crmarques/gitups/internal/gitops/catalog"
-	"github.com/crmarques/gitups/internal/gitops/cluster"
+	v1 "github.com/crmarques/bootwright/api/v1alpha1"
+	"github.com/crmarques/bootwright/internal/gitops/catalog"
+	"github.com/crmarques/bootwright/internal/gitops/cluster"
 )
 
 type ApplyOptions struct {
@@ -38,12 +38,12 @@ func ApplyFullTree(ctx context.Context, fp *v1.GitOpsPackageSet, ws Workspace, k
 			repoOrder = append(repoOrder, repo)
 		}
 	}
-	fmt.Fprintf(out, "gitups: applying %d repo(s) via %s (dry-run=%v, mode=full)\n",
+	fmt.Fprintf(out, "bootwright: applying %d repo(s) via %s (dry-run=%v, mode=full)\n",
 		len(repoOrder), kc.Binary(), opts.DryRun)
 	for _, repo := range repoOrder {
 		repoDir := filepath.Join(ws.RenderRoot, repo)
 		if _, err := os.Stat(repoDir); err != nil {
-			return fmt.Errorf("%s not rendered (render with `gitups render gitops %s` first): %w", repo, ws.Name, err)
+			return fmt.Errorf("%s not rendered (render with `bootwright render gitops %s` first): %w", repo, ws.Name, err)
 		}
 		if err := ApplyUnitDir(ctx, kc, repoDir, opts.DryRun, out); err != nil {
 			return err
@@ -51,14 +51,14 @@ func ApplyFullTree(ctx context.Context, fp *v1.GitOpsPackageSet, ws Workspace, k
 		if opts.WaitCRDs && !opts.DryRun {
 			subs := cluster.SubscriptionsForRepo(fp.Spec.Resolved.Packages, repo)
 			if len(subs) > 0 {
-				fmt.Fprintf(out, "gitups: waiting on %d subscription(s) from %s before next repo\n", len(subs), repo)
+				fmt.Fprintf(out, "bootwright: waiting on %d subscription(s) from %s before next repo\n", len(subs), repo)
 				if err := cluster.WaitForSubscriptions(ctx, kc, subs, cluster.WaitOptions{Timeout: opts.WaitTimeout, Out: out}); err != nil {
 					return fmt.Errorf("wait after %s: %w", repo, err)
 				}
 			}
 		}
 	}
-	fmt.Fprintf(out, "gitups: apply complete\n")
+	fmt.Fprintf(out, "bootwright: apply complete\n")
 	return nil
 }
 
@@ -79,12 +79,12 @@ func ApplyBootstrapOnly(ctx context.Context, fp *v1.GitOpsPackageSet, prov *v1.G
 		}
 	}
 
-	fmt.Fprintf(out, "gitups: bootstrap-only mode; %d unit(s) to apply via %s (dry-run=%v)\n",
+	fmt.Fprintf(out, "bootwright: bootstrap-only mode; %d unit(s) to apply via %s (dry-run=%v)\n",
 		len(planned), kc.Binary(), opts.DryRun)
 	WriteBootstrapPlan(out, fp, planned)
 	if warnings := CompatibilityWarnings(ctx, cat, planned, kc); len(warnings) > 0 {
 		for _, w := range warnings {
-			fmt.Fprintf(out, "gitups: compatibility warning — %s\n", w)
+			fmt.Fprintf(out, "bootwright: compatibility warning — %s\n", w)
 		}
 	}
 
@@ -103,7 +103,7 @@ func ApplyBootstrapOnly(ctx context.Context, fp *v1.GitOpsPackageSet, prov *v1.G
 		}
 		unitDir := filepath.Join(ws.RenderRoot, rp.RenderedPaths.Repo, rp.RenderedPaths.Dir)
 		if _, err := os.Stat(unitDir); err != nil {
-			return fmt.Errorf("unit %s not rendered at %s (render with `gitups render gitops %s` first): %w", rp.Instance, unitDir, ws.Name, err)
+			return fmt.Errorf("unit %s not rendered at %s (render with `bootwright render gitops %s` first): %w", rp.Instance, unitDir, ws.Name, err)
 		}
 		if rp.Controller != nil && rp.Controller.Kind == v1.RoleSRC {
 			intent := rp.Controller.Intent
@@ -129,7 +129,7 @@ func ApplyBootstrapOnly(ctx context.Context, fp *v1.GitOpsPackageSet, prov *v1.G
 			ns, _ := rp.ResolvedValues["namespace"].(string)
 			if ns != "" {
 				sub := []cluster.SubscriptionRef{{Namespace: ns, Name: rp.Instance}}
-				fmt.Fprintf(out, "gitups: waiting on subscription %s/%s\n", ns, rp.Instance)
+				fmt.Fprintf(out, "bootwright: waiting on subscription %s/%s\n", ns, rp.Instance)
 				if err := cluster.WaitForSubscriptions(ctx, kc, sub, cluster.WaitOptions{Timeout: opts.WaitTimeout, Out: out}); err != nil {
 					return fmt.Errorf("wait after %s: %w", rp.Instance, err)
 				}
@@ -141,23 +141,23 @@ func ApplyBootstrapOnly(ctx context.Context, fp *v1.GitOpsPackageSet, prov *v1.G
 			return err
 		}
 	}
-	fmt.Fprintf(out, "gitups: bootstrap complete; handoff to in-cluster KRC/SRC.\n")
+	fmt.Fprintf(out, "bootwright: bootstrap complete; handoff to in-cluster KRC/SRC.\n")
 	return nil
 }
 
 func ApplyUnitDir(ctx context.Context, kc *cluster.KubeClient, dir string, dryRun bool, out io.Writer) error {
 	out = writerOrDiscard(out)
 	run := func(label string) error {
-		fmt.Fprintf(out, "gitups: apply [%s]\n", label)
+		fmt.Fprintf(out, "bootwright: apply [%s]\n", label)
 		return kc.ApplyKustomize(ctx, dir, dryRun, out)
 	}
 	if err := run("pass 1"); err != nil {
 		if dryRun {
 			return fmt.Errorf("apply -k %s: %w", dir, err)
 		}
-		fmt.Fprintf(out, "gitups: pass 1 reported errors; waiting for CRD establishment before retry\n")
+		fmt.Fprintf(out, "bootwright: pass 1 reported errors; waiting for CRD establishment before retry\n")
 		if waitErr := WaitForCRDsEstablished(ctx, kc, out); waitErr != nil {
-			fmt.Fprintf(out, "gitups: CRD establishment wait did not complete cleanly: %v\n", waitErr)
+			fmt.Fprintf(out, "bootwright: CRD establishment wait did not complete cleanly: %v\n", waitErr)
 		}
 		if err2 := run("pass 2"); err2 != nil {
 			return fmt.Errorf("apply -k %s (both passes failed): %w", dir, err2)
@@ -168,7 +168,7 @@ func ApplyUnitDir(ctx context.Context, kc *cluster.KubeClient, dir string, dryRu
 
 func NewKubeClientFromPackageSet(prov *v1.GitOpsPackageSet, cat *catalog.Catalog, toContext string) (*cluster.KubeClient, error) {
 	if prov.Spec.Controllers == nil || prov.Spec.Controllers.KubernetesResources == nil {
-		return nil, fmt.Errorf("spec.controllers.kubernetesResources is required — the KRC declares the cluster binary gitups uses")
+		return nil, fmt.Errorf("spec.controllers.kubernetesResources is required — the KRC declares the cluster binary bootwright uses")
 	}
 	a := prov.Spec.Controllers.KubernetesResources
 	for _, r := range prov.Spec.Repositories {
@@ -189,7 +189,7 @@ func NewKubeClientFromPackageSet(prov *v1.GitOpsPackageSet, cat *catalog.Catalog
 				continue
 			}
 			if entry.Def.Spec.CLI == nil || entry.Def.Spec.CLI.Binary == "" {
-				return nil, fmt.Errorf("KRC package %q has no spec.cli declared — gitups needs it to know what binary to run for apply/wait",
+				return nil, fmt.Errorf("KRC package %q has no spec.cli declared — bootwright needs it to know what binary to run for apply/wait",
 					entry.Def.Metadata.Name)
 			}
 			return cluster.NewKubeClient(entry.Def.Spec.CLI, entry.Def.Metadata.Name, toContext, cluster.DefaultCLIRunner{})
@@ -200,7 +200,7 @@ func NewKubeClientFromPackageSet(prov *v1.GitOpsPackageSet, cat *catalog.Catalog
 
 func WaitForCRDsEstablished(ctx context.Context, kc *cluster.KubeClient, out io.Writer) error {
 	if !crdsExist(ctx, kc) {
-		fmt.Fprintf(writerOrDiscard(out), "gitups: no CRDs yet on %s; skipping establishment wait\n", kc.KubeContext())
+		fmt.Fprintf(writerOrDiscard(out), "bootwright: no CRDs yet on %s; skipping establishment wait\n", kc.KubeContext())
 		return nil
 	}
 	return kc.WaitCRDsEstablished(ctx, 60*time.Second, writerOrDiscard(out))
@@ -256,9 +256,9 @@ func waitForReadinessBestEffort(ctx context.Context, kc *cluster.KubeClient, tar
 			continue
 		}
 		seen[t] = true
-		fmt.Fprintf(out, "gitups: wave gate — %s/%s/%s condition=%s (best-effort, %s)\n", t.Kind, t.Namespace, t.Name, t.Condition, perTarget)
+		fmt.Fprintf(out, "bootwright: wave gate — %s/%s/%s condition=%s (best-effort, %s)\n", t.Kind, t.Namespace, t.Name, t.Condition, perTarget)
 		if err := kc.WaitCondition(ctx, t.Namespace, t.Kind, t.Name, t.Condition, perTarget, out); err != nil {
-			fmt.Fprintf(out, "gitups: wave gate skipped %s/%s/%s — %v (continuing; dependsOn ordering is still authoritative)\n", t.Kind, t.Namespace, t.Name, err)
+			fmt.Fprintf(out, "bootwright: wave gate skipped %s/%s/%s — %v (continuing; dependsOn ordering is still authoritative)\n", t.Kind, t.Namespace, t.Name, err)
 		}
 	}
 	return nil
@@ -271,7 +271,7 @@ func invokeSRCCli(ctx context.Context, runner cluster.CLIRunner, spec *v1.Contro
 func invokeSRCCliWithArgs(ctx context.Context, runner cluster.CLIRunner, binary string, argsTmpl []string, unitDir, toContext string, rp *v1.ResolvedPackage, out io.Writer, dryRun bool) error {
 	out = writerOrDiscard(out)
 	if dryRun {
-		fmt.Fprintf(out, "gitups: [dry-run] %s (skipped: SRC CLI has no uniform --dry-run contract) [%s]\n", binary, unitDir)
+		fmt.Fprintf(out, "bootwright: [dry-run] %s (skipped: SRC CLI has no uniform --dry-run contract) [%s]\n", binary, unitDir)
 		return nil
 	}
 	ns, _ := rp.ResolvedValues["namespace"].(string)
@@ -284,7 +284,7 @@ func invokeSRCCliWithArgs(ctx context.Context, runner cluster.CLIRunner, binary 
 	if err != nil {
 		return fmt.Errorf("unit %s: %w", rp.Instance, err)
 	}
-	fmt.Fprintf(out, "gitups: %s %s\n", binary, strings.Join(args, " "))
+	fmt.Fprintf(out, "bootwright: %s %s\n", binary, strings.Join(args, " "))
 	if err := runner.Run(ctx, binary, args, out, out); err != nil {
 		return fmt.Errorf("unit %s: %s %s: %w", rp.Instance, binary, strings.Join(args, " "), err)
 	}

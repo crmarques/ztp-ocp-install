@@ -41,12 +41,12 @@ func newInitWorkspaceCmd(stdout io.Writer) *cobra.Command {
 	stateDir = defaultStateDir()
 	cmd := &cobra.Command{
 		Use:   "workspace --cluster-name <name> --provider <provider>",
-		Short: "Create a clusters-bootstrap workspace with Gitups input files (under <state-dir>/git-repos/)",
+		Short: "Create a clusters-bootstrap workspace with Bootwright input files (under <state-dir>/git-repos/)",
 		Args:  cobra.NoArgs,
 	}
 	cmd.Flags().StringVar(&clusterName, "cluster-name", "", "cluster name to scaffold")
 	cmd.Flags().StringVar(&provider, "provider", "", "provider scaffold: vsphere|bare-metal|emulated-bare-metal")
-	cmd.Flags().StringVar(&stateDir, "state-dir", stateDir, "generated state directory (env: GITUPS_STATE_DIR)")
+	cmd.Flags().StringVar(&stateDir, "state-dir", stateDir, "generated state directory (env: BOOTWRIGHT_STATE_DIR)")
 	cmd.Flags().BoolVar(&force, "force", false, "overwrite existing scaffold files for the cluster")
 	cmd.RunE = func(_ *cobra.Command, _ []string) error {
 		clusterName = strings.TrimSpace(clusterName)
@@ -63,9 +63,9 @@ func newInitWorkspaceCmd(stdout io.Writer) *cobra.Command {
 		}
 
 		repo := bootstrapRepoDir(stateDir)
-		gitupsDir := filepath.Join(repo, clusterName, "gitups")
+		bootwrightDir := filepath.Join(repo, clusterName, "bootwright")
 		openshiftDir := filepath.Join(repo, clusterName, "openshift")
-		for _, dir := range []string{gitupsDir, openshiftDir} {
+		for _, dir := range []string{bootwrightDir, openshiftDir} {
 			if err := os.MkdirAll(dir, 0o755); err != nil {
 				return failErr(1, fmt.Errorf("create %s: %w", dir, err))
 			}
@@ -76,7 +76,7 @@ func newInitWorkspaceCmd(stdout io.Writer) *cobra.Command {
 
 		printTitle(stdout, "init workspace")
 		for _, item := range files {
-			path := filepath.Join(gitupsDir, item.name)
+			path := filepath.Join(bootwrightDir, item.name)
 			if _, err := os.Stat(path); err == nil && !force {
 				return failf(1, "%s already exists", path)
 			} else if err != nil && !os.IsNotExist(err) {
@@ -128,7 +128,7 @@ func emulatedBareMetalInitRepoFiles(clusterName string) []initRepoFile {
 	providerName := clusterName + "-emulated-bare-metal"
 	return []initRepoFile{
 		{name: "environment.yaml", body: connectedEnvironmentYAML(clusterName, providerHostSSHKeyYAML()+bmcCredentialsKeyYAML())},
-		{name: "provider.yaml", body: fmt.Sprintf(`apiVersion: gitups.io/v1alpha1
+		{name: "provider.yaml", body: fmt.Sprintf(`apiVersion: bootwright.io/v1alpha1
 kind: InfrastructureProvider
 metadata:
   name: %[1]s
@@ -137,7 +137,7 @@ spec:
     lab-host:
       ssh:
         address: 192.168.10.11
-        user: gitups
+        user: bootwright
         keyRef:
           name: provider-host-ssh
       capabilities:
@@ -167,7 +167,7 @@ spec:
       hostRefs:
         - name: lab-host
 `, providerName)},
-		{name: "infra.yaml", body: fmt.Sprintf(`apiVersion: gitups.io/v1alpha1
+		{name: "infra.yaml", body: fmt.Sprintf(`apiVersion: bootwright.io/v1alpha1
 kind: ClusterInfrastructure
 metadata:
   name: %[1]s
@@ -218,7 +218,7 @@ func bareMetalInitRepoFiles(clusterName string) []initRepoFile {
 	providerName := clusterName + "-bare-metal"
 	return []initRepoFile{
 		{name: "environment.yaml", body: connectedEnvironmentYAML(clusterName, bmcCredentialsKeyYAML())},
-		{name: "provider.yaml", body: fmt.Sprintf(`apiVersion: gitups.io/v1alpha1
+		{name: "provider.yaml", body: fmt.Sprintf(`apiVersion: bootwright.io/v1alpha1
 kind: InfrastructureProvider
 metadata:
   name: %[1]s
@@ -227,7 +227,7 @@ spec:
     baremetal:
       bmcProtocol: redfish
 `, providerName)},
-		{name: "infra.yaml", body: fmt.Sprintf(`apiVersion: gitups.io/v1alpha1
+		{name: "infra.yaml", body: fmt.Sprintf(`apiVersion: bootwright.io/v1alpha1
 kind: ClusterInfrastructure
 metadata:
   name: %[1]s
@@ -272,7 +272,7 @@ func vSphereInitRepoFiles(clusterName string) []initRepoFile {
 	providerName := clusterName + "-vsphere"
 	return []initRepoFile{
 		{name: "environment.yaml", body: connectedEnvironmentYAML(clusterName, vCenterCredentialsKeyYAML())},
-		{name: "provider.yaml", body: fmt.Sprintf(`apiVersion: gitups.io/v1alpha1
+		{name: "provider.yaml", body: fmt.Sprintf(`apiVersion: bootwright.io/v1alpha1
 kind: InfrastructureProvider
 metadata:
   name: %[1]s
@@ -284,7 +284,7 @@ spec:
       datacenter: dc1
       cluster: cluster1
 `, providerName)},
-		{name: "infra.yaml", body: fmt.Sprintf(`apiVersion: gitups.io/v1alpha1
+		{name: "infra.yaml", body: fmt.Sprintf(`apiVersion: bootwright.io/v1alpha1
 kind: ClusterInfrastructure
 metadata:
   name: %[1]s
@@ -311,7 +311,7 @@ spec:
         deviceName: /dev/sda
       vsphere:
         datastore: datastore1
-        folder: /Gitups/%[1]s
+        folder: /Bootwright/%[1]s
         template: rhcos
   endpoints:
     api:
@@ -326,7 +326,7 @@ spec:
 }
 
 func connectedEnvironmentYAML(name string, extraKeys string) string {
-	return fmt.Sprintf(`apiVersion: gitups.io/v1alpha1
+	return fmt.Sprintf(`apiVersion: bootwright.io/v1alpha1
 kind: Environment
 metadata:
   name: %[1]s
@@ -367,7 +367,7 @@ func vCenterCredentialsKeyYAML() string {
 }
 
 func ocpClusterYAML(clusterName string) string {
-	return fmt.Sprintf(`apiVersion: gitups.io/v1alpha1
+	return fmt.Sprintf(`apiVersion: bootwright.io/v1alpha1
 kind: OCPCluster
 metadata:
   name: %[1]s

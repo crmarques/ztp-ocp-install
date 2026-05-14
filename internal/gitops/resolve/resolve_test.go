@@ -4,10 +4,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	v1 "github.com/crmarques/gitups/api/v1alpha1"
-	"github.com/crmarques/gitups/internal/gitops/catalog"
-	"github.com/crmarques/gitups/internal/gitops/load"
-	"github.com/crmarques/gitups/internal/gitops/resolve"
+	v1 "github.com/crmarques/bootwright/api/v1alpha1"
+	"github.com/crmarques/bootwright/internal/gitops/catalog"
+	"github.com/crmarques/bootwright/internal/gitops/load"
+	"github.com/crmarques/bootwright/internal/gitops/resolve"
 )
 
 func loadFixtures(t *testing.T) (*v1.GitOpsPackageSet, *catalog.Catalog) {

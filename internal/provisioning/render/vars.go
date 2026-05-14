@@ -4,8 +4,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/crmarques/gitups/api/v1alpha1"
-	"github.com/crmarques/gitups/internal/secretref"
+	"github.com/crmarques/bootwright/api/v1alpha1"
+	"github.com/crmarques/bootwright/internal/secretref"
 )
 
 // Vars projects a fully-validated State into the closed set of top-level
@@ -23,13 +23,13 @@ func Vars(state v1alpha1.State, secretsDir string) VarsFile {
 		clusters = append(clusters, clusterVars(item, provider, ocp, env, secretsDir))
 	}
 	return VarsFile{
-		GitupsOCPInstall:       ocpInstallEnvVars(state, env, secretsDir),
-		GitupsProviders:        providerComponentVars(state, secretsDir),
-		GitupsLoadBalancers:    sharedLoadBalancerVars(state, env),
-		GitupsMirrorRegistries: mirrorRegistryRunVars(state, env, secretsDir),
-		GitupsForwardProxies:   forwardProxyRunVars(state, env, secretsDir),
-		GitupsClusters:         clusters,
-		GitupsComponentPins:    ComponentPins(state),
+		BootwrightOCPInstall:       ocpInstallEnvVars(state, env, secretsDir),
+		BootwrightProviders:        providerComponentVars(state, secretsDir),
+		BootwrightLoadBalancers:    sharedLoadBalancerVars(state, env),
+		BootwrightMirrorRegistries: mirrorRegistryRunVars(state, env, secretsDir),
+		BootwrightForwardProxies:   forwardProxyRunVars(state, env, secretsDir),
+		BootwrightClusters:         clusters,
+		BootwrightComponentPins:    ComponentPins(state),
 	}
 }
 

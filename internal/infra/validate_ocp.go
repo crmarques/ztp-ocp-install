@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/crmarques/gitups/api/v1alpha1"
+	"github.com/crmarques/bootwright/api/v1alpha1"
 )
 
 func validateOCPClusters(state v1alpha1.State) []string {
@@ -113,18 +113,18 @@ func validateInstallOverrides(ocp v1alpha1.OCPCluster) []string {
 	var errs []string
 	for k := range ocp.Spec.Install.InstallConfigOverrides {
 		if installOverrideForbiddenKeys[k] {
-			errs = append(errs, fmt.Sprintf("OCPCluster/%s install.installConfigOverrides[%s] is owned by Gitups and cannot be overridden", ocp.Metadata.Name, k))
+			errs = append(errs, fmt.Sprintf("OCPCluster/%s install.installConfigOverrides[%s] is owned by Bootwright and cannot be overridden", ocp.Metadata.Name, k))
 		}
 	}
 	errs = append(errs, validateSensitiveOverridePaths(fmt.Sprintf("OCPCluster/%s install.installConfigOverrides", ocp.Metadata.Name), ocp.Spec.Install.InstallConfigOverrides)...)
 	for _, path := range installOverrideForbiddenNestedPaths {
 		if hasNestedKey(ocp.Spec.Install.InstallConfigOverrides, path) {
-			errs = append(errs, fmt.Sprintf("OCPCluster/%s install.installConfigOverrides[%s] is owned by Gitups and cannot be overridden", ocp.Metadata.Name, path))
+			errs = append(errs, fmt.Sprintf("OCPCluster/%s install.installConfigOverrides[%s] is owned by Bootwright and cannot be overridden", ocp.Metadata.Name, path))
 		}
 	}
 	for k := range ocp.Spec.Install.AgentConfigOverrides {
 		if agentConfigForbiddenKeys[k] {
-			errs = append(errs, fmt.Sprintf("OCPCluster/%s install.agentConfigOverrides[%s] is owned by Gitups and cannot be overridden", ocp.Metadata.Name, k))
+			errs = append(errs, fmt.Sprintf("OCPCluster/%s install.agentConfigOverrides[%s] is owned by Bootwright and cannot be overridden", ocp.Metadata.Name, k))
 		}
 	}
 	errs = append(errs, validateSensitiveOverridePaths(fmt.Sprintf("OCPCluster/%s install.agentConfigOverrides", ocp.Metadata.Name), ocp.Spec.Install.AgentConfigOverrides)...)

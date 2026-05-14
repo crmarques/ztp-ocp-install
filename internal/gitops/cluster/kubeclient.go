@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	v1 "github.com/crmarques/gitups/api/v1alpha1"
+	v1 "github.com/crmarques/bootwright/api/v1alpha1"
 )
 
 type KubeClient struct {
@@ -58,7 +58,7 @@ func (k *KubeClient) intentArgs(intent string, ctx CLIContext) ([]string, error)
 	}
 	entry, ok := k.cli.Intents[intent]
 	if !ok {
-		return nil, fmt.Errorf("KRC %q: spec.cli.intents.%s is not declared; gitups needs it for the %q operation",
+		return nil, fmt.Errorf("KRC %q: spec.cli.intents.%s is not declared; bootwright needs it for the %q operation",
 			k.krcName, intent, intent)
 	}
 	ctx.KubeContext = k.kubeContext
@@ -97,7 +97,7 @@ func (k *KubeClient) ApplyKustomize(ctx context.Context, manifestPath string, dr
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "gitups: %s %s\n", k.cli.Binary, strings.Join(args, " "))
+	fmt.Fprintf(out, "bootwright: %s %s\n", k.cli.Binary, strings.Join(args, " "))
 	return k.run(ctx, args, out, out)
 }
 
@@ -120,7 +120,7 @@ func (k *KubeClient) WaitCondition(ctx context.Context, namespace, kind, name, c
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "gitups: %s %s\n", k.cli.Binary, strings.Join(args, " "))
+	fmt.Fprintf(out, "bootwright: %s %s\n", k.cli.Binary, strings.Join(args, " "))
 	return k.run(ctx, args, out, out)
 }
 
@@ -129,7 +129,7 @@ func (k *KubeClient) WaitCRDsEstablished(ctx context.Context, timeout time.Durat
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "gitups: %s %s\n", k.cli.Binary, strings.Join(args, " "))
+	fmt.Fprintf(out, "bootwright: %s %s\n", k.cli.Binary, strings.Join(args, " "))
 	return k.run(ctx, args, out, out)
 }
 

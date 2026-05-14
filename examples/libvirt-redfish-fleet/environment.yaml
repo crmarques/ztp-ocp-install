@@ -1,4 +1,4 @@
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: Environment
 metadata:
   name: connected-fleet
@@ -7,11 +7,11 @@ spec:
   ocpInstallType: connected
   secrets:
     openshift-pull-secret:
-      file: ~/.gitups/secrets/openshift-pull-secret
+      file: ~/.bootwright/secrets/openshift-pull-secret
     cluster-admin-key:
-      file: ~/.ssh/gitups-ssh-key.pub
+      file: ~/.ssh/bootwright-ssh-key.pub
     libvirt-host-ssh:
-      file: ~/.ssh/gitups-ssh-key
+      file: ~/.ssh/bootwright-ssh-key
     libvirt-redfish-bmc:
       generated:
         credentials:

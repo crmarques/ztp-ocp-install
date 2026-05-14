@@ -3,8 +3,8 @@ package resolve
 import (
 	"fmt"
 
-	v1 "github.com/crmarques/gitups/api/v1alpha1"
-	"github.com/crmarques/gitups/internal/gitops/catalog"
+	v1 "github.com/crmarques/bootwright/api/v1alpha1"
+	"github.com/crmarques/bootwright/internal/gitops/catalog"
 )
 
 const (
@@ -170,7 +170,7 @@ func rewireManagedScripts(p *v1.GitOpsPackageSet, cat *catalog.Catalog, fp *v1.G
 }
 
 // rewireSRCIntents tags resource units whose template matches an SRC
-// bootstrap-sync intent: gitups apply also invokes the SRC CLI for these.
+// bootstrap-sync intent: bootwright apply also invokes the SRC CLI for these.
 func rewireSRCIntents(p *v1.GitOpsPackageSet, cat *catalog.Catalog, fp *v1.GitOpsPackageSet) error {
 	if p.Spec.Controllers == nil || p.Spec.Controllers.ServiceResources == nil {
 		return nil

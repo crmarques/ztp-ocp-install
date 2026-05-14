@@ -2,8 +2,8 @@
 
 ## Mission
 
-Gitups is a desired-state orchestrator for OpenShift cluster fleets. The
-user declares what the platform should look like; Gitups validates the
+Bootwright is a desired-state orchestrator for OpenShift cluster fleets. The
+user declares what the platform should look like; Bootwright validates the
 declaration and renders tool-specific inputs for `openshift-install`, `oc`,
 `kubectl`, Ansible, and GitOps.
 

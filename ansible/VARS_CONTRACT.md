@@ -12,7 +12,7 @@ This document describes the seam in human-readable form.
 **Contract direction:** unidirectional. Go produces, Ansible consumes. No
 Ansible role mutates or augments these facts; per-host slicing happens
 through the `context_cluster` and `context_provider` shared roles, which
-expose derived `gitups_*_ctx` facts.
+expose derived `bootwright_*_ctx` facts.
 
 ## Top-level facts
 
@@ -21,13 +21,13 @@ These are the seven root keys in the rendered `vars.yaml`, passed to
 
 | Fact | Go type | Shape | Owner roles |
 |---|---|---|---|
-| `gitups_ocp_install` | `EnvironmentOCPInstallVars` | object | `install_agent`, `host_proxy` |
-| `gitups_providers` | `[]ProviderComponentVars` | array | `context_provider`, `bmc_*`, `boot_artifacts_http`, `proxy_squid`, `mirror_registry` |
-| `gitups_load_balancers` | `[]SharedLoadBalancerVars` | array | `context_provider`, `load_balancer_haproxy` |
-| `gitups_mirror_registries` | `[]MirrorRegistryRunVars` | array | `context_provider`, `mirror_registry` |
-| `gitups_forward_proxies` | `[]ForwardProxyRunVars` | array (omitempty) | `context_provider`, `proxy_squid`, `host_proxy` |
-| `gitups_clusters` | `[]ClusterVars` | array | `context_cluster`, `substrate_*`, `network_vips`, `name_resolution_hosts_file`, `install_agent`, `boot_*` |
-| `gitups_component_pins` | `[]ComponentPin` | array | (informational; recorded into `gitups.lock.yaml`) |
+| `bootwright_ocp_install` | `EnvironmentOCPInstallVars` | object | `install_agent`, `host_proxy` |
+| `bootwright_providers` | `[]ProviderComponentVars` | array | `context_provider`, `bmc_*`, `boot_artifacts_http`, `proxy_squid`, `mirror_registry` |
+| `bootwright_load_balancers` | `[]SharedLoadBalancerVars` | array | `context_provider`, `load_balancer_haproxy` |
+| `bootwright_mirror_registries` | `[]MirrorRegistryRunVars` | array | `context_provider`, `mirror_registry` |
+| `bootwright_forward_proxies` | `[]ForwardProxyRunVars` | array (omitempty) | `context_provider`, `proxy_squid`, `host_proxy` |
+| `bootwright_clusters` | `[]ClusterVars` | array | `context_cluster`, `substrate_*`, `network_vips`, `name_resolution_hosts_file`, `install_agent`, `boot_*` |
+| `bootwright_component_pins` | `[]ComponentPin` | array | (informational; recorded into `bootwright.lock.yaml`) |
 
 ## Per-host inventory contract
 
@@ -37,9 +37,9 @@ host-level facts:
 
 | Group | Per-host facts | Used by |
 |---|---|---|
-| `gitups_provider_hosts` | `gitups_provider_name`, `gitups_host_name` | `context_provider` |
-| `gitups_infra_hosts` | `gitups_provider_name`, `gitups_cluster_name`, `gitups_host_name` | `context_cluster` |
-| `gitups_ocp_hosts` | `gitups_provider_name`, `gitups_cluster_name`, `gitups_host_name` | `context_cluster`, `install_agent` |
+| `bootwright_provider_hosts` | `bootwright_provider_name`, `bootwright_host_name` | `context_provider` |
+| `bootwright_infra_hosts` | `bootwright_provider_name`, `bootwright_cluster_name`, `bootwright_host_name` | `context_cluster` |
+| `bootwright_ocp_hosts` | `bootwright_provider_name`, `bootwright_cluster_name`, `bootwright_host_name` | `context_cluster`, `install_agent` |
 
 Connection facts (`ansible_host`, `ansible_user`, `ansible_ssh_private_key_file`)
 are set per-host. Hosts always reach providers/clusters over SSH; the
@@ -48,34 +48,34 @@ local.
 
 ## Derived per-host facts (set by context roles)
 
-After `context_cluster` (run as the first pre-task on `gitups_infra_hosts`
-and `gitups_ocp_hosts`):
+After `context_cluster` (run as the first pre-task on `bootwright_infra_hosts`
+and `bootwright_ocp_hosts`):
 
-- `gitups_current_cluster` — the selected entry from `gitups_clusters`
-- `gitups_current_provider` — the selected entry from `gitups_providers`
-  (only when `gitups_provider_name` is defined)
-- `gitups_cluster_ctx` — `{cluster, provider}`
+- `bootwright_current_cluster` — the selected entry from `bootwright_clusters`
+- `bootwright_current_provider` — the selected entry from `bootwright_providers`
+  (only when `bootwright_provider_name` is defined)
+- `bootwright_cluster_ctx` — `{cluster, provider}`
 
 After `context_provider` (run as the first pre-task on
-`gitups_provider_hosts`):
+`bootwright_provider_hosts`):
 
-- `gitups_current_provider` — selected entry from `gitups_providers`
-- `gitups_current_load_balancers` — entries from `gitups_load_balancers`
+- `bootwright_current_provider` — selected entry from `bootwright_providers`
+- `bootwright_current_load_balancers` — entries from `bootwright_load_balancers`
   matching the host
-- `gitups_current_mirror_registry` — single entry from
-  `gitups_mirror_registries` matching the host (or `none`)
-- `gitups_current_forward_proxy` — single entry from
-  `gitups_forward_proxies` matching the host (or `none`)
-- `gitups_provider_ctx` — `{provider, loadBalancers, mirrorRegistry, forwardProxy}`
+- `bootwright_current_mirror_registry` — single entry from
+  `bootwright_mirror_registries` matching the host (or `none`)
+- `bootwright_current_forward_proxy` — single entry from
+  `bootwright_forward_proxies` matching the host (or `none`)
+- `bootwright_provider_ctx` — `{provider, loadBalancers, mirrorRegistry, forwardProxy}`
 
 Both context roles **assert** that their core selection resolved to a
 non-empty match; a malformed render produces a loud failure instead of
 silent empty results downstream.
 
-## Top-level fact: `gitups_ocp_install`
+## Top-level fact: `bootwright_ocp_install`
 
 ```yaml
-gitups_ocp_install:
+bootwright_ocp_install:
   mode: connected | disconnected         # required
   disconnected: <bool>                   # required, redundant for Jinja convenience
   registry:                              # optional; only set when env.spec.registries.mirror is present
@@ -98,14 +98,14 @@ before libvirt is up, so `host_proxy` can write a working
 `install-config.yaml`. See
 [`internal/provisioning/render/proxy.go`](../internal/provisioning/render/proxy.go).
 
-## Top-level fact: `gitups_providers`
+## Top-level fact: `bootwright_providers`
 
 One entry per `InfrastructureProvider`, regardless of whether the
 provider supplies machines, load balancers, name resolution, registry,
 or proxy.
 
 ```yaml
-gitups_providers:
+bootwright_providers:
   - name: <string>                       # provider metadata.name
     kind: libvirt | baremetal | vsphere | kubevirt
     substrateRole: libvirt | baremetal | vsphere | kubevirt
@@ -128,13 +128,13 @@ playbooks:
 Every kind resolves to a real role (no-op stubs `bmc_none` /
 `boot_none` exist so dispatch never fails).
 
-## Top-level fact: `gitups_clusters`
+## Top-level fact: `bootwright_clusters`
 
 One entry per `ClusterInfrastructure`, materialised by the renderer with
 its closure provider, OCP cluster intent, and resolved networks.
 
 ```yaml
-gitups_clusters:
+bootwright_clusters:
   - name: <string>                       # ClusterInfrastructure metadata.name
     ocp:
       name: <string>                     # OCPCluster metadata.name
@@ -161,16 +161,16 @@ gitups_clusters:
 
 ## Top-level facts: shared services
 
-`gitups_load_balancers`, `gitups_mirror_registries`, and
-`gitups_forward_proxies` are flat arrays indexed by **(provider, host)**.
+`bootwright_load_balancers`, `bootwright_mirror_registries`, and
+`bootwright_forward_proxies` are flat arrays indexed by **(provider, host)**.
 Context-provider slices them onto the host that should run each
 component. Each entry carries the runtime (`podman`), image refs, ports,
 and secret paths necessary for the component role to converge the
 service idempotently.
 
-## Image pinning: `gitups_component_pins`
+## Image pinning: `bootwright_component_pins`
 
-Recorded into the rendered `gitups.lock.yaml`. Roles do **not** read
+Recorded into the rendered `bootwright.lock.yaml`. Roles do **not** read
 this fact — the per-component facts above already carry resolved image
 URLs. The pin record exists for reproducibility review.
 

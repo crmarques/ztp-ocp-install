@@ -1,6 +1,6 @@
 package render
 
-import "github.com/crmarques/gitups/api/v1alpha1"
+import "github.com/crmarques/bootwright/api/v1alpha1"
 
 func clusterVars(item v1alpha1.ClusterInfrastructure, provider v1alpha1.InfrastructureProvider, ocp v1alpha1.OCPCluster, env *v1alpha1.Environment, secretsDir string) ClusterVars {
 	return ClusterVars{

@@ -5,7 +5,7 @@ import base64
 from ansible.errors import AnsibleFilterError
 
 
-def gitups_parse_credential(slurp_result, label="credential"):
+def bootwright_parse_credential(slurp_result, label="credential"):
     if not isinstance(slurp_result, dict):
         raise AnsibleFilterError(
             f"{label}: expected an ansible.builtin.slurp result mapping, "
@@ -38,4 +38,4 @@ def gitups_parse_credential(slurp_result, label="credential"):
 
 class FilterModule:
     def filters(self):
-        return {"gitups_parse_credential": gitups_parse_credential}
+        return {"bootwright_parse_credential": bootwright_parse_credential}

@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/crmarques/gitups/api/v1alpha1"
+	"github.com/crmarques/bootwright/api/v1alpha1"
 	"go.yaml.in/yaml/v3"
 )
 
@@ -41,7 +41,7 @@ func Load(paths []string) (v1alpha1.State, error) {
 		len(state.Environments) == 0 &&
 		len(state.ClusterInfrastructures) == 0 &&
 		len(state.OCPClusters) == 0 {
-		return v1alpha1.State{}, errors.New("no Gitups YAML documents found")
+		return v1alpha1.State{}, errors.New("no Bootwright YAML documents found")
 	}
 	sortState(&state)
 	return state, nil

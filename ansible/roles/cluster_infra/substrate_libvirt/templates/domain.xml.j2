@@ -1,9 +1,9 @@
 <domain type='kvm'>
-  <name>{{ gitups_current_cluster.name }}-{{ gitups_qemu_node.name }}</name>
-  <uuid>{{ gitups_qemu_node_uuids[gitups_qemu_node.name] }}</uuid>
-  <memory unit='MiB'>{{ gitups_qemu_node.resources.memoryMiB }}</memory>
-  <currentMemory unit='MiB'>{{ gitups_qemu_node.resources.memoryMiB }}</currentMemory>
-  <vcpu placement='static'>{{ gitups_qemu_node.resources.cpu }}</vcpu>
+  <name>{{ bootwright_current_cluster.name }}-{{ bootwright_qemu_node.name }}</name>
+  <uuid>{{ bootwright_qemu_node_uuids[bootwright_qemu_node.name] }}</uuid>
+  <memory unit='MiB'>{{ bootwright_qemu_node.resources.memoryMiB }}</memory>
+  <currentMemory unit='MiB'>{{ bootwright_qemu_node.resources.memoryMiB }}</currentMemory>
+  <vcpu placement='static'>{{ bootwright_qemu_node.resources.cpu }}</vcpu>
   <os>
     <type arch='x86_64' machine='q35'>hvm</type>
     <boot dev='hd'/>
@@ -15,10 +15,10 @@
   </features>
   <cpu mode='host-passthrough' check='none'/>
   <devices>
-    <emulator>{{ gitups_qemu_emulator_path }}</emulator>
+    <emulator>{{ bootwright_qemu_emulator_path }}</emulator>
     <disk type='file' device='disk'>
       <driver name='qemu' type='qcow2'/>
-      <source file='{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}/qemu/{{ gitups_qemu_node.name }}/disk.qcow2'/>
+      <source file='{{ bootwright_host_state_dir }}/{{ bootwright_current_cluster.name }}/qemu/{{ bootwright_qemu_node.name }}/disk.qcow2'/>
       <target dev='vda' bus='virtio'/>
     </disk>
     <disk type='file' device='cdrom'>
@@ -28,8 +28,8 @@
     </disk>
     <controller type='sata' index='0'/>
     <interface type='network'>
-      <mac address='{{ gitups_qemu_node.macAddress }}'/>
-      <source network='{{ gitups_current_cluster.provider.virtualization.libvirt.network }}'/>
+      <mac address='{{ bootwright_qemu_node.macAddress }}'/>
+      <source network='{{ bootwright_current_cluster.provider.virtualization.libvirt.network }}'/>
       <model type='virtio'/>
     </interface>
     <serial type='pty'/>

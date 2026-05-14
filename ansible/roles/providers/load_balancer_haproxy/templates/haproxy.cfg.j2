@@ -10,7 +10,7 @@ defaults
   timeout client 1m
   timeout server 1m
 
-{% for frontend in gitups_current_load_balancer.frontends %}
+{% for frontend in bootwright_current_load_balancer.frontends %}
 {% for binding in frontend.bindings %}
 {% for port in frontend.ports %}
 frontend {{ binding.clusterName }}_{{ frontend.name }}_{{ port.listenPort }}_fe

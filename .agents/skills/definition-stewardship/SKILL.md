@@ -32,7 +32,7 @@ or project-local agent guidance.
 Run stale-term searches over definition files before finishing:
 
 ```text
-rg -n 'connectivity[.](mode|connected|restricted|disconnected)|spec[.]connectivity|gitups_connectivity|local''Registry|gitups pre''flight|gitups pl''an|gitups di''ff|sp''oke|examples/inf''ra|ADR 000''3' README.md docs specs examples test .agents
+rg -n 'connectivity[.](mode|connected|restricted|disconnected)|spec[.]connectivity|bootwright_connectivity|local''Registry|bootwright pre''flight|bootwright pl''an|bootwright di''ff|sp''oke|examples/inf''ra|ADR 000''3' README.md docs specs examples test .agents
 ```
 
 Confirm connected provider-swap examples keep `Environment` and `OCPCluster`

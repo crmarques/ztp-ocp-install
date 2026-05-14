@@ -1,13 +1,13 @@
 package render
 
 type VarsFile struct {
-	GitupsOCPInstall       EnvironmentOCPInstallVars `yaml:"gitups_ocp_install" json:"gitups_ocp_install"`
-	GitupsProviders        []ProviderComponentVars   `yaml:"gitups_providers" json:"gitups_providers"`
-	GitupsLoadBalancers    []SharedLoadBalancerVars  `yaml:"gitups_load_balancers" json:"gitups_load_balancers"`
-	GitupsMirrorRegistries []MirrorRegistryRunVars   `yaml:"gitups_mirror_registries" json:"gitups_mirror_registries"`
-	GitupsForwardProxies   []ForwardProxyRunVars     `yaml:"gitups_forward_proxies,omitempty" json:"gitups_forward_proxies,omitempty"`
-	GitupsClusters         []ClusterVars             `yaml:"gitups_clusters" json:"gitups_clusters"`
-	GitupsComponentPins    []ComponentPin            `yaml:"gitups_component_pins" json:"gitups_component_pins"`
+	BootwrightOCPInstall       EnvironmentOCPInstallVars `yaml:"bootwright_ocp_install" json:"bootwright_ocp_install"`
+	BootwrightProviders        []ProviderComponentVars   `yaml:"bootwright_providers" json:"bootwright_providers"`
+	BootwrightLoadBalancers    []SharedLoadBalancerVars  `yaml:"bootwright_load_balancers" json:"bootwright_load_balancers"`
+	BootwrightMirrorRegistries []MirrorRegistryRunVars   `yaml:"bootwright_mirror_registries" json:"bootwright_mirror_registries"`
+	BootwrightForwardProxies   []ForwardProxyRunVars     `yaml:"bootwright_forward_proxies,omitempty" json:"bootwright_forward_proxies,omitempty"`
+	BootwrightClusters         []ClusterVars             `yaml:"bootwright_clusters" json:"bootwright_clusters"`
+	BootwrightComponentPins    []ComponentPin            `yaml:"bootwright_component_pins" json:"bootwright_component_pins"`
 }
 
 type EnvironmentOCPInstallVars struct {

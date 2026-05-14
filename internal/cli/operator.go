@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/crmarques/gitups/api/v1alpha1"
-	"github.com/crmarques/gitups/internal/embedded"
-	"github.com/crmarques/gitups/internal/provisioning/render"
+	"github.com/crmarques/bootwright/api/v1alpha1"
+	"github.com/crmarques/bootwright/internal/embedded"
+	"github.com/crmarques/bootwright/internal/provisioning/render"
 )
 
 func ansibleCorePinnedVersion() (string, error) {
@@ -172,8 +172,8 @@ func (s controllerCLIInstallSpec) PlannedCommand() []string {
 		s.Executable,
 		"-i", filepath.Join(bundleDir, controllerCLILocalInventory),
 		filepath.Join(bundleDir, "playbooks", "targets", "bastion", "apply-clis.yml"),
-		"-e", "gitups_openshift_release_version=" + s.OCPReleaseVersion,
-		"-e", "gitups_clis_install_dir=" + s.InstallDir,
+		"-e", "bootwright_openshift_release_version=" + s.OCPReleaseVersion,
+		"-e", "bootwright_clis_install_dir=" + s.InstallDir,
 	}
 }
 
@@ -192,8 +192,8 @@ func runControllerCLIInstall(ctx context.Context, stdin io.Reader, stdout io.Wri
 		spec.Executable,
 		"-i", filepath.Join(bundleDirAbs, controllerCLILocalInventory),
 		filepath.Join(bundleDirAbs, "playbooks", "targets", "bastion", "apply-clis.yml"),
-		"-e", "gitups_openshift_release_version=" + spec.OCPReleaseVersion,
-		"-e", "gitups_clis_install_dir=" + spec.InstallDir,
+		"-e", "bootwright_openshift_release_version=" + spec.OCPReleaseVersion,
+		"-e", "bootwright_clis_install_dir=" + spec.InstallDir,
 	}
 	fmt.Fprintf(stdout, "\n>>> install OCP CLIs %s into %s\n", spec.OCPReleaseVersion, spec.InstallDir)
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)

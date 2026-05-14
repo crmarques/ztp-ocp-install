@@ -1,6 +1,6 @@
 ---
-gitups_secrets_dir: "{{ lookup('env', 'GITUPS_SECRETS_DIR') | default((lookup('env', 'GITUPS_USER_DIR') | default(lookup('env', 'HOME') ~ '/.gitups', true)) ~ '/secrets', true) }}"
+bootwright_secrets_dir: "{{ lookup('env', 'BOOTWRIGHT_SECRETS_DIR') | default((lookup('env', 'BOOTWRIGHT_USER_DIR') | default(lookup('env', 'HOME') ~ '/.bootwright', true)) ~ '/secrets', true) }}"
 
-gitups_openshift_install: openshift-install
+bootwright_openshift_install: openshift-install
 
-gitups_ocp_install_timeout_seconds: 5400
+bootwright_ocp_install_timeout_seconds: 5400

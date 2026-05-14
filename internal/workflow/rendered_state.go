@@ -1,9 +1,9 @@
 package workflow
 
 import (
-	"github.com/crmarques/gitups/internal/ansible"
-	"github.com/crmarques/gitups/internal/orchestrate/provisioning"
-	"github.com/crmarques/gitups/internal/provisioning/render"
+	"github.com/crmarques/bootwright/internal/ansible"
+	"github.com/crmarques/bootwright/internal/orchestrate/provisioning"
+	"github.com/crmarques/bootwright/internal/provisioning/render"
 )
 
 // RenderedState is the value-object contract between the render and

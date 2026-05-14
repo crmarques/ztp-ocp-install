@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/crmarques/gitups/api/v1alpha1"
+	"github.com/crmarques/bootwright/api/v1alpha1"
 )
 
 func scopeState(state v1alpha1.State, target, scope string) (v1alpha1.State, error) {

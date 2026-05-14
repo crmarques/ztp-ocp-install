@@ -11,11 +11,11 @@ import (
 	"testing"
 )
 
-func clearGitupsEnv(t *testing.T) {
+func clearBootwrightEnv(t *testing.T) {
 	t.Helper()
-	t.Setenv(gitupsUserDirEnv, "")
-	t.Setenv(gitupsStateDirEnv, "")
-	t.Setenv(gitupsSecretsDirEnv, "")
+	t.Setenv(bootwrightUserDirEnv, "")
+	t.Setenv(bootwrightStateDirEnv, "")
+	t.Setenv(bootwrightSecretsDirEnv, "")
 }
 
 func TestInitWorkspaceGeneratesBootstrapRepo(t *testing.T) {
@@ -34,10 +34,10 @@ func TestInitWorkspaceGeneratesBootstrapRepo(t *testing.T) {
 	output := stdout.String()
 	clusterDir := filepath.Join(stateDir, "git-repos", "clusters-bootstrap", "ocp-bm-01")
 	for _, expected := range []string{
-		filepath.Join(clusterDir, "gitups", "environment.yaml"),
-		filepath.Join(clusterDir, "gitups", "provider.yaml"),
-		filepath.Join(clusterDir, "gitups", "infra.yaml"),
-		filepath.Join(clusterDir, "gitups", "cluster.yaml"),
+		filepath.Join(clusterDir, "bootwright", "environment.yaml"),
+		filepath.Join(clusterDir, "bootwright", "provider.yaml"),
+		filepath.Join(clusterDir, "bootwright", "infra.yaml"),
+		filepath.Join(clusterDir, "bootwright", "cluster.yaml"),
 		filepath.Join(clusterDir, "openshift"),
 	} {
 		if !strings.Contains(output, expected) {
@@ -85,7 +85,7 @@ func TestRenderClusterInstallFilesUsesBootstrapRepoByDefault(t *testing.T) {
 }
 
 func TestStatusDiscoversStateDirFromCwd(t *testing.T) {
-	clearGitupsEnv(t)
+	clearBootwrightEnv(t)
 	stateDir := t.TempDir()
 	var stdout, stderr bytes.Buffer
 	if code := Run(context.Background(), []string{
@@ -115,7 +115,7 @@ func TestStatusDiscoversStateDirFromCwd(t *testing.T) {
 }
 
 func TestStatusDiscoversStateDirFromNestedCwd(t *testing.T) {
-	clearGitupsEnv(t)
+	clearBootwrightEnv(t)
 	stateDir := t.TempDir()
 	var stdout, stderr bytes.Buffer
 	if code := Run(context.Background(), []string{
@@ -126,7 +126,7 @@ func TestStatusDiscoversStateDirFromNestedCwd(t *testing.T) {
 	}, nil, &stdout, &stderr); code != 0 {
 		t.Fatalf("init code=%d, stderr=%s", code, stderr.String())
 	}
-	nested := filepath.Join(stateDir, "git-repos", "clusters-bootstrap", "ocp-bm-01", "gitups")
+	nested := filepath.Join(stateDir, "git-repos", "clusters-bootstrap", "ocp-bm-01", "bootwright")
 	t.Chdir(nested)
 	stdout.Reset()
 	stderr.Reset()
@@ -139,7 +139,7 @@ func TestStatusDiscoversStateDirFromNestedCwd(t *testing.T) {
 }
 
 func TestStatusUninitializedSuggestsInitWorkspace(t *testing.T) {
-	clearGitupsEnv(t)
+	clearBootwrightEnv(t)
 	stateDir := t.TempDir()
 	var stdout, stderr bytes.Buffer
 	code := Run(context.Background(), []string{"status", "--state-dir", stateDir}, nil, &stdout, &stderr)
@@ -153,7 +153,7 @@ func TestStatusUninitializedSuggestsInitWorkspace(t *testing.T) {
 		stateDir,
 		"bootstrap repo",
 		"not initialized",
-		"gitups init workspace --cluster-name",
+		"bootwright init workspace --cluster-name",
 	} {
 		if !strings.Contains(out, expected) {
 			t.Fatalf("stdout missing %q\n%s", expected, out)
@@ -162,7 +162,7 @@ func TestStatusUninitializedSuggestsInitWorkspace(t *testing.T) {
 }
 
 func TestStatusAfterInitWorkspaceReportsClusterAndMissingInstaller(t *testing.T) {
-	clearGitupsEnv(t)
+	clearBootwrightEnv(t)
 	stateDir := t.TempDir()
 	var stdout, stderr bytes.Buffer
 	code := Run(context.Background(), []string{
@@ -187,7 +187,7 @@ func TestStatusAfterInitWorkspaceReportsClusterAndMissingInstaller(t *testing.T)
 		"ocp-bm-01",
 		"installer",
 		"not rendered",
-		"gitups render installer --scope ocp-bm-01",
+		"bootwright render installer --scope ocp-bm-01",
 	} {
 		if !strings.Contains(out, expected) {
 			t.Fatalf("stdout missing %q\n%s", expected, out)
@@ -218,14 +218,14 @@ func TestGitopsInitScaffoldPassesCheck(t *testing.T) {
 	}
 }
 
-func TestGitupsUserDirDefaultsToUserHome(t *testing.T) {
-	clearGitupsEnv(t)
+func TestBootwrightUserDirDefaultsToUserHome(t *testing.T) {
+	clearBootwrightEnv(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	userDir := filepath.Join(home, ".gitups")
-	if got := defaultGitupsUserDir(); got != userDir {
-		t.Fatalf("defaultGitupsUserDir got %q, want %q", got, userDir)
+	userDir := filepath.Join(home, ".bootwright")
+	if got := defaultBootwrightUserDir(); got != userDir {
+		t.Fatalf("defaultBootwrightUserDir got %q, want %q", got, userDir)
 	}
 	if got := defaultStateDir(); got != filepath.Join(userDir, "state") {
 		t.Fatalf("defaultStateDir got %q", got)
@@ -235,15 +235,15 @@ func TestGitupsUserDirDefaultsToUserHome(t *testing.T) {
 	}
 }
 
-func TestGitupsUserDirEnvOverridesUserHome(t *testing.T) {
-	clearGitupsEnv(t)
+func TestBootwrightUserDirEnvOverridesUserHome(t *testing.T) {
+	clearBootwrightEnv(t)
 	home := t.TempDir()
-	override := filepath.Join(t.TempDir(), "custom-gitups")
+	override := filepath.Join(t.TempDir(), "custom-bootwright")
 	t.Setenv("HOME", home)
-	t.Setenv(gitupsUserDirEnv, override)
+	t.Setenv(bootwrightUserDirEnv, override)
 
-	if got := defaultGitupsUserDir(); got != override {
-		t.Fatalf("defaultGitupsUserDir got %q, want %q", got, override)
+	if got := defaultBootwrightUserDir(); got != override {
+		t.Fatalf("defaultBootwrightUserDir got %q, want %q", got, override)
 	}
 	if got := defaultStateDir(); got != filepath.Join(override, "state") {
 		t.Fatalf("defaultStateDir got %q", got)
@@ -253,19 +253,19 @@ func TestGitupsUserDirEnvOverridesUserHome(t *testing.T) {
 	}
 }
 
-func TestGitupsStateDirEnvOverridesDefault(t *testing.T) {
-	clearGitupsEnv(t)
+func TestBootwrightStateDirEnvOverridesDefault(t *testing.T) {
+	clearBootwrightEnv(t)
 	override := filepath.Join(t.TempDir(), "custom-state")
-	t.Setenv(gitupsStateDirEnv, override)
+	t.Setenv(bootwrightStateDirEnv, override)
 	if got := defaultStateDir(); got != override {
 		t.Fatalf("defaultStateDir got %q, want %q", got, override)
 	}
 }
 
-func TestGitupsSecretsDirEnvOverridesDefault(t *testing.T) {
-	clearGitupsEnv(t)
+func TestBootwrightSecretsDirEnvOverridesDefault(t *testing.T) {
+	clearBootwrightEnv(t)
 	override := filepath.Join(t.TempDir(), "custom-secrets")
-	t.Setenv(gitupsSecretsDirEnv, override)
+	t.Setenv(bootwrightSecretsDirEnv, override)
 	if got := defaultSecretsDir(); got != override {
 		t.Fatalf("defaultSecretsDir got %q, want %q", got, override)
 	}
@@ -274,7 +274,7 @@ func TestGitupsSecretsDirEnvOverridesDefault(t *testing.T) {
 func TestProviderApplyRejectsUnsupportedProvider(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "vmware.yaml")
-	if err := os.WriteFile(path, []byte(`apiVersion: gitups.io/v1alpha1
+	if err := os.WriteFile(path, []byte(`apiVersion: bootwright.io/v1alpha1
 kind: Environment
 metadata:
   name: vmware-env
@@ -289,7 +289,7 @@ spec:
     example-vcenter:
       file: ./vcenter
 ---
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: InfrastructureProvider
 metadata:
   name: vmware-provider
@@ -301,7 +301,7 @@ spec:
       datacenter: example-dc
       cluster: example-cluster
 ---
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: ClusterInfrastructure
 metadata:
   name: vmware
@@ -330,7 +330,7 @@ spec:
     ingress:
       address: 192.168.155.11
 ---
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: OCPCluster
 metadata:
   name: vmware
@@ -363,7 +363,7 @@ spec:
 func TestSecretsGenerateWritesSelfSignedCertificate(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "state.yaml")
-	if err := os.WriteFile(path, []byte(`apiVersion: gitups.io/v1alpha1
+	if err := os.WriteFile(path, []byte(`apiVersion: bootwright.io/v1alpha1
 kind: Environment
 metadata:
   name: secrets-env
@@ -382,7 +382,7 @@ spec:
         selfSignedCertificate:
           commonName: registry.lab.test
 ---
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: InfrastructureProvider
 metadata:
   name: provider
@@ -400,7 +400,7 @@ spec:
       hostRefs:
         - name: host-01
 ---
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: ClusterInfrastructure
 metadata:
   name: hub-infra
@@ -430,7 +430,7 @@ spec:
     ingress:
       address: 192.168.155.11
 ---
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: OCPCluster
 metadata:
   name: hub
@@ -516,7 +516,7 @@ func mustReadFile(t *testing.T, path string) []byte {
 	return data
 }
 
-const generatedCredentialsFixture = `apiVersion: gitups.io/v1alpha1
+const generatedCredentialsFixture = `apiVersion: bootwright.io/v1alpha1
 kind: Environment
 metadata:
   name: cred-env
@@ -538,7 +538,7 @@ spec:
       generated:
         credentials: {}
 ---
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: InfrastructureProvider
 metadata:
   name: provider
@@ -556,7 +556,7 @@ spec:
       hostRefs:
         - name: host-01
 ---
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: ClusterInfrastructure
 metadata:
   name: hub-infra
@@ -586,7 +586,7 @@ spec:
     ingress:
       address: 192.168.155.11
 ---
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: OCPCluster
 metadata:
   name: hub
@@ -965,9 +965,9 @@ func TestProviderApplyDryRunPassesStateSecretsAndHostStateDirs(t *testing.T) {
 	}
 	output := stdout.String()
 	for _, expected := range []string{
-		"gitups_state_dir=" + stateDir,
-		"gitups_secrets_dir=" + secretsDir,
-		"gitups_host_state_dir=" + hostStateDir,
+		"bootwright_state_dir=" + stateDir,
+		"bootwright_secrets_dir=" + secretsDir,
+		"bootwright_host_state_dir=" + hostStateDir,
 	} {
 		if !strings.Contains(output, expected) {
 			t.Fatalf("stdout missing %q\n%s", expected, output)
@@ -990,8 +990,8 @@ func TestAnsibleUsesHostStateDirVariable(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if strings.Contains(string(data), "/var/lib/gitups") {
-			t.Fatalf("%s contains hard-coded /var/lib/gitups; use gitups_host_state_dir", path)
+		if strings.Contains(string(data), "/var/lib/bootwright") {
+			t.Fatalf("%s contains hard-coded /var/lib/bootwright; use bootwright_host_state_dir", path)
 		}
 		return nil
 	})
@@ -1001,7 +1001,7 @@ func TestAnsibleUsesHostStateDirVariable(t *testing.T) {
 }
 
 func TestGitopsDestroyPromptsWithoutYes(t *testing.T) {
-	clearGitupsEnv(t)
+	clearBootwrightEnv(t)
 	outDir := filepath.Join(t.TempDir(), "gitops")
 	var stdout, stderr bytes.Buffer
 	if code := Run(context.Background(), []string{"init", "gitops", "demo", "-d", outDir}, nil, &stdout, &stderr); code != 0 {
@@ -1023,7 +1023,7 @@ func TestGitopsDestroyPromptsWithoutYes(t *testing.T) {
 }
 
 func TestGitopsDestroyDryRunSkipsPrompt(t *testing.T) {
-	clearGitupsEnv(t)
+	clearBootwrightEnv(t)
 	outDir := filepath.Join(t.TempDir(), "gitops")
 	var stdout, stderr bytes.Buffer
 	if code := Run(context.Background(), []string{"init", "gitops", "demo", "-d", outDir}, nil, &stdout, &stderr); code != 0 {

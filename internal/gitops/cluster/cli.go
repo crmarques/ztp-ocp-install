@@ -8,7 +8,7 @@ import (
 	"os/exec"
 	"text/template"
 
-	v1 "github.com/crmarques/gitups/api/v1alpha1"
+	v1 "github.com/crmarques/bootwright/api/v1alpha1"
 )
 
 type CLIRunner interface {

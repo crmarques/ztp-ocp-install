@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/crmarques/gitups/api/v1alpha1"
+	"github.com/crmarques/bootwright/api/v1alpha1"
 )
 
 type secretRefRequirement struct {
@@ -234,7 +234,7 @@ func generatedSelfSignedDriftChecks(state v1alpha1.State, secretsDir string) []p
 			checks = append(checks, preflightCheck{
 				name:   name,
 				ok:     false,
-				detail: fmt.Sprintf("%v — remove %s and %s, then re-run `gitups secret generate`", err, certPath, keyPath),
+				detail: fmt.Sprintf("%v — remove %s and %s, then re-run `bootwright secret generate`", err, certPath, keyPath),
 			})
 			continue
 		}

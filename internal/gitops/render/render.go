@@ -13,10 +13,10 @@ import (
 
 	"sigs.k8s.io/yaml"
 
-	v1 "github.com/crmarques/gitups/api/v1alpha1"
-	"github.com/crmarques/gitups/internal/gitops/catalog"
-	"github.com/crmarques/gitups/internal/gitops/placeholders"
-	"github.com/crmarques/gitups/internal/gitops/safepath"
+	v1 "github.com/crmarques/bootwright/api/v1alpha1"
+	"github.com/crmarques/bootwright/internal/gitops/catalog"
+	"github.com/crmarques/bootwright/internal/gitops/placeholders"
+	"github.com/crmarques/bootwright/internal/gitops/safepath"
 )
 
 func managedScriptTemplateValues(rp *v1.ResolvedPackage, origUnit catalog.Unit) (map[string]any, error) {
@@ -114,7 +114,7 @@ func Render(ctx context.Context, fp *v1.GitOpsPackageSet, cat *catalog.Catalog, 
 
 	byRepo := map[string][]*v1.ResolvedPackage{}
 
-	tempDir, err := os.MkdirTemp(filepath.Dir(absOrCwd(opts.OutputPath)), ".gitups-render-")
+	tempDir, err := os.MkdirTemp(filepath.Dir(absOrCwd(opts.OutputPath)), ".bootwright-render-")
 	if err != nil {
 		return fmt.Errorf("create temp dir: %w", err)
 	}
@@ -548,7 +548,7 @@ func writeRepoToplevel(tempDir string, byRepo map[string][]*v1.ResolvedPackage, 
 		}
 
 		var b strings.Builder
-		fmt.Fprintf(&b, "# %s\n\nRepo rendered by gitups from GitOpsPackageSet %q.\n\n",
+		fmt.Fprintf(&b, "# %s\n\nRepo rendered by bootwright from GitOpsPackageSet %q.\n\n",
 			repo, fp.Metadata.Name)
 		fmt.Fprintf(&b, "## Packages\n\n")
 		for _, rp := range pkgs {
@@ -670,7 +670,7 @@ func encodeReadiness(checks []v1.ReadinessCheck) (string, error) {
 func writeServiceResourcesREADME(dir string, r *v1.ResolvedRepository, fp *v1.GitOpsPackageSet) error {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# %s\n\n", r.Name)
-	fmt.Fprintf(&b, "Declarest service-resources repository rendered by gitups from GitOpsPackageSet %q.\n\n",
+	fmt.Fprintf(&b, "Declarest service-resources repository rendered by bootwright from GitOpsPackageSet %q.\n\n",
 		fp.Metadata.Name)
 	if r.ManagedServiceRef != nil {
 		fmt.Fprintf(&b, "Reconciled by declarest against the `ManagedService/%s` CR declared in repo `%s`.\n\n",

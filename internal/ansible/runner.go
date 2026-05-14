@@ -104,7 +104,7 @@ func (r CommandRunner) Run(ctx context.Context, spec RunSpec) error {
 		cmd.Env = append(cmd.Env, "ANSIBLE_FILTER_PLUGINS="+filepath.Clean(spec.FilterPluginsPath))
 	}
 	if spec.ArtifactsDir != "" {
-		cmd.Env = append(cmd.Env, "GITUPS_ANSIBLE_ARTIFACTS="+filepath.Clean(spec.ArtifactsDir))
+		cmd.Env = append(cmd.Env, "BOOTWRIGHT_ANSIBLE_ARTIFACTS="+filepath.Clean(spec.ArtifactsDir))
 	}
 	if extra := sudoUserSitePackages(); extra != "" {
 		cmd.Env = appendPythonPath(cmd.Env, extra)

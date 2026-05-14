@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/crmarques/gitups/api/v1alpha1"
+	"github.com/crmarques/bootwright/api/v1alpha1"
 )
 
 func validateEnvironments(envs []v1alpha1.Environment) []string {

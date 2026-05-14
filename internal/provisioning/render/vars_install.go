@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/crmarques/gitups/api/v1alpha1"
-	"github.com/crmarques/gitups/internal/proxy"
+	"github.com/crmarques/bootwright/api/v1alpha1"
+	"github.com/crmarques/bootwright/internal/proxy"
 )
 
 func ocpInstallEnvVars(state v1alpha1.State, env *v1alpha1.Environment, secretsDir string) EnvironmentOCPInstallVars {

@@ -1,17 +1,17 @@
 ---
 - name: Remove HAProxy containers
   containers.podman.podman_container:
-    name: "gitups-haproxy-{{ item.name }}"
+    name: "bootwright-haproxy-{{ item.name }}"
     state: absent
-  loop: "{{ gitups_current_load_balancers }}"
+  loop: "{{ bootwright_current_load_balancers }}"
   loop_control:
     label: "{{ item.name }}"
 
 - name: Remove load balancer state directories
   ansible.builtin.file:
-    path: "{{ gitups_host_state_dir }}/load-balancers/{{ item.name }}"
+    path: "{{ bootwright_host_state_dir }}/load-balancers/{{ item.name }}"
     state: absent
-  loop: "{{ gitups_current_load_balancers }}"
+  loop: "{{ bootwright_current_load_balancers }}"
   loop_control:
     label: "{{ item.name }}"
 
@@ -19,12 +19,12 @@
   ansible.builtin.command:
     argv:
       - rmdir
-      - "{{ gitups_host_state_dir }}/load-balancers"
-  register: gitups_lb_parent_rm
+      - "{{ bootwright_host_state_dir }}/load-balancers"
+  register: bootwright_lb_parent_rm
   failed_when: false
-  changed_when: gitups_lb_parent_rm.rc == 0
+  changed_when: bootwright_lb_parent_rm.rc == 0
 
 - name: Remove HAProxy sysctl drop-in
   ansible.builtin.file:
-    path: /etc/sysctl.d/99-gitups-haproxy.conf
+    path: /etc/sysctl.d/99-bootwright-haproxy.conf
     state: absent

@@ -1,24 +1,24 @@
-# Gitups
+# Bootwright
 
-Gitups is a desired-state orchestrator that takes a fleet from bare hardware
-to an autonomous, GitOps-managed system. You author versioned YAML, Gitups
+Bootwright is a desired-state orchestrator that takes a fleet from bare hardware
+to an autonomous, GitOps-managed system. You author versioned YAML, Bootwright
 validates it, renders deterministic inputs for OpenShift, Ansible, and
 GitOps, then converges the environment in ordered phases.
 
 The CLI covers the full pipeline:
 
 ```text
-gitups init workspace --cluster-name ocp-bm-01 --provider bare-metal
+bootwright init workspace --cluster-name ocp-bm-01 --provider bare-metal
                                           author bootstrap repo desired state
-gitups apply infra                         install/configure infra (libvirt, bare metal, …)
-gitups render installer        render OpenShift install files
-gitups apply clusters --scope ocp-bm-01    install clusters via openshift-install agent
-gitups apply hub                           validate/apply hub components for the hub-role cluster
-gitups apply gitops <package-set>          render package compositions, push to git, bootstrap KRC/SRC
+bootwright apply infra                         install/configure infra (libvirt, bare metal, …)
+bootwright render installer        render OpenShift install files
+bootwright apply clusters --scope ocp-bm-01    install clusters via openshift-install agent
+bootwright apply hub                           validate/apply hub components for the hub-role cluster
+bootwright apply gitops <package-set>          render package compositions, push to git, bootstrap KRC/SRC
 ```
 
 The `gitops` target consumes a user-authored
-`apiVersion: gitups.io/v1alpha1, kind: GitOpsPackageSet` that names catalog
+`apiVersion: bootwright.io/v1alpha1, kind: GitOpsPackageSet` that names catalog
 sources (filesystem path / OCI artifact / git URL), output repositories,
 package selections, and the KRC/SRC controllers that own ongoing
 reconciliation. Packages are sourced from the autonomous `gitops-packages`
@@ -39,7 +39,7 @@ architecture boundaries, validation rules, CLI behavior, and security posture.
 
 ## Desired-State Contract
 
-User-authored YAML uses `apiVersion: gitups.io/v1alpha1` and four kinds:
+User-authored YAML uses `apiVersion: bootwright.io/v1alpha1` and four kinds:
 
 | Kind | Owns |
 | --- | --- |
@@ -60,21 +60,21 @@ until their provider roles land.
 ## CLI
 
 ```text
-gitups init workspace --cluster-name managed-01 --provider emulated-bare-metal
-gitups check bastion -f examples/libvirt-redfish-fleet
-gitups apply bastion -f examples/libvirt-redfish-fleet --yes
-gitups check infra -f examples/libvirt-redfish-fleet --dry-run
-gitups apply infra -f examples/libvirt-redfish-fleet --dry-run
-gitups render installer -f examples/libvirt-redfish-fleet --scope managed-01
-gitups apply clusters -f examples/libvirt-redfish-fleet --scope managed-01 --dry-run
-gitups apply all -f examples/libvirt-redfish-fleet --dry-run
+bootwright init workspace --cluster-name managed-01 --provider emulated-bare-metal
+bootwright check bastion -f examples/libvirt-redfish-fleet
+bootwright apply bastion -f examples/libvirt-redfish-fleet --yes
+bootwright check infra -f examples/libvirt-redfish-fleet --dry-run
+bootwright apply infra -f examples/libvirt-redfish-fleet --dry-run
+bootwright render installer -f examples/libvirt-redfish-fleet --scope managed-01
+bootwright apply clusters -f examples/libvirt-redfish-fleet --scope managed-01 --dry-run
+bootwright apply all -f examples/libvirt-redfish-fleet --dry-run
 
-gitups init gitops dev
-gitups expand gitops dev
-gitups check gitops dev
-gitups render gitops dev
-gitups push gitops dev --base-url https://github.com/myorg
-gitups apply gitops dev --to <kubectl-context>
+bootwright init gitops dev
+bootwright expand gitops dev
+bootwright check gitops dev
+bootwright render gitops dev
+bootwright push gitops dev --base-url https://github.com/myorg
+bootwright apply gitops dev --to <kubectl-context>
 ```
 
 The CLI is verb-first; every subcommand picks a target. Provisioning

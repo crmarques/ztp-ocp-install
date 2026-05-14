@@ -1,10 +1,10 @@
 ---
-title: Gitups
+title: Bootwright
 ---
 
-# Gitups
+# Bootwright
 
-Gitups provisions OpenShift clusters from declared desired state. You write a
+Bootwright provisions OpenShift clusters from declared desired state. You write a
 small set of YAML resources; the CLI validates them, renders deterministic
 artifacts, and applies ordered phases for infrastructure preparation and
 the openshift-install agent run.

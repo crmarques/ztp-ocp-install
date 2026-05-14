@@ -50,7 +50,7 @@ func runHook(ctx context.Context, unit renderUnit, phase string, pkgDir string, 
 		return fmt.Errorf("hook %s: %s is not executable", phase, scriptPath)
 	}
 
-	tmp, err := os.CreateTemp("", "gitups-hook-*.json")
+	tmp, err := os.CreateTemp("", "bootwright-hook-*.json")
 	if err != nil {
 		return err
 	}

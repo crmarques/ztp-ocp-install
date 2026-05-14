@@ -1,9 +1,9 @@
 ---
 - name: Destroy provider services
-  hosts: gitups_provider_hosts
+  hosts: bootwright_provider_hosts
   gather_facts: false
   become: true
-  environment: "{{ gitups_proxy_env | default({}) }}"
+  environment: "{{ bootwright_proxy_env | default({}) }}"
 
   pre_tasks:
     - name: Resolve provider context
@@ -28,7 +28,7 @@
 
     - name: Destroy provider BMC service
       ansible.builtin.include_role:
-        name: "bmc_{{ gitups_current_provider.bmcRole }}"
+        name: "bmc_{{ bootwright_current_provider.bmcRole }}"
         tasks_from: destroy.yml
 
     - name: Destroy managed load balancers
@@ -42,7 +42,7 @@
         tasks_from: destroy.yml
 
     # Must run AFTER proxy_squid destroy and last among proxy steps —
-    # earlier role destroys still need outbound HTTP via gitups_proxy_env.
+    # earlier role destroys still need outbound HTTP via bootwright_proxy_env.
     - name: Strip host-level proxy configuration
       ansible.builtin.import_role:
         name: host_proxy
@@ -52,7 +52,7 @@
       ansible.builtin.command:
         argv:
           - rmdir
-          - "{{ gitups_host_state_dir }}"
-      register: gitups_root_rm
+          - "{{ bootwright_host_state_dir }}"
+      register: bootwright_root_rm
       failed_when: false
-      changed_when: gitups_root_rm.rc == 0
+      changed_when: bootwright_root_rm.rc == 0

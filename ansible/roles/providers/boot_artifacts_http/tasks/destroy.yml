@@ -1,21 +1,21 @@
 ---
 - name: Stop boot artifact HTTP service
   ansible.builtin.systemd_service:
-    name: "gitups-boot-artifacts-{{ gitups_current_provider.name }}.service"
+    name: "bootwright-boot-artifacts-{{ bootwright_current_provider.name }}.service"
     state: stopped
     enabled: false
-  register: gitups_boot_artifacts_stop
+  register: bootwright_boot_artifacts_stop
   failed_when: false
-  changed_when: gitups_boot_artifacts_stop.changed | default(false)
-  when: gitups_current_provider.bootArtifactsHttp.enabled | default(false) | bool
+  changed_when: bootwright_boot_artifacts_stop.changed | default(false)
+  when: bootwright_current_provider.bootArtifactsHttp.enabled | default(false) | bool
 
 - name: Remove boot artifact HTTP unit
   ansible.builtin.file:
-    path: "/etc/systemd/system/gitups-boot-artifacts-{{ gitups_current_provider.name }}.service"
+    path: "/etc/systemd/system/bootwright-boot-artifacts-{{ bootwright_current_provider.name }}.service"
     state: absent
-  register: gitups_boot_artifacts_unit_remove
+  register: bootwright_boot_artifacts_unit_remove
 
 - name: Reload systemd after boot artifact cleanup
   ansible.builtin.systemd_service:
     daemon_reload: true
-  when: gitups_boot_artifacts_unit_remove.changed
+  when: bootwright_boot_artifacts_unit_remove.changed

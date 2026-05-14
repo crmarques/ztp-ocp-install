@@ -1,60 +1,60 @@
 ---
 - name: Locate agent ISO
   ansible.builtin.find:
-    paths: "{{ gitups_ocp_installer_work_dir }}"
+    paths: "{{ bootwright_ocp_installer_work_dir }}"
     patterns: "agent.*.iso"
     file_type: file
-  register: gitups_agent_iso_find
+  register: bootwright_agent_iso_find
   delegate_to: localhost
   become: false
 
 - name: Validate agent ISO exists
   ansible.builtin.fail:
-    msg: "openshift-install did not produce an agent ISO under {{ gitups_ocp_installer_work_dir }}"
-  when: gitups_agent_iso_find.matched == 0
+    msg: "openshift-install did not produce an agent ISO under {{ bootwright_ocp_installer_work_dir }}"
+  when: bootwright_agent_iso_find.matched == 0
 
 - name: Select agent ISO path
   ansible.builtin.set_fact:
-    gitups_agent_iso_path: "{{ gitups_agent_iso_find.files | sort(attribute='mtime', reverse=true) | map(attribute='path') | first }}"
+    bootwright_agent_iso_path: "{{ bootwright_agent_iso_find.files | sort(attribute='mtime', reverse=true) | map(attribute='path') | first }}"
   changed_when: false
 
 - name: Stage agent ISO for BMC boot
   ansible.builtin.copy:
-    src: "{{ gitups_agent_iso_path }}"
-    dest: "{{ gitups_host_state_dir }}/providers/{{ gitups_provider_name }}/bmc/vmedia/{{ gitups_current_cluster.name }}-agent.iso"
+    src: "{{ bootwright_agent_iso_path }}"
+    dest: "{{ bootwright_host_state_dir }}/providers/{{ bootwright_provider_name }}/bmc/vmedia/{{ bootwright_current_cluster.name }}-agent.iso"
     owner: root
     group: root
     mode: "0644"
-  register: gitups_agent_iso_stage
+  register: bootwright_agent_iso_stage
 
 - name: Refresh libvirt vmedia pool
   community.libvirt.virt_pool:
-    name: "gitups-{{ gitups_provider_name }}-vmedia"
+    name: "bootwright-{{ bootwright_provider_name }}-vmedia"
     command: refresh
   when:
-    - gitups_agent_iso_stage.changed
-    - gitups_current_provider.bmcRole == 'emulated'
+    - bootwright_agent_iso_stage.changed
+    - bootwright_current_provider.bmcRole == 'emulated'
 
 - name: Boot node via BMC
   ansible.builtin.include_role:
-    name: "boot_{{ gitups_current_provider.bmcRole }}"
+    name: "boot_{{ bootwright_current_provider.bmcRole }}"
 
 - name: Wait for agent install completion
   ansible.builtin.command:
-    cmd: "{{ gitups_openshift_install_path }} agent wait-for install-complete --dir {{ gitups_ocp_installer_work_dir }} --log-level info"
-  environment: "{{ gitups_ocp_install_env }}"
-  async: "{{ gitups_ocp_install_timeout_seconds }}"
+    cmd: "{{ bootwright_openshift_install_path }} agent wait-for install-complete --dir {{ bootwright_ocp_installer_work_dir }} --log-level info"
+  environment: "{{ bootwright_ocp_install_env }}"
+  async: "{{ bootwright_ocp_install_timeout_seconds }}"
   poll: 300
-  register: gitups_ocp_install_wait
-  changed_when: gitups_ocp_install_wait.rc == 0
+  register: bootwright_ocp_install_wait
+  changed_when: bootwright_ocp_install_wait.rc == 0
   delegate_to: localhost
   become: false
 
 - name: Record kubeconfig path
   ansible.builtin.copy:
-    dest: "{{ gitups_ocp_installer_work_dir }}/kubeconfig.path"
+    dest: "{{ bootwright_ocp_installer_work_dir }}/kubeconfig.path"
     mode: "0600"
-    content: "{{ gitups_ocp_installer_work_dir }}/auth/kubeconfig\n"
-  when: gitups_ocp_install_wait.rc == 0
+    content: "{{ bootwright_ocp_installer_work_dir }}/auth/kubeconfig\n"
+  when: bootwright_ocp_install_wait.rc == 0
   delegate_to: localhost
   become: false

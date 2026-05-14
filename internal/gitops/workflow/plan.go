@@ -5,23 +5,23 @@ import (
 	"io"
 	"strings"
 
-	v1 "github.com/crmarques/gitups/api/v1alpha1"
+	v1 "github.com/crmarques/bootwright/api/v1alpha1"
 )
 
 func WriteBootstrapPlan(out io.Writer, fp *v1.GitOpsPackageSet, planned []*v1.ResolvedPackage) {
 	out = writerOrDiscard(out)
 	total := len(fp.Spec.Resolved.Packages)
 	deferred := total - len(planned)
-	fmt.Fprintf(out, "gitups: plan — %d direct, %d deferred to KRC (total %d); handoff after direct set succeeds\n",
+	fmt.Fprintf(out, "bootwright: plan — %d direct, %d deferred to KRC (total %d); handoff after direct set succeeds\n",
 		len(planned), deferred, total)
 	const maxList = 30
 	for i, rp := range planned {
 		if i == maxList {
-			fmt.Fprintf(out, "gitups:   ... (+%d more; run `gitups plan gitops %s` for the full list)\n",
+			fmt.Fprintf(out, "bootwright:   ... (+%d more; run `bootwright plan gitops %s` for the full list)\n",
 				len(planned)-maxList, fp.Metadata.Name)
 			break
 		}
-		fmt.Fprintf(out, "gitups:   [wave %d] %s (%s) → %s\n",
+		fmt.Fprintf(out, "bootwright:   [wave %d] %s (%s) → %s\n",
 			rp.ApplyWave, rp.Instance, PlanUnitTag(rp), rp.RenderedPaths.Repo)
 	}
 }

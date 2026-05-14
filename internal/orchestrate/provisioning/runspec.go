@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/crmarques/gitups/internal/ansible"
-	"github.com/crmarques/gitups/internal/embedded"
+	"github.com/crmarques/bootwright/internal/ansible"
+	"github.com/crmarques/bootwright/internal/embedded"
 )
 
 type RunSpecConfig struct {
@@ -38,9 +38,9 @@ func NewRunSpec(cfg RunSpecConfig) (ansible.RunSpec, error) {
 		return ansible.RunSpec{}, fmt.Errorf("resolve host state dir: %w", err)
 	}
 	pairs := []string{
-		"gitups_state_dir=" + stateDirAbs,
-		"gitups_secrets_dir=" + secretsDirAbs,
-		"gitups_host_state_dir=" + hostStateDirAbs,
+		"bootwright_state_dir=" + stateDirAbs,
+		"bootwright_secrets_dir=" + secretsDirAbs,
+		"bootwright_host_state_dir=" + hostStateDirAbs,
 	}
 	pairs = append(pairs, cfg.ExtraVarPairs...)
 	return ansible.RunSpec{

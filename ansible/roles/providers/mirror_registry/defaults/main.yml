@@ -1,9 +1,9 @@
 ---
-gitups_mirror_registry_root: "{{ gitups_host_state_dir }}/mirror-registry/{{ gitups_current_mirror_registry.name }}"
-gitups_mirror_registry_data_dir: "{{ gitups_current_mirror_registry.dataDir | default(gitups_mirror_registry_root ~ '/data') }}"
-gitups_mirror_registry_auth_dir: "{{ gitups_mirror_registry_root }}/auth"
-gitups_mirror_registry_certs_dir: "{{ gitups_mirror_registry_root }}/certs"
-gitups_mirror_registry_tools_dir: "{{ gitups_mirror_registry_root }}/tools"
-gitups_mirror_registry_container_name: "gitups-mirror-registry-{{ gitups_current_mirror_registry.name }}"
-gitups_mirror_registry_skopeo_retries: 5
-gitups_mirror_registry_trust_anchor: "/etc/pki/ca-trust/source/anchors/gitups-mirror-{{ gitups_current_mirror_registry.host }}.crt"
+bootwright_mirror_registry_root: "{{ bootwright_host_state_dir }}/mirror-registry/{{ bootwright_current_mirror_registry.name }}"
+bootwright_mirror_registry_data_dir: "{{ bootwright_current_mirror_registry.dataDir | default(bootwright_mirror_registry_root ~ '/data') }}"
+bootwright_mirror_registry_auth_dir: "{{ bootwright_mirror_registry_root }}/auth"
+bootwright_mirror_registry_certs_dir: "{{ bootwright_mirror_registry_root }}/certs"
+bootwright_mirror_registry_tools_dir: "{{ bootwright_mirror_registry_root }}/tools"
+bootwright_mirror_registry_container_name: "bootwright-mirror-registry-{{ bootwright_current_mirror_registry.name }}"
+bootwright_mirror_registry_skopeo_retries: 5
+bootwright_mirror_registry_trust_anchor: "/etc/pki/ca-trust/source/anchors/bootwright-mirror-{{ bootwright_current_mirror_registry.host }}.crt"

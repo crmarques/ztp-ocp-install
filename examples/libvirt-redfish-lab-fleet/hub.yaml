@@ -1,4 +1,4 @@
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: ClusterInfrastructure
 metadata:
   name: hub
@@ -39,7 +39,7 @@ spec:
         - apiInt
         - ingress
 ---
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: OCPCluster
 metadata:
   name: hub

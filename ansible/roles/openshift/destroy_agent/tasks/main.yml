@@ -1,83 +1,83 @@
 ---
 - name: Resolve agent destroy context
   ansible.builtin.set_fact:
-    gitups_ocp_installer_dir: "{{ gitups_state_dir }}/{{ gitups_current_cluster.ocp.installer.relativeDir }}"
-    gitups_ocp_installer_work_dir: "{{ gitups_state_dir }}/{{ gitups_current_cluster.ocp.installer.relativeWorkDir }}"
-    gitups_ocp_installer_relative_work: "{{ gitups_current_cluster.ocp.installer.relativeWorkDir }}"
-    gitups_ocp_provider_bmc: "{{ gitups_current_provider.bmc | default({}) }}"
-    gitups_ocp_bmc_auth_enabled: "{{ (gitups_current_provider.bmc | default({})).auth is defined and (gitups_current_provider.bmc | default({})).auth.credentialRef | default('') | length > 0 }}"
+    bootwright_ocp_installer_dir: "{{ bootwright_state_dir }}/{{ bootwright_current_cluster.ocp.installer.relativeDir }}"
+    bootwright_ocp_installer_work_dir: "{{ bootwright_state_dir }}/{{ bootwright_current_cluster.ocp.installer.relativeWorkDir }}"
+    bootwright_ocp_installer_relative_work: "{{ bootwright_current_cluster.ocp.installer.relativeWorkDir }}"
+    bootwright_ocp_provider_bmc: "{{ bootwright_current_provider.bmc | default({}) }}"
+    bootwright_ocp_bmc_auth_enabled: "{{ (bootwright_current_provider.bmc | default({})).auth is defined and (bootwright_current_provider.bmc | default({})).auth.credentialRef | default('') | length > 0 }}"
   changed_when: false
 
 - name: Stop stale installer processes
   ansible.builtin.include_role:
     name: process_cleanup
   vars:
-    gitups_process_cleanup_pattern: "{{ gitups_ocp_installer_relative_work }}"
+    bootwright_process_cleanup_pattern: "{{ bootwright_ocp_installer_relative_work }}"
 
 - name: Read BMC credential file
   ansible.builtin.slurp:
-    src: "{{ gitups_ocp_provider_bmc.auth.credentialRef }}"
-  register: gitups_ocp_bmc_credentials_slurp
+    src: "{{ bootwright_ocp_provider_bmc.auth.credentialRef }}"
+  register: bootwright_ocp_bmc_credentials_slurp
   no_log: true
   delegate_to: localhost
   become: false
-  when: gitups_ocp_bmc_auth_enabled
+  when: bootwright_ocp_bmc_auth_enabled
 
 - name: Parse BMC credentials
   ansible.builtin.set_fact:
-    gitups_ocp_bmc_credentials: "{{ gitups_ocp_bmc_credentials_slurp | gitups_parse_credential('cluster BMC credentialRef ' ~ gitups_ocp_provider_bmc.auth.credentialRef) }}"
+    bootwright_ocp_bmc_credentials: "{{ bootwright_ocp_bmc_credentials_slurp | bootwright_parse_credential('cluster BMC credentialRef ' ~ bootwright_ocp_provider_bmc.auth.credentialRef) }}"
   no_log: true
   changed_when: false
   when:
-    - gitups_ocp_bmc_auth_enabled
-    - gitups_ocp_bmc_credentials_slurp.content is defined
+    - bootwright_ocp_bmc_auth_enabled
+    - bootwright_ocp_bmc_credentials_slurp.content is defined
 
 - name: Publish BMC auth facts
   ansible.builtin.set_fact:
-    gitups_ocp_bmc_username: "{{ gitups_ocp_bmc_credentials.username }}"
-    gitups_ocp_bmc_password: "{{ gitups_ocp_bmc_credentials.password }}"
+    bootwright_ocp_bmc_username: "{{ bootwright_ocp_bmc_credentials.username }}"
+    bootwright_ocp_bmc_password: "{{ bootwright_ocp_bmc_credentials.password }}"
   no_log: true
   changed_when: false
   when:
-    - gitups_ocp_bmc_auth_enabled
-    - gitups_ocp_bmc_credentials_slurp.content is defined
+    - bootwright_ocp_bmc_auth_enabled
+    - bootwright_ocp_bmc_credentials_slurp.content is defined
 
 - name: Resolve Redfish endpoint
   ansible.builtin.set_fact:
-    gitups_ocp_redfish_baseuri: "http://127.0.0.1:{{ gitups_ocp_provider_bmc.port }}"
-  when: gitups_ocp_provider_bmc.enabled | default(false) | bool
+    bootwright_ocp_redfish_baseuri: "http://127.0.0.1:{{ bootwright_ocp_provider_bmc.port }}"
+  when: bootwright_ocp_provider_bmc.enabled | default(false) | bool
   changed_when: false
 
 - name: List Redfish systems
   community.general.redfish_info:
     category: Systems
     command: GetSystemInventory
-    baseuri: "{{ gitups_ocp_redfish_baseuri }}"
-    username: "{{ gitups_ocp_bmc_username | default(omit) }}"
-    password: "{{ gitups_ocp_bmc_password | default(omit) }}"
-  register: gitups_ocp_redfish_systems
+    baseuri: "{{ bootwright_ocp_redfish_baseuri }}"
+    username: "{{ bootwright_ocp_bmc_username | default(omit) }}"
+    password: "{{ bootwright_ocp_bmc_password | default(omit) }}"
+  register: bootwright_ocp_redfish_systems
   failed_when: false
   changed_when: false
-  when: gitups_ocp_redfish_baseuri is defined
-  no_log: "{{ gitups_ocp_bmc_auth_enabled }}"
+  when: bootwright_ocp_redfish_baseuri is defined
+  no_log: "{{ bootwright_ocp_bmc_auth_enabled }}"
 
 - name: Eject virtual media on each cluster node
   ansible.builtin.include_tasks: eject-node.yml
-  loop: "{{ gitups_current_cluster.ocp.nodes }}"
+  loop: "{{ bootwright_current_cluster.ocp.nodes }}"
   loop_control:
-    loop_var: gitups_ocp_node
-    label: "{{ gitups_current_cluster.name }}-{{ gitups_ocp_node.name }}"
+    loop_var: bootwright_ocp_node
+    label: "{{ bootwright_current_cluster.name }}-{{ bootwright_ocp_node.name }}"
   when:
-    - gitups_ocp_redfish_baseuri is defined
-    - gitups_ocp_redfish_systems is defined
-    - gitups_ocp_redfish_systems.redfish_facts is defined
+    - bootwright_ocp_redfish_baseuri is defined
+    - bootwright_ocp_redfish_systems is defined
+    - bootwright_ocp_redfish_systems.redfish_facts is defined
 
 - name: Remove staged agent ISO
   ansible.builtin.file:
-    path: "{{ gitups_host_state_dir }}/providers/{{ gitups_provider_name }}/bmc/vmedia/{{ gitups_current_cluster.name }}-agent.iso"
+    path: "{{ bootwright_host_state_dir }}/providers/{{ bootwright_provider_name }}/bmc/vmedia/{{ bootwright_current_cluster.name }}-agent.iso"
     state: absent
 
 - name: Remove installer work directory
   ansible.builtin.file:
-    path: "{{ gitups_ocp_installer_work_dir }}"
+    path: "{{ bootwright_ocp_installer_work_dir }}"
     state: absent

@@ -10,7 +10,7 @@ orientation guide.
 
 ## Pipeline
 
-Gitups follows the pipeline in [`specs/architecture.md`](../specs/architecture.md):
+Bootwright follows the pipeline in [`specs/architecture.md`](../specs/architecture.md):
 
 ```text
 desired state -> load -> normalize -> validate -> render -> orchestrate
@@ -25,7 +25,7 @@ installer files, locks, or state output.
 | Path | Responsibility |
 | --- | --- |
 | `api/v1alpha1/` | Versioned desired-state and GitOps schema types. Keep this package close to API shape and simple pure helpers. |
-| `cmd/gitups/` | Process entrypoint. |
+| `cmd/bootwright/` | Process entrypoint. |
 | `internal/cli/` | Cobra command wiring, flags, prompts, and user-facing output. Workflow and domain behavior should move out as it becomes reusable. |
 | `internal/infra/` | Desired-state loading, normalization, validation, and cross-layer state checks. |
 | `internal/provisioning/render/` | Deterministic projection into installer inputs, Ansible inventory, Ansible vars, locks, and effective state. |
@@ -74,7 +74,7 @@ The provisioning handoff from Go to Ansible is the rendered state directory:
 | Artifact | Owner | Consumer |
 | --- | --- | --- |
 | `effective-state.yaml` | Go | Humans, tests, later workflow steps |
-| `gitups.lock.yaml` | Go | Reproducibility and review |
+| `bootwright.lock.yaml` | Go | Reproducibility and review |
 | `ansible/inventory.yaml` | Go | Ansible only |
 | `ansible/vars.yaml` | Go | Ansible only |
 | `git-repos/clusters-bootstrap/<cluster>/openshift/install-config.yaml` | Go | Reviewable safe installer input (GitOps-publishable) |

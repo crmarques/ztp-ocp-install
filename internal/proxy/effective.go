@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/crmarques/gitups/api/v1alpha1"
+	"github.com/crmarques/bootwright/api/v1alpha1"
 )
 
 // Effective is the resolved proxy. NoProxy is the deduplicated union of
@@ -17,7 +17,7 @@ type Effective struct {
 	Auth    v1alpha1.SecretRef
 }
 
-// IsManaged reports whether Gitups provisions the proxy itself
+// IsManaged reports whether Bootwright provisions the proxy itself
 // (any provider supplies spec.proxy.squid). A managed proxy only exists
 // after the bastion has stood it up, so bastion-bootstrap callers must
 // not route through it.

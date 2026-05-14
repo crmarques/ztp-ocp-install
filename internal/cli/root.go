@@ -18,9 +18,9 @@ const (
 
 func newRootCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Command {
 	root := &cobra.Command{
-		Use:   "gitups",
+		Use:   "bootwright",
 		Short: "GitOps-driven OpenShift fleet provisioning",
-		Long: "Gitups renders, validates, and converges versioned desired-state YAML\n" +
+		Long: "Bootwright renders, validates, and converges versioned desired-state YAML\n" +
 			"to drive OpenShift cluster lifecycle.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -70,8 +70,8 @@ type commonFlags struct {
 
 func addCommonFlags(cmd *cobra.Command) *commonFlags {
 	cf := &commonFlags{stateDir: defaultStateDir()}
-	cmd.Flags().StringArrayVarP(&cf.files, "file", "f", nil, "Gitups YAML file or directory; may be repeated (default: <state-dir>/clusters-bootstrap.git/*/gitups)")
-	cmd.Flags().StringVar(&cf.stateDir, "state-dir", cf.stateDir, "generated state directory (env: GITUPS_STATE_DIR)")
+	cmd.Flags().StringArrayVarP(&cf.files, "file", "f", nil, "Bootwright YAML file or directory; may be repeated (default: <state-dir>/clusters-bootstrap.git/*/bootwright)")
+	cmd.Flags().StringVar(&cf.stateDir, "state-dir", cf.stateDir, "generated state directory (env: BOOTWRIGHT_STATE_DIR)")
 	return cf
 }
 

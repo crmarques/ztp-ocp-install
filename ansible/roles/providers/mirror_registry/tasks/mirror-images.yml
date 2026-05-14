@@ -2,40 +2,40 @@
 - name: Wait for mirror registry to accept connections
   ansible.builtin.wait_for:
     host: 127.0.0.1
-    port: "{{ gitups_current_mirror_registry.port }}"
+    port: "{{ bootwright_current_mirror_registry.port }}"
     delay: 1
     timeout: 60
 
 - name: Slurp pull secret for upstream registry auth
   ansible.builtin.slurp:
-    src: "{{ gitups_current_cluster.ocp.install.pullSecretRef | default(gitups_clusters[0].ocp.install.pullSecretRef) }}"
-  register: gitups_mirror_registry_pull_secret_raw
+    src: "{{ bootwright_current_cluster.ocp.install.pullSecretRef | default(bootwright_clusters[0].ocp.install.pullSecretRef) }}"
+  register: bootwright_mirror_registry_pull_secret_raw
   no_log: true
   delegate_to: localhost
   become: false
 
 - name: Decode pull secret for authfile
   ansible.builtin.set_fact:
-    gitups_mirror_registry_pull_secret: "{{ gitups_mirror_registry_pull_secret_raw.content | b64decode | from_json }}"
+    bootwright_mirror_registry_pull_secret: "{{ bootwright_mirror_registry_pull_secret_raw.content | b64decode | from_json }}"
   no_log: true
 
 - name: Write merged authfile
   ansible.builtin.copy:
-    dest: "{{ gitups_mirror_registry_auth_dir }}/authfile.json"
+    dest: "{{ bootwright_mirror_registry_auth_dir }}/authfile.json"
     owner: root
     group: root
     mode: "0600"
     content: >-
       {{
         (
-          gitups_mirror_registry_pull_secret
+          bootwright_mirror_registry_pull_secret
           | combine({
               'auths': (
-                (gitups_mirror_registry_pull_secret.auths | default({}))
+                (bootwright_mirror_registry_pull_secret.auths | default({}))
                 | combine({
-                    gitups_current_mirror_registry.url: {
-                      'auth': ((gitups_mirror_registry_credentials.username ~ ':' ~ gitups_mirror_registry_credentials.password) | b64encode),
-                      'email': 'gitups@' ~ gitups_current_mirror_registry.host,
+                    bootwright_current_mirror_registry.url: {
+                      'auth': ((bootwright_mirror_registry_credentials.username ~ ':' ~ bootwright_mirror_registry_credentials.password) | b64encode),
+                      'email': 'bootwright@' ~ bootwright_current_mirror_registry.host,
                     }
                   })
               )
@@ -48,13 +48,13 @@
   ansible.builtin.shell: "command -v oc"
   args:
     executable: /bin/sh
-  register: gitups_mirror_registry_oc_probe
+  register: bootwright_mirror_registry_oc_probe
   changed_when: false
   failed_when: false
 
 - name: Resolve oc path
   ansible.builtin.set_fact:
-    gitups_mirror_registry_oc: "{{ gitups_mirror_registry_oc_probe.stdout if gitups_mirror_registry_oc_probe.rc == 0 else (gitups_mirror_registry_tools_dir ~ '/oc') }}"
+    bootwright_mirror_registry_oc: "{{ bootwright_mirror_registry_oc_probe.stdout if bootwright_mirror_registry_oc_probe.rc == 0 else (bootwright_mirror_registry_tools_dir ~ '/oc') }}"
 
 - name: Probe local registry for already-mirrored images
   ansible.builtin.command:
@@ -62,39 +62,39 @@
       - skopeo
       - inspect
       - --tls-verify=true
-      - "--authfile={{ gitups_mirror_registry_auth_dir }}/authfile.json"
+      - "--authfile={{ bootwright_mirror_registry_auth_dir }}/authfile.json"
       - "docker://{{ item.local }}"
-  loop: "{{ gitups_current_mirror_registry.mirrorSet }}"
+  loop: "{{ bootwright_current_mirror_registry.mirrorSet }}"
   loop_control:
     label: "{{ item.local }}"
-  register: gitups_mirror_registry_probe
+  register: bootwright_mirror_registry_probe
   changed_when: false
   failed_when: false
 
 - name: Resolve already-mirrored image set
   ansible.builtin.set_fact:
-    gitups_mirror_registry_present_locals: "{{ gitups_mirror_registry_probe.results | selectattr('rc', 'equalto', 0) | map(attribute='item.local') | list }}"
+    bootwright_mirror_registry_present_locals: "{{ bootwright_mirror_registry_probe.results | selectattr('rc', 'equalto', 0) | map(attribute='item.local') | list }}"
 
 - name: Report already-mirrored images
   ansible.builtin.debug:
-    msg: "Local registry already has {{ gitups_mirror_registry_present_locals | length }} of {{ gitups_current_mirror_registry.mirrorSet | length }} entries; will skip those."
-  when: gitups_mirror_registry_present_locals | length > 0
+    msg: "Local registry already has {{ bootwright_mirror_registry_present_locals | length }} of {{ bootwright_current_mirror_registry.mirrorSet | length }} entries; will skip those."
+  when: bootwright_mirror_registry_present_locals | length > 0
 
 - name: Mirror OpenShift release payload (skip already-mirrored)
   ansible.builtin.command:
     argv:
-      - "{{ gitups_mirror_registry_oc }}"
+      - "{{ bootwright_mirror_registry_oc }}"
       - adm
       - release
       - mirror
       - "--from={{ item.public }}"
-      - "--to={{ gitups_current_mirror_registry.url }}/openshift/release-images"
+      - "--to={{ bootwright_current_mirror_registry.url }}/openshift/release-images"
       - "--to-release-image={{ item.local }}"
-      - "--registry-config={{ gitups_mirror_registry_auth_dir }}/authfile.json"
+      - "--registry-config={{ bootwright_mirror_registry_auth_dir }}/authfile.json"
       - --insecure=false
-  loop: "{{ gitups_current_mirror_registry.mirrorSet | selectattr('kind', 'equalto', 'releasePayload') | rejectattr('local', 'in', gitups_mirror_registry_present_locals) | list }}"
-  register: gitups_mirror_registry_release_mirror
-  changed_when: gitups_mirror_registry_release_mirror.rc == 0
+  loop: "{{ bootwright_current_mirror_registry.mirrorSet | selectattr('kind', 'equalto', 'releasePayload') | rejectattr('local', 'in', bootwright_mirror_registry_present_locals) | list }}"
+  register: bootwright_mirror_registry_release_mirror
+  changed_when: bootwright_mirror_registry_release_mirror.rc == 0
   retries: 2
   delay: 10
 
@@ -104,23 +104,23 @@
       - skopeo
       - copy
       - --src-tls-verify=true
-      - "--dest-authfile={{ gitups_mirror_registry_auth_dir }}/authfile.json"
-      - "--retry-times={{ gitups_mirror_registry_skopeo_retries }}"
+      - "--dest-authfile={{ bootwright_mirror_registry_auth_dir }}/authfile.json"
+      - "--retry-times={{ bootwright_mirror_registry_skopeo_retries }}"
       - "docker://{{ item.public }}"
       - "docker://{{ item.local }}"
-  loop: "{{ gitups_current_mirror_registry.mirrorSet | rejectattr('kind', 'equalto', 'releasePayload') | rejectattr('local', 'in', gitups_mirror_registry_present_locals) | list }}"
-  register: gitups_mirror_registry_skopeo
-  changed_when: gitups_mirror_registry_skopeo.rc == 0
+  loop: "{{ bootwright_current_mirror_registry.mirrorSet | rejectattr('kind', 'equalto', 'releasePayload') | rejectattr('local', 'in', bootwright_mirror_registry_present_locals) | list }}"
+  register: bootwright_mirror_registry_skopeo
+  changed_when: bootwright_mirror_registry_skopeo.rc == 0
 
 - name: Persist mirror results summary
   ansible.builtin.copy:
-    dest: "{{ gitups_mirror_registry_root }}/mirror-results.json"
+    dest: "{{ bootwright_mirror_registry_root }}/mirror-results.json"
     owner: root
     group: root
     mode: "0644"
     content: |
       {
-        "alreadyMirrored": {{ gitups_mirror_registry_present_locals | to_nice_json }},
-        "release": {{ (gitups_mirror_registry_release_mirror.results | default([])) | to_nice_json }},
-        "components": {{ (gitups_mirror_registry_skopeo.results | default([])) | to_nice_json }}
+        "alreadyMirrored": {{ bootwright_mirror_registry_present_locals | to_nice_json }},
+        "release": {{ (bootwright_mirror_registry_release_mirror.results | default([])) | to_nice_json }},
+        "components": {{ (bootwright_mirror_registry_skopeo.results | default([])) | to_nice_json }}
       }

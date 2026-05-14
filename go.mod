@@ -1,4 +1,4 @@
-module github.com/crmarques/gitups
+module github.com/crmarques/bootwright
 
 go 1.25.9
 

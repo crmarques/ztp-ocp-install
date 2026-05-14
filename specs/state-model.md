@@ -3,7 +3,7 @@
 The desired-state model is the user API. Four kinds, four layers, one
 source of truth per fact.
 
-- API group / version: `gitups.io/v1alpha1`
+- API group / version: `bootwright.io/v1alpha1`
 - Kinds: `Environment`, `InfrastructureProvider`, `ClusterInfrastructure`,
   `OCPCluster`
 - Generated outputs (Ansible inventory and vars, installer assets, lock
@@ -38,7 +38,7 @@ contributor per capability.
 ## `Environment`
 
 ```yaml
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: Environment
 metadata:
   name: connected-fleet
@@ -47,9 +47,9 @@ spec:
   ocpInstallType: connected
   secrets:
     openshift-pull-secret:
-      file: ~/.gitups/secrets/openshift-pull-secret
+      file: ~/.bootwright/secrets/openshift-pull-secret
     cluster-admin-key:
-      file: ~/.ssh/gitups-ssh-key.pub
+      file: ~/.ssh/bootwright-ssh-key.pub
   openshift:
     release:
       channel: stable-4.21
@@ -65,7 +65,7 @@ Rules:
 - `spec.proxy` is a top-level optional block carrying `http`, `https`,
   `noProxy`, and `auth.proxyAuthRef`. When set it applies to every component
   (bastion CLI, provider-host package and image pulls, generated
-  `install-config.yaml`, `openshift-install`). Gitups auto-extends `noProxy`
+  `install-config.yaml`, `openshift-install`). Bootwright auto-extends `noProxy`
   with cluster-local endpoints (service/cluster CIDRs, `.svc`,
   `.cluster.local`, base domain, mirror registry host, provider host
   addresses); user entries take precedence and are listed first.
@@ -75,9 +75,9 @@ Rules:
   without `spec.registries.mirror` and a non-empty `trustBundleRef`.
 - Every secret name lives under `Environment.spec.secrets[name]`, with
   exactly one source set: `file:` for operator-supplied material on
-  disk, or `generated:` for material gitups produces (a
+  disk, or `generated:` for material bootwright produces (a
   `username:password\n` credentials file or a self-signed cert/key
-  pair). `gitups secret generate -f` materializes only generated secrets;
+  pair). `bootwright secret generate -f` materializes only generated secrets;
   file-sourced secrets must exist at their declared paths or be written by the
   dedicated secret writer commands. The bytes never appear in YAML.
 - `Environment` owns proxy, registry mirrors, trust bundles, secret sources,
@@ -88,7 +88,7 @@ Rules:
 ## `InfrastructureProvider`
 
 ```yaml
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: InfrastructureProvider
 metadata:
   name: qemu-redfish-provider
@@ -128,7 +128,7 @@ spec:
         name: qemu-host
       port: 3128
       runtime: podman
-      dataDir: /var/lib/gitups/proxy
+      dataDir: /var/lib/bootwright/proxy
 ```
 
 Rules:
@@ -143,7 +143,7 @@ Rules:
   by name (`hostRef` / `hostRefs`); appliance-style capabilities embed the
   endpoint inline and need no host pool.
 - `spec.hosts.<name>.ssh.user` defaults to the invoking controller user when
-  omitted. Gitups still treats the host as a provider-host target and uses
+  omitted. Bootwright still treats the host as a provider-host target and uses
   Ansible root escalation for mutating provider, cluster, and OCP workflows,
   including `ssh.address: localhost`.
 - Each capability sub-block (`machine`, `loadBalancer`, `nameResolution`,
@@ -161,7 +161,7 @@ Rules:
   capability. The credentials stay in
   `Environment.spec.proxy.auth.proxyAuthRef`.
   If `proxy.squid` is omitted, any install proxy URL is external. If it is
-  present, Gitups provisions authenticated Squid using
+  present, Bootwright provisions authenticated Squid using
   `componentImages.proxy.squid` or the default pinned Squid image.
 - Owns: provider host pool with capabilities, machine substrate (with
   BMC service settings and reusable machine profiles for libvirt), load
@@ -175,7 +175,7 @@ Rules:
 ## `ClusterInfrastructure`
 
 ```yaml
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: ClusterInfrastructure
 metadata:
     name: hub
@@ -245,7 +245,7 @@ Rules:
   `Environment.spec.proxy` with exactly
   one referenced provider that supplies `InfrastructureProvider.spec.proxy.squid`.
   The proxy credentials live only in the environment proxy `credentialsRef`.
-  For Gitups-managed libvirt networks, this also renders the libvirt network
+  For Bootwright-managed libvirt networks, this also renders the libvirt network
   without NAT so VMs reach the internet only through the managed Squid proxy.
   External proxies, no proxy, bare metal, vSphere, and OpenShift
   Virtualization do not receive egress blocking.
@@ -262,7 +262,7 @@ Rules:
 ## `OCPCluster`
 
 ```yaml
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: OCPCluster
 metadata:
   name: hub
@@ -296,16 +296,16 @@ Rules:
 - Release and install defaults inherit from `Environment`; per-cluster
   overrides remain allowed on `OCPCluster.spec.install`.
 - Agent-install boot artifact wiring (minimal-ISO selection and provider-
-  local `bootArtifactsBaseURL`) is Gitups-derived from `Environment`
+  local `bootArtifactsBaseURL`) is Bootwright-derived from `Environment`
   `ocpInstallType`, the referenced provider, and `ClusterInfrastructure`.
   Users do not set those fields; validation rejects them.
-- For disconnected installs, Gitups derives OpenShift release payload
+- For disconnected installs, Bootwright derives OpenShift release payload
   `imageDigestSources` for `ocp-release` and `ocp-v4.0-art-dev`, defaults
   their `sourcePolicy` to `NeverContactSource`, and rejects mirror refs
   that do not use the configured local registry.
 - Installer override blocks (`installConfigOverrides`,
-  `agentConfigOverrides`) are reserved for installer-native fields Gitups
-  does not own. Override keys whose value Gitups derives from
+  `agentConfigOverrides`) are reserved for installer-native fields Bootwright
+  does not own. Override keys whose value Bootwright derives from
   `Environment`, `ClusterInfrastructure`, or `InfrastructureProvider` are
   rejected by validation.
 
@@ -344,7 +344,7 @@ The validator enforces:
 - Resolve every upper-layer reference to the correct lower-layer object
   or child object.
 - Reject `OCPCluster.spec.install.{installConfigOverrides, agentConfigOverrides}`
-  keys whose value Gitups owns, including `apiVersion`, `metadata`,
+  keys whose value Bootwright owns, including `apiVersion`, `metadata`,
   `baseDomain`, `pullSecret`, `sshKey`, `additionalTrustBundle`,
   `controlPlane`, `compute`, `networking.machineNetwork`,
   `imageDigestSources`, platform `apiVIPs` / `ingressVIPs` blocks,
@@ -355,19 +355,19 @@ The validator enforces:
 
 The user-facing CLI is organized by verb. Provisioning targets are `bastion`,
 `infra`, `clusters`, `hub`, and `all`. The GitOps authoring group remains
-every gitops operation is reached as `gitups <verb> gitops <name>`.
+every gitops operation is reached as `bootwright <verb> gitops <name>`.
 
 | Command | Reads input? | Mutates? | Purpose |
 | --- | --- | --- | --- |
-| `init workspace --cluster-name <name> --provider <provider>` | no | local only | Creates `<state-dir>/clusters-bootstrap.git/<cluster>/{gitups,openshift}` and scaffolds `environment.yaml`, `provider.yaml`, `infra.yaml`, and `cluster.yaml` under `gitups/`. Providers: `vsphere`, `bare-metal`, `emulated-bare-metal`. |
-| `secrets` | optional | yes (writes secrets) | `generate`, `pull-secret set`, and credential writers — the only writers into `<gitups-user-dir>/secrets`. |
+| `init workspace --cluster-name <name> --provider <provider>` | no | local only | Creates `<state-dir>/clusters-bootstrap.git/<cluster>/{bootwright,openshift}` and scaffolds `environment.yaml`, `provider.yaml`, `infra.yaml`, and `cluster.yaml` under `bootwright/`. Providers: `vsphere`, `bare-metal`, `emulated-bare-metal`. |
+| `secrets` | optional | yes (writes secrets) | `generate`, `pull-secret set`, and credential writers — the only writers into `<bootwright-user-dir>/secrets`. |
 | `check bastion` | optional | no | Controller prerequisite checks for the selected desired state. |
 | `check infra` | yes | no | Local + Ansible read-only checks for provider hosts and per-cluster substrate. |
 | `check clusters [--scope a,b]` | yes | no | Local + Ansible read-only checks for OpenShift cluster installation. |
 | `check hub` | yes | no | Validates that exactly one cluster is selected for the hub role. Hub component readiness is reserved until the hub component schema lands. |
 | `check all` | yes | no | Runs bastion, infra, cluster, and hub selection checks. |
 | `render installer [--scope a,b]` | yes | local only | Renders installer assets under `<state-dir>/clusters-bootstrap.git/<cluster>/openshift/`. |
-| `apply bastion [--dry-run]` | optional | yes | Installs pinned controller-local dependencies, defaulting to the user-owned Gitups-managed Ansible venv. |
+| `apply bastion [--dry-run]` | optional | yes | Installs pinned controller-local dependencies, defaulting to the user-owned Bootwright-managed Ansible venv. |
 | `apply infra [--dry-run]` | yes | yes | Converges `InfrastructureProvider` and `ClusterInfrastructure`: provider services plus per-cluster substrate. |
 | `apply clusters [--scope a,b] [--dry-run]` | yes | yes | Runs `openshift-install agent` for selected clusters. |
 | `apply hub [--dry-run]` | yes | reserved | Reserved for hub components installed onto the cluster declaring `role: hub`; today it validates the hub selection and reports no component schema. |
@@ -376,17 +376,17 @@ every gitops operation is reached as `gitups <verb> gitops <name>`.
 Common flags accepted by provisioning target commands:
 
 - `--file` / `-f` — desired-state YAML file or directory; may be repeated.
-  Defaults to `<state-dir>/clusters-bootstrap.git/*/gitups`.
-- `--state-dir` — generated state directory (env: `GITUPS_STATE_DIR`).
-- `--secrets-dir` — local install secret material directory (env: `GITUPS_SECRETS_DIR`).
+  Defaults to `<state-dir>/clusters-bootstrap.git/*/bootwright`.
+- `--state-dir` — generated state directory (env: `BOOTWRIGHT_STATE_DIR`).
+- `--secrets-dir` — local install secret material directory (env: `BOOTWRIGHT_SECRETS_DIR`).
 - `--scope` — comma-separated `OCPCluster.metadata.name` list, accepted by
   `clusters` and `installer` targets.
 
 Configuration env vars:
 
-- `GITUPS_USER_DIR` — overrides the default `~/.gitups` user directory.
-- `GITUPS_STATE_DIR` — overrides the default `<user-dir>/state`.
-- `GITUPS_SECRETS_DIR` — overrides the default `<user-dir>/secrets`.
+- `BOOTWRIGHT_USER_DIR` — overrides the default `~/.bootwright` user directory.
+- `BOOTWRIGHT_STATE_DIR` — overrides the default `<user-dir>/state`.
+- `BOOTWRIGHT_SECRETS_DIR` — overrides the default `<user-dir>/secrets`.
 
 Multi-cluster fleet GitOps publication (one cluster running ACM/OpenShift
 GitOps to reconcile additional clusters) is forward-looking architecture and

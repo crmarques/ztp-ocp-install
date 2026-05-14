@@ -38,7 +38,7 @@ func Push(ctx context.Context, cfg Config, opts Options, parsed ParsedBaseURL) (
 		cfg.Out = io.Discard
 	}
 	if len(cfg.RepoNames) == 0 {
-		return nil, fmt.Errorf("push: no rendered repos found under %s (render with `gitups render` first)", cfg.WorkspaceRoot)
+		return nil, fmt.Errorf("push: no rendered repos found under %s (render with `bootwright render` first)", cfg.WorkspaceRoot)
 	}
 	names := append([]string(nil), cfg.RepoNames...)
 	sort.Strings(names)
@@ -51,7 +51,7 @@ func Push(ctx context.Context, cfg Config, opts Options, parsed ParsedBaseURL) (
 		}
 		remote := RemoteRepoName(name, opts.Flatten)
 
-		fmt.Fprintf(cfg.Out, "gitups: push %s -> %s/%s/%s\n", name, parsed.Host, parsed.Owner, remote)
+		fmt.Fprintf(cfg.Out, "bootwright: push %s -> %s/%s/%s\n", name, parsed.Host, parsed.Owner, remote)
 
 		cloneURL, err := cfg.Provider.EnsureRepo(ctx, parsed.Owner, remote, opts.Visibility, opts.CreateMissing && !opts.DryRun)
 		if err != nil {
@@ -72,9 +72,9 @@ func Push(ctx context.Context, cfg Config, opts Options, parsed ParsedBaseURL) (
 			return plans, err
 		}
 		if committed {
-			fmt.Fprintf(cfg.Out, "gitups: committed changes in %s\n", name)
+			fmt.Fprintf(cfg.Out, "bootwright: committed changes in %s\n", name)
 		} else {
-			fmt.Fprintf(cfg.Out, "gitups: no changes to commit in %s\n", name)
+			fmt.Fprintf(cfg.Out, "bootwright: no changes to commit in %s\n", name)
 		}
 		if err := GitPush(ctx, cfg.Git, repoDir, opts.Branch, opts.Force, opts.DryRun); err != nil {
 			return plans, fmt.Errorf("git push %s: %w", name, err)
@@ -86,6 +86,6 @@ func Push(ctx context.Context, cfg Config, opts Options, parsed ParsedBaseURL) (
 			CloneURL:   cloneURL,
 		})
 	}
-	fmt.Fprintf(cfg.Out, "gitups: push complete (%d repo(s))\n", len(plans))
+	fmt.Fprintf(cfg.Out, "bootwright: push complete (%d repo(s))\n", len(plans))
 	return plans, nil
 }

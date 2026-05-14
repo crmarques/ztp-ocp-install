@@ -11,10 +11,10 @@ import (
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/yaml"
 
-	v1 "github.com/crmarques/gitups/api/v1alpha1"
-	"github.com/crmarques/gitups/internal/gitops/load"
-	"github.com/crmarques/gitups/internal/gitops/placeholders"
-	"github.com/crmarques/gitups/internal/gitops/workflow"
+	v1 "github.com/crmarques/bootwright/api/v1alpha1"
+	"github.com/crmarques/bootwright/internal/gitops/load"
+	"github.com/crmarques/bootwright/internal/gitops/placeholders"
+	"github.com/crmarques/bootwright/internal/gitops/workflow"
 )
 
 func newGitopsPlanCmd() *cobra.Command {
@@ -32,7 +32,7 @@ func newGitopsPlanCmd() *cobra.Command {
 				return err
 			}
 			if _, err := os.Stat(ws.ExpandedPackageSet); err != nil {
-				return fmt.Errorf("%s not found (run `gitups expand gitops %s` first)", ws.ExpandedPackageSet, ws.Name)
+				return fmt.Errorf("%s not found (run `bootwright expand gitops %s` first)", ws.ExpandedPackageSet, ws.Name)
 			}
 			fp, err := load.ExpandedPackageSet(ws.ExpandedPackageSet)
 			if err != nil {
@@ -61,7 +61,7 @@ func newGitopsPlanCmd() *cobra.Command {
 						repos = append(repos, r)
 					}
 				}
-				fmt.Fprintf(out, "gitups: mode=full; %d repo(s), %d unit(s)\n", len(repos), len(fp.Spec.Resolved.Packages))
+				fmt.Fprintf(out, "bootwright: mode=full; %d repo(s), %d unit(s)\n", len(repos), len(fp.Spec.Resolved.Packages))
 				for _, r := range repos {
 					fmt.Fprintf(out, "  repo %s\n", r)
 					for i := range fp.Spec.Resolved.Packages {
@@ -76,7 +76,7 @@ func newGitopsPlanCmd() *cobra.Command {
 			}
 			planned := workflow.BootstrapSubset(fp)
 			workflow.SortPlan(planned)
-			fmt.Fprintf(out, "gitups: mode=bootstrap; %d direct, %d deferred to KRC (total %d)\n",
+			fmt.Fprintf(out, "bootwright: mode=bootstrap; %d direct, %d deferred to KRC (total %d)\n",
 				len(planned), len(fp.Spec.Resolved.Packages)-len(planned), len(fp.Spec.Resolved.Packages))
 			for _, rp := range planned {
 				fmt.Fprintf(out, "  [wave %d] %-48s (%s) → %s\n", rp.ApplyWave, rp.Instance, workflow.PlanUnitTag(rp), rp.RenderedPaths.Repo)
@@ -92,7 +92,7 @@ func newGitopsPlanCmd() *cobra.Command {
 				}
 			}
 			if deferred > 0 {
-				fmt.Fprintf(out, "gitups: deferred to KRC — %d unit(s) land after handoff\n", deferred)
+				fmt.Fprintf(out, "bootwright: deferred to KRC — %d unit(s) land after handoff\n", deferred)
 			}
 			return nil
 		},
@@ -118,7 +118,7 @@ func newGitopsFillCmd() *cobra.Command {
 				return err
 			}
 			if _, err := os.Stat(ws.ExpandedPackageSet); err != nil {
-				return fmt.Errorf("%s not found (run `gitups expand gitops %s` first)", ws.ExpandedPackageSet, ws.Name)
+				return fmt.Errorf("%s not found (run `bootwright expand gitops %s` first)", ws.ExpandedPackageSet, ws.Name)
 			}
 			fp, err := load.ExpandedPackageSet(ws.ExpandedPackageSet)
 			if err != nil {
@@ -148,7 +148,7 @@ func newGitopsFillCmd() *cobra.Command {
 				if err := workflow.SetDottedPath(rp.ResolvedValues, path, val); err != nil {
 					return fmt.Errorf("--set %q: %w", s, err)
 				}
-				fmt.Fprintf(out, "gitups: set %s.%s\n", inst, path)
+				fmt.Fprintf(out, "bootwright: set %s.%s\n", inst, path)
 			}
 			var remaining []v1.Placeholder
 			for i := range fp.Spec.Resolved.Packages {
@@ -169,7 +169,7 @@ func newGitopsFillCmd() *cobra.Command {
 			if err := os.WriteFile(ws.ExpandedPackageSet, body, 0o644); err != nil {
 				return fmt.Errorf("write %s: %w", ws.ExpandedPackageSet, err)
 			}
-			fmt.Fprintf(out, "gitups: wrote %s (%d placeholder(s) remaining)\n", ws.ExpandedPackageSet, len(remaining))
+			fmt.Fprintf(out, "bootwright: wrote %s (%d placeholder(s) remaining)\n", ws.ExpandedPackageSet, len(remaining))
 			return nil
 		},
 	}

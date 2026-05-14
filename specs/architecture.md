@@ -2,7 +2,7 @@
 
 ## Pipeline
 
-User YAML flows through Gitups in fixed stages:
+User YAML flows through Bootwright in fixed stages:
 
 ```text
 desired state → load → normalize → validate → render → orchestrate
@@ -119,7 +119,7 @@ reconciled workload clusters remains possible without schema rework.
   through root escalation, even when the provider host address is
   `localhost`.
 - Repository-owned Ansible content lives under `/ansible` and is embedded
-  into the `gitups` binary via `internal/embedded` (build-time copy into
+  into the `bootwright` binary via `internal/embedded` (build-time copy into
   `internal/embedded/bundle/`, captured by `//go:embed`). At runtime the
   CLI materialises the tree under `<state-dir>/ansible-bundle/`. Roles and
   collections paths are passed to `ansible-playbook` via
@@ -131,15 +131,15 @@ reconciled workload clusters remains possible without schema rework.
 
 ### Role taxonomy
 
-Ansible roles are grouped by Gitups layer. ADR 0002 records the contract.
+Ansible roles are grouped by Bootwright layer. ADR 0002 records the contract.
 
 | Directory | Layer | Hosts |
 | --- | --- | --- |
 | `roles/bastion/` | controller-local setup | `localhost` |
 | `roles/shared/` | context and host helpers | varies |
-| `roles/providers/` | provider-scoped shared services | `gitups_provider_hosts` |
-| `roles/cluster_infra/` | per-cluster substrate and network state | `gitups_infra_hosts` |
-| `roles/openshift/` | openshift-install agent install / boot / destroy | `gitups_ocp_hosts` |
+| `roles/providers/` | provider-scoped shared services | `bootwright_provider_hosts` |
+| `roles/cluster_infra/` | per-cluster substrate and network state | `bootwright_infra_hosts` |
+| `roles/openshift/` | openshift-install agent install / boot / destroy | `bootwright_ocp_hosts` |
 
 Dynamic role names are local to their layer: `substrate_<role>` under
 `roles/cluster_infra/`, `bmc_<role>` under `roles/providers/`, and
@@ -157,7 +157,7 @@ its consumer pulls it on subsequent applies.
 `spec.proxy.squid`. It executes in `playbooks/layers/providers/apply.yml`
 before `host_proxy`, `mirror_registry`, and `load_balancer_haproxy` so
 provider-host tasks can use the managed proxy after it exists. Libvirt egress
-isolation remains in `substrate_libvirt`: only Gitups-managed libvirt
+isolation remains in `substrate_libvirt`: only Bootwright-managed libvirt
 networks that reference the managed proxy omit NAT.
 
 ### Provider dispatch

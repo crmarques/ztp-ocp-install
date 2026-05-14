@@ -1,12 +1,12 @@
 # Minimal bastion image for the sno-libvirt e2e case.
 #
-# Gitups installs the managed Ansible runtime, OpenShift CLIs, and provider
+# Bootwright installs the managed Ansible runtime, OpenShift CLIs, and provider
 # host dependencies. The image carries only bootstrap tools needed before
-# Gitups can manage itself: a same-name non-root user, sudo, git for
-# `gitups init workspace`, and base TLS/archive utilities.
+# Bootwright can manage itself: a same-name non-root user, sudo, git for
+# `bootwright init workspace`, and base TLS/archive utilities.
 #
 # Build:
-#   podman build -t gitups-bastion \
+#   podman build -t bootwright-bastion \
 #     -f test/e2e/sno-libvirt/Containerfile \
 #     --build-arg UID=$(id -u) \
 #     --build-arg GID=$(id -g) \
@@ -23,7 +23,7 @@ FROM registry.access.redhat.com/ubi9/ubi:9.7
 
 ARG UID=1000
 ARG GID=1000
-ARG USER=gitups
+ARG USER=bootwright
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
 ARG NO_PROXY
@@ -46,10 +46,10 @@ RUN if ! getent group ${GID} >/dev/null; then groupadd -g ${GID} ${USER}; fi \
     && printf '%s ALL=(ALL) NOPASSWD: ALL\n' "${USER}" > /etc/sudoers.d/${USER} \
     && chmod 0440 /etc/sudoers.d/${USER}
 
-COPY --chmod=0755 bin/gitups /usr/local/bin/gitups
+COPY --chmod=0755 bin/bootwright /usr/local/bin/bootwright
 
 USER ${USER}
 WORKDIR /home/${USER}
-ENV PATH=/home/${USER}/.gitups/bin:/usr/local/bin:/usr/bin:/bin
+ENV PATH=/home/${USER}/.bootwright/bin:/usr/local/bin:/usr/bin:/bin
 
 CMD ["bash"]

@@ -24,9 +24,9 @@ the matching files under
 ## Commands
 
 ```text
-gitups check bastion -f examples/libvirt-redfish-fleet
-gitups check infra -f examples/libvirt-redfish-fleet --state-dir .state --dry-run
-gitups apply infra -f examples/libvirt-redfish-fleet --state-dir .state --dry-run
-gitups apply clusters -f examples/libvirt-redfish-fleet --scope managed-01 --state-dir .state --dry-run
-gitups apply hub -f examples/libvirt-redfish-fleet --state-dir .state --dry-run
+bootwright check bastion -f examples/libvirt-redfish-fleet
+bootwright check infra -f examples/libvirt-redfish-fleet --state-dir .state --dry-run
+bootwright apply infra -f examples/libvirt-redfish-fleet --state-dir .state --dry-run
+bootwright apply clusters -f examples/libvirt-redfish-fleet --scope managed-01 --state-dir .state --dry-run
+bootwright apply hub -f examples/libvirt-redfish-fleet --state-dir .state --dry-run
 ```

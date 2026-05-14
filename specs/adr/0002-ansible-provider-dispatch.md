@@ -18,7 +18,7 @@ selection and some resource teardown logic.
 
 ## Decision
 
-The Ansible bundle is organized by Gitups layers:
+The Ansible bundle is organized by Bootwright layers:
 
 ```text
 ansible/playbooks/
@@ -54,9 +54,9 @@ explicit no-op roles (`bmc_none`, `boot_none`) so dispatch never fails to
 resolve.
 
 Shared context roles (`context_provider`, `context_cluster`) own the
-host-local selection of `gitups_current_provider`,
-`gitups_current_cluster`, and related runtime views. They also publish
-structured context facts (`gitups_provider_ctx`, `gitups_cluster_ctx`) while
+host-local selection of `bootwright_current_provider`,
+`bootwright_current_cluster`, and related runtime views. They also publish
+structured context facts (`bootwright_provider_ctx`, `bootwright_cluster_ctx`) while
 preserving the existing facts consumed by current roles.
 
 Provider roles own provider-scoped apply and destroy logic. Cluster
@@ -65,7 +65,7 @@ roles own installer execution and BMC boot handoff only.
 
 ## Consequences
 
-- Public CLI commands stay stable: `gitups check/apply bastion|infra|clusters|all`.
+- Public CLI commands stay stable: `bootwright check/apply bastion|infra|clusters|all`.
 - Adding a provider still requires a substrate role, a BMC role or no-op, an
   OpenShift boot role or no-op, and one `render.providerDispatch` case.
 - The embedded bundle passes multiple role search paths to Ansible instead of

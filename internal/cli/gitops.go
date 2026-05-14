@@ -8,11 +8,11 @@ import (
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/yaml"
 
-	v1 "github.com/crmarques/gitups/api/v1alpha1"
-	"github.com/crmarques/gitups/internal/gitops/catalog"
-	"github.com/crmarques/gitups/internal/gitops/load"
-	"github.com/crmarques/gitups/internal/gitops/resolve"
-	"github.com/crmarques/gitups/internal/gitops/workflow"
+	v1 "github.com/crmarques/bootwright/api/v1alpha1"
+	"github.com/crmarques/bootwright/internal/gitops/catalog"
+	"github.com/crmarques/bootwright/internal/gitops/load"
+	"github.com/crmarques/bootwright/internal/gitops/resolve"
+	"github.com/crmarques/bootwright/internal/gitops/workflow"
 )
 
 const defaultGitopsWorkspace = workflow.DefaultWorkspaceRoot
@@ -52,7 +52,7 @@ func newGitopsInitCmd() *cobra.Command {
 				return fmt.Errorf("write %s: %w", ws.PackageSet, err)
 			}
 			fmt.Fprintf(cmd.ErrOrStderr(),
-				"gitups: scaffolded %s\n  next: edit spec.sources and spec.repositories, then `gitups expand gitops %s`\n",
+				"bootwright: scaffolded %s\n  next: edit spec.sources and spec.repositories, then `bootwright expand gitops %s`\n",
 				ws.PackageSet, ws.Name)
 			return nil
 		},
@@ -77,7 +77,7 @@ func newGitopsExpandCmd() *cobra.Command {
 				return err
 			}
 			if _, err := os.Stat(ws.PackageSet); err != nil {
-				return fmt.Errorf("%s not found (run `gitups init gitops %s` first)", ws.PackageSet, ws.Name)
+				return fmt.Errorf("%s not found (run `bootwright init gitops %s` first)", ws.PackageSet, ws.Name)
 			}
 			prov, extFrom, err := load.PackageSetResolved(ws.PackageSet)
 			if err != nil {
@@ -88,7 +88,7 @@ func newGitopsExpandCmd() *cobra.Command {
 					ws.PackageSet, prov.Metadata.Name, ws.Name)
 			}
 			if load.IsScaffold(prov) {
-				return fmt.Errorf("%s is still the init scaffold; fill in spec.sources and spec.repositories before `gitups expand gitops %s`",
+				return fmt.Errorf("%s is still the init scaffold; fill in spec.sources and spec.repositories before `bootwright expand gitops %s`",
 					ws.PackageSet, ws.Name)
 			}
 			if len(prov.Spec.Sources) == 0 {
@@ -130,7 +130,7 @@ func newGitopsExpandCmd() *cobra.Command {
 			if err := os.WriteFile(ws.ExpandedPackageSet, body, 0o644); err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.ErrOrStderr(), "gitups: wrote %s\n", ws.ExpandedPackageSet)
+			fmt.Fprintf(cmd.ErrOrStderr(), "bootwright: wrote %s\n", ws.ExpandedPackageSet)
 			printPlaceholderSummary(cmd.ErrOrStderr(), fp)
 			return nil
 		},
@@ -153,7 +153,7 @@ func newGitopsCheckCmd() *cobra.Command {
 			}
 			out := cmd.ErrOrStderr()
 			if _, err := os.Stat(ws.PackageSet); err != nil {
-				return fmt.Errorf("%s not found (run `gitups init gitops %s`)", ws.PackageSet, ws.Name)
+				return fmt.Errorf("%s not found (run `bootwright init gitops %s`)", ws.PackageSet, ws.Name)
 			}
 			prov, extFrom, err := load.PackageSetResolved(ws.PackageSet)
 			if err != nil {
@@ -164,13 +164,13 @@ func newGitopsCheckCmd() *cobra.Command {
 					ws.PackageSet, prov.Metadata.Name, ws.Name)
 			}
 			if load.IsScaffold(prov) {
-				fmt.Fprintf(out, "gitups: %s is the init scaffold (empty sources/repositories) — fill it in, then re-run check\n", ws.PackageSet)
+				fmt.Fprintf(out, "bootwright: %s is the init scaffold (empty sources/repositories) — fill it in, then re-run check\n", ws.PackageSet)
 				return nil
 			}
 			if extFrom != nil {
-				fmt.Fprintf(out, "gitups: %s extends %s\n", ws.PackageSet, extFrom.Source)
+				fmt.Fprintf(out, "bootwright: %s extends %s\n", ws.PackageSet, extFrom.Source)
 			}
-			fmt.Fprintf(out, "gitups: %s ok (%d source(s), %d repositories)\n",
+			fmt.Fprintf(out, "bootwright: %s ok (%d source(s), %d repositories)\n",
 				ws.PackageSet, len(prov.Spec.Sources), len(prov.Spec.Repositories))
 
 			baseDir := filepath.Dir(workflow.AbsPath(ws.PackageSet))
@@ -182,10 +182,10 @@ func newGitopsCheckCmd() *cobra.Command {
 			if _, err := resolve.Expand(prov, cat, resolve.Options{}); err != nil {
 				return fmt.Errorf("dry expand: %w", err)
 			}
-			fmt.Fprintf(out, "gitups: dry expand ok\n")
+			fmt.Fprintf(out, "bootwright: dry expand ok\n")
 
 			if _, err := os.Stat(ws.ExpandedPackageSet); err != nil {
-				fmt.Fprintf(out, "gitups: %s not present — run `gitups expand gitops %s`\n",
+				fmt.Fprintf(out, "bootwright: %s not present — run `bootwright expand gitops %s`\n",
 					ws.ExpandedPackageSet, ws.Name)
 				return nil
 			}
@@ -197,7 +197,7 @@ func newGitopsCheckCmd() *cobra.Command {
 				return fmt.Errorf("%s has metadata.name %q but workspace is %q",
 					ws.ExpandedPackageSet, fp.Metadata.Name, ws.Name)
 			}
-			fmt.Fprintf(out, "gitups: %s ok (%d package(s))\n",
+			fmt.Fprintf(out, "bootwright: %s ok (%d package(s))\n",
 				ws.ExpandedPackageSet, len(fp.Spec.Resolved.Packages))
 			printPlaceholderSummary(out, fp)
 			return nil

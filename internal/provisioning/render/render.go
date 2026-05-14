@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/crmarques/gitups/api/v1alpha1"
+	"github.com/crmarques/bootwright/api/v1alpha1"
 	"go.yaml.in/yaml/v3"
 )
 
@@ -21,7 +21,7 @@ type Result struct {
 func All(stateDir, secretsDir string, state v1alpha1.State) (Result, error) {
 	result := Result{
 		EffectiveStatePath: filepath.Join(stateDir, "effective-state.yaml"),
-		LockPath:           filepath.Join(stateDir, "gitups.lock.yaml"),
+		LockPath:           filepath.Join(stateDir, "bootwright.lock.yaml"),
 		InventoryPath:      filepath.Join(stateDir, "ansible", "inventory.yaml"),
 		VarsPath:           filepath.Join(stateDir, "ansible", "vars.yaml"),
 		ArtifactsDir:       filepath.Join(stateDir, "ansible", "artifacts"),

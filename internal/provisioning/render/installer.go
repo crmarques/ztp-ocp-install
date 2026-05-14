@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/crmarques/gitups/api/v1alpha1"
-	"github.com/crmarques/gitups/internal/proxy"
+	"github.com/crmarques/bootwright/api/v1alpha1"
+	"github.com/crmarques/bootwright/internal/proxy"
 )
 
 // BootstrapRepoRelativeDir is the path under <state-dir> where the
@@ -487,7 +487,7 @@ func nodeRoleCount(ocp v1alpha1.OCPCluster, role string) int {
 func pullSecretPlaceholder(ref string) string {
 	data, err := json.Marshal(map[string]any{
 		"auths": map[string]any{
-			"gitups-secret-ref:" + ref: map[string]any{},
+			"bootwright-secret-ref:" + ref: map[string]any{},
 		},
 	})
 	if err != nil {
@@ -497,7 +497,7 @@ func pullSecretPlaceholder(ref string) string {
 }
 
 func secretRefPlaceholder(kind string, ref string) string {
-	return fmt.Sprintf("<gitups-%s-ref:%s>", kind, ref)
+	return fmt.Sprintf("<bootwright-%s-ref:%s>", kind, ref)
 }
 
 func mergeYAMLMaps(base map[string]any, override map[string]any) map[string]any {

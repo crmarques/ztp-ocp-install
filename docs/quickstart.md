@@ -12,14 +12,14 @@ local registry mirror (disconnected install).
 
 - Linux host with KVM support (`/dev/kvm` present).
 - Go toolchain compatible with `go.mod`.
-- `python3` on `PATH`; `gitups apply bastion` installs a
-  pinned Ansible runtime into the Gitups-managed venv by default.
-- Permission to manage root-owned host runtime state under `/var/lib/gitups`
+- `python3` on `PATH`; `bootwright apply bastion` installs a
+  pinned Ansible runtime into the Bootwright-managed venv by default.
+- Permission to manage root-owned host runtime state under `/var/lib/bootwright`
   on provider hosts.
-- Install secret material under `~/.gitups/secrets` or a chosen
-  `--secrets-dir` (env: `GITUPS_SECRETS_DIR`).
+- Install secret material under `~/.bootwright/secrets` or a chosen
+  `--secrets-dir` (env: `BOOTWRIGHT_SECRETS_DIR`).
 
-`gitups check bastion -f <state>` reports controller dependency status.
+`bootwright check bastion -f <state>` reports controller dependency status.
 
 ## Build
 
@@ -30,14 +30,14 @@ make build
 ## Dry Run
 
 ```text
-bin/gitups check bastion -f test/e2e/sno-libvirt
-bin/gitups check infra -f test/e2e/sno-libvirt --state-dir /tmp/gitups-sno-libvirt --dry-run
-bin/gitups check clusters -f test/e2e/sno-libvirt --state-dir /tmp/gitups-sno-libvirt --dry-run
-bin/gitups check hub -f test/e2e/sno-libvirt --state-dir /tmp/gitups-sno-libvirt
-bin/gitups apply infra -f test/e2e/sno-libvirt --state-dir /tmp/gitups-sno-libvirt --dry-run
-bin/gitups render installer -f test/e2e/sno-libvirt --state-dir /tmp/gitups-sno-libvirt
-bin/gitups apply clusters -f test/e2e/sno-libvirt --state-dir /tmp/gitups-sno-libvirt --dry-run
-bin/gitups apply hub -f test/e2e/sno-libvirt --state-dir /tmp/gitups-sno-libvirt --dry-run
+bin/bootwright check bastion -f test/e2e/sno-libvirt
+bin/bootwright check infra -f test/e2e/sno-libvirt --state-dir /tmp/bootwright-sno-libvirt --dry-run
+bin/bootwright check clusters -f test/e2e/sno-libvirt --state-dir /tmp/bootwright-sno-libvirt --dry-run
+bin/bootwright check hub -f test/e2e/sno-libvirt --state-dir /tmp/bootwright-sno-libvirt
+bin/bootwright apply infra -f test/e2e/sno-libvirt --state-dir /tmp/bootwright-sno-libvirt --dry-run
+bin/bootwright render installer -f test/e2e/sno-libvirt --state-dir /tmp/bootwright-sno-libvirt
+bin/bootwright apply clusters -f test/e2e/sno-libvirt --state-dir /tmp/bootwright-sno-libvirt --dry-run
+bin/bootwright apply hub -f test/e2e/sno-libvirt --state-dir /tmp/bootwright-sno-libvirt --dry-run
 ```
 
 The dry run renders state and prints the Ansible command for each scope without
@@ -45,22 +45,22 @@ changing the host.
 
 ## Installer Render Output
 
-`gitups render installer` writes two artifacts per `OCPCluster` under
+`bootwright render installer` writes two artifacts per `OCPCluster` under
 `<state-dir>/git-repos/clusters-bootstrap/<cluster>/openshift/`:
 
 - `install-config.yaml` and `agent-config.yaml` with placeholder strings
-  (`<gitups-ssh-key-ref:...>`, `gitups-secret-ref:...`) in place of secret
+  (`<bootwright-ssh-key-ref:...>`, `bootwright-secret-ref:...`) in place of secret
   material. These are safe to inspect and are the GitOps-publishable source.
 - With `--resolve-secrets`, effective copies are written under
   `<state-dir>/runtime/<cluster>/installer/install-config.yaml` and
   `agent-config.yaml`. These have the pull secret, SSH key, additional trust
   bundle, mirror-registry auth, and proxy credentials inlined from
-  `--secrets-dir` (default `$GITUPS_SECRETS_DIR` or `~/.gitups/secrets`),
+  `--secrets-dir` (default `$BOOTWRIGHT_SECRETS_DIR` or `~/.bootwright/secrets`),
   written mode `0600`, and are the files `openshift-install agent create
   image` consumes. Treat them as credentials and keep them off version
   control — they live outside the bootstrap repo for exactly that reason.
 
-`gitups apply clusters` rewrites the runtime
+`bootwright apply clusters` rewrites the runtime
 `installer/install-config.yaml` and `installer/agent-config.yaml` at apply
 time, so the `--resolve-secrets` step is optional and only needed when you
 want to inspect the effective config
@@ -69,16 +69,16 @@ before booting.
 ## Apply
 
 ```text
-bin/gitups apply bastion -f test/e2e/sno-libvirt --yes
-bin/gitups apply infra -f test/e2e/sno-libvirt --state-dir /tmp/gitups-sno-libvirt --yes
-bin/gitups apply clusters -f test/e2e/sno-libvirt --state-dir /tmp/gitups-sno-libvirt --yes
-bin/gitups apply hub -f test/e2e/sno-libvirt --state-dir /tmp/gitups-sno-libvirt
+bin/bootwright apply bastion -f test/e2e/sno-libvirt --yes
+bin/bootwright apply infra -f test/e2e/sno-libvirt --state-dir /tmp/bootwright-sno-libvirt --yes
+bin/bootwright apply clusters -f test/e2e/sno-libvirt --state-dir /tmp/bootwright-sno-libvirt --yes
+bin/bootwright apply hub -f test/e2e/sno-libvirt --state-dir /tmp/bootwright-sno-libvirt
 ```
 
 Each mutating `apply` target validates first, renders state, prints the phase
 plan, and executes only that target. `apply hub` currently validates the
 selected hub cluster and reports that hub component schema is not implemented
-yet. `--ask-become-pass` defaults to false when gitups runs as root and true
+yet. `--ask-become-pass` defaults to false when bootwright runs as root and true
 otherwise; pass `--ask-become-pass=false` on non-root hosts that have
 passwordless sudo.
 

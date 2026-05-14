@@ -3,7 +3,7 @@ package render
 import (
 	"path/filepath"
 
-	"github.com/crmarques/gitups/internal/gitops/safepath"
+	"github.com/crmarques/bootwright/internal/gitops/safepath"
 )
 
 func sourcePath(sourceDir, label, value string) (string, error) {

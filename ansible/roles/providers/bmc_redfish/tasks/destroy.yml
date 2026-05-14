@@ -1,4 +1,4 @@
 ---
 - name: Skip external Redfish BMC cleanup
   ansible.builtin.debug:
-    msg: "Provider {{ gitups_current_provider.name }} uses external Redfish BMC endpoints."
+    msg: "Provider {{ bootwright_current_provider.name }} uses external Redfish BMC endpoints."

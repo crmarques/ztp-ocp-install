@@ -15,4 +15,4 @@
   ansible.builtin.include_tasks: mirror-images.yml
   when:
     - not ansible_check_mode
-    - (gitups_current_mirror_registry.mirrorSet | default([])) | length > 0
+    - (bootwright_current_mirror_registry.mirrorSet | default([])) | length > 0

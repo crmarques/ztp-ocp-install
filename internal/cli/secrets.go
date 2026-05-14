@@ -11,9 +11,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/crmarques/gitups/api/v1alpha1"
-	"github.com/crmarques/gitups/internal/infra"
-	"github.com/crmarques/gitups/internal/secretref"
+	"github.com/crmarques/bootwright/api/v1alpha1"
+	"github.com/crmarques/bootwright/internal/infra"
+	"github.com/crmarques/bootwright/internal/secretref"
 )
 
 type generatedSelfSignedRequest struct {
@@ -57,7 +57,7 @@ func newSecretGenerateCmd(stdout io.Writer, _ io.Writer) *cobra.Command {
 		Args:  cobra.NoArgs,
 	}
 	secretsDir = defaultSecretsDir()
-	cmd.Flags().StringArrayVarP(&files, "file", "f", nil, "Gitups YAML file or directory; may be repeated")
+	cmd.Flags().StringArrayVarP(&files, "file", "f", nil, "Bootwright YAML file or directory; may be repeated")
 	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory for generated install secret material")
 	cmd.RunE = func(_ *cobra.Command, _ []string) error {
 		state, err := infra.LoadNormalizeValidate(files)
@@ -167,7 +167,7 @@ operator provides.`,
 	cmd.Flags().StringVar(&password, "password", "", "password (mutually exclusive with --password-stdin and --generate)")
 	cmd.Flags().BoolVar(&passwordStdin, "password-stdin", false, "read password from stdin instead of --password")
 	cmd.Flags().BoolVar(&generate, "generate", false, "generate a strong random password (intended for test fixtures)")
-	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory for local install secret material (env: GITUPS_SECRETS_DIR)")
+	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory for local install secret material (env: BOOTWRIGHT_SECRETS_DIR)")
 	cmd.RunE = func(c *cobra.Command, args []string) error {
 		name := args[0]
 		if !infra.IsDNSLabel(name) {

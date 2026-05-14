@@ -1,5 +1,5 @@
 ---
-- name: Skip BMC boot for provider {{ gitups_current_provider.name }}
+- name: Skip BMC boot for provider {{ bootwright_current_provider.name }}
   ansible.builtin.debug:
-    msg: "Provider {{ gitups_current_provider.name }} (kind {{ gitups_current_provider.kind }}) has no BMC boot action."
+    msg: "Provider {{ bootwright_current_provider.name }} (kind {{ bootwright_current_provider.kind }}) has no BMC boot action."
   changed_when: false

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	v1 "github.com/crmarques/gitups/api/v1alpha1"
+	v1 "github.com/crmarques/bootwright/api/v1alpha1"
 )
 
 type SubscriptionRef struct {
@@ -83,7 +83,7 @@ func WaitForSubscriptions(ctx context.Context, kc *KubeClient, subs []Subscripti
 }
 
 func waitOne(ctx context.Context, kc *KubeClient, s SubscriptionRef, deadline time.Time, opts WaitOptions) error {
-	fmt.Fprintf(opts.Out, "gitups: wait subscription %s/%s → installedCSV\n", s.Namespace, s.Name)
+	fmt.Fprintf(opts.Out, "bootwright: wait subscription %s/%s → installedCSV\n", s.Namespace, s.Name)
 	var csv string
 	for {
 		if ctx.Err() != nil {
@@ -101,7 +101,7 @@ func waitOne(ctx context.Context, kc *KubeClient, s SubscriptionRef, deadline ti
 		}
 		sleep(ctx, opts.Interval)
 	}
-	fmt.Fprintf(opts.Out, "gitups: wait csv %s/%s → Succeeded\n", s.Namespace, csv)
+	fmt.Fprintf(opts.Out, "bootwright: wait csv %s/%s → Succeeded\n", s.Namespace, csv)
 	for {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -115,7 +115,7 @@ func waitOne(ctx context.Context, kc *KubeClient, s SubscriptionRef, deadline ti
 			phase, reason := csvPhase(body)
 			switch phase {
 			case "Succeeded":
-				fmt.Fprintf(opts.Out, "gitups: csv %s/%s Succeeded\n", s.Namespace, csv)
+				fmt.Fprintf(opts.Out, "bootwright: csv %s/%s Succeeded\n", s.Namespace, csv)
 				return nil
 			case "Failed":
 				surfaceCSVDiagnostics(ctx, kc, s.Namespace, csv, opts.Out)
@@ -127,15 +127,15 @@ func waitOne(ctx context.Context, kc *KubeClient, s SubscriptionRef, deadline ti
 }
 
 func surfaceCSVDiagnostics(ctx context.Context, kc *KubeClient, ns, csv string, out io.Writer) {
-	fmt.Fprintf(out, "gitups: diagnostics for csv %s/%s:\n", ns, csv)
+	fmt.Fprintf(out, "bootwright: diagnostics for csv %s/%s:\n", ns, csv)
 	if body, err := kc.GetJSON(ctx, ns, "csv", csv); err == nil {
 		phase, reason := csvPhase(body)
-		fmt.Fprintf(out, "gitups:   csv.status.phase=%q reason=%q\n", phase, reason)
+		fmt.Fprintf(out, "bootwright:   csv.status.phase=%q reason=%q\n", phase, reason)
 	}
 	selector := "olm.owner=" + csv
 	podList, err := kc.ListPodsJSONPath(ctx, ns, selector)
 	if err != nil || len(podList) == 0 {
-		fmt.Fprintf(out, "gitups:   (no pods labelled %s in %s — skipping log tail)\n", selector, ns)
+		fmt.Fprintf(out, "bootwright:   (no pods labelled %s in %s — skipping log tail)\n", selector, ns)
 		return
 	}
 	for _, line := range strings.Split(strings.TrimSpace(string(podList)), "\n") {
@@ -148,10 +148,10 @@ func surfaceCSVDiagnostics(ctx context.Context, kc *KubeClient, ns, csv string, 
 		if podName == "" {
 			continue
 		}
-		fmt.Fprintf(out, "gitups:   pod %s phase=%s — last 40 lines:\n", podName, phase)
+		fmt.Fprintf(out, "bootwright:   pod %s phase=%s — last 40 lines:\n", podName, phase)
 		body, _ := kc.PodLogs(ctx, ns, podName)
 		for _, l := range strings.Split(strings.TrimRight(string(body), "\n"), "\n") {
-			fmt.Fprintf(out, "gitups:     %s\n", l)
+			fmt.Fprintf(out, "bootwright:     %s\n", l)
 		}
 	}
 }

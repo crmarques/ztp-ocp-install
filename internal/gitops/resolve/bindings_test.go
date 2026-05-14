@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	v1 "github.com/crmarques/gitups/api/v1alpha1"
-	"github.com/crmarques/gitups/internal/gitops/resolve"
+	v1 "github.com/crmarques/bootwright/api/v1alpha1"
+	"github.com/crmarques/bootwright/internal/gitops/resolve"
 )
 
 func withBinding(prov *v1.GitOpsPackageSet, bindingName string) {

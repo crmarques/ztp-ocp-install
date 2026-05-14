@@ -1,6 +1,6 @@
 package render
 
-import "github.com/crmarques/gitups/api/v1alpha1"
+import "github.com/crmarques/bootwright/api/v1alpha1"
 
 type InfrastructureState struct {
 	APIVersion string                  `yaml:"apiVersion" json:"apiVersion"`

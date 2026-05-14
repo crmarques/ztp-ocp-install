@@ -2,10 +2,10 @@
 
 - name: Select load balancer VIPs to remove
   ansible.builtin.set_fact:
-    gitups_cluster_vips_unplumb_targets: >-
+    bootwright_cluster_vips_unplumb_targets: >-
       {{
-        (gitups_load_balancers | default([]))
-        | selectattr('clusterName', 'equalto', gitups_current_cluster.name)
+        (bootwright_load_balancers | default([]))
+        | selectattr('clusterName', 'equalto', bootwright_current_cluster.name)
         | map(attribute='frontends') | flatten
         | map(attribute='bindings') | flatten
         | selectattr('bridgeAttachment', 'defined')
@@ -23,12 +23,12 @@
       - "{{ item.bindAddress }}/{{ item.bridgeAttachment.prefixLength }}"
       - dev
       - "{{ item.bridgeAttachment.bridge }}"
-  register: gitups_cluster_vips_unplumb
-  changed_when: gitups_cluster_vips_unplumb.rc == 0
+  register: bootwright_cluster_vips_unplumb
+  changed_when: bootwright_cluster_vips_unplumb.rc == 0
   failed_when:
-    - gitups_cluster_vips_unplumb.rc != 0
-    - "'Cannot assign requested address' not in (gitups_cluster_vips_unplumb.stderr | default(''))"
-    - "'Cannot find device' not in (gitups_cluster_vips_unplumb.stderr | default(''))"
-  loop: "{{ gitups_cluster_vips_unplumb_targets }}"
+    - bootwright_cluster_vips_unplumb.rc != 0
+    - "'Cannot assign requested address' not in (bootwright_cluster_vips_unplumb.stderr | default(''))"
+    - "'Cannot find device' not in (bootwright_cluster_vips_unplumb.stderr | default(''))"
+  loop: "{{ bootwright_cluster_vips_unplumb_targets }}"
   loop_control:
     label: "{{ item.bindAddress }}/{{ item.bridgeAttachment.prefixLength }} dev {{ item.bridgeAttachment.bridge }}"

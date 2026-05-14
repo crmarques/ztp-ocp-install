@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	v1 "github.com/crmarques/gitups/api/v1alpha1"
+	v1 "github.com/crmarques/bootwright/api/v1alpha1"
 )
 
 func TestNewWorkspaceValidatesName(t *testing.T) {
@@ -47,10 +47,10 @@ func TestNewWorkspaceDefaultsAndPaths(t *testing.T) {
 	if !strings.HasSuffix(ws.PackageSet, filepath.Join("dev", "gitops-package-set.yaml")) {
 		t.Fatalf("PackageSet = %q", ws.PackageSet)
 	}
-	if !strings.HasSuffix(ws.ExpandedPackageSet, filepath.Join(".gitups", "expanded", "gitops-package-set.yaml")) {
+	if !strings.HasSuffix(ws.ExpandedPackageSet, filepath.Join(".bootwright", "expanded", "gitops-package-set.yaml")) {
 		t.Fatalf("ExpandedPackageSet = %q", ws.ExpandedPackageSet)
 	}
-	if !strings.HasSuffix(ws.RenderRoot, filepath.Join(".gitups", "render")) {
+	if !strings.HasSuffix(ws.RenderRoot, filepath.Join(".bootwright", "render")) {
 		t.Fatalf("RenderRoot = %q", ws.RenderRoot)
 	}
 }

@@ -10,7 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/crmarques/gitups/api/v1alpha1"
+	"github.com/crmarques/bootwright/api/v1alpha1"
 )
 
 func newStatusCmd(stdout io.Writer) *cobra.Command {
@@ -28,7 +28,7 @@ func newStatusCmd(stdout io.Writer) *cobra.Command {
 		Args: cobra.NoArgs,
 	}
 	cf := addCommonFlags(cmd)
-	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material (env: GITUPS_SECRETS_DIR)")
+	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material (env: BOOTWRIGHT_SECRETS_DIR)")
 	cmd.Flags().StringVar(&hostStateDir, "host-state-dir", hostStateDir, "root-managed host runtime state directory")
 	cmd.RunE = func(_ *cobra.Command, _ []string) error {
 		return runStatus(stdout, cf, secretsDir, hostStateDir)
@@ -64,7 +64,7 @@ func runStatus(stdout io.Writer, cf *commonFlags, secretsDir, hostStateDir strin
 	case loadErr != nil:
 		printFail(stdout, "load", loadErr.Error())
 	case !stateLoaded:
-		printFail(stdout, "load", "no desired state found (run `gitups init workspace` or pass -f)")
+		printFail(stdout, "load", "no desired state found (run `bootwright init workspace` or pass -f)")
 	default:
 		fmt.Fprintf(stdout, "  Environments:           %d\n", len(state.Environments))
 		fmt.Fprintf(stdout, "  InfrastructureProviders: %d\n", len(state.InfrastructureProviders))
@@ -114,28 +114,28 @@ func printClusterStatus(stdout io.Writer, state v1alpha1.State, stateDir string)
 
 func nextStepHints(repoExists, stateLoaded bool, state v1alpha1.State, stateDir string) []string {
 	if !repoExists {
-		return []string{"gitups init workspace --cluster-name <name> --provider <bare-metal|emulated-bare-metal|vsphere>"}
+		return []string{"bootwright init workspace --cluster-name <name> --provider <bare-metal|emulated-bare-metal|vsphere>"}
 	}
 	if !stateLoaded {
 		return []string{
 			"edit the scaffolded YAML under the bootstrap repo",
-			"gitups check all",
+			"bootwright check all",
 		}
 	}
 
-	hints := []string{"gitups check bastion"}
+	hints := []string{"bootwright check bastion"}
 	missingInstaller := clustersMissingInstaller(state, stateDir)
 	if len(missingInstaller) > 0 {
 		hints = append(hints,
-			"gitups apply infra --dry-run",
-			fmt.Sprintf("gitups render installer --scope %s", joinNames(missingInstaller)),
+			"bootwright apply infra --dry-run",
+			fmt.Sprintf("bootwright render installer --scope %s", joinNames(missingInstaller)),
 		)
 		return hints
 	}
 	hints = append(hints,
-		"gitups apply infra",
-		"gitups apply clusters",
-		"gitups apply hub",
+		"bootwright apply infra",
+		"bootwright apply clusters",
+		"bootwright apply hub",
 	)
 	return hints
 }
@@ -168,7 +168,7 @@ func stateSource(cf *commonFlags, repoExists bool) string {
 		return fmt.Sprintf("--file %v", cf.files)
 	}
 	if repoExists {
-		return bootstrapRepoDir(cf.stateDir) + "/*/gitups"
+		return bootstrapRepoDir(cf.stateDir) + "/*/bootwright"
 	}
 	return "(none)"
 }

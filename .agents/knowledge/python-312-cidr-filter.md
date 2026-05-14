@@ -4,5 +4,5 @@
 
 **Root cause:** `ansible.utils.in_any_network` can return `False` on Python 3.12 because an internal helper reads the removed private `ipaddress.IPv*Network._version` attribute and swallows the resulting exception.
 
-**Fix:** Use the project-local `gitups_in_cidr` Ansible test plugin backed directly by Python's public `ipaddress` APIs.
+**Fix:** Use the project-local `bootwright_in_cidr` Ansible test plugin backed directly by Python's public `ipaddress` APIs.
 

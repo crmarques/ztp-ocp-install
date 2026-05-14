@@ -2,63 +2,63 @@
 
 - name: Wait for Redfish endpoint readiness
   ansible.builtin.uri:
-    url: "http://127.0.0.1:{{ gitups_ocp_provider_bmc.port }}/redfish/v1/Systems"
+    url: "http://127.0.0.1:{{ bootwright_ocp_provider_bmc.port }}/redfish/v1/Systems"
     method: GET
     status_code: 200
     return_content: false
-    url_username: "{{ gitups_ocp_bmc_username | default(omit) }}"
-    url_password: "{{ gitups_ocp_bmc_password | default(omit) }}"
-    force_basic_auth: "{{ gitups_ocp_bmc_auth_enabled }}"
-  register: gitups_ocp_redfish_ready
+    url_username: "{{ bootwright_ocp_bmc_username | default(omit) }}"
+    url_password: "{{ bootwright_ocp_bmc_password | default(omit) }}"
+    force_basic_auth: "{{ bootwright_ocp_bmc_auth_enabled }}"
+  register: bootwright_ocp_redfish_ready
   retries: 30
   delay: 2
-  until: gitups_ocp_redfish_ready.status == 200
-  no_log: "{{ gitups_ocp_bmc_auth_enabled }}"
+  until: bootwright_ocp_redfish_ready.status == 200
+  no_log: "{{ bootwright_ocp_bmc_auth_enabled }}"
 
 - name: Wait for vmedia HTTP server readiness
   ansible.builtin.uri:
-    url: "http://127.0.0.1:{{ gitups_ocp_provider_bmc.port | int + 1 }}/"
+    url: "http://127.0.0.1:{{ bootwright_ocp_provider_bmc.port | int + 1 }}/"
     method: GET
     status_code: 200
     return_content: false
-  register: gitups_ocp_vmedia_http
+  register: bootwright_ocp_vmedia_http
   retries: 30
   delay: 2
-  until: gitups_ocp_vmedia_http.status == 200
+  until: bootwright_ocp_vmedia_http.status == 200
 
 - name: Resolve Redfish base URL for cluster
   ansible.builtin.set_fact:
-    gitups_ocp_redfish_baseuri: "http://127.0.0.1:{{ gitups_ocp_provider_bmc.port }}"
+    bootwright_ocp_redfish_baseuri: "http://127.0.0.1:{{ bootwright_ocp_provider_bmc.port }}"
   changed_when: false
 
 - name: Enumerate Redfish systems
   ansible.builtin.uri:
-    url: "{{ gitups_ocp_redfish_baseuri }}/redfish/v1/Systems"
+    url: "{{ bootwright_ocp_redfish_baseuri }}/redfish/v1/Systems"
     method: GET
     return_content: true
     body_format: json
-    url_username: "{{ gitups_ocp_bmc_username | default(omit) }}"
-    url_password: "{{ gitups_ocp_bmc_password | default(omit) }}"
-    force_basic_auth: "{{ gitups_ocp_bmc_auth_enabled }}"
-  register: gitups_ocp_redfish_systems
-  no_log: "{{ gitups_ocp_bmc_auth_enabled }}"
+    url_username: "{{ bootwright_ocp_bmc_username | default(omit) }}"
+    url_password: "{{ bootwright_ocp_bmc_password | default(omit) }}"
+    force_basic_auth: "{{ bootwright_ocp_bmc_auth_enabled }}"
+  register: bootwright_ocp_redfish_systems
+  no_log: "{{ bootwright_ocp_bmc_auth_enabled }}"
 
 - name: Fetch Redfish system details
   ansible.builtin.uri:
-    url: "{{ gitups_ocp_redfish_baseuri }}{{ item['@odata.id'] }}"
+    url: "{{ bootwright_ocp_redfish_baseuri }}{{ item['@odata.id'] }}"
     method: GET
     return_content: true
     body_format: json
-    url_username: "{{ gitups_ocp_bmc_username | default(omit) }}"
-    url_password: "{{ gitups_ocp_bmc_password | default(omit) }}"
-    force_basic_auth: "{{ gitups_ocp_bmc_auth_enabled }}"
-  loop: "{{ gitups_ocp_redfish_systems.json.Members }}"
-  register: gitups_ocp_redfish_system_details
-  no_log: "{{ gitups_ocp_bmc_auth_enabled }}"
+    url_username: "{{ bootwright_ocp_bmc_username | default(omit) }}"
+    url_password: "{{ bootwright_ocp_bmc_password | default(omit) }}"
+    force_basic_auth: "{{ bootwright_ocp_bmc_auth_enabled }}"
+  loop: "{{ bootwright_ocp_redfish_systems.json.Members }}"
+  register: bootwright_ocp_redfish_system_details
+  no_log: "{{ bootwright_ocp_bmc_auth_enabled }}"
 
 - name: Boot each cluster node via Redfish virtual media
   ansible.builtin.include_tasks: boot-node.yml
-  loop: "{{ gitups_current_cluster.ocp.nodes }}"
+  loop: "{{ bootwright_current_cluster.ocp.nodes }}"
   loop_control:
-    loop_var: gitups_ocp_node
-    label: "{{ gitups_current_cluster.name }}-{{ gitups_ocp_node.name }}"
+    loop_var: bootwright_ocp_node
+    label: "{{ bootwright_current_cluster.name }}-{{ bootwright_ocp_node.name }}"

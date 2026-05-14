@@ -1,6 +1,6 @@
-# Gitups E2E Cases
+# Bootwright E2E Cases
 
-End-to-end scenarios for `gitups`. Pick a case, follow its README, and let it
+End-to-end scenarios for `bootwright`. Pick a case, follow its README, and let it
 point you at the shared docs in this directory for the steps that do not
 change between cases.
 
@@ -9,14 +9,14 @@ change between cases.
 Each run follows the same five stages. The case README is the spine; it tells
 you, in order, which shared doc to open at each stage.
 
-1. **Bastion** — where `gitups` runs. Pick one mode and follow that doc:
+1. **Bastion** — where `bootwright` runs. Pick one mode and follow that doc:
    - [bastion.md](bastion.md) — a Linux VM or physical host you SSH into.
    - [containerized-bastion.md](containerized-bastion.md) — a non-root UBI9
      Podman container on the operator's machine (`--network host`).
 2. **Desired state** — case-specific. The case README lists the YAML files
    to copy from the case directory and the user-specific fields to edit.
 3. **Proxy** — optional. [proxy.md](proxy.md) covers direct, external
-   proxy (with or without auth), and Gitups-managed Squid.
+   proxy (with or without auth), and Bootwright-managed Squid.
 4. **Load balancer** — [load-balancer.md](load-balancer.md). The reference
    cases use managed HAProxy on the provider host.
 5. **Apply, install, verify, tear down** — [common-steps.md](common-steps.md).

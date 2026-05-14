@@ -9,7 +9,7 @@ in [`/specs/`](../specs/index.md).
 
 ## Desired State
 
-The YAML you author. It uses `apiVersion: gitups.io/v1alpha1` and is the only
+The YAML you author. It uses `apiVersion: bootwright.io/v1alpha1` and is the only
 source of declared platform intent. Generated files are outputs, not edit
 points.
 
@@ -49,7 +49,7 @@ type:
 
 - `spec.proxy` (`http`, `https`, `noProxy`, `auth.proxyAuthRef`) — applies to
   bastion CLI downloads, provider-host package and image pulls, generated
-  `install-config.yaml`, and `openshift-install`. Gitups auto-extends
+  `install-config.yaml`, and `openshift-install`. Bootwright auto-extends
   `noProxy` with cluster-local endpoints (service/cluster CIDRs, `.svc`,
   `.cluster.local`, `localhost`, base domain, mirror registry host, provider
   host addresses); user entries take precedence and are listed first.
@@ -59,22 +59,22 @@ type:
   content but still have public-network access for everything else.
 
 If `spec.proxy` is paired with a referenced
-`InfrastructureProvider.spec.proxy.squid`, Gitups provisions an authenticated
+`InfrastructureProvider.spec.proxy.squid`, Bootwright provisions an authenticated
 Squid proxy and materializes its htpasswd from
 `spec.proxy.auth.proxyAuthRef` (file-backed or `generated.credentials`).
-Otherwise the proxy URL is external. On Gitups-managed libvirt networks only,
+Otherwise the proxy URL is external. On Bootwright-managed libvirt networks only,
 the managed proxy path also disables direct VM NAT egress so cluster VMs leave
 through Squid.
 
 ### Managed-Squid Two-URL Model
 
-For the managed-Squid case Gitups derives **two** proxy URLs from the same
+For the managed-Squid case Bootwright derives **two** proxy URLs from the same
 Squid deployment, because hosts and VMs can't reach Squid at the same address:
 
 - **Host URL** — `http://<squid-host-ssh-address>:<port>`. Written by
   `host_proxy` into `/etc/dnf/dnf.conf`, `/etc/environment`, the systemd
   drop-in, and `pip.conf` on every host (bastion, providers, infra, OCP).
-  Uses the SSH address gitups already knows works on this host (since
+  Uses the SSH address bootwright already knows works on this host (since
   ansible reached it that way), so it's routable before libvirt is
   installed — solving the bootstrap chicken-and-egg where host_proxy must
   configure a proxy that host_libvirt needs to install libvirt itself.
@@ -85,7 +85,7 @@ Squid deployment, because hosts and VMs can't reach Squid at the same address:
 
 For an **external proxy** both URLs collapse to the same user-configured
 URL, so the split is invisible. Internally the values surface as
-`gitups_ocp_install.proxy.http` / `.https` (host) and `.vmHttp` / `.vmHttps`
+`bootwright_ocp_install.proxy.http` / `.https` (host) and `.vmHttp` / `.vmHttps`
 (VM) in the ansible vars file.
 
 ## Future: Multi-Cluster Topology
@@ -98,7 +98,7 @@ installer.
 
 ## Workflow Targets
 
-Provisioning commands are verb-first. `gitups apply <target>` runs
+Provisioning commands are verb-first. `bootwright apply <target>` runs
 idempotent phases through explicit targets:
 
 1. `bastion`: controller-local dependencies (managed Ansible venv, OCP CLIs).
@@ -110,18 +110,18 @@ idempotent phases through explicit targets:
    `role: hub`. Not implemented yet.
 5. `all`: infra, clusters, and the reserved hub component step.
 
-`gitups check <target>` exposes the matching read-only checks. Cluster
+`bootwright check <target>` exposes the matching read-only checks. Cluster
 targets accept `--scope` to select named `OCPCluster` definitions.
 
 ## Rendered Output
 
 Rendering is internal to mutating targets, and can be requested explicitly with
-`gitups render installer`. Gitups writes deterministic output under
+`bootwright render installer`. Bootwright writes deterministic output under
 `--state-dir`, including effective state, installer assets, Ansible inventory
 and variables, and the embedded Ansible bundle.
 
 ## Secrets
 
 Desired state references secret names. Secret bytes live outside the repo under
-`<gitups-user-dir>/secrets` by default. See
+`<bootwright-user-dir>/secrets` by default. See
 [`/specs/security.md`](../specs/security.md).

@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	v1 "github.com/crmarques/gitups/api/v1alpha1"
-	"github.com/crmarques/gitups/internal/gitops/load"
+	v1 "github.com/crmarques/bootwright/api/v1alpha1"
+	"github.com/crmarques/bootwright/internal/gitops/load"
 )
 
 func validateProvisioningStyle(descPath string, install bool, unitDir string, spec v1.PackageDescriptorSpec) error {

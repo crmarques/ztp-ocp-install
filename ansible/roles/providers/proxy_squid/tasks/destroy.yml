@@ -1,17 +1,17 @@
 ---
 - name: Remove managed proxy container
   containers.podman.podman_container:
-    name: "gitups-squid-{{ gitups_current_forward_proxy.name }}"
+    name: "bootwright-squid-{{ bootwright_current_forward_proxy.name }}"
     state: absent
-  when: gitups_current_forward_proxy is not none
+  when: bootwright_current_forward_proxy is not none
   failed_when: false
 
 - name: Remove managed proxy hosts-file pin
   ansible.builtin.blockinfile:
     path: /etc/hosts
-    marker: "# {mark} GITUPS managed-forward-proxy {{ gitups_current_forward_proxy.name }}"
+    marker: "# {mark} BOOTWRIGHT managed-forward-proxy {{ bootwright_current_forward_proxy.name }}"
     state: absent
-  when: gitups_current_forward_proxy is not none
+  when: bootwright_current_forward_proxy is not none
   failed_when: false
 
 - name: Check managed proxy firewalld state
@@ -19,32 +19,32 @@
     argv:
       - firewall-cmd
       - --state
-  register: gitups_squid_firewalld_state
+  register: bootwright_squid_firewalld_state
   changed_when: false
   failed_when: false
-  when: gitups_current_forward_proxy is not none
+  when: bootwright_current_forward_proxy is not none
 
 - name: Close managed proxy firewall port
   ansible.posix.firewalld:
-    port: "{{ gitups_current_forward_proxy.port | int }}/tcp"
+    port: "{{ bootwright_current_forward_proxy.port | int }}/tcp"
     state: disabled
     permanent: true
     immediate: true
   when:
-    - gitups_current_forward_proxy is not none
-    - gitups_squid_firewalld_state.rc | default(1) == 0
+    - bootwright_current_forward_proxy is not none
+    - bootwright_squid_firewalld_state.rc | default(1) == 0
 
 - name: Remove managed proxy state directory
   ansible.builtin.file:
-    path: "{{ gitups_current_forward_proxy.dataDir | default(gitups_host_state_dir ~ '/forward-proxy/' ~ gitups_current_forward_proxy.name, true) }}"
+    path: "{{ bootwright_current_forward_proxy.dataDir | default(bootwright_host_state_dir ~ '/forward-proxy/' ~ bootwright_current_forward_proxy.name, true) }}"
     state: absent
-  when: gitups_current_forward_proxy is not none
+  when: bootwright_current_forward_proxy is not none
 
 - name: Remove empty forward-proxy directory
   ansible.builtin.command:
     argv:
       - rmdir
-      - "{{ gitups_host_state_dir }}/forward-proxy"
-  register: gitups_forward_proxy_parent_rm
+      - "{{ bootwright_host_state_dir }}/forward-proxy"
+  register: bootwright_forward_proxy_parent_rm
   failed_when: false
-  changed_when: gitups_forward_proxy_parent_rm.rc == 0
+  changed_when: bootwright_forward_proxy_parent_rm.rc == 0

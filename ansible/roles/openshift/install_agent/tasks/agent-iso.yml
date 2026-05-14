@@ -1,7 +1,7 @@
 ---
 - name: Create installer work directory
   ansible.builtin.file:
-    path: "{{ gitups_ocp_installer_work_dir }}"
+    path: "{{ bootwright_ocp_installer_work_dir }}"
     state: directory
     mode: "0700"
   delegate_to: localhost
@@ -9,46 +9,46 @@
 
 - name: Write effective install config
   ansible.builtin.copy:
-    dest: "{{ gitups_ocp_installer_work_dir }}/install-config.yaml"
+    dest: "{{ bootwright_ocp_installer_work_dir }}/install-config.yaml"
     mode: "0600"
-    content: "{{ gitups_effective_install_config | to_nice_yaml(indent=2) }}"
+    content: "{{ bootwright_effective_install_config | to_nice_yaml(indent=2) }}"
   no_log: true
-  register: gitups_effective_install_config_file
+  register: bootwright_effective_install_config_file
   delegate_to: localhost
   become: false
 
 - name: Write effective agent config
   ansible.builtin.copy:
-    dest: "{{ gitups_ocp_installer_work_dir }}/agent-config.yaml"
+    dest: "{{ bootwright_ocp_installer_work_dir }}/agent-config.yaml"
     mode: "0600"
-    content: "{{ gitups_effective_agent_config | to_nice_yaml(indent=2) }}"
-  register: gitups_effective_agent_config_file
+    content: "{{ bootwright_effective_agent_config | to_nice_yaml(indent=2) }}"
+  register: bootwright_effective_agent_config_file
   delegate_to: localhost
   become: false
 
 - name: Check existing agent ISO
   ansible.builtin.stat:
-    path: "{{ gitups_ocp_installer_work_dir }}/agent.x86_64.iso"
-  register: gitups_agent_iso_stat
+    path: "{{ bootwright_ocp_installer_work_dir }}/agent.x86_64.iso"
+  register: bootwright_agent_iso_stat
   delegate_to: localhost
   become: false
 
 - name: Clear stale installer state
   ansible.builtin.copy:
-    dest: "{{ gitups_ocp_installer_work_dir }}/{{ item.name }}"
+    dest: "{{ bootwright_ocp_installer_work_dir }}/{{ item.name }}"
     mode: "0600"
     content: "{{ item.content }}"
   no_log: true
   loop:
-    - { name: install-config.yaml, content: "{{ gitups_effective_install_config | to_nice_yaml(indent=2) }}" }
-    - { name: agent-config.yaml, content: "{{ gitups_effective_agent_config | to_nice_yaml(indent=2) }}" }
-  when: not gitups_agent_iso_stat.stat.exists or gitups_effective_install_config_file.changed or gitups_effective_agent_config_file.changed
+    - { name: install-config.yaml, content: "{{ bootwright_effective_install_config | to_nice_yaml(indent=2) }}" }
+    - { name: agent-config.yaml, content: "{{ bootwright_effective_agent_config | to_nice_yaml(indent=2) }}" }
+  when: not bootwright_agent_iso_stat.stat.exists or bootwright_effective_install_config_file.changed or bootwright_effective_agent_config_file.changed
   delegate_to: localhost
   become: false
 
 - name: Remove stale installer files
   ansible.builtin.file:
-    path: "{{ gitups_ocp_installer_work_dir }}/{{ item }}"
+    path: "{{ bootwright_ocp_installer_work_dir }}/{{ item }}"
     state: absent
   loop:
     - .openshift_install_state.json
@@ -57,66 +57,66 @@
     - boot-artifacts
     - rendezvousIP
     - auth
-  when: not gitups_agent_iso_stat.stat.exists or gitups_effective_install_config_file.changed or gitups_effective_agent_config_file.changed
+  when: not bootwright_agent_iso_stat.stat.exists or bootwright_effective_install_config_file.changed or bootwright_effective_agent_config_file.changed
   delegate_to: localhost
   become: false
 
 - name: Create agent ISO
   ansible.builtin.command:
-    cmd: "{{ gitups_openshift_install_path }} agent create image --dir {{ gitups_ocp_installer_work_dir }}"
-    chdir: "{{ gitups_ocp_installer_work_dir }}"
-  environment: "{{ gitups_ocp_install_env }}"
+    cmd: "{{ bootwright_openshift_install_path }} agent create image --dir {{ bootwright_ocp_installer_work_dir }}"
+    chdir: "{{ bootwright_ocp_installer_work_dir }}"
+  environment: "{{ bootwright_ocp_install_env }}"
   changed_when: true
-  when: not gitups_agent_iso_stat.stat.exists or gitups_effective_install_config_file.changed or gitups_effective_agent_config_file.changed
+  when: not bootwright_agent_iso_stat.stat.exists or bootwright_effective_install_config_file.changed or bootwright_effective_agent_config_file.changed
   delegate_to: localhost
   become: false
 
 - name: Locate rootfs boot artifacts
   ansible.builtin.find:
-    paths: "{{ gitups_ocp_installer_work_dir }}/boot-artifacts"
+    paths: "{{ bootwright_ocp_installer_work_dir }}/boot-artifacts"
     patterns: "agent.*-rootfs.img"
     file_type: file
-  register: gitups_agent_rootfs_find
-  when: gitups_ocp_minimal_iso | bool
+  register: bootwright_agent_rootfs_find
+  when: bootwright_ocp_minimal_iso | bool
   delegate_to: localhost
   become: false
 
 - name: Validate minimal ISO rootfs
   ansible.builtin.fail:
-    msg: "openshift-install did not produce an agent rootfs artifact under {{ gitups_ocp_installer_work_dir }}/boot-artifacts"
+    msg: "openshift-install did not produce an agent rootfs artifact under {{ bootwright_ocp_installer_work_dir }}/boot-artifacts"
   when:
-    - gitups_ocp_minimal_iso | bool
-    - gitups_agent_rootfs_find.matched == 0
+    - bootwright_ocp_minimal_iso | bool
+    - bootwright_agent_rootfs_find.matched == 0
 
 - name: Create provider boot artifact directory
   ansible.builtin.file:
-    path: "{{ gitups_host_state_dir }}/providers/{{ gitups_provider_name }}/boot-artifacts"
+    path: "{{ bootwright_host_state_dir }}/providers/{{ bootwright_provider_name }}/boot-artifacts"
     state: directory
     owner: root
     group: root
     mode: "0755"
-  when: gitups_ocp_minimal_iso | bool
+  when: bootwright_ocp_minimal_iso | bool
 
 - name: Stage rootfs boot artifacts
   ansible.builtin.copy:
     src: "{{ item.path }}"
-    dest: "{{ gitups_host_state_dir }}/providers/{{ gitups_provider_name }}/boot-artifacts/{{ item.path | basename }}"
+    dest: "{{ bootwright_host_state_dir }}/providers/{{ bootwright_provider_name }}/boot-artifacts/{{ item.path | basename }}"
     owner: root
     group: root
     mode: "0644"
-  loop: "{{ gitups_agent_rootfs_find.files | default([]) }}"
+  loop: "{{ bootwright_agent_rootfs_find.files | default([]) }}"
   loop_control:
     label: "{{ item.path | basename }}"
-  when: gitups_ocp_minimal_iso | bool
+  when: bootwright_ocp_minimal_iso | bool
 
 - name: Verify staged rootfs HTTP URL
   ansible.builtin.uri:
-    url: "http://127.0.0.1:{{ gitups_ocp_boot_artifacts_http_port }}/{{ (gitups_agent_rootfs_find.files | first).path | basename }}"
+    url: "http://127.0.0.1:{{ bootwright_ocp_boot_artifacts_http_port }}/{{ (bootwright_agent_rootfs_find.files | first).path | basename }}"
     method: GET
     status_code: 200
     return_content: false
-  register: gitups_agent_rootfs_http
+  register: bootwright_agent_rootfs_http
   retries: 30
   delay: 1
-  until: gitups_agent_rootfs_http.status == 200
-  when: gitups_ocp_minimal_iso | bool
+  until: bootwright_agent_rootfs_http.status == 200
+  when: bootwright_ocp_minimal_iso | bool

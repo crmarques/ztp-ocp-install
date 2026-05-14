@@ -42,7 +42,7 @@ func ExtractAnsibleBundle(dest string) error {
 		return fmt.Errorf("locate embedded ansible bundle: %w", err)
 	}
 	if _, err := fs.Stat(sub, AnsibleCfgRelPath); err != nil {
-		return fmt.Errorf("embedded ansible bundle is empty (rebuild gitups via 'make build'): %w", err)
+		return fmt.Errorf("embedded ansible bundle is empty (rebuild bootwright via 'make build'): %w", err)
 	}
 	if err := os.RemoveAll(dest); err != nil {
 		return fmt.Errorf("clear bundle destination %s: %w", dest, err)

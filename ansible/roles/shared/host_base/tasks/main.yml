@@ -4,12 +4,12 @@
 
 - name: Install base host packages
   ansible.builtin.package:
-    name: "{{ gitups_host_base_packages }}"
+    name: "{{ bootwright_host_base_packages }}"
     state: present
 
 - name: Create cluster state directory
   ansible.builtin.file:
-    path: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}"
+    path: "{{ bootwright_host_state_dir }}/{{ bootwright_current_cluster.name }}"
     state: directory
     owner: root
     group: root

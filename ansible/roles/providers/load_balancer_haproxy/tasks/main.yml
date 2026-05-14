@@ -9,13 +9,13 @@
     name: net.ipv4.ip_nonlocal_bind
     value: "1"
     state: present
-    sysctl_file: /etc/sysctl.d/99-gitups-haproxy.conf
+    sysctl_file: /etc/sysctl.d/99-bootwright-haproxy.conf
     sysctl_set: true
     reload: true
 
 - name: Reconcile HAProxy load balancers
   ansible.builtin.include_tasks: haproxy.yml
-  loop: "{{ gitups_current_load_balancers }}"
+  loop: "{{ bootwright_current_load_balancers }}"
   loop_control:
-    loop_var: gitups_current_load_balancer
-    label: "{{ gitups_current_load_balancer.name }}"
+    loop_var: bootwright_current_load_balancer
+    label: "{{ bootwright_current_load_balancer.name }}"

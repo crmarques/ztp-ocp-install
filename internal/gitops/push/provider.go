@@ -81,7 +81,7 @@ func doJSON(ctx context.Context, client *http.Client, method, url string, header
 }
 
 func errMissingToken(name string) error {
-	return fmt.Errorf("%s: a token is required to create repositories; set --token or GITUPS_PUSH_TOKEN (or the provider env) or pass --create-missing=false", name)
+	return fmt.Errorf("%s: a token is required to create repositories; set --token or BOOTWRIGHT_PUSH_TOKEN (or the provider env) or pass --create-missing=false", name)
 }
 
 func httpError(provider, action string, status int, body []byte) error {

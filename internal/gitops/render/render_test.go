@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/crmarques/gitups/internal/gitops/catalog"
-	"github.com/crmarques/gitups/internal/gitops/load"
-	"github.com/crmarques/gitups/internal/gitops/render"
-	"github.com/crmarques/gitups/internal/gitops/resolve"
+	"github.com/crmarques/bootwright/internal/gitops/catalog"
+	"github.com/crmarques/bootwright/internal/gitops/load"
+	"github.com/crmarques/bootwright/internal/gitops/render"
+	"github.com/crmarques/bootwright/internal/gitops/resolve"
 )
 
 type stubHelmRunner struct{}

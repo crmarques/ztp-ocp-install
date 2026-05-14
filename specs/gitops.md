@@ -1,18 +1,18 @@
 # GitOps Spec
 
 The gitops command leaves (`init gitops`, `check gitops`, `render gitops`, `apply gitops`, …) are the post-provisioning concern of the
-gitups CLI. It turns a declarative package set into rendered git repos and
+bootwright CLI. It turns a declarative package set into rendered git repos and
 bootstraps a target cluster with the KRC/SRC controllers that own ongoing
 reconciliation.
 
 ## Kinds
 
-All public objects use `apiVersion: gitups.io/v1alpha1`.
+All public objects use `apiVersion: bootwright.io/v1alpha1`.
 
 | Kind | Owns |
 | --- | --- |
 | `GitOpsPackageSet` | User-authored intent plus optional machine-expanded execution state in `spec.resolved`. |
-| `PackageDefinition` | Per-package descriptor authored in the catalog (`packages/<name>/package.yaml`). Loaded by the catalog driver; never written by gitups. |
+| `PackageDefinition` | Per-package descriptor authored in the catalog (`packages/<name>/package.yaml`). Loaded by the catalog driver; never written by bootwright. |
 
 `GitOpsPackageSet` is a peer GitOps authoring artifact, not a member of the
 cluster-infra `State` aggregate ([state-model.md](state-model.md)). Cluster
@@ -23,13 +23,13 @@ kinds are consumed by `internal/gitops/load.PackageSet` and
 ## Non-Negotiable Invariants
 
 1. **One object, two profiles.** A minimal `GitOpsPackageSet` carries user
-   intent. `gitups expand gitops` writes the same kind with
-   `spec.resolved` populated under `.gitups/expanded/`.
+   intent. `bootwright expand gitops` writes the same kind with
+   `spec.resolved` populated under `.bootwright/expanded/`.
 2. **Lean input.** User-authored fields carry only sources, repositories,
    selected templates, controllers, and bindings. Defaults and inferable
    fields belong in `package.yaml` and `spec.resolved`.
 3. **Generated output is disposable.** Expanded and rendered artifacts live
-   under `.gitups/`; users edit the source `gitops-package-set.yaml`.
+   under `.bootwright/`; users edit the source `gitops-package-set.yaml`.
 4. **Install vs resources.** A package is one service/application. It declares
    install methods under `install/<renderer>/descriptor.yaml` and optional
    custom resources under `resources/<resourceTemplate>/descriptor.yaml`.
@@ -65,7 +65,7 @@ kinds are consumed by `internal/gitops/load.PackageSet` and
 Minimal input:
 
 ```yaml
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: GitOpsPackageSet
 metadata:
   name: dev
@@ -88,7 +88,7 @@ spec:
   resolved:
     repository:
       layout: split
-      outputPath: .gitups/render/dev
+      outputPath: .bootwright/render/dev
     repositories: []
     packages: []
     placeholders: []
@@ -115,25 +115,25 @@ plans, and apply ordering metadata. It must not carry generated secret values.
 | Artifact | Location | Why |
 | --- | --- | --- |
 | `gitops-package-set.yaml` | `<workspace>/<name>/` | User-authored input |
-| Expanded `GitOpsPackageSet` | `<workspace>/<name>/.gitups/expanded/gitops-package-set.yaml` | Generated execution plan |
-| Rendered repo trees | `<workspace>/<name>/.gitups/render/` | Generated repo content |
+| Expanded `GitOpsPackageSet` | `<workspace>/<name>/.bootwright/expanded/gitops-package-set.yaml` | Generated execution plan |
+| Rendered repo trees | `<workspace>/<name>/.bootwright/render/` | Generated repo content |
 | OCI/git source caches | `<state-dir>/gitops/sources/...` | Pure derivative; safe to delete |
 | Apply logs / lock | `<state-dir>/gitops/<name>/apply/` | Pure derivative |
 
 ## CLI
 
 ```text
-gitups init gitops <name>            # scaffold a GitOpsPackageSet workspace
-gitups expand gitops <name>          # populate spec.resolved
-gitups check gitops <name>           # validate and dry-expand
-gitups render gitops <name>          # render repo trees under .gitups/render
-gitups fill gitops <name>            # fill non-secret placeholders
-gitups plan gitops <name>            # print apply plan
-gitups push gitops <name>            # publish rendered repos
-gitups apply gitops <name>           # render/push/bootstrap
-gitups wait gitops <name>            # poll cluster state
-gitups status gitops <name>        # drift + freshness report
-gitups destroy gitops <name>         # tear down bootstrap
+bootwright init gitops <name>            # scaffold a GitOpsPackageSet workspace
+bootwright expand gitops <name>          # populate spec.resolved
+bootwright check gitops <name>           # validate and dry-expand
+bootwright render gitops <name>          # render repo trees under .bootwright/render
+bootwright fill gitops <name>            # fill non-secret placeholders
+bootwright plan gitops <name>            # print apply plan
+bootwright push gitops <name>            # publish rendered repos
+bootwright apply gitops <name>           # render/push/bootstrap
+bootwright wait gitops <name>            # poll cluster state
+bootwright status gitops <name>        # drift + freshness report
+bootwright destroy gitops <name>         # tear down bootstrap
 ```
 
 ## Anti-Goals

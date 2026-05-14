@@ -14,42 +14,42 @@
     group: "{{ item.group | default('root') }}"
     mode: "{{ item.mode }}"
   loop:
-    - { path: "{{ gitups_forward_proxy_root }}", mode: "0755" }
-    - { path: "{{ gitups_forward_proxy_config_dir }}", mode: "0755" }
-    - { path: "{{ gitups_forward_proxy_auth_dir }}", mode: "0700", owner: "{{ gitups_forward_proxy_runtime_uid }}", group: "{{ gitups_forward_proxy_runtime_gid }}" }
-    - { path: "{{ gitups_forward_proxy_cache_dir }}", mode: "0755", owner: "{{ gitups_forward_proxy_runtime_uid }}", group: "{{ gitups_forward_proxy_runtime_gid }}" }
-    - { path: "{{ gitups_forward_proxy_logs_dir }}", mode: "0755", owner: "{{ gitups_forward_proxy_runtime_uid }}", group: "{{ gitups_forward_proxy_runtime_gid }}" }
+    - { path: "{{ bootwright_forward_proxy_root }}", mode: "0755" }
+    - { path: "{{ bootwright_forward_proxy_config_dir }}", mode: "0755" }
+    - { path: "{{ bootwright_forward_proxy_auth_dir }}", mode: "0700", owner: "{{ bootwright_forward_proxy_runtime_uid }}", group: "{{ bootwright_forward_proxy_runtime_gid }}" }
+    - { path: "{{ bootwright_forward_proxy_cache_dir }}", mode: "0755", owner: "{{ bootwright_forward_proxy_runtime_uid }}", group: "{{ bootwright_forward_proxy_runtime_gid }}" }
+    - { path: "{{ bootwright_forward_proxy_logs_dir }}", mode: "0755", owner: "{{ bootwright_forward_proxy_runtime_uid }}", group: "{{ bootwright_forward_proxy_runtime_gid }}" }
 
 - name: Record managed proxy requirements
   ansible.builtin.copy:
-    dest: "{{ gitups_forward_proxy_root }}/requirements.yml"
+    dest: "{{ bootwright_forward_proxy_root }}/requirements.yml"
     owner: root
     group: root
     mode: "0644"
     content: |
-      name: {{ gitups_current_forward_proxy.name }}
-      providerRef: {{ gitups_current_forward_proxy.providerRef }}
-      providerHostRef: {{ gitups_current_forward_proxy.providerHostRef }}
-      url: {{ gitups_current_forward_proxy.url }}
-      host: {{ gitups_current_forward_proxy.host }}
-      port: {{ gitups_current_forward_proxy.port }}
-      runtime: {{ gitups_current_forward_proxy.runtime }}
+      name: {{ bootwright_current_forward_proxy.name }}
+      providerRef: {{ bootwright_current_forward_proxy.providerRef }}
+      providerHostRef: {{ bootwright_current_forward_proxy.providerHostRef }}
+      url: {{ bootwright_current_forward_proxy.url }}
+      host: {{ bootwright_current_forward_proxy.host }}
+      port: {{ bootwright_current_forward_proxy.port }}
+      runtime: {{ bootwright_current_forward_proxy.runtime }}
       image:
-        local: {{ gitups_current_forward_proxy.image.local | default('') }}
-        public: {{ gitups_current_forward_proxy.image.public | default('') }}
-  register: gitups_forward_proxy_requirements
+        local: {{ bootwright_current_forward_proxy.image.local | default('') }}
+        public: {{ bootwright_current_forward_proxy.image.public | default('') }}
+  register: bootwright_forward_proxy_requirements
 
 - name: Read managed proxy credential file
   ansible.builtin.slurp:
-    src: "{{ gitups_current_forward_proxy.credentialsSecretName }}"
-  register: gitups_forward_proxy_credentials_raw
+    src: "{{ bootwright_current_forward_proxy.credentialsSecretName }}"
+  register: bootwright_forward_proxy_credentials_raw
   no_log: true
   delegate_to: localhost
   become: false
 
 - name: Parse managed proxy credentials
   ansible.builtin.set_fact:
-    gitups_forward_proxy_credentials: "{{ gitups_forward_proxy_credentials_raw | gitups_parse_credential('proxy credentialsSecret ' ~ gitups_current_forward_proxy.credentialsSecretName) }}"
+    bootwright_forward_proxy_credentials: "{{ bootwright_forward_proxy_credentials_raw | bootwright_parse_credential('proxy credentialsSecret ' ~ bootwright_current_forward_proxy.credentialsSecretName) }}"
   no_log: true
 
 - name: Verify managed proxy htpasswd
@@ -57,10 +57,10 @@
     argv:
       - htpasswd
       - -viB
-      - "{{ gitups_forward_proxy_auth_dir }}/htpasswd"
-      - "{{ gitups_forward_proxy_credentials.username }}"
-    stdin: "{{ gitups_forward_proxy_credentials.password }}"
-  register: gitups_forward_proxy_htpasswd_verify
+      - "{{ bootwright_forward_proxy_auth_dir }}/htpasswd"
+      - "{{ bootwright_forward_proxy_credentials.username }}"
+    stdin: "{{ bootwright_forward_proxy_credentials.password }}"
+  register: bootwright_forward_proxy_htpasswd_verify
   changed_when: false
   failed_when: false
   no_log: true
@@ -70,41 +70,41 @@
     argv:
       - htpasswd
       - -niB
-      - "{{ gitups_forward_proxy_credentials.username }}"
-    stdin: "{{ gitups_forward_proxy_credentials.password }}"
-  register: gitups_forward_proxy_htpasswd_generate
+      - "{{ bootwright_forward_proxy_credentials.username }}"
+    stdin: "{{ bootwright_forward_proxy_credentials.password }}"
+  register: bootwright_forward_proxy_htpasswd_generate
   changed_when: false
   no_log: true
-  when: gitups_forward_proxy_htpasswd_verify.rc | default(1) != 0
+  when: bootwright_forward_proxy_htpasswd_verify.rc | default(1) != 0
 
 - name: Write managed proxy htpasswd
   ansible.builtin.copy:
-    dest: "{{ gitups_forward_proxy_auth_dir }}/htpasswd"
-    owner: "{{ gitups_forward_proxy_runtime_uid }}"
-    group: "{{ gitups_forward_proxy_runtime_gid }}"
+    dest: "{{ bootwright_forward_proxy_auth_dir }}/htpasswd"
+    owner: "{{ bootwright_forward_proxy_runtime_uid }}"
+    group: "{{ bootwright_forward_proxy_runtime_gid }}"
     mode: "0600"
-    content: "{{ gitups_forward_proxy_htpasswd_generate.stdout }}\n"
-  register: gitups_forward_proxy_htpasswd_create
+    content: "{{ bootwright_forward_proxy_htpasswd_generate.stdout }}\n"
+  register: bootwright_forward_proxy_htpasswd_create
   no_log: true
-  when: gitups_forward_proxy_htpasswd_verify.rc | default(1) != 0
+  when: bootwright_forward_proxy_htpasswd_verify.rc | default(1) != 0
 
 - name: Hash managed proxy htpasswd
   ansible.builtin.stat:
-    path: "{{ gitups_forward_proxy_auth_dir }}/htpasswd"
-  register: gitups_forward_proxy_htpasswd_stat
+    path: "{{ bootwright_forward_proxy_auth_dir }}/htpasswd"
+  register: bootwright_forward_proxy_htpasswd_stat
 
 - name: Write managed proxy configuration
   ansible.builtin.copy:
-    dest: "{{ gitups_forward_proxy_config_dir }}/squid.conf"
+    dest: "{{ bootwright_forward_proxy_config_dir }}/squid.conf"
     owner: root
     group: root
     mode: "0644"
     content: |
-      visible_hostname gitups-managed-forward-proxy
-      http_port 0.0.0.0:{{ gitups_current_forward_proxy.port }}
+      visible_hostname bootwright-managed-forward-proxy
+      http_port 0.0.0.0:{{ bootwright_current_forward_proxy.port }}
 
       auth_param basic program /usr/local/squid/libexec/basic_ncsa_auth /etc/squid/auth/htpasswd
-      auth_param basic realm gitups-forward-proxy
+      auth_param basic realm bootwright-forward-proxy
       acl authenticated proxy_auth REQUIRED
 
       acl SSL_ports port 443
@@ -126,16 +126,16 @@
       cache_log /var/log/squid/cache.log
       cache deny all
       coredump_dir /var/spool/squid
-  register: gitups_forward_proxy_config
+  register: bootwright_forward_proxy_config
 
 - name: Pull managed proxy image from mirror
   containers.podman.podman_image:
-    name: "{{ gitups_current_forward_proxy.image.local }}"
+    name: "{{ bootwright_current_forward_proxy.image.local }}"
     state: present
     pull: true
-  register: gitups_forward_proxy_pull_local
+  register: bootwright_forward_proxy_pull_local
   failed_when: false
-  when: (gitups_current_forward_proxy.image.local | default('')) | length > 0
+  when: (bootwright_current_forward_proxy.image.local | default('')) | length > 0
 
 - name: Check mirrored proxy image
   ansible.builtin.command:
@@ -143,24 +143,24 @@
       - podman
       - image
       - exists
-      - "{{ gitups_current_forward_proxy.image.local }}"
-  register: gitups_forward_proxy_local_present
+      - "{{ bootwright_current_forward_proxy.image.local }}"
+  register: bootwright_forward_proxy_local_present
   changed_when: false
   failed_when: false
-  when: (gitups_current_forward_proxy.image.local | default('')) | length > 0
+  when: (bootwright_current_forward_proxy.image.local | default('')) | length > 0
 
 - name: Pull managed proxy image from public registry
   containers.podman.podman_image:
-    name: "{{ gitups_current_forward_proxy.image.public }}"
+    name: "{{ bootwright_current_forward_proxy.image.public }}"
     state: present
     pull: true
-  register: gitups_forward_proxy_pull_public
+  register: bootwright_forward_proxy_pull_public
   failed_when: false
   when:
-    - (gitups_current_forward_proxy.image.public | default('')) | length > 0
+    - (bootwright_current_forward_proxy.image.public | default('')) | length > 0
     - >-
-      (gitups_current_forward_proxy.image.local | default('')) | length == 0
-      or (gitups_forward_proxy_local_present.rc | default(1) != 0)
+      (bootwright_current_forward_proxy.image.local | default('')) | length == 0
+      or (bootwright_forward_proxy_local_present.rc | default(1) != 0)
 
 - name: Check public proxy image
   ansible.builtin.command:
@@ -168,77 +168,77 @@
       - podman
       - image
       - exists
-      - "{{ gitups_current_forward_proxy.image.public }}"
-  register: gitups_forward_proxy_public_present
+      - "{{ bootwright_current_forward_proxy.image.public }}"
+  register: bootwright_forward_proxy_public_present
   changed_when: false
   failed_when: false
-  when: (gitups_current_forward_proxy.image.public | default('')) | length > 0
+  when: (bootwright_current_forward_proxy.image.public | default('')) | length > 0
 
 - name: Select managed proxy image
   ansible.builtin.set_fact:
-    gitups_forward_proxy_run_image: >-
-      {{ gitups_current_forward_proxy.image.local
-         if (gitups_forward_proxy_local_present.rc | default(1) == 0)
-         else gitups_current_forward_proxy.image.public }}
+    bootwright_forward_proxy_run_image: >-
+      {{ bootwright_current_forward_proxy.image.local
+         if (bootwright_forward_proxy_local_present.rc | default(1) == 0)
+         else bootwright_current_forward_proxy.image.public }}
 
 - name: Validate managed proxy image
   ansible.builtin.fail:
     msg: >-
       Managed Squid image pull failed.
-      local={{ gitups_current_forward_proxy.image.local | default('<unset>') }},
-      public={{ gitups_current_forward_proxy.image.public | default('<unset>') }}.
+      local={{ bootwright_current_forward_proxy.image.local | default('<unset>') }},
+      public={{ bootwright_current_forward_proxy.image.public | default('<unset>') }}.
   when:
-    - (gitups_forward_proxy_local_present.rc | default(1) != 0)
-    - (gitups_forward_proxy_public_present.rc | default(1) != 0)
+    - (bootwright_forward_proxy_local_present.rc | default(1) != 0)
+    - (bootwright_forward_proxy_public_present.rc | default(1) != 0)
 
 - name: Compute managed proxy fingerprint
   ansible.builtin.set_fact:
-    gitups_forward_proxy_spec_hash: >-
-      {{ (gitups_forward_proxy_requirements.checksum
-          ~ '|config=' ~ (gitups_forward_proxy_config.checksum | default(''))
-          ~ '|htpasswd=' ~ (gitups_forward_proxy_htpasswd_stat.stat.checksum | default(''))
-          ~ '|run-image=' ~ gitups_forward_proxy_run_image
-          ~ '|port=' ~ gitups_current_forward_proxy.port | string
-          ~ '|run-args=v3:user=' ~ gitups_forward_proxy_runtime_uid ~ ':' ~ gitups_forward_proxy_runtime_gid ~ ',net=host,restart=unless-stopped'
+    bootwright_forward_proxy_spec_hash: >-
+      {{ (bootwright_forward_proxy_requirements.checksum
+          ~ '|config=' ~ (bootwright_forward_proxy_config.checksum | default(''))
+          ~ '|htpasswd=' ~ (bootwright_forward_proxy_htpasswd_stat.stat.checksum | default(''))
+          ~ '|run-image=' ~ bootwright_forward_proxy_run_image
+          ~ '|port=' ~ bootwright_current_forward_proxy.port | string
+          ~ '|run-args=v3:user=' ~ bootwright_forward_proxy_runtime_uid ~ ':' ~ bootwright_forward_proxy_runtime_gid ~ ',net=host,restart=unless-stopped'
          ) | hash('sha1') }}
   changed_when: false
 
 - name: Inspect managed proxy container
   containers.podman.podman_container_info:
-    name: "{{ gitups_forward_proxy_container_name }}"
-  register: gitups_forward_proxy_existing
+    name: "{{ bootwright_forward_proxy_container_name }}"
+  register: bootwright_forward_proxy_existing
   failed_when: false
 
 - name: Decide managed proxy restart
   ansible.builtin.set_fact:
-    gitups_forward_proxy_recreate: >-
+    bootwright_forward_proxy_recreate: >-
       {{
-        (gitups_forward_proxy_existing.containers | default([]) | length) == 0
-        or (((gitups_forward_proxy_existing.containers | first).Config.Labels | default({}))['gitups.spec-hash'] | default('')) != gitups_forward_proxy_spec_hash
-        or not ((gitups_forward_proxy_existing.containers | first).State.Running | default(false))
+        (bootwright_forward_proxy_existing.containers | default([]) | length) == 0
+        or (((bootwright_forward_proxy_existing.containers | first).Config.Labels | default({}))['bootwright.spec-hash'] | default('')) != bootwright_forward_proxy_spec_hash
+        or not ((bootwright_forward_proxy_existing.containers | first).State.Running | default(false))
       }}
   changed_when: false
 
 - name: Run managed proxy container
   containers.podman.podman_container:
-    name: "{{ gitups_forward_proxy_container_name }}"
-    image: "{{ gitups_forward_proxy_run_image }}"
+    name: "{{ bootwright_forward_proxy_container_name }}"
+    image: "{{ bootwright_forward_proxy_run_image }}"
     state: started
-    recreate: "{{ gitups_forward_proxy_recreate | bool }}"
+    recreate: "{{ bootwright_forward_proxy_recreate | bool }}"
     network: host
-    user: "{{ gitups_forward_proxy_runtime_uid }}:{{ gitups_forward_proxy_runtime_gid }}"
+    user: "{{ bootwright_forward_proxy_runtime_uid }}:{{ bootwright_forward_proxy_runtime_gid }}"
     restart_policy: unless-stopped
     pull: never
     command: "squid -N -f /etc/squid/squid.conf"
     labels:
-      gitups.spec-hash: "{{ gitups_forward_proxy_spec_hash }}"
-      gitups.forward-proxy: "{{ gitups_current_forward_proxy.name }}"
+      bootwright.spec-hash: "{{ bootwright_forward_proxy_spec_hash }}"
+      bootwright.forward-proxy: "{{ bootwright_current_forward_proxy.name }}"
     volumes:
-      - "{{ gitups_forward_proxy_config_dir }}/squid.conf:/etc/squid/squid.conf:ro,Z"
-      - "{{ gitups_forward_proxy_auth_dir }}:/etc/squid/auth:ro,Z"
-      - "{{ gitups_forward_proxy_cache_dir }}:/var/spool/squid:Z"
-      - "{{ gitups_forward_proxy_logs_dir }}:/var/log/squid:Z"
-  when: gitups_forward_proxy_recreate | bool
+      - "{{ bootwright_forward_proxy_config_dir }}/squid.conf:/etc/squid/squid.conf:ro,Z"
+      - "{{ bootwright_forward_proxy_auth_dir }}:/etc/squid/auth:ro,Z"
+      - "{{ bootwright_forward_proxy_cache_dir }}:/var/spool/squid:Z"
+      - "{{ bootwright_forward_proxy_logs_dir }}:/var/log/squid:Z"
+  when: bootwright_forward_proxy_recreate | bool
 
 - name: Probe managed proxy container
   ansible.builtin.command:
@@ -248,15 +248,15 @@
       - podman
       - wait
       - --condition=stopped
-      - "{{ gitups_forward_proxy_container_name }}"
-  register: gitups_forward_proxy_wait
+      - "{{ bootwright_forward_proxy_container_name }}"
+  register: bootwright_forward_proxy_wait
   failed_when: false
   changed_when: false
 
 - name: Capture managed proxy inspect
   containers.podman.podman_container_info:
-    name: "{{ gitups_forward_proxy_container_name }}"
-  register: gitups_forward_proxy_post_inspect
+    name: "{{ bootwright_forward_proxy_container_name }}"
+  register: bootwright_forward_proxy_post_inspect
   failed_when: false
 
 - name: Capture managed proxy logs
@@ -266,68 +266,68 @@
       - logs
       - --tail=500
       - --timestamps
-      - "{{ gitups_forward_proxy_container_name }}"
-  register: gitups_forward_proxy_logs
+      - "{{ bootwright_forward_proxy_container_name }}"
+  register: bootwright_forward_proxy_logs
   failed_when: false
   changed_when: false
 
 - name: Save managed proxy inspect
   ansible.builtin.copy:
-    dest: "{{ gitups_forward_proxy_root }}/last-inspect.json"
+    dest: "{{ bootwright_forward_proxy_root }}/last-inspect.json"
     owner: root
     group: root
     mode: "0644"
-    content: "{{ (gitups_forward_proxy_post_inspect.containers | default([])) | to_nice_json }}"
+    content: "{{ (bootwright_forward_proxy_post_inspect.containers | default([])) | to_nice_json }}"
 
 - name: Save managed proxy logs
   ansible.builtin.copy:
-    dest: "{{ gitups_forward_proxy_root }}/last-run.log"
+    dest: "{{ bootwright_forward_proxy_root }}/last-run.log"
     owner: root
     group: root
     mode: "0644"
-    content: "{{ gitups_forward_proxy_logs.stdout | default('') }}\n===== stderr =====\n{{ gitups_forward_proxy_logs.stderr | default('') }}\n"
+    content: "{{ bootwright_forward_proxy_logs.stdout | default('') }}\n===== stderr =====\n{{ bootwright_forward_proxy_logs.stderr | default('') }}\n"
 
 - name: Resolve managed proxy state
   ansible.builtin.set_fact:
-    gitups_forward_proxy_final_state: "{{ ((gitups_forward_proxy_post_inspect.containers | first).State | default({})) if (gitups_forward_proxy_post_inspect.containers | default([]) | length) > 0 else {} }}"
+    bootwright_forward_proxy_final_state: "{{ ((bootwright_forward_proxy_post_inspect.containers | first).State | default({})) if (bootwright_forward_proxy_post_inspect.containers | default([]) | length) > 0 else {} }}"
   changed_when: false
 
 - name: Validate managed proxy health
   ansible.builtin.fail:
     msg: |
-      Managed Squid container {{ gitups_forward_proxy_container_name }} is not running cleanly.
-      Status:        {{ gitups_forward_proxy_final_state.Status | default('unknown') }}
-      Running:       {{ gitups_forward_proxy_final_state.Running | default(false) }}
-      ExitCode:      {{ gitups_forward_proxy_final_state.ExitCode | default('n/a') }}
-      Probe rc:      {{ gitups_forward_proxy_wait.rc }}
-      Logs:    {{ gitups_forward_proxy_root }}/last-run.log
-      Inspect: {{ gitups_forward_proxy_root }}/last-inspect.json
-  when: gitups_forward_proxy_wait.rc != 124
+      Managed Squid container {{ bootwright_forward_proxy_container_name }} is not running cleanly.
+      Status:        {{ bootwright_forward_proxy_final_state.Status | default('unknown') }}
+      Running:       {{ bootwright_forward_proxy_final_state.Running | default(false) }}
+      ExitCode:      {{ bootwright_forward_proxy_final_state.ExitCode | default('n/a') }}
+      Probe rc:      {{ bootwright_forward_proxy_wait.rc }}
+      Logs:    {{ bootwright_forward_proxy_root }}/last-run.log
+      Inspect: {{ bootwright_forward_proxy_root }}/last-inspect.json
+  when: bootwright_forward_proxy_wait.rc != 124
 
 - name: Check managed proxy firewalld state
   ansible.builtin.command:
     argv:
       - firewall-cmd
       - --state
-  register: gitups_forward_proxy_firewalld_state
+  register: bootwright_forward_proxy_firewalld_state
   changed_when: false
   failed_when: false
 
 - name: Open managed proxy firewall port
   ansible.posix.firewalld:
-    port: "{{ gitups_current_forward_proxy.port | int }}/tcp"
+    port: "{{ bootwright_current_forward_proxy.port | int }}/tcp"
     state: enabled
     permanent: true
     immediate: true
-  when: gitups_forward_proxy_firewalld_state.rc == 0
+  when: bootwright_forward_proxy_firewalld_state.rc == 0
 
 # Pin the Squid hostname to 127.0.0.1 so pip/dnf on this host can resolve
 # a hostname-form HTTP(S)_PROXY value pointing at the local managed Squid.
 - name: Resolve managed proxy hostnames
   ansible.builtin.set_fact:
-    gitups_forward_proxy_url_host: "{{ gitups_current_forward_proxy.url | urlsplit('hostname') | default('', true) }}"
-    gitups_forward_proxy_host_http_host: "{{ (gitups_ocp_install.proxy | default({})).http | default('') | urlsplit('hostname') | default('', true) }}"
-    gitups_forward_proxy_host_https_host: "{{ (gitups_ocp_install.proxy | default({})).https | default('') | urlsplit('hostname') | default('', true) }}"
+    bootwright_forward_proxy_url_host: "{{ bootwright_current_forward_proxy.url | urlsplit('hostname') | default('', true) }}"
+    bootwright_forward_proxy_host_http_host: "{{ (bootwright_ocp_install.proxy | default({})).http | default('') | urlsplit('hostname') | default('', true) }}"
+    bootwright_forward_proxy_host_https_host: "{{ (bootwright_ocp_install.proxy | default({})).https | default('') | urlsplit('hostname') | default('', true) }}"
   changed_when: false
 
 - name: Pin managed proxy hostname
@@ -337,11 +337,11 @@
     owner: root
     group: root
     mode: "0644"
-    marker: "# {mark} GITUPS managed-forward-proxy {{ gitups_current_forward_proxy.name }}"
+    marker: "# {mark} BOOTWRIGHT managed-forward-proxy {{ bootwright_current_forward_proxy.name }}"
     block: |
-      127.0.0.1 {{ gitups_forward_proxy_url_host }}
+      127.0.0.1 {{ bootwright_forward_proxy_url_host }}
   when:
-    - gitups_forward_proxy_url_host | length > 0
-    - gitups_forward_proxy_url_host is not match('^(\d{1,3}\.){3}\d{1,3}$')
-    - "':' not in gitups_forward_proxy_url_host"
-    - gitups_forward_proxy_url_host in [gitups_forward_proxy_host_http_host, gitups_forward_proxy_host_https_host]
+    - bootwright_forward_proxy_url_host | length > 0
+    - bootwright_forward_proxy_url_host is not match('^(\d{1,3}\.){3}\d{1,3}$')
+    - "':' not in bootwright_forward_proxy_url_host"
+    - bootwright_forward_proxy_url_host in [bootwright_forward_proxy_host_http_host, bootwright_forward_proxy_host_https_host]

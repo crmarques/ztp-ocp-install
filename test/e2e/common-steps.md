@@ -6,8 +6,8 @@ desired-state files edited. The case README drops you here after
 teardown.
 
 These steps assume the env vars from the bastion doc are exported:
-`$CASE`, `$GITUPS_USER_DIR`, `$GITUPS_STATE_DIR`, `$GITUPS_SECRETS_DIR`,
-`$GITUPS_REPO`, plus `$WORKSPACE` from the case README.
+`$CASE`, `$BOOTWRIGHT_USER_DIR`, `$BOOTWRIGHT_STATE_DIR`, `$BOOTWRIGHT_SECRETS_DIR`,
+`$BOOTWRIGHT_REPO`, plus `$WORKSPACE` from the case README.
 
 ## 1. Save And Generate Secrets
 
@@ -16,7 +16,7 @@ The case workspace references four or five secrets through
 
 | Secret | Form | Required for |
 | --- | --- | --- |
-| `gitups-ssh-key` / `.pub` | File under `~/.ssh` (created during bastion setup) | Cluster SSH key, bastion→host SSH |
+| `bootwright-ssh-key` / `.pub` | File under `~/.ssh` (created during bastion setup) | Cluster SSH key, bastion→host SSH |
 | `openshift-pull-secret` | Set from the pull-secret JSON | `render installer`, `apply clusters` |
 | `proxy-credentials` (optional) | Set (file-backed) or generated — see [proxy.md](proxy.md) | `apply bastion -f`, install-config proxy block |
 | `bmc-credentials` | Generated | `apply infra`, `apply clusters` |
@@ -24,36 +24,36 @@ The case workspace references four or five secrets through
 Confirm the SSH key pair, then set the pull secret:
 
 ```bash
-test -r ~/.ssh/gitups-ssh-key
-test -r ~/.ssh/gitups-ssh-key.pub
+test -r ~/.ssh/bootwright-ssh-key
+test -r ~/.ssh/bootwright-ssh-key.pub
 
-gitups secret set openshift-pull-secret \
+bootwright secret set openshift-pull-secret \
   --pull-secret "$HOME/pull-secret.json" \
-  --secrets-dir "$GITUPS_SECRETS_DIR"
+  --secrets-dir "$BOOTWRIGHT_SECRETS_DIR"
 ```
 
 For the containerized bastion the pull secret is mounted at
 `$HOME/pull-secret.json`. For a host bastion, point `--pull-secret` at
 wherever you placed the JSON (typically
-`~/.gitups/secrets/openshift-pull-secret`).
+`~/.bootwright/secrets/openshift-pull-secret`).
 
 If `environment.yaml` declares `proxy-credentials` in the **file-backed**
 form (see [proxy.md](proxy.md)), write it now (skip for the **generated**
 form):
 
 ```bash
-gitups secret set proxy-credentials \
+bootwright secret set proxy-credentials \
   --username <proxy-user> \
   --password-stdin \
-  --secrets-dir "$GITUPS_SECRETS_DIR"
+  --secrets-dir "$BOOTWRIGHT_SECRETS_DIR"
 ```
 
 Materialize every `generated:` entry (`bmc-credentials` always;
 `proxy-credentials` if generated):
 
 ```bash
-gitups secret generate -f "$WORKSPACE" --secrets-dir "$GITUPS_SECRETS_DIR"
-find "$GITUPS_SECRETS_DIR" -maxdepth 1 -type f -printf '%f\n' | sort
+bootwright secret generate -f "$WORKSPACE" --secrets-dir "$BOOTWRIGHT_SECRETS_DIR"
+find "$BOOTWRIGHT_SECRETS_DIR" -maxdepth 1 -type f -printf '%f\n' | sort
 ```
 
 ## 2. Apply The Workspace To The Bastion
@@ -63,12 +63,12 @@ Installs release-specific OpenShift CLIs declared by the workspace.
 `Environment.spec.proxy` from desired state.
 
 ```bash
-gitups apply bastion -f "$WORKSPACE" --yes
-gitups check bastion -f "$WORKSPACE"
+bootwright apply bastion -f "$WORKSPACE" --yes
+bootwright check bastion -f "$WORKSPACE"
 ```
 
 Managed Squid is **not** running yet at this point — the bastion phase
-runs before `apply infra` provisions it. Gitups deliberately ignores
+runs before `apply infra` provisions it. Bootwright deliberately ignores
 `spec.proxy` for this phase; every later phase routes through Squid once
 infra is up. See [proxy.md](proxy.md) for the full bootstrap order.
 
@@ -84,10 +84,10 @@ when declared. The case's `provider.yaml` and `infra.yaml` decide which
 of these apply.
 
 ```bash
-gitups check infra -f "$WORKSPACE"
-gitups apply infra -f "$WORKSPACE" --dry-run
-gitups apply infra -f "$WORKSPACE" --yes
-gitups check infra -f "$WORKSPACE"
+bootwright check infra -f "$WORKSPACE"
+bootwright apply infra -f "$WORKSPACE" --dry-run
+bootwright apply infra -f "$WORKSPACE" --yes
+bootwright check infra -f "$WORKSPACE"
 ```
 
 If the provider integration drives Ansible over SSH (libvirt, bare
@@ -104,11 +104,11 @@ This tree is the GitOps-publishable declarative source — safe to
 commit.
 
 ```bash
-gitups check clusters -f "$WORKSPACE"
-gitups render installer -f "$WORKSPACE"
+bootwright check clusters -f "$WORKSPACE"
+bootwright render installer -f "$WORKSPACE"
 
-gitups apply clusters -f "$WORKSPACE" --dry-run
-gitups apply clusters -f "$WORKSPACE" --yes
+bootwright apply clusters -f "$WORKSPACE" --dry-run
+bootwright apply clusters -f "$WORKSPACE" --yes
 ```
 
 `apply clusters` materializes
@@ -124,7 +124,7 @@ To see the final form `openshift-install` will consume, re-run `render
 installer` with `--resolve-secrets`:
 
 ```bash
-gitups render installer -f "$WORKSPACE" --resolve-secrets
+bootwright render installer -f "$WORKSPACE" --resolve-secrets
 ```
 
 That writes the runtime copies eagerly so you can review them. It is
@@ -135,13 +135,13 @@ them into a GitOps repo).
 
 ### Following The Install Logs
 
-`gitups apply clusters` is one long-running command. Its Ansible output
+`bootwright apply clusters` is one long-running command. Its Ansible output
 streams to the foreground terminal; the `openshift-install agent
 wait-for install-complete` phase that gates the run writes a richer log
 to disk. Open a second shell on the bastion to follow it:
 
 ```bash
-tail -f "$GITUPS_STATE_DIR/runtime/$CASE/installer/.openshift_install.log"
+tail -f "$BOOTWRIGHT_STATE_DIR/runtime/$CASE/installer/.openshift_install.log"
 ```
 
 For node-side visibility, SSH to a booted control plane (IPs are in
@@ -149,24 +149,24 @@ For node-side visibility, SSH to a booted control plane (IPs are in
 and watch the agent / bootkube journals:
 
 ```bash
-ssh -i ~/.ssh/gitups-ssh-key core@<node-ip> \
+ssh -i ~/.ssh/bootwright-ssh-key core@<node-ip> \
   sudo journalctl -fu assisted-service.service
 # or, after bootstrap kicks off:
-ssh -i ~/.ssh/gitups-ssh-key core@<node-ip> \
+ssh -i ~/.ssh/bootwright-ssh-key core@<node-ip> \
   sudo journalctl -fu bootkube.service
 ```
 
 ## 5. Verify
 
 ```bash
-export KUBECONFIG="$GITUPS_STATE_DIR/clusters/$CASE/auth/kubeconfig"
+export KUBECONFIG="$BOOTWRIGHT_STATE_DIR/clusters/$CASE/auth/kubeconfig"
 
 oc get nodes
 oc get clusterversion
 oc get clusteroperators
 
-gitups check infra -f "$WORKSPACE"
-gitups check clusters -f "$WORKSPACE"
+bootwright check infra -f "$WORKSPACE"
+bootwright check clusters -f "$WORKSPACE"
 ```
 
 The case README lists the per-case expectation for `oc get nodes`
@@ -175,8 +175,8 @@ The case README lists the per-case expectation for `oc get nodes`
 ## 6. Tear Down The Cluster
 
 ```bash
-gitups destroy clusters -f "$WORKSPACE" --yes
-gitups destroy infra -f "$WORKSPACE" --yes
+bootwright destroy clusters -f "$WORKSPACE" --yes
+bootwright destroy infra -f "$WORKSPACE" --yes
 ```
 
 After this, return to the bastion doc you used:

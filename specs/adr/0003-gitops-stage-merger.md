@@ -11,33 +11,33 @@ fleet that ends up gitops-managed:
 
 - `ztp-ocp-install-lab` (this repo) — provisioned clusters from declarative
   YAML via infra and cluster workflows.
-- `gitops-workspace/gitups` — a CLI binary (also named `gitups`) that
+- `gitops-workspace/bootwright` — a CLI binary (also named `bootwright`) that
   rendered package compositions, pushed them to a git provider, and
-  bootstrapped a KRC/SRC. apiVersion `gitups/v1alpha1`.
+  bootstrapped a KRC/SRC. apiVersion `bootwright/v1alpha1`.
 - `gitops-workspace/gitups-packages` — a per-package OCI catalog with a
   validate/build/publish pipeline.
 
 The user-facing tool was effectively split: provisioning ran from one
 binary, the post-provision gitops workflow ran from another that happened
 to share the same name. The two had divergent apiVersions
-(`gitups.io/v1alpha1` vs `gitups/v1alpha1`), divergent CLI shapes (scope
+(`bootwright.io/v1alpha1` vs `bootwright/v1alpha1`), divergent CLI shapes (scope
 pattern vs flat verbs), and divergent module identities
-(`github.com/crmarques/ztp-ocp-install-lab` vs `github.com/crmarques/gitups`).
+(`github.com/crmarques/ztp-ocp-install-lab` vs `github.com/crmarques/bootwright`).
 
 ## Decision
 
-Merge `gitops-workspace/gitups` into this repo. Keep
+Merge `gitops-workspace/bootwright` into this repo. Keep
 `gitops-workspace/gitups-packages` autonomous and consume it via three
 source drivers (filesystem, OCI, git URL).
 
 ### Module identity
 
-- Rename module to `github.com/crmarques/gitups`. Disk repo dir stays
+- Rename module to `github.com/crmarques/bootwright`. Disk repo dir stays
   `ztp-ocp-install-lab` for now; rename later if useful.
 
 ### Schemas
 
-- New kinds at `apiVersion: gitups.io/v1alpha1`:
+- New kinds at `apiVersion: bootwright.io/v1alpha1`:
   - `GitOpsPackageSet` (the only package-set object).
   - `PackageDefinition` (consumer-side struct; authored in the
     autonomous catalog repo).
@@ -58,20 +58,20 @@ source drivers (filesystem, OCI, git URL).
 - Verbs preserve the upstream gitops vocabulary
   (`init`, `expand`, `check`, `fill`, `plan`, `push`, `apply`, `wait`,
   `status`) with one rename and one addition:
-  - `generate` → `render` (avoids semantic adjacency to `gitups secret generate`).
+  - `generate` → `render` (avoids semantic adjacency to `bootwright secret generate`).
   - `destroy` is new (currently advisory; prints manual `kubectl delete`
     commands until KRC packages declare a destroy intent).
 - The group does **not** wrap into the ansible-shaped `scopeSpec`. It
   builds a parallel command tree because gitops verbs do not run ansible
   and do not want the `--ansible-playbook`/`--secrets-dir`/
   `--host-state-dir` flag set.
-- Default workspace changed from upstream `./gitups-output-dir` to
-  `./gitups-workspaces` to make the directory's purpose self-describing.
+- Default workspace changed from upstream `./bootwright-output-dir` to
+  `./bootwright-workspaces` to make the directory's purpose self-describing.
 
 ### Workspace + state-dir model
 
 - Authored YAML (`gitops-package-set.yaml`) lives in the user's workspace.
-- Expanded and rendered artifacts live under `<workspace>/<name>/.gitups/`.
+- Expanded and rendered artifacts live under `<workspace>/<name>/.bootwright/`.
 - Caches (OCI/git source pulls, apply intent logs) live under
   `<state-dir>/gitops/...` and are wipeable.
 
@@ -87,19 +87,19 @@ source drivers (filesystem, OCI, git URL).
 ### Cross-repo apiVersion sweep
 
 `gitops-workspace/gitups-packages` cuts a coordinated breaking change
-that rewrites every `apiVersion: gitups/v1alpha1` to
-`apiVersion: gitups.io/v1alpha1`. Older versions of the catalog cannot be
+that rewrites every `apiVersion: bootwright/v1alpha1` to
+`apiVersion: bootwright.io/v1alpha1`. Older versions of the catalog cannot be
 loaded by the merged tool, and vice versa. The catalog's per-package OCI
 release pipeline (`pkg/<name>/v<version>` tags → GHCR) is unchanged.
 
 ## Consequences
 
-- One binary `gitups` covers the full pipeline: `init workspace` → `apply infra`
+- One binary `bootwright` covers the full pipeline: `init workspace` → `apply infra`
   → `apply clusters` → `apply hub` → `gitops apply`.
 - The autonomous catalog repo continues its independent per-package
   release lifecycle.
 - The merge introduces no compatibility shims, consistent with the
   authoritative `v1alpha1` rule that breaking changes ship without
   migrations.
-- Sibling `gitops-workspace/gitups` is retired after the merge branch
+- Sibling `gitops-workspace/bootwright` is retired after the merge branch
   lands.

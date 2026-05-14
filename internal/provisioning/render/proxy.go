@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/crmarques/gitups/api/v1alpha1"
+	"github.com/crmarques/bootwright/api/v1alpha1"
 )
 
 func managedProxyIsolationEnabled(infra v1alpha1.ClusterInfrastructure, provider v1alpha1.InfrastructureProvider, env *v1alpha1.Environment) bool {

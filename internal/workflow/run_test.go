@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/crmarques/gitups/api/v1alpha1"
-	"github.com/crmarques/gitups/internal/ansible"
+	"github.com/crmarques/bootwright/api/v1alpha1"
+	"github.com/crmarques/bootwright/internal/ansible"
 )
 
 // fakeRunner satisfies ansible.Runner without actually exec'ing.
@@ -54,7 +54,7 @@ func TestRunDryRunDoesNotInvokeRunner(t *testing.T) {
 		State:             minimalState(),
 		StateDir:          stateDir,
 		SecretsDir:        t.TempDir(),
-		HostStateDir:      "/var/lib/gitups",
+		HostStateDir:      "/var/lib/bootwright",
 		Executable:        "ansible-playbook",
 		BundleDir:         t.TempDir(),
 		Playbook:          "playbooks/checks/preflight.yml",
@@ -87,7 +87,7 @@ func TestRunExecutesRunnerWhenNotDryRun(t *testing.T) {
 		State:             minimalState(),
 		StateDir:          stateDir,
 		SecretsDir:        t.TempDir(),
-		HostStateDir:      "/var/lib/gitups",
+		HostStateDir:      "/var/lib/bootwright",
 		BundleDir:         t.TempDir(),
 		Playbook:          "playbooks/targets/infra/apply.yml",
 		ArtifactsBaseName: "infra",
@@ -109,7 +109,7 @@ func TestRunPropagatesRunnerError(t *testing.T) {
 		State:             minimalState(),
 		StateDir:          t.TempDir(),
 		SecretsDir:        t.TempDir(),
-		HostStateDir:      "/var/lib/gitups",
+		HostStateDir:      "/var/lib/bootwright",
 		BundleDir:         t.TempDir(),
 		Playbook:          "playbooks/targets/infra/apply.yml",
 		ArtifactsBaseName: "infra",
@@ -126,7 +126,7 @@ func TestRunDryRunLabelFallsBackToPlaybook(t *testing.T) {
 		State:             minimalState(),
 		StateDir:          t.TempDir(),
 		SecretsDir:        t.TempDir(),
-		HostStateDir:      "/var/lib/gitups",
+		HostStateDir:      "/var/lib/bootwright",
 		BundleDir:         t.TempDir(),
 		Playbook:          "playbooks/checks/preflight.yml",
 		ArtifactsBaseName: "preflight-test",
@@ -153,7 +153,7 @@ func TestRunRenderFailureSurfaces(t *testing.T) {
 		State:             minimalState(),
 		StateDir:          stateFile, // file, not directory
 		SecretsDir:        t.TempDir(),
-		HostStateDir:      "/var/lib/gitups",
+		HostStateDir:      "/var/lib/bootwright",
 		BundleDir:         t.TempDir(),
 		Playbook:          "playbooks/checks/preflight.yml",
 		ArtifactsBaseName: "preflight-test",

@@ -1,7 +1,7 @@
 ---
 - name: Create managed load balancer state directory
   ansible.builtin.file:
-    path: "{{ gitups_host_state_dir }}/load-balancers/{{ gitups_current_load_balancer.name }}"
+    path: "{{ bootwright_host_state_dir }}/load-balancers/{{ bootwright_current_load_balancer.name }}"
     state: directory
     owner: root
     group: root
@@ -10,7 +10,7 @@
 - name: Write managed load balancer requirements
   ansible.builtin.template:
     src: requirements.yml.j2
-    dest: "{{ gitups_host_state_dir }}/load-balancers/{{ gitups_current_load_balancer.name }}/requirements.yml"
+    dest: "{{ bootwright_host_state_dir }}/load-balancers/{{ bootwright_current_load_balancer.name }}/requirements.yml"
     owner: root
     group: root
     mode: "0644"
@@ -18,48 +18,48 @@
 - name: Write HAProxy configuration
   ansible.builtin.template:
     src: haproxy.cfg.j2
-    dest: "{{ gitups_host_state_dir }}/load-balancers/{{ gitups_current_load_balancer.name }}/haproxy.cfg"
+    dest: "{{ bootwright_host_state_dir }}/load-balancers/{{ bootwright_current_load_balancer.name }}/haproxy.cfg"
     owner: root
     group: root
     mode: "0644"
-  register: gitups_haproxy_config
+  register: bootwright_haproxy_config
 
 - name: Compute managed HAProxy spec fingerprint
   ansible.builtin.set_fact:
-    gitups_haproxy_spec_hash: >-
-      {{ (gitups_haproxy_config.checksum
+    bootwright_haproxy_spec_hash: >-
+      {{ (bootwright_haproxy_config.checksum
           ~ '|run-args=v3:user=0:0,net=host,restart=unless-stopped'
-          ~ '|local=' ~ (gitups_current_load_balancer.image.local | default(''))
-          ~ '|public=' ~ (gitups_current_load_balancer.image.public | default(''))
+          ~ '|local=' ~ (bootwright_current_load_balancer.image.local | default(''))
+          ~ '|public=' ~ (bootwright_current_load_balancer.image.public | default(''))
          ) | hash('sha1') }}
   changed_when: false
 
 - name: Inspect existing managed HAProxy container
   containers.podman.podman_container_info:
-    name: "gitups-haproxy-{{ gitups_current_load_balancer.name }}"
-  register: gitups_haproxy_existing
+    name: "bootwright-haproxy-{{ bootwright_current_load_balancer.name }}"
+  register: bootwright_haproxy_existing
   failed_when: false
 
 - name: Resolve managed HAProxy recreate decision
   ansible.builtin.set_fact:
-    gitups_haproxy_recreate: >-
+    bootwright_haproxy_recreate: >-
       {{
-        (gitups_haproxy_existing.containers | default([]) | length) == 0
-        or (((gitups_haproxy_existing.containers | first).Config.Labels | default({}))['gitups.spec-hash'] | default('')) != gitups_haproxy_spec_hash
-        or not ((gitups_haproxy_existing.containers | first).State.Running | default(false))
+        (bootwright_haproxy_existing.containers | default([]) | length) == 0
+        or (((bootwright_haproxy_existing.containers | first).Config.Labels | default({}))['bootwright.spec-hash'] | default('')) != bootwright_haproxy_spec_hash
+        or not ((bootwright_haproxy_existing.containers | first).State.Running | default(false))
       }}
   changed_when: false
 
 - name: Pull managed HAProxy image from local registry
   containers.podman.podman_image:
-    name: "{{ gitups_current_load_balancer.image.local }}"
+    name: "{{ bootwright_current_load_balancer.image.local }}"
     state: present
     pull: true
-  register: gitups_haproxy_pull_local
+  register: bootwright_haproxy_pull_local
   failed_when: false
   when:
-    - gitups_haproxy_recreate | bool
-    - (gitups_current_load_balancer.image.local | default('')) | length > 0
+    - bootwright_haproxy_recreate | bool
+    - (bootwright_current_load_balancer.image.local | default('')) | length > 0
 
 - name: Check whether managed HAProxy local image is in podman storage
   ansible.builtin.command:
@@ -67,27 +67,27 @@
       - podman
       - image
       - exists
-      - "{{ gitups_current_load_balancer.image.local }}"
-  register: gitups_haproxy_local_present
+      - "{{ bootwright_current_load_balancer.image.local }}"
+  register: bootwright_haproxy_local_present
   changed_when: false
   failed_when: false
   when:
-    - gitups_haproxy_recreate | bool
-    - (gitups_current_load_balancer.image.local | default('')) | length > 0
+    - bootwright_haproxy_recreate | bool
+    - (bootwright_current_load_balancer.image.local | default('')) | length > 0
 
 - name: Pull managed HAProxy image from public registry
   containers.podman.podman_image:
-    name: "{{ gitups_current_load_balancer.image.public }}"
+    name: "{{ bootwright_current_load_balancer.image.public }}"
     state: present
     pull: true
-  register: gitups_haproxy_pull_public
+  register: bootwright_haproxy_pull_public
   failed_when: false
   when:
-    - gitups_haproxy_recreate | bool
-    - (gitups_current_load_balancer.image.public | default('')) | length > 0
+    - bootwright_haproxy_recreate | bool
+    - (bootwright_current_load_balancer.image.public | default('')) | length > 0
     - >-
-      (gitups_current_load_balancer.image.local | default('')) | length == 0
-      or (gitups_haproxy_local_present.rc | default(1) != 0)
+      (bootwright_current_load_balancer.image.local | default('')) | length == 0
+      or (bootwright_haproxy_local_present.rc | default(1) != 0)
 
 - name: Check whether managed HAProxy public image is in podman storage
   ansible.builtin.command:
@@ -95,55 +95,55 @@
       - podman
       - image
       - exists
-      - "{{ gitups_current_load_balancer.image.public }}"
-  register: gitups_haproxy_public_present
+      - "{{ bootwright_current_load_balancer.image.public }}"
+  register: bootwright_haproxy_public_present
   changed_when: false
   failed_when: false
   when:
-    - gitups_haproxy_recreate | bool
-    - (gitups_current_load_balancer.image.public | default('')) | length > 0
+    - bootwright_haproxy_recreate | bool
+    - (bootwright_current_load_balancer.image.public | default('')) | length > 0
 
 - name: Resolve managed HAProxy image ref for run
   ansible.builtin.set_fact:
-    gitups_haproxy_run_image: >-
-      {{ gitups_current_load_balancer.image.local
-         if (gitups_haproxy_local_present.rc | default(1) == 0)
-         else gitups_current_load_balancer.image.public }}
-  when: gitups_haproxy_recreate | bool
+    bootwright_haproxy_run_image: >-
+      {{ bootwright_current_load_balancer.image.local
+         if (bootwright_haproxy_local_present.rc | default(1) == 0)
+         else bootwright_current_load_balancer.image.public }}
+  when: bootwright_haproxy_recreate | bool
 
 - name: Fail when neither managed HAProxy image ref could be pulled
   ansible.builtin.fail:
     msg: >-
       managed HAProxy image pull failed.
-      local={{ gitups_current_load_balancer.image.local | default('<unset>') }},
-      public={{ gitups_current_load_balancer.image.public | default('<unset>') }}.
+      local={{ bootwright_current_load_balancer.image.local | default('<unset>') }},
+      public={{ bootwright_current_load_balancer.image.public | default('<unset>') }}.
       Pre-pull the image into local container storage or run
-      `gitups check infra` to inspect mirror reachability and prerequisites.
+      `bootwright check infra` to inspect mirror reachability and prerequisites.
   when:
-    - gitups_haproxy_recreate | bool
-    - (gitups_haproxy_local_present.rc | default(1) != 0)
-    - (gitups_haproxy_public_present.rc | default(1) != 0)
+    - bootwright_haproxy_recreate | bool
+    - (bootwright_haproxy_local_present.rc | default(1) != 0)
+    - (bootwright_haproxy_public_present.rc | default(1) != 0)
 
 - name: Run managed HAProxy container
   containers.podman.podman_container:
-    name: "gitups-haproxy-{{ gitups_current_load_balancer.name }}"
-    image: "{{ gitups_haproxy_run_image }}"
+    name: "bootwright-haproxy-{{ bootwright_current_load_balancer.name }}"
+    image: "{{ bootwright_haproxy_run_image }}"
     state: started
-    recreate: "{{ gitups_haproxy_recreate | bool }}"
+    recreate: "{{ bootwright_haproxy_recreate | bool }}"
     network: host
     user: "0:0"
     restart_policy: unless-stopped
     pull: never
     labels:
-      gitups.spec-hash: "{{ gitups_haproxy_spec_hash }}"
-      gitups.load-balancer: "{{ gitups_current_load_balancer.name }}"
+      bootwright.spec-hash: "{{ bootwright_haproxy_spec_hash }}"
+      bootwright.load-balancer: "{{ bootwright_current_load_balancer.name }}"
     volumes:
-      - "{{ gitups_host_state_dir }}/load-balancers/{{ gitups_current_load_balancer.name }}/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro,Z"
+      - "{{ bootwright_host_state_dir }}/load-balancers/{{ bootwright_current_load_balancer.name }}/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro,Z"
     command:
       - haproxy
       - -f
       - /usr/local/etc/haproxy/haproxy.cfg
-  when: gitups_haproxy_recreate | bool
+  when: bootwright_haproxy_recreate | bool
 
 - name: Probe managed HAProxy container stability
   ansible.builtin.command:
@@ -153,15 +153,15 @@
       - podman
       - wait
       - --condition=stopped
-      - "gitups-haproxy-{{ gitups_current_load_balancer.name }}"
-  register: gitups_haproxy_wait
+      - "bootwright-haproxy-{{ bootwright_current_load_balancer.name }}"
+  register: bootwright_haproxy_wait
   failed_when: false
   changed_when: false
 
 - name: Capture managed HAProxy container inspect for diagnostics
   containers.podman.podman_container_info:
-    name: "gitups-haproxy-{{ gitups_current_load_balancer.name }}"
-  register: gitups_haproxy_post_inspect
+    name: "bootwright-haproxy-{{ bootwright_current_load_balancer.name }}"
+  register: bootwright_haproxy_post_inspect
   failed_when: false
 
 - name: Capture managed HAProxy container logs for diagnostics
@@ -171,42 +171,42 @@
       - logs
       - --tail=500
       - --timestamps
-      - "gitups-haproxy-{{ gitups_current_load_balancer.name }}"
-  register: gitups_haproxy_logs
+      - "bootwright-haproxy-{{ bootwright_current_load_balancer.name }}"
+  register: bootwright_haproxy_logs
   failed_when: false
   changed_when: false
 
 - name: Persist managed HAProxy container inspect snapshot
   ansible.builtin.copy:
-    dest: "{{ gitups_host_state_dir }}/load-balancers/{{ gitups_current_load_balancer.name }}/last-inspect.json"
+    dest: "{{ bootwright_host_state_dir }}/load-balancers/{{ bootwright_current_load_balancer.name }}/last-inspect.json"
     owner: root
     group: root
     mode: "0644"
-    content: "{{ (gitups_haproxy_post_inspect.containers | default([])) | to_nice_json }}"
+    content: "{{ (bootwright_haproxy_post_inspect.containers | default([])) | to_nice_json }}"
 
 - name: Persist managed HAProxy container log snapshot
   ansible.builtin.copy:
-    dest: "{{ gitups_host_state_dir }}/load-balancers/{{ gitups_current_load_balancer.name }}/last-run.log"
+    dest: "{{ bootwright_host_state_dir }}/load-balancers/{{ bootwright_current_load_balancer.name }}/last-run.log"
     owner: root
     group: root
     mode: "0644"
-    content: "{{ gitups_haproxy_logs.stdout }}\n===== stderr =====\n{{ gitups_haproxy_logs.stderr }}\n"
+    content: "{{ bootwright_haproxy_logs.stdout }}\n===== stderr =====\n{{ bootwright_haproxy_logs.stderr }}\n"
 
 - name: Resolve final managed HAProxy container state
   ansible.builtin.set_fact:
-    gitups_haproxy_final_state: "{{ ((gitups_haproxy_post_inspect.containers | first).State | default({})) if (gitups_haproxy_post_inspect.containers | default([]) | length) > 0 else {} }}"
-    gitups_haproxy_final_restart_count: "{{ ((gitups_haproxy_post_inspect.containers | first).RestartCount | default('n/a')) if (gitups_haproxy_post_inspect.containers | default([]) | length) > 0 else 'n/a' }}"
+    bootwright_haproxy_final_state: "{{ ((bootwright_haproxy_post_inspect.containers | first).State | default({})) if (bootwright_haproxy_post_inspect.containers | default([]) | length) > 0 else {} }}"
+    bootwright_haproxy_final_restart_count: "{{ ((bootwright_haproxy_post_inspect.containers | first).RestartCount | default('n/a')) if (bootwright_haproxy_post_inspect.containers | default([]) | length) > 0 else 'n/a' }}"
   changed_when: false
 
 - name: Fail when managed HAProxy container is not healthy
   ansible.builtin.fail:
     msg: |
-      HAProxy container gitups-haproxy-{{ gitups_current_load_balancer.name }} is not running cleanly.
-      Status:        {{ gitups_haproxy_final_state.Status | default('unknown') }}
-      Running:       {{ gitups_haproxy_final_state.Running | default(false) }}
-      ExitCode:      {{ gitups_haproxy_final_state.ExitCode | default('n/a') }}
-      RestartCount:  {{ gitups_haproxy_final_restart_count | default('n/a') }}
-      Probe rc:      {{ gitups_haproxy_wait.rc }}
-      Logs:    {{ gitups_host_state_dir }}/load-balancers/{{ gitups_current_load_balancer.name }}/last-run.log
-      Inspect: {{ gitups_host_state_dir }}/load-balancers/{{ gitups_current_load_balancer.name }}/last-inspect.json
-  when: gitups_haproxy_wait.rc != 124
+      HAProxy container bootwright-haproxy-{{ bootwright_current_load_balancer.name }} is not running cleanly.
+      Status:        {{ bootwright_haproxy_final_state.Status | default('unknown') }}
+      Running:       {{ bootwright_haproxy_final_state.Running | default(false) }}
+      ExitCode:      {{ bootwright_haproxy_final_state.ExitCode | default('n/a') }}
+      RestartCount:  {{ bootwright_haproxy_final_restart_count | default('n/a') }}
+      Probe rc:      {{ bootwright_haproxy_wait.rc }}
+      Logs:    {{ bootwright_host_state_dir }}/load-balancers/{{ bootwright_current_load_balancer.name }}/last-run.log
+      Inspect: {{ bootwright_host_state_dir }}/load-balancers/{{ bootwright_current_load_balancer.name }}/last-inspect.json
+  when: bootwright_haproxy_wait.rc != 124

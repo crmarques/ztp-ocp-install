@@ -7,10 +7,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/crmarques/gitups/api/v1alpha1"
-	"github.com/crmarques/gitups/internal/ansible"
-	"github.com/crmarques/gitups/internal/orchestrate/provisioning"
-	"github.com/crmarques/gitups/internal/workflow"
+	"github.com/crmarques/bootwright/api/v1alpha1"
+	"github.com/crmarques/bootwright/internal/ansible"
+	"github.com/crmarques/bootwright/internal/orchestrate/provisioning"
+	"github.com/crmarques/bootwright/internal/workflow"
 )
 
 func newScopeCheckCmd(scope scopeSpec, stdout io.Writer, stderr io.Writer) *cobra.Command {
@@ -29,8 +29,8 @@ func newScopeCheckCmd(scope scopeSpec, stdout io.Writer, stderr io.Writer) *cobr
 		Args:  cobra.NoArgs,
 	}
 	cf := addCommonFlags(cmd)
-	cmd.Flags().StringVar(&executable, "ansible-playbook", resolveAnsiblePlaybook(), "ansible-playbook executable to run (defaults to the gitups-managed venv when present)")
-	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material (env: GITUPS_SECRETS_DIR)")
+	cmd.Flags().StringVar(&executable, "ansible-playbook", resolveAnsiblePlaybook(), "ansible-playbook executable to run (defaults to the bootwright-managed venv when present)")
+	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material (env: BOOTWRIGHT_SECRETS_DIR)")
 	cmd.Flags().StringVar(&hostStateDir, "host-state-dir", hostStateDir, "root-managed host runtime state directory")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "render artifacts and print the Ansible preflight command without executing it")
 	if scope.name == "clusters" || scope.name == "infra" || scope.name == "all" {
@@ -96,10 +96,10 @@ func newScopeApplyCmd(scope scopeSpec, stdin io.Reader, stdout io.Writer, stderr
 	cf := addCommonFlags(cmd)
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "render artifacts and print the Ansible commands without executing them")
 	cmd.Flags().BoolVar(&check, "check", false, "pass --check to ansible-playbook")
-	cmd.Flags().BoolVar(&askBecomePass, "ask-become-pass", askBecomePassDefault(), "prompt for the Ansible become password; defaults to false when gitups runs as root, true otherwise")
+	cmd.Flags().BoolVar(&askBecomePass, "ask-become-pass", askBecomePassDefault(), "prompt for the Ansible become password; defaults to false when bootwright runs as root, true otherwise")
 	cmd.Flags().BoolVar(&yes, "yes", false, "skip the apply confirmation prompt")
-	cmd.Flags().StringVar(&executable, "ansible-playbook", resolveAnsiblePlaybook(), "ansible-playbook executable to run (defaults to the gitups-managed venv when present)")
-	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material (env: GITUPS_SECRETS_DIR)")
+	cmd.Flags().StringVar(&executable, "ansible-playbook", resolveAnsiblePlaybook(), "ansible-playbook executable to run (defaults to the bootwright-managed venv when present)")
+	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material (env: BOOTWRIGHT_SECRETS_DIR)")
 	cmd.Flags().StringVar(&hostStateDir, "host-state-dir", hostStateDir, "root-managed host runtime state directory")
 	if scope.name == "clusters" || scope.name == "infra" || scope.name == "all" {
 		cmd.Flags().StringVar(&clusterScope, "scope", "", "comma-separated OCPCluster names to apply (restricts the matching ClusterInfrastructure/Provider sets)")
@@ -197,10 +197,10 @@ func newScopeDestroyCmd(scope scopeSpec, stdin io.Reader, stdout io.Writer, stde
 	cf := addCommonFlags(cmd)
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "render artifacts and print the Ansible commands without executing them")
 	cmd.Flags().BoolVar(&check, "check", false, "pass --check to ansible-playbook")
-	cmd.Flags().BoolVar(&askBecomePass, "ask-become-pass", askBecomePassDefault(), "prompt for the Ansible become password; defaults to false when gitups runs as root, true otherwise")
+	cmd.Flags().BoolVar(&askBecomePass, "ask-become-pass", askBecomePassDefault(), "prompt for the Ansible become password; defaults to false when bootwright runs as root, true otherwise")
 	cmd.Flags().BoolVar(&yes, "yes", false, "skip the destroy confirmation prompt")
-	cmd.Flags().StringVar(&executable, "ansible-playbook", resolveAnsiblePlaybook(), "ansible-playbook executable to run (defaults to the gitups-managed venv when present)")
-	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material (env: GITUPS_SECRETS_DIR)")
+	cmd.Flags().StringVar(&executable, "ansible-playbook", resolveAnsiblePlaybook(), "ansible-playbook executable to run (defaults to the bootwright-managed venv when present)")
+	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material (env: BOOTWRIGHT_SECRETS_DIR)")
 	cmd.Flags().StringVar(&hostStateDir, "host-state-dir", hostStateDir, "root-managed host runtime state directory")
 	if scope.name == "clusters" || scope.name == "infra" {
 		cmd.Flags().StringVar(&clusterScope, "scope", "", "comma-separated OCPCluster names to destroy (restricts the matching ClusterInfrastructure/Provider sets)")
@@ -288,9 +288,9 @@ func runApplyHostCheck(stdout io.Writer, stderr io.Writer, state v1alpha1.State,
 func ansibleLimitForScope(name string) string {
 	switch name {
 	case "infra":
-		return "gitups_provider_hosts:gitups_infra_hosts"
+		return "bootwright_provider_hosts:bootwright_infra_hosts"
 	case "clusters":
-		return "gitups_ocp_hosts"
+		return "bootwright_ocp_hosts"
 	default:
 		return ""
 	}
@@ -311,5 +311,5 @@ func resolvedOCPBinaryPairs(selected []Phase, hostStateDir string) []string {
 	if err != nil {
 		return nil
 	}
-	return []string{"gitups_openshift_install=" + path}
+	return []string{"bootwright_openshift_install=" + path}
 }

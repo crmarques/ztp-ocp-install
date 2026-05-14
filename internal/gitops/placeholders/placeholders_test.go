@@ -3,8 +3,8 @@ package placeholders_test
 import (
 	"testing"
 
-	v1 "github.com/crmarques/gitups/api/v1alpha1"
-	"github.com/crmarques/gitups/internal/gitops/placeholders"
+	v1 "github.com/crmarques/bootwright/api/v1alpha1"
+	"github.com/crmarques/bootwright/internal/gitops/placeholders"
 )
 
 func TestContains(t *testing.T) {

@@ -1,11 +1,11 @@
 ---
 - name: Apply provider services
-  hosts: gitups_provider_hosts
+  hosts: bootwright_provider_hosts
   gather_subset:
     - "!all"
     - min
   become: true
-  environment: "{{ gitups_proxy_env | default({}) }}"
+  environment: "{{ bootwright_proxy_env | default({}) }}"
 
   pre_tasks:
     - name: Resolve provider context
@@ -16,7 +16,7 @@
     - name: Apply managed proxy
       ansible.builtin.import_role:
         name: proxy_squid
-      when: gitups_current_forward_proxy is not none
+      when: bootwright_current_forward_proxy is not none
 
     - name: Persist host proxy settings
       ansible.builtin.import_role:
@@ -24,19 +24,19 @@
 
     - name: Apply provider BMC service
       ansible.builtin.include_role:
-        name: "bmc_{{ gitups_current_provider.bmcRole }}"
+        name: "bmc_{{ bootwright_current_provider.bmcRole }}"
 
     - name: Apply boot artifacts HTTP service
       ansible.builtin.import_role:
         name: boot_artifacts_http
-      when: gitups_current_provider.bootArtifactsHttp.enabled | default(false) | bool
+      when: bootwright_current_provider.bootArtifactsHttp.enabled | default(false) | bool
 
     - name: Apply mirror registry
       ansible.builtin.import_role:
         name: mirror_registry
-      when: gitups_current_mirror_registry is not none
+      when: bootwright_current_mirror_registry is not none
 
     - name: Apply managed load balancers
       ansible.builtin.import_role:
         name: load_balancer_haproxy
-      when: gitups_current_load_balancers | length > 0
+      when: bootwright_current_load_balancers | length > 0

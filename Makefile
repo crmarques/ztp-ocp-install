@@ -1,11 +1,11 @@
 GO ?= go
-BINARY ?= gitups
+BINARY ?= bootwright
 BIN_DIR ?= bin
 STATE_DIR ?= .state
 E2E_DIR ?= test/e2e
 CASE ?=
 E2E_FIXTURE = $(E2E_DIR)/$(CASE)
-E2E_STATE_DIR ?= /tmp/gitups-$(CASE)
+E2E_STATE_DIR ?= /tmp/bootwright-$(CASE)
 ANSIBLE_PLAYBOOK ?= $(shell command -v ansible-playbook 2>/dev/null)
 E2E_ANSIBLE_FLAGS = $(if $(ANSIBLE_PLAYBOOK),--ansible-playbook $(ANSIBLE_PLAYBOOK),)
 E2E_APPLY_ALL ?= $(BIN_DIR)/$(BINARY) apply all --yes
@@ -20,7 +20,7 @@ EMBED_COLLECTIONS_DIR = $(EMBED_BUNDLE_DIR)/collections
 COLLECTIONS_STAMP = $(EMBED_COLLECTIONS_DIR)/.stamp
 GOFMT_FILES = $(shell find . -path './internal/embedded/bundle' -prune -o -name '*.go' -print)
 ANSIBLE_ROLE_PATHS = ansible/roles/bastion:ansible/roles/shared:ansible/roles/providers:ansible/roles/cluster_infra:ansible/roles/openshift
-ANSIBLE_SYNTAX_ENV = ANSIBLE_LOCAL_TEMP=/tmp/gitups-ansible-local ANSIBLE_REMOTE_TEMP=/tmp/gitups-ansible-remote ANSIBLE_ROLES_PATH=$(ANSIBLE_ROLE_PATHS) ANSIBLE_COLLECTIONS_PATH=internal/embedded/bundle/collections ANSIBLE_FILTER_PLUGINS=ansible/filter_plugins
+ANSIBLE_SYNTAX_ENV = ANSIBLE_LOCAL_TEMP=/tmp/bootwright-ansible-local ANSIBLE_REMOTE_TEMP=/tmp/bootwright-ansible-remote ANSIBLE_ROLES_PATH=$(ANSIBLE_ROLE_PATHS) ANSIBLE_COLLECTIONS_PATH=internal/embedded/bundle/collections ANSIBLE_FILTER_PLUGINS=ansible/filter_plugins
 ANSIBLE_SYNTAX_PLAYBOOKS = \
 	ansible/playbooks/checks/preflight.yml \
 	ansible/playbooks/targets/all/apply.yml \
@@ -47,12 +47,12 @@ CLI_FILE_LINE_LIMIT ?= 400
 all: build
 
 build: $(BIN_DIR) sync-bundle
-	$(GO) build -o $(BIN_DIR)/$(BINARY) ./cmd/gitups
+	$(GO) build -o $(BIN_DIR)/$(BINARY) ./cmd/bootwright
 
 # PLACEHOLDER and .gitignore are preserved so a bare `go build` still
 # compiles when the bundle has not been synced. Collections declared in
 # $(COLLECTIONS_REQUIREMENTS) are resolved at build time into
-# $(EMBED_COLLECTIONS_DIR) so the gitups binary ships every Ansible
+# $(EMBED_COLLECTIONS_DIR) so the bootwright binary ships every Ansible
 # collection it needs and disconnected hosts never reach Galaxy.
 sync-bundle: $(COLLECTIONS_STAMP)
 	@find $(EMBED_BUNDLE_DIR) -mindepth 1 -maxdepth 1 \
@@ -95,7 +95,7 @@ ansible-syntax-check: check-e2e-deps
 	done
 
 stale-term-check:
-	@! rg -n 'connectivity[.](mode|connected|restricted|disconnected)|spec[.]connectivity|gitups_connectivity|localRegistry|ocpInstall[.]|spoke|examples/infra' README.md docs specs examples test
+	@! rg -n 'connectivity[.](mode|connected|restricted|disconnected)|spec[.]connectivity|bootwright_connectivity|localRegistry|ocpInstall[.]|spoke|examples/infra' README.md docs specs examples test
 
 provider-swap-check:
 	diff -u examples/libvirt-redfish-fleet/environment.yaml examples/baremetal-redfish-fleet/environment.yaml
@@ -140,11 +140,11 @@ e2e: check-e2e-case check-e2e-deps build
 # Render-only e2e for the baremetal-redfish fleet — exercises the
 # bare-metal provider dispatch path without requiring real Redfish
 # hardware. Produces inventory/vars/installer artifacts under
-# /tmp/gitups-baremetal-redfish-fleet and prints the Ansible command,
+# /tmp/bootwright-baremetal-redfish-fleet and prints the Ansible command,
 # but never invokes ansible-playbook.
 e2e-render-baremetal: check-e2e-deps build
 	$(BIN_DIR)/$(BINARY) apply all -f examples/baremetal-redfish-fleet \
-		--state-dir /tmp/gitups-baremetal-redfish-fleet --dry-run \
+		--state-dir /tmp/bootwright-baremetal-redfish-fleet --dry-run \
 		$(E2E_ANSIBLE_FLAGS) $(E2E_APPLY_FLAGS)
 
 list-e2e-gitops-cases:
@@ -171,7 +171,7 @@ clean-e2e-state: check-e2e-case
 help:
 	@printf '%s\n' \
 		'Targets:' \
-		'  build            Build bin/gitups (syncs the embedded ansible bundle first)' \
+		'  build            Build bin/bootwright (syncs the embedded ansible bundle first)' \
 		'  sync-bundle      Refresh internal/embedded/bundle from /ansible without building' \
 		'  check            Run formatting, Go, Ansible, stale-term, and provider-swap checks' \
 		'  test             Run Go tests' \

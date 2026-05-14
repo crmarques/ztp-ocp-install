@@ -1,175 +1,175 @@
 ---
-- name: Validate gitups_openshift_release_version is set
+- name: Validate bootwright_openshift_release_version is set
   ansible.builtin.assert:
     that:
-      - gitups_openshift_release_version is defined
-      - (gitups_openshift_release_version | string | length) > 0
+      - bootwright_openshift_release_version is defined
+      - (bootwright_openshift_release_version | string | length) > 0
     fail_msg: >-
-      gitups_openshift_release_version is required (e.g. 4.21.12);
+      bootwright_openshift_release_version is required (e.g. 4.21.12);
       pass it via -e or set it in the playbook vars.
 
 - name: Install controller OS packages
   ansible.builtin.package:
-    name: "{{ gitups_clis_packages }}"
+    name: "{{ bootwright_clis_packages }}"
     state: present
   become: true
 
 - name: Compute release URL base
   ansible.builtin.set_fact:
-    gitups_clis_release_url: "{{ gitups_clis_mirror_base }}/{{ gitups_openshift_release_version }}"
-    gitups_clis_workdir: "{{ gitups_clis_tmp_dir }}/{{ gitups_openshift_release_version }}"
+    bootwright_clis_release_url: "{{ bootwright_clis_mirror_base }}/{{ bootwright_openshift_release_version }}"
+    bootwright_clis_workdir: "{{ bootwright_clis_tmp_dir }}/{{ bootwright_openshift_release_version }}"
 
 - name: Ensure tmp working directory exists
   ansible.builtin.file:
-    path: "{{ gitups_clis_workdir }}"
+    path: "{{ bootwright_clis_workdir }}"
     state: directory
     mode: "0755"
 
 - name: Ensure CLI install directory exists
   ansible.builtin.file:
-    path: "{{ gitups_clis_install_dir }}"
+    path: "{{ bootwright_clis_install_dir }}"
     state: directory
     mode: "0755"
   become: true
 
 - name: Compute CLI lookup PATH (install dir + system PATH)
   ansible.builtin.set_fact:
-    gitups_clis_lookup_path: "{{ gitups_clis_install_dir }}:{{ ansible_facts.env.PATH }}"
+    bootwright_clis_lookup_path: "{{ bootwright_clis_install_dir }}:{{ ansible_facts.env.PATH }}"
 
 - name: Probe installed openshift-install version
   ansible.builtin.command:
     cmd: openshift-install version
-  register: gitups_clis_oi_probe
+  register: bootwright_clis_oi_probe
   environment:
-    PATH: "{{ gitups_clis_lookup_path }}"
+    PATH: "{{ bootwright_clis_lookup_path }}"
   changed_when: false
   failed_when: false
 
 - name: Probe installed oc version
   ansible.builtin.command:
     cmd: oc version --client
-  register: gitups_clis_oc_probe
+  register: bootwright_clis_oc_probe
   environment:
-    PATH: "{{ gitups_clis_lookup_path }}"
+    PATH: "{{ bootwright_clis_lookup_path }}"
   changed_when: false
   failed_when: false
 
 - name: Parse installed CLI versions
   ansible.builtin.set_fact:
-    gitups_clis_oi_version: >-
-      {{ gitups_clis_oi_probe.stdout | default('')
+    bootwright_clis_oi_version: >-
+      {{ bootwright_clis_oi_probe.stdout | default('')
          | regex_search('openshift-install\s+(\S+)', '\1')
          | default([], true) | first | default('') }}
-    gitups_clis_oc_version: >-
-      {{ gitups_clis_oc_probe.stdout | default('')
+    bootwright_clis_oc_version: >-
+      {{ bootwright_clis_oc_probe.stdout | default('')
          | regex_search('Client Version:\s*(\S+)', '\1')
          | default([], true) | first | default('') }}
 
 - name: Decide whether each CLI needs install (accept same-or-newer version)
   ansible.builtin.set_fact:
-    gitups_clis_install_oi: >-
-      {{ gitups_clis_oi_probe.rc != 0
-         or gitups_clis_oi_version | length == 0
-         or gitups_clis_oi_version is not version(gitups_openshift_release_version, '>=') }}
-    gitups_clis_install_oc: >-
-      {{ gitups_clis_oc_probe.rc != 0
-         or gitups_clis_oc_version | length == 0
-         or gitups_clis_oc_version is not version(gitups_openshift_release_version, '>=') }}
+    bootwright_clis_install_oi: >-
+      {{ bootwright_clis_oi_probe.rc != 0
+         or bootwright_clis_oi_version | length == 0
+         or bootwright_clis_oi_version is not version(bootwright_openshift_release_version, '>=') }}
+    bootwright_clis_install_oc: >-
+      {{ bootwright_clis_oc_probe.rc != 0
+         or bootwright_clis_oc_version | length == 0
+         or bootwright_clis_oc_version is not version(bootwright_openshift_release_version, '>=') }}
 
 - name: Download OpenShift CLI checksums
   ansible.builtin.get_url:
-    url: "{{ gitups_clis_release_url }}/sha256sum.txt"
-    dest: "{{ gitups_clis_workdir }}/sha256sum.txt"
+    url: "{{ bootwright_clis_release_url }}/sha256sum.txt"
+    dest: "{{ bootwright_clis_workdir }}/sha256sum.txt"
     mode: "0644"
-  when: gitups_clis_install_oc | bool or gitups_clis_install_oi | bool
+  when: bootwright_clis_install_oc | bool or bootwright_clis_install_oi | bool
 
 - name: Read OpenShift CLI checksums
   ansible.builtin.slurp:
-    src: "{{ gitups_clis_workdir }}/sha256sum.txt"
-  register: gitups_clis_checksums
-  when: gitups_clis_install_oc | bool or gitups_clis_install_oi | bool
+    src: "{{ bootwright_clis_workdir }}/sha256sum.txt"
+  register: bootwright_clis_checksums
+  when: bootwright_clis_install_oc | bool or bootwright_clis_install_oi | bool
 
 - name: Resolve OpenShift CLI checksums
   ansible.builtin.set_fact:
-    gitups_clis_client_checksum: >-
-      {{ (gitups_clis_checksums.content | b64decode).splitlines()
-         | select('search', '\s+openshift-client-linux-' ~ gitups_openshift_release_version ~ '\.tar\.gz$')
+    bootwright_clis_client_checksum: >-
+      {{ (bootwright_clis_checksums.content | b64decode).splitlines()
+         | select('search', '\s+openshift-client-linux-' ~ bootwright_openshift_release_version ~ '\.tar\.gz$')
          | first | default('')
          | regex_replace('\s+.*$', '') }}
-    gitups_clis_installer_checksum: >-
-      {{ (gitups_clis_checksums.content | b64decode).splitlines()
-         | select('search', '\s+openshift-install-linux-' ~ gitups_openshift_release_version ~ '\.tar\.gz$')
+    bootwright_clis_installer_checksum: >-
+      {{ (bootwright_clis_checksums.content | b64decode).splitlines()
+         | select('search', '\s+openshift-install-linux-' ~ bootwright_openshift_release_version ~ '\.tar\.gz$')
          | first | default('')
          | regex_replace('\s+.*$', '') }}
-  when: gitups_clis_install_oc | bool or gitups_clis_install_oi | bool
+  when: bootwright_clis_install_oc | bool or bootwright_clis_install_oi | bool
 
 - name: Verify OpenShift CLI checksums are known
   ansible.builtin.assert:
     that:
-      - not (gitups_clis_install_oc | bool) or gitups_clis_client_checksum is match('^[0-9a-f]{64}$')
-      - not (gitups_clis_install_oi | bool) or gitups_clis_installer_checksum is match('^[0-9a-f]{64}$')
+      - not (bootwright_clis_install_oc | bool) or bootwright_clis_client_checksum is match('^[0-9a-f]{64}$')
+      - not (bootwright_clis_install_oi | bool) or bootwright_clis_installer_checksum is match('^[0-9a-f]{64}$')
     fail_msg: "sha256sum.txt did not contain the expected OpenShift CLI tarball checksums"
-  when: gitups_clis_install_oc | bool or gitups_clis_install_oi | bool
+  when: bootwright_clis_install_oc | bool or bootwright_clis_install_oi | bool
 
 - name: Download openshift-client tarball
   ansible.builtin.get_url:
-    url: "{{ gitups_clis_release_url }}/openshift-client-linux-{{ gitups_openshift_release_version }}.tar.gz"
-    dest: "{{ gitups_clis_workdir }}/openshift-client.tar.gz"
+    url: "{{ bootwright_clis_release_url }}/openshift-client-linux-{{ bootwright_openshift_release_version }}.tar.gz"
+    dest: "{{ bootwright_clis_workdir }}/openshift-client.tar.gz"
     mode: "0644"
-    checksum: "sha256:{{ gitups_clis_client_checksum }}"
-  when: gitups_clis_install_oc | bool
+    checksum: "sha256:{{ bootwright_clis_client_checksum }}"
+  when: bootwright_clis_install_oc | bool
 
 - name: Download openshift-install tarball
   ansible.builtin.get_url:
-    url: "{{ gitups_clis_release_url }}/openshift-install-linux-{{ gitups_openshift_release_version }}.tar.gz"
-    dest: "{{ gitups_clis_workdir }}/openshift-install.tar.gz"
+    url: "{{ bootwright_clis_release_url }}/openshift-install-linux-{{ bootwright_openshift_release_version }}.tar.gz"
+    dest: "{{ bootwright_clis_workdir }}/openshift-install.tar.gz"
     mode: "0644"
-    checksum: "sha256:{{ gitups_clis_installer_checksum }}"
-  when: gitups_clis_install_oi | bool
+    checksum: "sha256:{{ bootwright_clis_installer_checksum }}"
+  when: bootwright_clis_install_oi | bool
 
 - name: Extract oc and kubectl into install dir
   ansible.builtin.unarchive:
-    src: "{{ gitups_clis_workdir }}/openshift-client.tar.gz"
-    dest: "{{ gitups_clis_install_dir }}"
+    src: "{{ bootwright_clis_workdir }}/openshift-client.tar.gz"
+    dest: "{{ bootwright_clis_install_dir }}"
     remote_src: true
     include:
       - oc
       - kubectl
     mode: "0755"
   become: true
-  when: gitups_clis_install_oc | bool
+  when: bootwright_clis_install_oc | bool
 
 - name: Extract openshift-install into install dir
   ansible.builtin.unarchive:
-    src: "{{ gitups_clis_workdir }}/openshift-install.tar.gz"
-    dest: "{{ gitups_clis_install_dir }}"
+    src: "{{ bootwright_clis_workdir }}/openshift-install.tar.gz"
+    dest: "{{ bootwright_clis_install_dir }}"
     remote_src: true
     include:
       - openshift-install
     mode: "0755"
   become: true
-  when: gitups_clis_install_oi | bool
+  when: bootwright_clis_install_oi | bool
 
 - name: Remove tarball working directory
   ansible.builtin.file:
-    path: "{{ gitups_clis_workdir }}"
+    path: "{{ bootwright_clis_workdir }}"
     state: absent
 
 - name: Report installed CLI versions
   ansible.builtin.command:
     cmd: "{{ item }} version --client"
   environment:
-    PATH: "{{ gitups_clis_lookup_path }}"
+    PATH: "{{ bootwright_clis_lookup_path }}"
   loop:
     - oc
     - openshift-install
-  register: gitups_clis_final
+  register: bootwright_clis_final
   changed_when: false
   failed_when: false
 
 - name: Show final CLI versions
   ansible.builtin.debug:
     msg: "{{ item.stdout_lines | default([item.stderr | default('unavailable')]) }}"
-  loop: "{{ gitups_clis_final.results }}"
+  loop: "{{ bootwright_clis_final.results }}"
   loop_control:
     label: "{{ item.cmd | default([]) | last | default('cli') }}"

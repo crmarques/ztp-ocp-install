@@ -2,7 +2,7 @@
 
 Repository tests run from the project root.
 
-- `test/e2e/<case>/`: self-contained Gitups input sets for real host
+- `test/e2e/<case>/`: self-contained Bootwright input sets for real host
   validation and apply flows.
 - Go unit and rendering fixtures live with the package tests that consume
   them.
@@ -19,7 +19,7 @@ install mode (connected vs. disconnected) is documented in each case's
 
 Current cases:
 
-- `sno-libvirt` — Gitups CLI runs inside a UBI9
+- `sno-libvirt` — Bootwright CLI runs inside a UBI9
   container; libvirt host is the same machine, reached as `localhost` via
   `podman run --network host`; one SNO cluster.
 
@@ -36,14 +36,14 @@ make e2e         CASE=sno-libvirt
 make clean-e2e-state CASE=sno-libvirt
 ```
 
-The user-facing equivalent is plain `gitups`:
+The user-facing equivalent is plain `bootwright`:
 
 ```text
-gitups check bastion -f test/e2e/<case>
-gitups check infra -f test/e2e/<case> --state-dir /tmp/gitups-<case> --dry-run
-gitups check all -f test/e2e/<case> --state-dir /tmp/gitups-<case> --dry-run
-gitups apply all -f test/e2e/<case> --state-dir /tmp/gitups-<case> --dry-run
-gitups apply all -f test/e2e/<case> --state-dir /tmp/gitups-<case> --yes
+bootwright check bastion -f test/e2e/<case>
+bootwright check infra -f test/e2e/<case> --state-dir /tmp/bootwright-<case> --dry-run
+bootwright check all -f test/e2e/<case> --state-dir /tmp/bootwright-<case> --dry-run
+bootwright apply all -f test/e2e/<case> --state-dir /tmp/bootwright-<case> --dry-run
+bootwright apply all -f test/e2e/<case> --state-dir /tmp/bootwright-<case> --yes
 ```
 
 ## Common Prerequisites
@@ -52,11 +52,11 @@ gitups apply all -f test/e2e/<case> --state-dir /tmp/gitups-<case> --yes
 - Go toolchain compatible with `go.mod`.
 - `ansible-playbook`, `python3`, and `pip3` on the controller `PATH`.
 - Permission to escalate to root on provider hosts and manage host runtime
-  state under `/var/lib/gitups`.
-- Required install secrets under `~/.gitups/secrets` or `--secrets-dir`.
+  state under `/var/lib/bootwright`.
+- Required install secrets under `~/.bootwright/secrets` or `--secrets-dir`.
 
 ## Logs And Artifacts
 
-Generated state defaults to `/tmp/gitups-<case>/`. Apply and destroy logs are
+Generated state defaults to `/tmp/bootwright-<case>/`. Apply and destroy logs are
 written under `ansible/artifacts/<phase>/ansible-output.log` inside that state
 directory. Failed phases print the relevant log path.

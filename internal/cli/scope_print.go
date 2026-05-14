@@ -36,7 +36,7 @@ func printWorkflowSummary(w io.Writer, title string, selected []Phase, askBecome
 		case askBecomePass:
 			fmt.Fprintln(w, "[root] phases run as root on provider hosts; ansible will prompt for the BECOME (sudo) password.")
 		case os.Geteuid() == 0:
-			fmt.Fprintln(w, "[root] phases run as root on provider hosts; gitups is running as root, no BECOME password prompt needed.")
+			fmt.Fprintln(w, "[root] phases run as root on provider hosts; bootwright is running as root, no BECOME password prompt needed.")
 		default:
 			fmt.Fprintln(w, "[root] phases run as root on provider hosts; --ask-become-pass=false requires passwordless sudo or an already-root connection user.")
 		}

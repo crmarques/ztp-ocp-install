@@ -1,4 +1,4 @@
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: InfrastructureProvider
 metadata:
   name: sno-libvirt-emulated-bare-metal
@@ -44,5 +44,5 @@ spec:
       hostRefs:
         - name: lab-host
       additionalIngressHosts:
-        - console-openshift-console.apps.sno-libvirt.gitups.test
-        - oauth-openshift.apps.sno-libvirt.gitups.test
+        - console-openshift-console.apps.sno-libvirt.bootwright.test
+        - oauth-openshift.apps.sno-libvirt.bootwright.test

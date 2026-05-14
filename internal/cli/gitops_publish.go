@@ -12,11 +12,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/crmarques/gitups/internal/gitops/catalog"
-	"github.com/crmarques/gitups/internal/gitops/load"
-	"github.com/crmarques/gitups/internal/gitops/push"
-	"github.com/crmarques/gitups/internal/gitops/render"
-	"github.com/crmarques/gitups/internal/gitops/workflow"
+	"github.com/crmarques/bootwright/internal/gitops/catalog"
+	"github.com/crmarques/bootwright/internal/gitops/load"
+	"github.com/crmarques/bootwright/internal/gitops/push"
+	"github.com/crmarques/bootwright/internal/gitops/render"
+	"github.com/crmarques/bootwright/internal/gitops/workflow"
 )
 
 func newGitopsRenderCmd() *cobra.Command {
@@ -37,7 +37,7 @@ func newGitopsRenderCmd() *cobra.Command {
 				return err
 			}
 			if _, err := os.Stat(ws.ExpandedPackageSet); err != nil {
-				return fmt.Errorf("%s not found (run `gitups expand gitops %s` first)",
+				return fmt.Errorf("%s not found (run `bootwright expand gitops %s` first)",
 					ws.ExpandedPackageSet, ws.Name)
 			}
 			fp, err := load.ExpandedPackageSet(ws.ExpandedPackageSet)
@@ -113,7 +113,7 @@ func newGitopsPushCmd() *cobra.Command {
 				return err
 			}
 			if _, err := os.Stat(ws.ExpandedPackageSet); err != nil {
-				return fmt.Errorf("%s not found (run `gitups expand gitops %s` first)", ws.ExpandedPackageSet, ws.Name)
+				return fmt.Errorf("%s not found (run `bootwright expand gitops %s` first)", ws.ExpandedPackageSet, ws.Name)
 			}
 			fp, err := load.ExpandedPackageSet(ws.ExpandedPackageSet)
 			if err != nil {
@@ -132,7 +132,7 @@ func newGitopsPushCmd() *cobra.Command {
 				return err
 			}
 			if commitMessage == "" {
-				commitMessage = fmt.Sprintf("gitups: sync %s", ws.Name)
+				commitMessage = fmt.Sprintf("bootwright: sync %s", ws.Name)
 			}
 			resolvedToken := resolvePushToken(token, provider)
 
@@ -178,10 +178,10 @@ func newGitopsPushCmd() *cobra.Command {
 	cmd.Flags().StringVar(&provider, "provider", "", "git provider: github|gitlab|gitea (required)")
 	cmd.Flags().StringVar(&baseURL, "base-url", "", "HTTPS base URL including owner/group, e.g. https://github.com/myorg (required)")
 	cmd.Flags().StringVar(&ownerType, "owner-type", "org", "GitHub/Gitea create-endpoint selector: org or user")
-	cmd.Flags().StringVar(&token, "token", "", "override credentials for REST and push; else uses GITUPS_PUSH_TOKEN or provider env")
+	cmd.Flags().StringVar(&token, "token", "", "override credentials for REST and push; else uses BOOTWRIGHT_PUSH_TOKEN or provider env")
 	cmd.Flags().StringVar(&user, "user", "", "basic-auth username injected into push URL when --token is set (default: provider-appropriate literal)")
 	cmd.Flags().StringVar(&branch, "branch", "main", "branch to commit and push")
-	cmd.Flags().StringVar(&commitMessage, "commit-message", "", "commit message when there are changes (default: \"gitups: sync <name>\")")
+	cmd.Flags().StringVar(&commitMessage, "commit-message", "", "commit message when there are changes (default: \"bootwright: sync <name>\")")
 	cmd.Flags().StringVar(&visibility, "visibility", "private", "repo visibility on creation: private|public|internal")
 	cmd.Flags().BoolVar(&createMissing, "create-missing", true, "create remote repo via provider API when absent")
 	cmd.Flags().BoolVar(&flatten, "flatten", false, "replace '/' with '-' in rendered repo names for providers without subgroups")
@@ -195,7 +195,7 @@ func resolvePushToken(flag, provider string) string {
 	if flag != "" {
 		return flag
 	}
-	if v := os.Getenv("GITUPS_PUSH_TOKEN"); v != "" {
+	if v := os.Getenv("BOOTWRIGHT_PUSH_TOKEN"); v != "" {
 		return v
 	}
 	switch strings.ToLower(provider) {
@@ -233,7 +233,7 @@ func newGitopsApplyCmd() *cobra.Command {
 				return err
 			}
 			if _, err := os.Stat(ws.ExpandedPackageSet); err != nil {
-				return fmt.Errorf("%s not found (run `gitups expand gitops %s` and `gitups render gitops %s` first)",
+				return fmt.Errorf("%s not found (run `bootwright expand gitops %s` and `bootwright render gitops %s` first)",
 					ws.ExpandedPackageSet, ws.Name, ws.Name)
 			}
 			fp, err := load.ExpandedPackageSet(ws.ExpandedPackageSet)
@@ -257,7 +257,7 @@ func newGitopsApplyCmd() *cobra.Command {
 				return fmt.Errorf("load package set %s: %w", provPath, err)
 			}
 			if prov.Spec.Controllers == nil || prov.Spec.Controllers.KubernetesResources == nil {
-				return fmt.Errorf("apply requires spec.controllers.kubernetesResources in %s — the KRC declares the cluster binary gitups uses", provPath)
+				return fmt.Errorf("apply requires spec.controllers.kubernetesResources in %s — the KRC declares the cluster binary bootwright uses", provPath)
 			}
 
 			cat, err := workflow.BuildCatalog(prov, ws, workflow.SourceCacheDir(defaultStateDir()))

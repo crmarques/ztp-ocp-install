@@ -33,4 +33,4 @@ tmp/
 .claude/
 
 # GitOpsPackageSet workspace generated output (expanded plan, rendered repos).
-.gitups/
+.bootwright/

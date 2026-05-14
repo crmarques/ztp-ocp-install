@@ -5,7 +5,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/crmarques/gitups/api/v1alpha1"
+	"github.com/crmarques/bootwright/api/v1alpha1"
 )
 
 func validateClusterInfrastructures(state v1alpha1.State) []string {

@@ -3,8 +3,8 @@ package resolve
 import (
 	"testing"
 
-	v1 "github.com/crmarques/gitups/api/v1alpha1"
-	"github.com/crmarques/gitups/internal/gitops/catalog"
+	v1 "github.com/crmarques/bootwright/api/v1alpha1"
+	"github.com/crmarques/bootwright/internal/gitops/catalog"
 )
 
 func TestResolveOneCarriesGeneratorOnPlaceholder(t *testing.T) {

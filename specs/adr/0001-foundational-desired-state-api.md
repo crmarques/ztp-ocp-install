@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-Gitups needs one user-authored desired-state contract that survives provider
+Bootwright needs one user-authored desired-state contract that survives provider
 changes. The user wants to author the OpenShift cluster intent once and have
 it apply unchanged whether the cluster runs on libvirt (with emulated BMC),
 on real bare metal, on vSphere, or on OpenShift Virtualization.
@@ -20,13 +20,13 @@ defaults to be copy-pasted across every cluster file.
 intent. It must not grow into a complete copy of the OpenShift installer
 schema, but it must still let users reach installer-native fields when
 needed. OpenShift agent installs consume `install-config.yaml` and
-`agent-config.yaml`; Gitups renders those files instead of inventing a
+`agent-config.yaml`; Bootwright renders those files instead of inventing a
 parallel install contract.
 
 ## Decision
 
 The desired-state API is four domain layers. Each layer is one user-authored
-kind under `apiVersion: gitups.io/v1alpha1`. The layer above references the
+kind under `apiVersion: bootwright.io/v1alpha1`. The layer above references the
 layer below by name; no layer copies facts from the layer it references.
 
 | Layer | Kind | Owns |
@@ -59,9 +59,9 @@ real bare metal — or for vSphere — touches `InfrastructureProvider` and
 byte-identical across the swap. CI asserts this invariant by diffing the
 `OCPCluster` and `Environment` files across the canonical provider examples.
 
-`OCPCluster` is a thin wrapper around generated installer assets. Gitups
+`OCPCluster` is a thin wrapper around generated installer assets. Bootwright
 renders complete installer files under
-`<state-dir>/clusters-bootstrap.git/<cluster>/openshift/`. Gitups-owned fields are derived
+`<state-dir>/clusters-bootstrap.git/<cluster>/openshift/`. Bootwright-owned fields are derived
 from `Environment`, `InfrastructureProvider`, and `ClusterInfrastructure` —
 that includes cluster name, base domain, VIPs, machine networks, host roles,
 host interfaces, per-host NMState, root device hints, image digest mirrors,
@@ -71,8 +71,8 @@ Users do not toggle those fields on `OCPCluster`.
 
 `OCPCluster.spec.install` exposes typed fields for installer-native data
 that users frequently set. Beyond those, users supply `installConfigOverrides`
-and `agentConfigOverrides` for fields Gitups does not model. Overrides whose
-path collides with a Gitups-owned field are rejected at validation time, and
+and `agentConfigOverrides` for fields Bootwright does not model. Overrides whose
+path collides with a Bootwright-owned field are rejected at validation time, and
 `agentConfigOverrides.hosts` is rejected wholesale — host-level identity
 flows through `ClusterInfrastructure`.
 

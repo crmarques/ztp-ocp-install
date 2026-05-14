@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/crmarques/gitups/api/v1alpha1"
+	"github.com/crmarques/bootwright/api/v1alpha1"
 )
 
 func collectBastionChecks(state v1alpha1.State, hostStateDir string, deps preflightDeps) []preflightCheck {
@@ -49,9 +49,9 @@ func pythonVersionCheck() preflightCheck {
 		if major > 3 || (major == 3 && minor >= 12) {
 			return preflightCheck{name: name, ok: true, detail: bin + " " + ver}
 		}
-		return preflightCheck{name: name, ok: false, detail: bin + " is " + ver + "; run `gitups apply bastion`"}
+		return preflightCheck{name: name, ok: false, detail: bin + " is " + ver + "; run `bootwright apply bastion`"}
 	}
-	return preflightCheck{name: name, ok: false, detail: "python3 not found; run `gitups apply bastion`"}
+	return preflightCheck{name: name, ok: false, detail: "python3 not found; run `bootwright apply bastion`"}
 }
 
 func parsePythonVersion(s string) (major, minor int, err error) {
@@ -229,7 +229,7 @@ func bmcPortCheck(providerName, label, bindAddr string, port int, unitKind strin
 	addr := net.JoinHostPort(bindAddr, strconv.Itoa(port))
 	name := fmt.Sprintf("provider %s %s port %s free", providerName, label, addr)
 	if err := deps.tryListen("tcp", addr); err != nil {
-		expectedUnit := fmt.Sprintf("gitups-%s-%s.service", unitKind, providerName)
+		expectedUnit := fmt.Sprintf("bootwright-%s-%s.service", unitKind, providerName)
 		if deps.unitActive != nil && deps.unitActive(expectedUnit) {
 			return preflightCheck{
 				name:   name,
@@ -240,7 +240,7 @@ func bmcPortCheck(providerName, label, bindAddr string, port int, unitKind strin
 		return preflightCheck{
 			name:   name,
 			ok:     false,
-			detail: fmt.Sprintf("cannot bind: %v — stop whatever is holding the port (e.g. a stale gitups-sushy-/gitups-vmedia-/gitups-boot-artifacts-* unit)", err),
+			detail: fmt.Sprintf("cannot bind: %v — stop whatever is holding the port (e.g. a stale bootwright-sushy-/bootwright-vmedia-/bootwright-boot-artifacts-* unit)", err),
 		}
 	}
 	return preflightCheck{name: name, ok: true}
@@ -284,9 +284,9 @@ func secretFileCheck(refName, path, label string, publicKey bool, deps preflight
 		detail := "missing"
 		switch {
 		case strings.Contains(label, "pullSecretRef"):
-			detail = "missing — run `gitups secret set " + refName + " --pull-secret <path>`"
+			detail = "missing — run `bootwright secret set " + refName + " --pull-secret <path>`"
 		case strings.Contains(label, "credentialRef") || strings.Contains(label, "credentialsRef") || strings.Contains(label, "proxyAuthRef"):
-			detail = "missing — run `gitups secret set " + refName + " --from-file <path>` (or `--generate` for test fixtures)"
+			detail = "missing — run `bootwright secret set " + refName + " --from-file <path>` (or `--generate` for test fixtures)"
 		case strings.Contains(label, "sshKeyRef"):
 			detail = "missing — ensure the file exists at the path declared in Environment.spec.secrets[" + refName + "].file"
 		}
@@ -307,7 +307,7 @@ func generatedSecretCheck(path, label string, deps preflightDeps) preflightCheck
 	name := label + " at " + path
 	info, err := deps.statPath(path)
 	if err != nil {
-		return preflightCheck{name: name, ok: false, detail: "missing — run `gitups secret generate` before apply"}
+		return preflightCheck{name: name, ok: false, detail: "missing — run `bootwright secret generate` before apply"}
 	}
 	if info.IsDir() {
 		return preflightCheck{name: name, ok: false, detail: "is a directory; expected a generated file"}

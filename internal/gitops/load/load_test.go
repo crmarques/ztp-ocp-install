@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/crmarques/gitups/internal/gitops/load"
+	"github.com/crmarques/bootwright/internal/gitops/load"
 )
 
 func TestGitOpsPackageSetLoads(t *testing.T) {
@@ -24,7 +24,7 @@ func TestGitOpsPackageSetLoads(t *testing.T) {
 }
 
 func TestExpandedGitOpsPackageSetLoads(t *testing.T) {
-	path := writeFile(t, t.TempDir(), "gitops-package-set.yaml", `apiVersion: gitups.io/v1alpha1
+	path := writeFile(t, t.TempDir(), "gitops-package-set.yaml", `apiVersion: bootwright.io/v1alpha1
 kind: GitOpsPackageSet
 metadata:
   name: demo
@@ -41,7 +41,7 @@ spec:
   resolved:
     repository:
       layout: split
-      outputPath: .gitups/render/demo
+      outputPath: .bootwright/render/demo
     packages:
       - template: local/metallb
         unitType: install
@@ -110,7 +110,7 @@ func writeFile(t *testing.T, dir, name, body string) string {
 
 func TestGitOpsPackageSetResolvedExtendsMerge(t *testing.T) {
 	dir := t.TempDir()
-	writeFile(t, dir, "basic-infra/gitops-package-set.yaml", `apiVersion: gitups.io/v1alpha1
+	writeFile(t, dir, "basic-infra/gitops-package-set.yaml", `apiVersion: bootwright.io/v1alpha1
 kind: GitOpsPackageSet
 metadata:
   name: basic-infra
@@ -126,7 +126,7 @@ spec:
         - template: local/metallb
         - template: local/argocd
 `)
-	writeFile(t, dir, "basic-infra-dev/gitops-package-set.yaml", `apiVersion: gitups.io/v1alpha1
+	writeFile(t, dir, "basic-infra-dev/gitops-package-set.yaml", `apiVersion: bootwright.io/v1alpha1
 kind: GitOpsPackageSet
 metadata:
   name: basic-infra-dev
@@ -171,7 +171,7 @@ spec:
 
 func TestGitOpsPackageSetResolvedRejectsTransitiveExtends(t *testing.T) {
 	dir := t.TempDir()
-	writeFile(t, dir, "a/gitops-package-set.yaml", `apiVersion: gitups.io/v1alpha1
+	writeFile(t, dir, "a/gitops-package-set.yaml", `apiVersion: bootwright.io/v1alpha1
 kind: GitOpsPackageSet
 metadata: {name: a}
 spec:
@@ -181,7 +181,7 @@ spec:
       type: kubernetes-resources
       packages: [{template: local/x}]
 `)
-	writeFile(t, dir, "b/gitops-package-set.yaml", `apiVersion: gitups.io/v1alpha1
+	writeFile(t, dir, "b/gitops-package-set.yaml", `apiVersion: bootwright.io/v1alpha1
 kind: GitOpsPackageSet
 metadata: {name: b}
 spec:
@@ -191,7 +191,7 @@ spec:
       type: kubernetes-resources
       repoRef: {name: base}
 `)
-	writeFile(t, dir, "c/gitops-package-set.yaml", `apiVersion: gitups.io/v1alpha1
+	writeFile(t, dir, "c/gitops-package-set.yaml", `apiVersion: bootwright.io/v1alpha1
 kind: GitOpsPackageSet
 metadata: {name: c}
 spec:
@@ -212,7 +212,7 @@ spec:
 
 func TestGitOpsPackageSetResolvedRejectsGitSource(t *testing.T) {
 	dir := t.TempDir()
-	writeFile(t, dir, "env/gitops-package-set.yaml", `apiVersion: gitups.io/v1alpha1
+	writeFile(t, dir, "env/gitops-package-set.yaml", `apiVersion: bootwright.io/v1alpha1
 kind: GitOpsPackageSet
 metadata: {name: env}
 spec:
@@ -232,7 +232,7 @@ spec:
 
 func TestGitOpsPackageSetResolvedSourceConflict(t *testing.T) {
 	dir := t.TempDir()
-	writeFile(t, dir, "base/gitops-package-set.yaml", `apiVersion: gitups.io/v1alpha1
+	writeFile(t, dir, "base/gitops-package-set.yaml", `apiVersion: bootwright.io/v1alpha1
 kind: GitOpsPackageSet
 metadata: {name: base}
 spec:
@@ -242,7 +242,7 @@ spec:
       type: kubernetes-resources
       packages: [{template: local/x}]
 `)
-	writeFile(t, dir, "env/gitops-package-set.yaml", `apiVersion: gitups.io/v1alpha1
+	writeFile(t, dir, "env/gitops-package-set.yaml", `apiVersion: bootwright.io/v1alpha1
 kind: GitOpsPackageSet
 metadata: {name: env}
 spec:
@@ -261,7 +261,7 @@ spec:
 
 func TestGitOpsPackageSetRejectsOldTopLevelPackages(t *testing.T) {
 	dir := t.TempDir()
-	path := writeFile(t, dir, "gitops-package-set.yaml", `apiVersion: gitups.io/v1alpha1
+	path := writeFile(t, dir, "gitops-package-set.yaml", `apiVersion: bootwright.io/v1alpha1
 kind: GitOpsPackageSet
 metadata: {name: dsv}
 spec:
@@ -278,7 +278,7 @@ spec:
 }
 
 func TestPackageSetRejectsUnknownFields(t *testing.T) {
-	path := writeFile(t, t.TempDir(), "gitops-package-set.yaml", `apiVersion: gitups.io/v1alpha1
+	path := writeFile(t, t.TempDir(), "gitops-package-set.yaml", `apiVersion: bootwright.io/v1alpha1
 kind: GitOpsPackageSet
 metadata: {name: dsv}
 spec:
@@ -296,7 +296,7 @@ spec:
 }
 
 func TestPackageSetRejectsUnsafeGitSourcePath(t *testing.T) {
-	path := writeFile(t, t.TempDir(), "gitops-package-set.yaml", `apiVersion: gitups.io/v1alpha1
+	path := writeFile(t, t.TempDir(), "gitops-package-set.yaml", `apiVersion: bootwright.io/v1alpha1
 kind: GitOpsPackageSet
 metadata: {name: dsv}
 spec:
@@ -318,7 +318,7 @@ spec:
 }
 
 func TestPackageSetRejectsOCITagOnlySource(t *testing.T) {
-	path := writeFile(t, t.TempDir(), "gitops-package-set.yaml", `apiVersion: gitups.io/v1alpha1
+	path := writeFile(t, t.TempDir(), "gitops-package-set.yaml", `apiVersion: bootwright.io/v1alpha1
 kind: GitOpsPackageSet
 metadata: {name: dsv}
 spec:
@@ -339,7 +339,7 @@ spec:
 }
 
 func TestExpandedPackageSetRejectsUnsafeRenderedPath(t *testing.T) {
-	path := writeFile(t, t.TempDir(), "gitops-package-set.yaml", `apiVersion: gitups.io/v1alpha1
+	path := writeFile(t, t.TempDir(), "gitops-package-set.yaml", `apiVersion: bootwright.io/v1alpha1
 kind: GitOpsPackageSet
 metadata: {name: demo}
 spec:

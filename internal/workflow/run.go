@@ -19,10 +19,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/crmarques/gitups/api/v1alpha1"
-	"github.com/crmarques/gitups/internal/ansible"
-	"github.com/crmarques/gitups/internal/orchestrate/provisioning"
-	"github.com/crmarques/gitups/internal/provisioning/render"
+	"github.com/crmarques/bootwright/api/v1alpha1"
+	"github.com/crmarques/bootwright/internal/ansible"
+	"github.com/crmarques/bootwright/internal/orchestrate/provisioning"
+	"github.com/crmarques/bootwright/internal/provisioning/render"
 )
 
 // RunOptions describes one ansible-playbook invocation against rendered
@@ -101,14 +101,14 @@ func Run(ctx context.Context, opts RunOptions, runner ansible.Runner, out io.Wri
 }
 
 // RenderOnly executes the render half of a Run without producing a
-// RunSpec or invoking ansible. Used by `gitups render installer` and
+// RunSpec or invoking ansible. Used by `bootwright render installer` and
 // other read-only previews.
 func RenderOnly(stateDir, secretsDir string, state v1alpha1.State) (render.Result, error) {
 	return render.All(stateDir, secretsDir, state)
 }
 
 // ResolveInstaller renders effective install-config/agent-config copies
-// with secret material inlined. Used by `gitups render installer
+// with secret material inlined. Used by `bootwright render installer
 // --resolve-secrets`.
 func ResolveInstaller(stateDir, secretsDir string, state v1alpha1.State) (render.Result, error) {
 	return render.ResolveInstaller(stateDir, secretsDir, state)

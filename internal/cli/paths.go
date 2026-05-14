@@ -7,33 +7,33 @@ import (
 )
 
 const (
-	gitupsUserDirEnv    = "GITUPS_USER_DIR"
-	gitupsStateDirEnv   = "GITUPS_STATE_DIR"
-	gitupsSecretsDirEnv = "GITUPS_SECRETS_DIR"
+	bootwrightUserDirEnv    = "BOOTWRIGHT_USER_DIR"
+	bootwrightStateDirEnv   = "BOOTWRIGHT_STATE_DIR"
+	bootwrightSecretsDirEnv = "BOOTWRIGHT_SECRETS_DIR"
 
-	defaultHostStateDir = "/var/lib/gitups"
+	defaultHostStateDir = "/var/lib/bootwright"
 	ansibleVenvDirName  = "ansible-venv"
 )
 
-func defaultGitupsUserDir() string {
-	if value := strings.TrimSpace(os.Getenv(gitupsUserDirEnv)); value != "" {
+func defaultBootwrightUserDir() string {
+	if value := strings.TrimSpace(os.Getenv(bootwrightUserDirEnv)); value != "" {
 		return filepath.Clean(value)
 	}
 	home, err := os.UserHomeDir()
 	if err == nil && strings.TrimSpace(home) != "" {
-		return filepath.Join(home, ".gitups")
+		return filepath.Join(home, ".bootwright")
 	}
-	return ".gitups"
+	return ".bootwright"
 }
 
 func defaultStateDir() string {
-	if value := strings.TrimSpace(os.Getenv(gitupsStateDirEnv)); value != "" {
+	if value := strings.TrimSpace(os.Getenv(bootwrightStateDirEnv)); value != "" {
 		return filepath.Clean(value)
 	}
 	if found, ok := discoverStateDir(); ok {
 		return found
 	}
-	return filepath.Join(defaultGitupsUserDir(), "state")
+	return filepath.Join(defaultBootwrightUserDir(), "state")
 }
 
 func discoverStateDir() (string, bool) {
@@ -56,10 +56,10 @@ func discoverStateDir() (string, bool) {
 }
 
 func defaultSecretsDir() string {
-	if value := strings.TrimSpace(os.Getenv(gitupsSecretsDirEnv)); value != "" {
+	if value := strings.TrimSpace(os.Getenv(bootwrightSecretsDirEnv)); value != "" {
 		return filepath.Clean(value)
 	}
-	return filepath.Join(defaultGitupsUserDir(), "secrets")
+	return filepath.Join(defaultBootwrightUserDir(), "secrets")
 }
 
 func openshiftInstallSearchDirs(_ string) []string {
@@ -71,7 +71,7 @@ func defaultControllerCLIInstallDir() string {
 }
 
 func ansibleVenvDir() string {
-	return filepath.Join(defaultGitupsUserDir(), ansibleVenvDirName)
+	return filepath.Join(defaultBootwrightUserDir(), ansibleVenvDirName)
 }
 
 func ansibleVenvBin(name string) string {

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	v1 "github.com/crmarques/gitups/api/v1alpha1"
+	v1 "github.com/crmarques/bootwright/api/v1alpha1"
 )
 
 // fakeCLIRunner records every Run() call and returns scripted responses.
@@ -135,7 +135,7 @@ func TestKubeClientApplyKustomize(t *testing.T) {
 	if got != "apply -k /tmp/k" {
 		t.Fatalf("ApplyKustomize args = %q, want %q", got, "apply -k /tmp/k")
 	}
-	if !strings.Contains(out.String(), "gitups: kubectl apply -k /tmp/k") {
+	if !strings.Contains(out.String(), "bootwright: kubectl apply -k /tmp/k") {
 		t.Fatalf("expected stdout to echo the command, got %q", out.String())
 	}
 

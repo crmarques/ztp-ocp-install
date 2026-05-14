@@ -1,6 +1,6 @@
 # Ansible Bundle
 
-This tree is embedded into the `gitups` binary and materialized under
+This tree is embedded into the `bootwright` binary and materialized under
 `<state-dir>/ansible-bundle/` at runtime. Users do not edit inventory,
 `group_vars`, or `host_vars`; Go renders inventory and vars from desired
 state.

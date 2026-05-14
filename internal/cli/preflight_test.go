@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/crmarques/gitups/api/v1alpha1"
+	"github.com/crmarques/bootwright/api/v1alpha1"
 )
 
 type fakeFileInfo struct {
@@ -360,8 +360,8 @@ func TestPreflightHubChecksDisconnectedRegistryCredentials(t *testing.T) {
 	if found.ok {
 		t.Fatalf("expected %q to fail when missing, got ok", want)
 	}
-	if !strings.Contains(found.detail, "gitups secret set registry-lab-credentials") {
-		t.Fatalf("expected hint pointing at `gitups secret set`, got: %s", found.detail)
+	if !strings.Contains(found.detail, "bootwright secret set registry-lab-credentials") {
+		t.Fatalf("expected hint pointing at `bootwright secret set`, got: %s", found.detail)
 	}
 }
 
@@ -417,7 +417,7 @@ func TestPreflightHubGeneratedTrustBundleChecksOpenSSL(t *testing.T) {
 		if c.ok != want[c.name] {
 			t.Fatalf("check %q: ok=%v want=%v (%s)", c.name, c.ok, want[c.name], c.detail)
 		}
-		if c.name == "hub additionalTrustBundleRef at /secrets/trust" && !strings.Contains(c.detail, "gitups secret generate") {
+		if c.name == "hub additionalTrustBundleRef at /secrets/trust" && !strings.Contains(c.detail, "bootwright secret generate") {
 			t.Fatalf("expected generated-secret guidance, got %+v", c)
 		}
 	}
@@ -488,7 +488,7 @@ func TestPreflightFailsWhenSelfSignedCertOnDiskDoesNotMatchSpec(t *testing.T) {
 	if !strings.Contains(found.detail, wantPath) {
 		t.Fatalf("expected detail to mention cert path %s, got %q", wantPath, found.detail)
 	}
-	if !strings.Contains(found.detail, "gitups secret generate") {
+	if !strings.Contains(found.detail, "bootwright secret generate") {
 		t.Fatalf("expected remediation hint, got %q", found.detail)
 	}
 }
@@ -605,12 +605,12 @@ func TestPreflightProviderPhaseFailsWhenBMCPortInUse(t *testing.T) {
 	if found.ok {
 		t.Fatalf("expected %q to fail when port is busy, got ok", want)
 	}
-	if !strings.Contains(found.detail, "stale gitups-sushy") {
+	if !strings.Contains(found.detail, "stale bootwright-sushy") {
 		t.Fatalf("expected hint about stale unit, got: %s", found.detail)
 	}
 }
 
-func TestPreflightProviderPhaseAllowsPortHeldByMatchingGitupsUnit(t *testing.T) {
+func TestPreflightProviderPhaseAllowsPortHeldByMatchingBootwrightUnit(t *testing.T) {
 	state := v1alpha1.State{
 		InfrastructureProviders: []v1alpha1.InfrastructureProvider{{
 			Metadata: v1alpha1.Metadata{Name: "libvirt-1-host-provider"},
@@ -632,15 +632,15 @@ func TestPreflightProviderPhaseAllowsPortHeldByMatchingGitupsUnit(t *testing.T) 
 		"127.0.0.1:8001": true,
 		"0.0.0.0:8002":   true,
 	}, map[string]bool{
-		"gitups-sushy-libvirt-1-host-provider.service":          true,
-		"gitups-vmedia-libvirt-1-host-provider.service":         true,
-		"gitups-boot-artifacts-libvirt-1-host-provider.service": true,
+		"bootwright-sushy-libvirt-1-host-provider.service":          true,
+		"bootwright-vmedia-libvirt-1-host-provider.service":         true,
+		"bootwright-boot-artifacts-libvirt-1-host-provider.service": true,
 	})
 	checks := collectPreflightChecks(state, nil, true, defaultSecretsDir(), defaultHostStateDir, deps)
 	want := map[string]string{
-		"provider libvirt-1-host-provider redfish port 0.0.0.0:8000 free":             "gitups-sushy-libvirt-1-host-provider.service",
-		"provider libvirt-1-host-provider vmedia HTTP port 127.0.0.1:8001 free":       "gitups-vmedia-libvirt-1-host-provider.service",
-		"provider libvirt-1-host-provider boot-artifacts HTTP port 0.0.0.0:8002 free": "gitups-boot-artifacts-libvirt-1-host-provider.service",
+		"provider libvirt-1-host-provider redfish port 0.0.0.0:8000 free":             "bootwright-sushy-libvirt-1-host-provider.service",
+		"provider libvirt-1-host-provider vmedia HTTP port 127.0.0.1:8001 free":       "bootwright-vmedia-libvirt-1-host-provider.service",
+		"provider libvirt-1-host-provider boot-artifacts HTTP port 0.0.0.0:8002 free": "bootwright-boot-artifacts-libvirt-1-host-provider.service",
 	}
 	seen := map[string]bool{}
 	for _, c := range checks {
@@ -650,7 +650,7 @@ func TestPreflightProviderPhaseAllowsPortHeldByMatchingGitupsUnit(t *testing.T) 
 		}
 		seen[c.name] = true
 		if !c.ok {
-			t.Fatalf("expected %q to pass when held by matching gitups unit, got fail (%s)", c.name, c.detail)
+			t.Fatalf("expected %q to pass when held by matching bootwright unit, got fail (%s)", c.name, c.detail)
 		}
 		if !strings.Contains(c.detail, expected) {
 			t.Fatalf("expected detail to mention %s, got %q", expected, c.detail)
@@ -683,7 +683,7 @@ func TestPreflightProviderPhaseFailsWhenPortHeldByForeignUnit(t *testing.T) {
 	}, true, nil, map[string]bool{
 		"127.0.0.1:8001": true,
 	}, map[string]bool{
-		"gitups-vmedia-some-other-provider.service": true,
+		"bootwright-vmedia-some-other-provider.service": true,
 	})
 	checks := collectPreflightChecks(state, nil, true, defaultSecretsDir(), defaultHostStateDir, deps)
 	const want = "provider libvirt-1-host-provider vmedia HTTP port 127.0.0.1:8001 free"
@@ -825,8 +825,8 @@ func TestPreflightChecksProxyAuthRef(t *testing.T) {
 	if found.ok {
 		t.Fatalf("expected %q to fail when missing, got ok", want)
 	}
-	if !strings.Contains(found.detail, "gitups secret set proxy-credentials") {
-		t.Fatalf("expected hint pointing at `gitups secret set`, got: %s", found.detail)
+	if !strings.Contains(found.detail, "bootwright secret set proxy-credentials") {
+		t.Fatalf("expected hint pointing at `bootwright secret set`, got: %s", found.detail)
 	}
 }
 
@@ -1022,7 +1022,7 @@ func TestPreflightChecksBMCEmulationAndMachineCredentials(t *testing.T) {
 		if c.ok {
 			t.Fatalf("expected %q to fail when missing, got ok", c.name)
 		}
-		if !strings.Contains(c.detail, "gitups secret set") {
+		if !strings.Contains(c.detail, "bootwright secret set") {
 			t.Fatalf("expected BMC writer hint for %q, got: %s", c.name, c.detail)
 		}
 	}

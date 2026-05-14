@@ -2,9 +2,9 @@
 - name: Validate process cleanup pattern
   ansible.builtin.assert:
     that:
-      - gitups_process_cleanup_pattern is defined
-      - gitups_process_cleanup_pattern | length > 0
-    fail_msg: "gitups_process_cleanup_pattern is required"
+      - bootwright_process_cleanup_pattern is defined
+      - bootwright_process_cleanup_pattern | length > 0
+    fail_msg: "bootwright_process_cleanup_pattern is required"
 
 - name: Find process cleanup candidates
   ansible.builtin.command:
@@ -12,15 +12,15 @@
       - pgrep
       - -f
       - "--"
-      - "{{ gitups_process_cleanup_pattern }}"
-  register: gitups_process_cleanup_pgrep
+      - "{{ bootwright_process_cleanup_pattern }}"
+  register: bootwright_process_cleanup_pgrep
   failed_when: false
   changed_when: false
 
 - name: Stop process cleanup candidates
   ansible.builtin.shell: |
     set -uo pipefail
-    pids="{{ gitups_process_cleanup_pgrep.stdout_lines | join(' ') }}"
+    pids="{{ bootwright_process_cleanup_pgrep.stdout_lines | join(' ') }}"
     [ -n "$pids" ] || exit 0
     alive() {
       for p in $pids; do
@@ -41,5 +41,5 @@
     fi
   args:
     executable: /bin/bash
-  changed_when: gitups_process_cleanup_pgrep.rc == 0
-  when: gitups_process_cleanup_pgrep.rc == 0
+  changed_when: bootwright_process_cleanup_pgrep.rc == 0
+  when: bootwright_process_cleanup_pgrep.rc == 0

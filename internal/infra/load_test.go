@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/crmarques/gitups/api/v1alpha1"
+	"github.com/crmarques/bootwright/api/v1alpha1"
 )
 
 func TestLoadNormalizeValidateExamples(t *testing.T) {
@@ -98,7 +98,7 @@ func TestLoadNormalizeValidateOneHostSample(t *testing.T) {
 func TestLegacyKindRejected(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "legacy.yaml")
-	writeFile(t, path, `apiVersion: gitups.io/v1alpha1
+	writeFile(t, path, `apiVersion: bootwright.io/v1alpha1
 kind: Cluster
 metadata:
   name: legacy
@@ -134,7 +134,7 @@ spec:
 func TestLoadRejectsMissingSpec(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "missing-spec.yaml")
-	writeFile(t, path, `apiVersion: gitups.io/v1alpha1
+	writeFile(t, path, `apiVersion: bootwright.io/v1alpha1
 kind: Environment
 metadata:
   name: bad
@@ -151,7 +151,7 @@ metadata:
 func TestLoadRejectsLocalRegistryField(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "legacy-localregistry.yaml")
-	writeFile(t, path, `apiVersion: gitups.io/v1alpha1
+	writeFile(t, path, `apiVersion: bootwright.io/v1alpha1
 kind: Environment
 metadata:
   name: legacy
@@ -172,7 +172,7 @@ spec:
 func TestLoadRejectsProviderSpecType(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "with-type.yaml")
-	writeFile(t, path, `apiVersion: gitups.io/v1alpha1
+	writeFile(t, path, `apiVersion: bootwright.io/v1alpha1
 kind: InfrastructureProvider
 metadata:
   name: bad
@@ -192,7 +192,7 @@ spec:
 func TestLoadRejectsEndpointsOnOCPCluster(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "endpoints-on-ocp.yaml")
-	writeFile(t, path, `apiVersion: gitups.io/v1alpha1
+	writeFile(t, path, `apiVersion: bootwright.io/v1alpha1
 kind: OCPCluster
 metadata:
   name: bad
@@ -228,7 +228,7 @@ func TestDefaultsAreApplied(t *testing.T) {
 	if host.SSH == nil {
 		t.Fatalf("host-01 missing ssh connection")
 	}
-	if got, want := host.SSH.User, "gitups"; got != want {
+	if got, want := host.SSH.User, "bootwright"; got != want {
 		t.Fatalf("ssh user got %q, want %q", got, want)
 	}
 	if provider.Spec.Machine.Libvirt.BMCEmulation.Enabled == nil || !*provider.Spec.Machine.Libvirt.BMCEmulation.Enabled {
@@ -265,7 +265,7 @@ func TestNormalizeDefaultsRemoteHostUserToInvokingUser(t *testing.T) {
 	t.Setenv("LOGNAME", "")
 	dir := t.TempDir()
 	path := filepath.Join(dir, "minimal.yaml")
-	body := strings.Replace(validStateYAML("minimal", "minimal-provider", "192.168.150.0/24", "192.168.150.10", "192.168.150.11", "192.168.150.20"), "        user: gitups\n", "", 1)
+	body := strings.Replace(validStateYAML("minimal", "minimal-provider", "192.168.150.0/24", "192.168.150.10", "192.168.150.11", "192.168.150.20"), "        user: bootwright\n", "", 1)
 	writeFile(t, path, body)
 	state, err := LoadNormalizeValidate([]string{path})
 	if err != nil {
@@ -280,7 +280,7 @@ func TestNormalizeDefaultsRemoteHostUserToInvokingUser(t *testing.T) {
 func TestValidationRejectsMultipleEnvironments(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "case.yaml"), validStateYAML("multi-env", "multi-env-provider", "192.168.170.0/24", "192.168.170.10", "192.168.170.11", "192.168.170.20"))
-	writeFile(t, filepath.Join(dir, "second-env.yaml"), `apiVersion: gitups.io/v1alpha1
+	writeFile(t, filepath.Join(dir, "second-env.yaml"), `apiVersion: bootwright.io/v1alpha1
 kind: Environment
 metadata:
   name: env-second
@@ -305,8 +305,8 @@ spec:
 func TestValidationRejectsMissingEnvironment(t *testing.T) {
 	dir := t.TempDir()
 	body := validStateYAML("no-env", "no-env-provider", "192.168.171.0/24", "192.168.171.10", "192.168.171.11", "192.168.171.20")
-	envStart := strings.Index(body, "apiVersion: gitups.io/v1alpha1\nkind: Environment")
-	envEnd := strings.Index(body, "---\napiVersion: gitups.io/v1alpha1\nkind: InfrastructureProvider")
+	envStart := strings.Index(body, "apiVersion: bootwright.io/v1alpha1\nkind: Environment")
+	envEnd := strings.Index(body, "---\napiVersion: bootwright.io/v1alpha1\nkind: InfrastructureProvider")
 	if envStart < 0 || envEnd < 0 {
 		t.Fatalf("fixture is missing the Environment header it should strip")
 	}
@@ -473,7 +473,7 @@ func TestBareMetalAndVMwareSchemasValidate(t *testing.T) {
 
 func TestLoadRejectsOldEnvironmentSecretShapes(t *testing.T) {
 	tests := map[string]string{
-		"old-keys-field": `apiVersion: gitups.io/v1alpha1
+		"old-keys-field": `apiVersion: bootwright.io/v1alpha1
 kind: Environment
 metadata:
   name: old-keys
@@ -484,7 +484,7 @@ spec:
     openshift-pull-secret:
       file: ./pull-secret
 `,
-		"old-secret-refs": `apiVersion: gitups.io/v1alpha1
+		"old-secret-refs": `apiVersion: bootwright.io/v1alpha1
 kind: Environment
 metadata:
   name: old-secret-refs
@@ -525,7 +525,7 @@ func TestValidationRejectsMissingInheritedInstallSecrets(t *testing.T) {
 
 func validStateYAML(name string, providerName string, cidr string, apiVIP string, ingressVIP string, nodeIP string) string {
 	envName := "env-" + name
-	return fmt.Sprintf(`apiVersion: gitups.io/v1alpha1
+	return fmt.Sprintf(`apiVersion: bootwright.io/v1alpha1
 kind: Environment
 metadata:
   name: %s
@@ -548,7 +548,7 @@ spec:
         selfSignedCertificate:
           commonName: registry.lab.test
 ---
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: InfrastructureProvider
 metadata:
   name: %s
@@ -557,7 +557,7 @@ spec:
     host-01:
       ssh:
         address: 10.0.0.1
-        user: gitups
+        user: bootwright
         keyRef:
           name: default-key
       capabilities:
@@ -568,7 +568,7 @@ spec:
         - name: host-01
       bmcEmulation: {}
 ---
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: ClusterInfrastructure
 metadata:
   name: %s
@@ -598,7 +598,7 @@ spec:
     ingress:
       address: %s
 ---
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: OCPCluster
 metadata:
   name: %s
@@ -615,7 +615,7 @@ spec:
 }
 
 func bareMetalStateYAML() string {
-	return `apiVersion: gitups.io/v1alpha1
+	return `apiVersion: bootwright.io/v1alpha1
 kind: Environment
 metadata:
   name: bm-env
@@ -632,7 +632,7 @@ spec:
         credentials:
           username: admin
 ---
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: InfrastructureProvider
 metadata:
   name: baremetal-provider
@@ -640,7 +640,7 @@ spec:
   machine:
     baremetal: {}
 ---
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: ClusterInfrastructure
 metadata:
   name: baremetal
@@ -672,7 +672,7 @@ spec:
     ingress:
       address: 192.168.180.11
 ---
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: OCPCluster
 metadata:
   name: baremetal
@@ -689,7 +689,7 @@ spec:
 }
 
 func vmwareStateYAML() string {
-	return `apiVersion: gitups.io/v1alpha1
+	return `apiVersion: bootwright.io/v1alpha1
 kind: Environment
 metadata:
   name: vmware-env
@@ -704,7 +704,7 @@ spec:
     example-vcenter:
       file: ./vcenter
 ---
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: InfrastructureProvider
 metadata:
   name: vmware-provider
@@ -716,7 +716,7 @@ spec:
       datacenter: example-dc
       cluster: example-cluster
 ---
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: ClusterInfrastructure
 metadata:
   name: vmware
@@ -745,7 +745,7 @@ spec:
     ingress:
       address: 192.168.181.11
 ---
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: OCPCluster
 metadata:
   name: vmware
@@ -809,8 +809,8 @@ func disconnectedYAML(name, providerName, cidr, apiVIP, ingressVIP, nodeIP strin
 		)
 		body = strings.Replace(
 			body,
-			"---\napiVersion: gitups.io/v1alpha1\nkind: ClusterInfrastructure",
-			registryBlock+"---\napiVersion: gitups.io/v1alpha1\nkind: ClusterInfrastructure",
+			"---\napiVersion: bootwright.io/v1alpha1\nkind: ClusterInfrastructure",
+			registryBlock+"---\napiVersion: bootwright.io/v1alpha1\nkind: ClusterInfrastructure",
 			1,
 		)
 	}
@@ -926,8 +926,8 @@ func TestValidationRejectsManagedProxyWithoutCredentialsRef(t *testing.T) {
 func TestValidationRejectsDuplicateManagedProxyProviders(t *testing.T) {
 	dir := t.TempDir()
 	body := managedProxyYAML("proxy-dupe", "proxy-dupe-provider", "192.168.164.0/24", "192.168.164.1", "192.168.164.10", "192.168.164.11", "192.168.164.20")
-	body = strings.Replace(body, "---\napiVersion: gitups.io/v1alpha1\nkind: ClusterInfrastructure", `---
-apiVersion: gitups.io/v1alpha1
+	body = strings.Replace(body, "---\napiVersion: bootwright.io/v1alpha1\nkind: ClusterInfrastructure", `---
+apiVersion: bootwright.io/v1alpha1
 kind: InfrastructureProvider
 metadata:
   name: extra-proxy-provider
@@ -936,7 +936,7 @@ spec:
     proxy-02:
       ssh:
         address: 10.0.0.2
-        user: gitups
+        user: bootwright
         keyRef:
           name: default-key
       capabilities:
@@ -946,7 +946,7 @@ spec:
       hostRef:
         name: proxy-02
 ---
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: ClusterInfrastructure`, 1)
 	writeFile(t, filepath.Join(dir, "case.yaml"), body)
 	_, err := LoadNormalizeValidate([]string{dir})
@@ -961,7 +961,7 @@ kind: ClusterInfrastructure`, 1)
 func TestValidationRejectsManagedProxyUnsafeLibvirtPlacement(t *testing.T) {
 	dir := t.TempDir()
 	body := managedProxyYAML("proxy-placement", "proxy-placement-provider", "192.168.165.0/24", "192.168.165.1", "192.168.165.10", "192.168.165.11", "192.168.165.20")
-	body = strings.Replace(body, "    host-01:\n      ssh:", "    host-02:\n      ssh:\n        address: 10.0.0.2\n        user: gitups\n        keyRef:\n          name: default-key\n      capabilities:\n        - libvirt\n    host-01:\n      ssh:", 1)
+	body = strings.Replace(body, "    host-01:\n      ssh:", "    host-02:\n      ssh:\n        address: 10.0.0.2\n        user: bootwright\n        keyRef:\n          name: default-key\n      capabilities:\n        - libvirt\n    host-01:\n      ssh:", 1)
 	body = strings.Replace(body, "      hostRefs:\n        - name: host-01", "      hostRefs:\n        - name: host-01\n        - name: host-02", 1)
 	body = strings.Replace(body, "      libvirt:\n        hostRef:\n          name: host-01", "      libvirt:\n        hostRef:\n          name: host-02", 1)
 	writeFile(t, filepath.Join(dir, "case.yaml"), body)
@@ -981,7 +981,7 @@ func secretsFixtureYAML(secretsBlock string) string {
     cluster-admin-key:
       file: ./ssh-key.pub
 `, 1)
-	return `apiVersion: gitups.io/v1alpha1
+	return `apiVersion: bootwright.io/v1alpha1
 kind: Environment
 metadata:
   name: secrets-env

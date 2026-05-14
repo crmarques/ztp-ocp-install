@@ -16,40 +16,40 @@
     group: root
     mode: "{{ item.mode }}"
   loop:
-    - { path: "{{ gitups_mirror_registry_root }}", mode: "0755" }
-    - { path: "{{ gitups_mirror_registry_auth_dir }}", mode: "0700" }
-    - { path: "{{ gitups_mirror_registry_certs_dir }}", mode: "0700" }
-    - { path: "{{ gitups_mirror_registry_data_dir }}", mode: "0755" }
-    - { path: "{{ gitups_mirror_registry_tools_dir }}", mode: "0755" }
+    - { path: "{{ bootwright_mirror_registry_root }}", mode: "0755" }
+    - { path: "{{ bootwright_mirror_registry_auth_dir }}", mode: "0700" }
+    - { path: "{{ bootwright_mirror_registry_certs_dir }}", mode: "0700" }
+    - { path: "{{ bootwright_mirror_registry_data_dir }}", mode: "0755" }
+    - { path: "{{ bootwright_mirror_registry_tools_dir }}", mode: "0755" }
 
 - name: Record mirror registry requirements
   ansible.builtin.copy:
-    dest: "{{ gitups_mirror_registry_root }}/requirements.yml"
+    dest: "{{ bootwright_mirror_registry_root }}/requirements.yml"
     owner: root
     group: root
     mode: "0644"
     content: |
-      name: {{ gitups_current_mirror_registry.name }}
-      providerRef: {{ gitups_current_mirror_registry.providerRef }}
-      providerHostRef: {{ gitups_current_mirror_registry.providerHostRef }}
-      url: {{ gitups_current_mirror_registry.url }}
-      host: {{ gitups_current_mirror_registry.host }}
-      port: {{ gitups_current_mirror_registry.port }}
-      runtime: {{ gitups_current_mirror_registry.runtime }}
+      name: {{ bootwright_current_mirror_registry.name }}
+      providerRef: {{ bootwright_current_mirror_registry.providerRef }}
+      providerHostRef: {{ bootwright_current_mirror_registry.providerHostRef }}
+      url: {{ bootwright_current_mirror_registry.url }}
+      host: {{ bootwright_current_mirror_registry.host }}
+      port: {{ bootwright_current_mirror_registry.port }}
+      runtime: {{ bootwright_current_mirror_registry.runtime }}
       image:
-        local: {{ gitups_current_mirror_registry.image.local | default('') }}
-        public: {{ gitups_current_mirror_registry.image.public | default('') }}
-  register: gitups_mirror_registry_requirements
+        local: {{ bootwright_current_mirror_registry.image.local | default('') }}
+        public: {{ bootwright_current_mirror_registry.image.public | default('') }}
+  register: bootwright_mirror_registry_requirements
 
 - name: Record mirror image set
   ansible.builtin.copy:
-    dest: "{{ gitups_mirror_registry_root }}/mirror-set.yml"
+    dest: "{{ bootwright_mirror_registry_root }}/mirror-set.yml"
     owner: root
     group: root
     mode: "0644"
     content: |
       mirrorSet:
-      {% for entry in gitups_current_mirror_registry.mirrorSet %}
+      {% for entry in bootwright_current_mirror_registry.mirrorSet %}
         - kind: {{ entry.kind }}
           public: {{ entry.public }}
           local: {{ entry.local }}

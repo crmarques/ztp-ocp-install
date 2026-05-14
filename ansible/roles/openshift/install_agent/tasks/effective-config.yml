@@ -1,42 +1,42 @@
 ---
 - name: Read rendered install config
   ansible.builtin.slurp:
-    src: "{{ gitups_ocp_install_config_path }}"
-  register: gitups_install_config_slurp
+    src: "{{ bootwright_ocp_install_config_path }}"
+  register: bootwright_install_config_slurp
   delegate_to: localhost
   become: false
 
 - name: Read rendered agent config
   ansible.builtin.slurp:
-    src: "{{ gitups_ocp_agent_config_path }}"
-  register: gitups_agent_config_slurp
+    src: "{{ bootwright_ocp_agent_config_path }}"
+  register: bootwright_agent_config_slurp
   delegate_to: localhost
   become: false
 
 - name: Build effective install config
   ansible.builtin.set_fact:
-    gitups_effective_install_config: >-
+    bootwright_effective_install_config: >-
       {{
-        (gitups_install_config_slurp.content | b64decode | from_yaml)
+        (bootwright_install_config_slurp.content | b64decode | from_yaml)
         | combine({
-            'pullSecret': gitups_resolved_pull_secret,
-            'sshKey': gitups_resolved_ssh_key,
+            'pullSecret': bootwright_resolved_pull_secret,
+            'sshKey': bootwright_resolved_ssh_key,
           })
         | combine(
-            {'additionalTrustBundle': gitups_resolved_trust_bundle}
-            if (gitups_resolved_trust_bundle | length) > 0 else {},
+            {'additionalTrustBundle': bootwright_resolved_trust_bundle}
+            if (bootwright_resolved_trust_bundle | length) > 0 else {},
             recursive=true
           )
         | combine(
             {
               'proxy': {
-                'httpProxy': gitups_proxy_vm_http_effective,
-                'httpsProxy': gitups_proxy_vm_https_effective,
-                'noProxy': gitups_proxy_no,
+                'httpProxy': bootwright_proxy_vm_http_effective,
+                'httpsProxy': bootwright_proxy_vm_https_effective,
+                'noProxy': bootwright_proxy_no,
               }
             }
-            if (gitups_proxy_enabled | default(false) | bool)
-               and ((gitups_proxy_credentials_ref | default('') | length) > 0)
+            if (bootwright_proxy_enabled | default(false) | bool)
+               and ((bootwright_proxy_credentials_ref | default('') | length) > 0)
             else {},
             recursive=true
           )
@@ -46,20 +46,20 @@
 
 - name: Build effective agent config
   ansible.builtin.set_fact:
-    gitups_effective_agent_config: "{{ gitups_agent_config_slurp.content | b64decode | from_yaml }}"
+    bootwright_effective_agent_config: "{{ bootwright_agent_config_slurp.content | b64decode | from_yaml }}"
   changed_when: false
 
 - name: Resolve boot artifact settings
   ansible.builtin.set_fact:
-    gitups_ocp_minimal_iso: "{{ gitups_effective_agent_config.minimalISO | default(false) | bool }}"
-    gitups_ocp_boot_artifacts_http_port: "{{ gitups_current_provider.bootArtifactsHttp.port | int }}"
+    bootwright_ocp_minimal_iso: "{{ bootwright_effective_agent_config.minimalISO | default(false) | bool }}"
+    bootwright_ocp_boot_artifacts_http_port: "{{ bootwright_current_provider.bootArtifactsHttp.port | int }}"
   changed_when: false
 
 - name: Collect image mirror endpoints
   ansible.builtin.set_fact:
-    gitups_ocp_mirror_endpoints: >-
+    bootwright_ocp_mirror_endpoints: >-
       {{
-        (gitups_effective_install_config.imageDigestSources | default([]))
+        (bootwright_effective_install_config.imageDigestSources | default([]))
         | map(attribute='mirrors') | flatten
         | map('regex_replace', '^([^/]+)/.*$', '\1')
         | unique | list
@@ -74,7 +74,7 @@
         port: "{{ ((item.split(':') | length > 1) | ternary(item.split(':') | last, '443')) | int }}"
         timeout: 5
         state: started
-      loop: "{{ gitups_ocp_mirror_endpoints }}"
+      loop: "{{ bootwright_ocp_mirror_endpoints }}"
   rescue:
     - name: Fail with local-registry guidance when a mirror is unreachable
       ansible.builtin.fail:
@@ -84,23 +84,23 @@
           Bring up the mirror at the address listed in install-config.yaml
           imageDigestSources[].mirrors and re-run, or disable the local registry
           in the Environment for a connected install.
-  when: gitups_ocp_mirror_endpoints | length > 0
+  when: bootwright_ocp_mirror_endpoints | length > 0
 
 - name: Validate disconnected release image
   ansible.builtin.fail:
     msg: "disconnected installs require a local release image override derived from spec.registries.imageDigestSources"
   when:
-    - gitups_ocp_install.disconnected | default(false) | bool
-    - gitups_ocp_release_image_override | length == 0
+    - bootwright_ocp_install.disconnected | default(false) | bool
+    - bootwright_ocp_release_image_override | length == 0
 
 - name: Build openshift-install environment
   ansible.builtin.set_fact:
-    gitups_ocp_install_env: >-
+    bootwright_ocp_install_env: >-
       {{
-        (gitups_proxy_env | default({}))
+        (bootwright_proxy_env | default({}))
         | combine(
-            {'OPENSHIFT_INSTALL_RELEASE_IMAGE_OVERRIDE': gitups_ocp_release_image_override}
-            if (gitups_ocp_release_image_override | length) > 0
+            {'OPENSHIFT_INSTALL_RELEASE_IMAGE_OVERRIDE': bootwright_ocp_release_image_override}
+            if (bootwright_ocp_release_image_override | length) > 0
             else {}
           )
       }}

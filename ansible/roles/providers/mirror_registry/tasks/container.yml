@@ -1,57 +1,57 @@
 ---
 - name: Compute mirror registry fingerprint
   ansible.builtin.set_fact:
-    gitups_mirror_registry_spec_hash: >-
-      {{ (gitups_mirror_registry_requirements.checksum
-          ~ '|htpasswd=' ~ (gitups_mirror_registry_htpasswd_stat.stat.checksum | default(''))
-          ~ '|cert=' ~ (gitups_mirror_registry_cert_write.checksum | default(''))
-          ~ '|run-image=' ~ gitups_mirror_registry_run_image
-          ~ '|port=' ~ gitups_current_mirror_registry.port | string
+    bootwright_mirror_registry_spec_hash: >-
+      {{ (bootwright_mirror_registry_requirements.checksum
+          ~ '|htpasswd=' ~ (bootwright_mirror_registry_htpasswd_stat.stat.checksum | default(''))
+          ~ '|cert=' ~ (bootwright_mirror_registry_cert_write.checksum | default(''))
+          ~ '|run-image=' ~ bootwright_mirror_registry_run_image
+          ~ '|port=' ~ bootwright_current_mirror_registry.port | string
           ~ '|run-args=v1:user=0:0,net=host,restart=unless-stopped'
          ) | hash('sha1') }}
   changed_when: false
 
 - name: Inspect mirror registry container
   containers.podman.podman_container_info:
-    name: "{{ gitups_mirror_registry_container_name }}"
-  register: gitups_mirror_registry_existing
+    name: "{{ bootwright_mirror_registry_container_name }}"
+  register: bootwright_mirror_registry_existing
   failed_when: false
 
 - name: Decide mirror registry restart
   ansible.builtin.set_fact:
-    gitups_mirror_registry_recreate: >-
+    bootwright_mirror_registry_recreate: >-
       {{
-        (gitups_mirror_registry_existing.containers | default([]) | length) == 0
-        or (((gitups_mirror_registry_existing.containers | first).Config.Labels | default({}))['gitups.spec-hash'] | default('')) != gitups_mirror_registry_spec_hash
-        or not ((gitups_mirror_registry_existing.containers | first).State.Running | default(false))
+        (bootwright_mirror_registry_existing.containers | default([]) | length) == 0
+        or (((bootwright_mirror_registry_existing.containers | first).Config.Labels | default({}))['bootwright.spec-hash'] | default('')) != bootwright_mirror_registry_spec_hash
+        or not ((bootwright_mirror_registry_existing.containers | first).State.Running | default(false))
       }}
   changed_when: false
 
 - name: Run mirror registry container
   containers.podman.podman_container:
-    name: "{{ gitups_mirror_registry_container_name }}"
-    image: "{{ gitups_mirror_registry_run_image }}"
+    name: "{{ bootwright_mirror_registry_container_name }}"
+    image: "{{ bootwright_mirror_registry_run_image }}"
     state: started
-    recreate: "{{ gitups_mirror_registry_recreate | bool }}"
+    recreate: "{{ bootwright_mirror_registry_recreate | bool }}"
     network: host
     user: "0:0"
     restart_policy: unless-stopped
     pull: never
     labels:
-      gitups.spec-hash: "{{ gitups_mirror_registry_spec_hash }}"
-      gitups.mirror-registry: "{{ gitups_current_mirror_registry.name }}"
+      bootwright.spec-hash: "{{ bootwright_mirror_registry_spec_hash }}"
+      bootwright.mirror-registry: "{{ bootwright_current_mirror_registry.name }}"
     env:
       REGISTRY_AUTH: htpasswd
       REGISTRY_AUTH_HTPASSWD_REALM: Registry
       REGISTRY_AUTH_HTPASSWD_PATH: /auth/htpasswd
       REGISTRY_HTTP_TLS_CERTIFICATE: /certs/registry.crt
       REGISTRY_HTTP_TLS_KEY: /certs/registry.key
-      REGISTRY_HTTP_ADDR: "0.0.0.0:{{ gitups_current_mirror_registry.port }}"
+      REGISTRY_HTTP_ADDR: "0.0.0.0:{{ bootwright_current_mirror_registry.port }}"
     volumes:
-      - "{{ gitups_mirror_registry_auth_dir }}:/auth:ro,Z"
-      - "{{ gitups_mirror_registry_certs_dir }}:/certs:ro,Z"
-      - "{{ gitups_mirror_registry_data_dir }}:/var/lib/registry:Z"
-  when: gitups_mirror_registry_recreate | bool
+      - "{{ bootwright_mirror_registry_auth_dir }}:/auth:ro,Z"
+      - "{{ bootwright_mirror_registry_certs_dir }}:/certs:ro,Z"
+      - "{{ bootwright_mirror_registry_data_dir }}:/var/lib/registry:Z"
+  when: bootwright_mirror_registry_recreate | bool
 
 - name: Probe mirror registry container
   ansible.builtin.command:
@@ -61,15 +61,15 @@
       - podman
       - wait
       - --condition=stopped
-      - "{{ gitups_mirror_registry_container_name }}"
-  register: gitups_mirror_registry_wait
+      - "{{ bootwright_mirror_registry_container_name }}"
+  register: bootwright_mirror_registry_wait
   failed_when: false
   changed_when: false
 
 - name: Capture mirror registry inspect
   containers.podman.podman_container_info:
-    name: "{{ gitups_mirror_registry_container_name }}"
-  register: gitups_mirror_registry_post_inspect
+    name: "{{ bootwright_mirror_registry_container_name }}"
+  register: bootwright_mirror_registry_post_inspect
   failed_when: false
 
 - name: Capture mirror registry logs
@@ -79,50 +79,50 @@
       - logs
       - --tail=500
       - --timestamps
-      - "{{ gitups_mirror_registry_container_name }}"
-  register: gitups_mirror_registry_logs
+      - "{{ bootwright_mirror_registry_container_name }}"
+  register: bootwright_mirror_registry_logs
   failed_when: false
   changed_when: false
 
 - name: Save mirror registry inspect
   ansible.builtin.copy:
-    dest: "{{ gitups_mirror_registry_root }}/last-inspect.json"
+    dest: "{{ bootwright_mirror_registry_root }}/last-inspect.json"
     owner: root
     group: root
     mode: "0644"
-    content: "{{ (gitups_mirror_registry_post_inspect.containers | default([])) | to_nice_json }}"
+    content: "{{ (bootwright_mirror_registry_post_inspect.containers | default([])) | to_nice_json }}"
 
 - name: Save mirror registry logs
   ansible.builtin.copy:
-    dest: "{{ gitups_mirror_registry_root }}/last-run.log"
+    dest: "{{ bootwright_mirror_registry_root }}/last-run.log"
     owner: root
     group: root
     mode: "0644"
-    content: "{{ gitups_mirror_registry_logs.stdout | default('') }}\n===== stderr =====\n{{ gitups_mirror_registry_logs.stderr | default('') }}\n"
+    content: "{{ bootwright_mirror_registry_logs.stdout | default('') }}\n===== stderr =====\n{{ bootwright_mirror_registry_logs.stderr | default('') }}\n"
 
 - name: Resolve mirror registry state
   ansible.builtin.set_fact:
-    gitups_mirror_registry_final_state: "{{ ((gitups_mirror_registry_post_inspect.containers | first).State | default({})) if (gitups_mirror_registry_post_inspect.containers | default([]) | length) > 0 else {} }}"
+    bootwright_mirror_registry_final_state: "{{ ((bootwright_mirror_registry_post_inspect.containers | first).State | default({})) if (bootwright_mirror_registry_post_inspect.containers | default([]) | length) > 0 else {} }}"
   changed_when: false
 
 - name: Validate mirror registry health
   ansible.builtin.fail:
     msg: |
-      Mirror registry container {{ gitups_mirror_registry_container_name }} is not running cleanly.
-      Status:        {{ gitups_mirror_registry_final_state.Status | default('unknown') }}
-      Running:       {{ gitups_mirror_registry_final_state.Running | default(false) }}
-      ExitCode:      {{ gitups_mirror_registry_final_state.ExitCode | default('n/a') }}
-      Probe rc:      {{ gitups_mirror_registry_wait.rc }}
-      Logs:    {{ gitups_mirror_registry_root }}/last-run.log
-      Inspect: {{ gitups_mirror_registry_root }}/last-inspect.json
-  when: gitups_mirror_registry_wait.rc != 124
+      Mirror registry container {{ bootwright_mirror_registry_container_name }} is not running cleanly.
+      Status:        {{ bootwright_mirror_registry_final_state.Status | default('unknown') }}
+      Running:       {{ bootwright_mirror_registry_final_state.Running | default(false) }}
+      ExitCode:      {{ bootwright_mirror_registry_final_state.ExitCode | default('n/a') }}
+      Probe rc:      {{ bootwright_mirror_registry_wait.rc }}
+      Logs:    {{ bootwright_mirror_registry_root }}/last-run.log
+      Inspect: {{ bootwright_mirror_registry_root }}/last-inspect.json
+  when: bootwright_mirror_registry_wait.rc != 124
 
 - name: Check mirror registry firewalld state
   ansible.builtin.command:
     argv:
       - firewall-cmd
       - --state
-  register: gitups_mirror_registry_firewalld_state
+  register: bootwright_mirror_registry_firewalld_state
   changed_when: false
   failed_when: false
 
@@ -131,18 +131,18 @@
     argv:
       - firewall-cmd
       - --get-zones
-  register: gitups_mirror_registry_firewalld_zones
+  register: bootwright_mirror_registry_firewalld_zones
   changed_when: false
   failed_when: false
-  when: gitups_mirror_registry_firewalld_state.rc == 0
+  when: bootwright_mirror_registry_firewalld_state.rc == 0
 
 - name: Open mirror registry firewall port
   ansible.posix.firewalld:
     zone: libvirt
-    port: "{{ gitups_current_mirror_registry.port | int }}/tcp"
+    port: "{{ bootwright_current_mirror_registry.port | int }}/tcp"
     state: enabled
     permanent: true
     immediate: true
   when:
-    - gitups_mirror_registry_firewalld_state.rc == 0
-    - "'libvirt' in (gitups_mirror_registry_firewalld_zones.stdout | default('') | split())"
+    - bootwright_mirror_registry_firewalld_state.rc == 0
+    - "'libvirt' in (bootwright_mirror_registry_firewalld_zones.stdout | default('') | split())"

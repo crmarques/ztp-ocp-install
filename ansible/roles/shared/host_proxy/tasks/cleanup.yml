@@ -2,38 +2,38 @@
 - name: Remove proxy block from /etc/environment
   ansible.builtin.blockinfile:
     path: /etc/environment
-    marker: "# {mark} ANSIBLE MANAGED BLOCK gitups-proxy"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK bootwright-proxy"
     state: absent
   failed_when: false
 
-- name: Remove /etc/profile.d/gitups-proxy.sh
+- name: Remove /etc/profile.d/bootwright-proxy.sh
   ansible.builtin.file:
-    path: /etc/profile.d/gitups-proxy.sh
+    path: /etc/profile.d/bootwright-proxy.sh
     state: absent
 
 - name: Stat dnf.conf for proxy cleanup
   ansible.builtin.stat:
     path: /etc/dnf/dnf.conf
-  register: gitups_proxy_cleanup_dnf_stat
+  register: bootwright_proxy_cleanup_dnf_stat
 
 - name: Strip dnf proxy line
   ansible.builtin.lineinfile:
     path: /etc/dnf/dnf.conf
     regexp: '^proxy='
     state: absent
-  when: gitups_proxy_cleanup_dnf_stat.stat.exists
+  when: bootwright_proxy_cleanup_dnf_stat.stat.exists
 
 - name: Stat yum.conf for proxy cleanup
   ansible.builtin.stat:
     path: /etc/yum.conf
-  register: gitups_proxy_cleanup_yum_stat
+  register: bootwright_proxy_cleanup_yum_stat
 
 - name: Strip yum proxy line
   ansible.builtin.lineinfile:
     path: /etc/yum.conf
     regexp: '^proxy='
     state: absent
-  when: gitups_proxy_cleanup_yum_stat.stat.exists
+  when: bootwright_proxy_cleanup_yum_stat.stat.exists
 
 - name: Remove /root/.pip/pip.conf
   ansible.builtin.file:
@@ -42,29 +42,29 @@
 
 - name: Remove containers.conf proxy drop-in
   ansible.builtin.file:
-    path: /etc/containers/containers.conf.d/10-gitups-proxy.conf
+    path: /etc/containers/containers.conf.d/10-bootwright-proxy.conf
     state: absent
 
 - name: Stat legacy containers.conf for cleanup
   ansible.builtin.stat:
     path: /etc/containers/containers.conf
-  register: gitups_proxy_cleanup_legacy_containers_conf
+  register: bootwright_proxy_cleanup_legacy_containers_conf
 
 - name: Remove legacy proxy block from /etc/containers/containers.conf
   ansible.builtin.blockinfile:
     path: /etc/containers/containers.conf
-    marker: "# {mark} ANSIBLE MANAGED BLOCK gitups-proxy"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK bootwright-proxy"
     state: absent
-  when: gitups_proxy_cleanup_legacy_containers_conf.stat.exists
+  when: bootwright_proxy_cleanup_legacy_containers_conf.stat.exists
   failed_when: false
 
 - name: Remove systemd proxy drop-in
   ansible.builtin.file:
-    path: /etc/systemd/system.conf.d/10-gitups-proxy.conf
+    path: /etc/systemd/system.conf.d/10-bootwright-proxy.conf
     state: absent
-  register: gitups_proxy_cleanup_systemd_dropin
+  register: bootwright_proxy_cleanup_systemd_dropin
 
 - name: Reload systemd manager when proxy drop-in removed
   ansible.builtin.systemd_service:
     daemon_reexec: true
-  when: gitups_proxy_cleanup_systemd_dropin.changed
+  when: bootwright_proxy_cleanup_systemd_dropin.changed

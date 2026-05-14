@@ -9,9 +9,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/crmarques/gitups/api/v1alpha1"
-	"github.com/crmarques/gitups/internal/proxy"
-	"github.com/crmarques/gitups/internal/secretref"
+	"github.com/crmarques/bootwright/api/v1alpha1"
+	"github.com/crmarques/bootwright/internal/proxy"
+	"github.com/crmarques/bootwright/internal/secretref"
 )
 
 // InstallerSecrets holds secret material inlined into install-config.yaml.

@@ -3,7 +3,7 @@
 Shared reference for how the e2e cases handle outbound egress. Cases link
 here when they reach the "optional proxy" step. Pick one of the four modes
 below and edit `environment.yaml` / `provider.yaml` accordingly before
-running `gitups secret generate`.
+running `bootwright secret generate`.
 
 The cases' reference yamls ship the **managed Squid** layout (so the
 files exercise the richest path). To use any other mode, prune the
@@ -41,7 +41,7 @@ credentials.
 - `provider.yaml`: remove the `spec.proxy:` block. Drop `proxy` from the
   host's `capabilities:` list.
 
-Gitups auto-extends `noProxy` with cluster-local endpoints
+Bootwright auto-extends `noProxy` with cluster-local endpoints
 (service/cluster CIDRs, `.svc`, `.cluster.local`, `localhost`, the base
 domain, mirror registry host, provider host addresses); only
 user-specific entries need to be listed.
@@ -65,19 +65,19 @@ spec:
         name: proxy-credentials
   secrets:
     proxy-credentials:
-      file: ~/.gitups/secrets/proxy-credentials
+      file: ~/.bootwright/secrets/proxy-credentials
 ```
 
 Then on the bastion:
 
 ```bash
-gitups secret set proxy-credentials \
+bootwright secret set proxy-credentials \
   --username <proxy-user> \
   --password-stdin \
-  --secrets-dir "$GITUPS_SECRETS_DIR"
+  --secrets-dir "$BOOTWRIGHT_SECRETS_DIR"
 ```
 
-**Generated** — `gitups secret generate` materializes the file. Password
+**Generated** — `bootwright secret generate` materializes the file. Password
 is auto-generated; username defaults to `admin` when omitted:
 
 ```yaml
@@ -90,15 +90,15 @@ spec:
           username: proxy
 ```
 
-No `gitups secret set` step — `gitups secret generate -f "$WORKSPACE"`
+No `bootwright secret set` step — `bootwright secret generate -f "$WORKSPACE"`
 covers it.
 
 In both forms `provider.yaml` keeps no `spec.proxy:` block and the host
 keeps no `proxy` capability.
 
-## Mode 4 — Gitups-Managed Squid On The Provider Host
+## Mode 4 — Bootwright-Managed Squid On The Provider Host
 
-Gitups stands up an authenticated Squid container on the provider host
+Bootwright stands up an authenticated Squid container on the provider host
 itself.
 
 `environment.yaml` carries the same `proxy:` block as Mode 3 (auth is
@@ -151,7 +151,7 @@ Constraints:
 ### Two Client URLs
 
 Managed Squid is reached at different addresses by the host and by the
-VMs. Gitups renders both:
+VMs. Bootwright renders both:
 
 - **Host URL** — `http://<provider-host SSH address>:<port>`. Written by
   `host_proxy` into `/etc/dnf/dnf.conf`, `/etc/environment`, the systemd
@@ -167,7 +167,7 @@ For external proxies the two URLs collapse to the user-configured
 
 ## Bootstrap Order Note
 
-`gitups apply bastion -f "$WORKSPACE"` runs *before* `gitups apply infra`
+`bootwright apply bastion -f "$WORKSPACE"` runs *before* `bootwright apply infra`
 provisions the managed Squid container, so the bastion phase deliberately
 ignores `environment.yaml`'s `spec.proxy` for Mode 4. Once `apply infra`
 finishes, every later phase (provider-host package/image pulls,
@@ -178,10 +178,10 @@ external proxy URL from the workspace immediately.
 
 ## Bastion-Build Proxy
 
-The no-state `gitups apply bastion` and (for the containerized bastion)
+The no-state `bootwright apply bastion` and (for the containerized bastion)
 the `podman build` reach the internet *before* a workspace exists. Both
 read ambient `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` env vars. Set
 these on the host (or in the bastion shell) when an external proxy is
 required to reach base packages and registry content. They have no
-effect once `gitups apply bastion -f "$WORKSPACE"` runs — that phase
+effect once `bootwright apply bastion -f "$WORKSPACE"` runs — that phase
 strips them and uses `Environment.spec.proxy` instead.

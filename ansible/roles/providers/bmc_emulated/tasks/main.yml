@@ -5,12 +5,12 @@
 
 - name: Resolve pinned sushy-tools version
   ansible.builtin.set_fact:
-    gitups_sushy_tools_version: "{{ gitups_component_pins | selectattr('name', 'equalto', 'sushy-tools') | map(attribute='version') | first }}"
+    bootwright_sushy_tools_version: "{{ bootwright_component_pins | selectattr('name', 'equalto', 'sushy-tools') | map(attribute='version') | first }}"
   changed_when: false
 
 - name: Create BMC emulator state directory
   ansible.builtin.file:
-    path: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc"
+    path: "{{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/bmc"
     state: directory
     owner: root
     group: root
@@ -18,7 +18,7 @@
 
 - name: Create BMC emulator runtime directories
   ansible.builtin.file:
-    path: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/{{ item }}"
+    path: "{{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/bmc/{{ item }}"
     state: directory
     owner: root
     group: root
@@ -29,18 +29,18 @@
 
 - name: Write BMC emulator settings
   ansible.builtin.copy:
-    dest: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/settings.yml"
+    dest: "{{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/bmc/settings.yml"
     owner: root
     group: root
     mode: "0644"
     content: |
-      protocol: {{ gitups_current_provider.bmc.protocol }}
-      emulator: {{ gitups_current_provider.bmc.emulator }}
-      bindAddress: {{ gitups_current_provider.bmc.bindAddress }}
-      port: {{ gitups_current_provider.bmc.port }}
-      version: {{ gitups_sushy_tools_version }}
+      protocol: {{ bootwright_current_provider.bmc.protocol }}
+      emulator: {{ bootwright_current_provider.bmc.emulator }}
+      bindAddress: {{ bootwright_current_provider.bmc.bindAddress }}
+      port: {{ bootwright_current_provider.bmc.port }}
+      version: {{ bootwright_sushy_tools_version }}
       nodes:
-      {% for node in gitups_current_provider.bmc.nodes | selectattr('hostRef', 'equalto', gitups_host_name) %}
+      {% for node in bootwright_current_provider.bmc.nodes | selectattr('hostRef', 'equalto', bootwright_host_name) %}
         - name: {{ node.name }}
           clusterName: {{ node.clusterName }}
           ipAddress: {{ node.ipAddress }}
@@ -58,340 +58,340 @@
   ansible.builtin.package:
     name: httpd-tools
     state: present
-  when: gitups_current_provider.bmc.auth is defined and gitups_current_provider.bmc.auth.credentialRef | default('') | length > 0
+  when: bootwright_current_provider.bmc.auth is defined and bootwright_current_provider.bmc.auth.credentialRef | default('') | length > 0
 
 - name: Read BMC credentials for sushy auth
   ansible.builtin.slurp:
-    src: "{{ gitups_current_provider.bmc.auth.credentialRef }}"
-  register: gitups_bmc_credentials_slurp
+    src: "{{ bootwright_current_provider.bmc.auth.credentialRef }}"
+  register: bootwright_bmc_credentials_slurp
   no_log: true
   delegate_to: localhost
   become: false
-  when: gitups_current_provider.bmc.auth is defined and gitups_current_provider.bmc.auth.credentialRef | default('') | length > 0
+  when: bootwright_current_provider.bmc.auth is defined and bootwright_current_provider.bmc.auth.credentialRef | default('') | length > 0
 
 - name: Parse BMC credentials
   ansible.builtin.set_fact:
-    gitups_bmc_credentials: "{{ gitups_bmc_credentials_slurp | gitups_parse_credential('provider BMC credentialRef ' ~ gitups_current_provider.bmc.auth.credentialRef) }}"
+    bootwright_bmc_credentials: "{{ bootwright_bmc_credentials_slurp | bootwright_parse_credential('provider BMC credentialRef ' ~ bootwright_current_provider.bmc.auth.credentialRef) }}"
   no_log: true
   changed_when: false
-  when: gitups_current_provider.bmc.auth is defined and gitups_current_provider.bmc.auth.credentialRef | default('') | length > 0
+  when: bootwright_current_provider.bmc.auth is defined and bootwright_current_provider.bmc.auth.credentialRef | default('') | length > 0
 
 - name: Expose BMC username and password as facts
   ansible.builtin.set_fact:
-    gitups_bmc_username: "{{ gitups_bmc_credentials.username }}"
-    gitups_bmc_password: "{{ gitups_bmc_credentials.password }}"
+    bootwright_bmc_username: "{{ bootwright_bmc_credentials.username }}"
+    bootwright_bmc_password: "{{ bootwright_bmc_credentials.password }}"
   no_log: true
   changed_when: false
-  when: gitups_current_provider.bmc.auth is defined and gitups_current_provider.bmc.auth.credentialRef | default('') | length > 0
+  when: bootwright_current_provider.bmc.auth is defined and bootwright_current_provider.bmc.auth.credentialRef | default('') | length > 0
 
 - name: Verify existing sushy htpasswd bcrypt entry
   ansible.builtin.command:
     argv:
       - htpasswd
       - -viB
-      - "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/htpasswd"
-      - "{{ gitups_bmc_username }}"
-    stdin: "{{ gitups_bmc_password }}"
-  register: gitups_bmc_htpasswd_verify
+      - "{{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/bmc/htpasswd"
+      - "{{ bootwright_bmc_username }}"
+    stdin: "{{ bootwright_bmc_password }}"
+  register: bootwright_bmc_htpasswd_verify
   changed_when: false
   failed_when: false
   no_log: true
-  when: gitups_current_provider.bmc.auth is defined and gitups_current_provider.bmc.auth.credentialRef | default('') | length > 0
+  when: bootwright_current_provider.bmc.auth is defined and bootwright_current_provider.bmc.auth.credentialRef | default('') | length > 0
 
 - name: Write sushy htpasswd file with bcrypt entry
   ansible.builtin.command:
     argv:
       - htpasswd
       - -iBc
-      - "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/htpasswd"
-      - "{{ gitups_bmc_username }}"
-    stdin: "{{ gitups_bmc_password }}"
+      - "{{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/bmc/htpasswd"
+      - "{{ bootwright_bmc_username }}"
+    stdin: "{{ bootwright_bmc_password }}"
   no_log: true
-  register: gitups_bmc_htpasswd
+  register: bootwright_bmc_htpasswd
   when:
-    - gitups_current_provider.bmc.auth is defined and gitups_current_provider.bmc.auth.credentialRef | default('') | length > 0
-    - gitups_bmc_htpasswd_verify.rc | default(1) != 0
+    - bootwright_current_provider.bmc.auth is defined and bootwright_current_provider.bmc.auth.credentialRef | default('') | length > 0
+    - bootwright_bmc_htpasswd_verify.rc | default(1) != 0
 
 - name: Enforce sushy htpasswd file permissions
   ansible.builtin.file:
-    path: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/htpasswd"
+    path: "{{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/bmc/htpasswd"
     owner: root
     group: root
     mode: "0600"
-  when: gitups_current_provider.bmc.auth is defined and gitups_current_provider.bmc.auth.credentialRef | default('') | length > 0
+  when: bootwright_current_provider.bmc.auth is defined and bootwright_current_provider.bmc.auth.credentialRef | default('') | length > 0
 
 - name: Create sushy-tools virtualenv with system site packages
   ansible.builtin.command:
-    cmd: "python3 -m venv --system-site-packages {{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/venv"
-    creates: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/venv/bin/python"
+    cmd: "python3 -m venv --system-site-packages {{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/bmc/venv"
+    creates: "{{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/bmc/venv/bin/python"
 
 - name: Find installed sushy-tools dist-info inside virtualenv
   ansible.builtin.find:
-    paths: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/venv/lib"
-    patterns: "sushy_tools-{{ gitups_sushy_tools_version }}.dist-info"
+    paths: "{{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/bmc/venv/lib"
+    patterns: "sushy_tools-{{ bootwright_sushy_tools_version }}.dist-info"
     recurse: true
     file_type: directory
-  register: gitups_bmc_venv_sushy_dirs
+  register: bootwright_bmc_venv_sushy_dirs
   changed_when: false
 
 - name: Stat sushy-emulator executable inside virtualenv
   ansible.builtin.stat:
-    path: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/venv/bin/sushy-emulator"
-  register: gitups_bmc_sushy_emulator_stat
+    path: "{{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/bmc/venv/bin/sushy-emulator"
+  register: bootwright_bmc_sushy_emulator_stat
   changed_when: false
 
 - name: Resolve whether sushy-tools must be installed into virtualenv
   ansible.builtin.set_fact:
-    gitups_bmc_sushy_install_needed: >-
+    bootwright_bmc_sushy_install_needed: >-
       {{
-        (gitups_bmc_venv_sushy_dirs.files | default([]) | length) == 0
-        or not (gitups_bmc_sushy_emulator_stat.stat.exists | default(false))
+        (bootwright_bmc_venv_sushy_dirs.files | default([]) | length) == 0
+        or not (bootwright_bmc_sushy_emulator_stat.stat.exists | default(false))
       }}
   changed_when: false
 
 - name: Stage pip proxy config for sushy-tools install
   ansible.builtin.copy:
-    dest: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/pip.conf"
+    dest: "{{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/bmc/pip.conf"
     content: |
       [global]
-      proxy = {{ gitups_proxy_primary }}
+      proxy = {{ bootwright_proxy_primary }}
     owner: root
     group: root
     mode: "0600"
   no_log: true
   when:
-    - gitups_bmc_sushy_install_needed | bool
-    - gitups_proxy_enabled | default(false)
+    - bootwright_bmc_sushy_install_needed | bool
+    - bootwright_proxy_enabled | default(false)
 
 - name: Install pinned sushy-tools into virtualenv
   ansible.builtin.shell:
     cmd: |
       set -o pipefail
-      PIP_CONFIG="{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/pip.conf"
+      PIP_CONFIG="{{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/bmc/pip.conf"
       [ -r "$PIP_CONFIG" ] || PIP_CONFIG=/dev/null
       env \
         -u HTTP_PROXY -u HTTPS_PROXY -u NO_PROXY \
         -u http_proxy -u https_proxy -u no_proxy \
         PIP_CONFIG_FILE="$PIP_CONFIG" \
-        "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/venv/bin/pip" install \
+        "{{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/bmc/venv/bin/pip" install \
         --ignore-installed --no-deps \
-        "sushy-tools=={{ gitups_sushy_tools_version }}" 2>&1 \
+        "sushy-tools=={{ bootwright_sushy_tools_version }}" 2>&1 \
         | sed -E 's|://[^@/]+@|://***@|g'
     executable: /bin/bash
-  register: gitups_bmc_pip_install
-  changed_when: gitups_bmc_pip_install.rc == 0
+  register: bootwright_bmc_pip_install
+  changed_when: bootwright_bmc_pip_install.rc == 0
   failed_when: false
-  when: gitups_bmc_sushy_install_needed | bool
+  when: bootwright_bmc_sushy_install_needed | bool
 
 - name: Remove staged pip proxy files
   ansible.builtin.file:
     path: "{{ item }}"
     state: absent
   loop:
-    - "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/.pip-proxy-url"
-    - "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/pip.conf"
+    - "{{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/bmc/.pip-proxy-url"
+    - "{{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/bmc/pip.conf"
 
 - name: List venv site-packages after install
   ansible.builtin.find:
-    paths: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/venv/lib"
-    patterns: "sushy_tools-{{ gitups_sushy_tools_version }}.dist-info"
+    paths: "{{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/bmc/venv/lib"
+    patterns: "sushy_tools-{{ bootwright_sushy_tools_version }}.dist-info"
     recurse: true
     file_type: directory
-  register: gitups_bmc_venv_sushy_dirs
+  register: bootwright_bmc_venv_sushy_dirs
   changed_when: false
 
 - name: Stat sushy-emulator executable after install
   ansible.builtin.stat:
-    path: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/venv/bin/sushy-emulator"
-  register: gitups_bmc_sushy_emulator_stat
+    path: "{{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/bmc/venv/bin/sushy-emulator"
+  register: bootwright_bmc_sushy_emulator_stat
   changed_when: false
 
 - name: Assert sushy-tools install succeeded
   ansible.builtin.assert:
     that:
-      - (not (gitups_bmc_sushy_install_needed | bool)) or gitups_bmc_pip_install.rc | default(1) == 0
-      - (gitups_bmc_venv_sushy_dirs.files | default([]) | length) > 0
-      - gitups_bmc_sushy_emulator_stat.stat.exists | default(false)
+      - (not (bootwright_bmc_sushy_install_needed | bool)) or bootwright_bmc_pip_install.rc | default(1) == 0
+      - (bootwright_bmc_venv_sushy_dirs.files | default([]) | length) > 0
+      - bootwright_bmc_sushy_emulator_stat.stat.exists | default(false)
     fail_msg: >-
-      sushy-tools=={{ gitups_sushy_tools_version }} did not land in the venv.
-      install_needed={{ gitups_bmc_sushy_install_needed | default('unknown') }};
-      proxy_enabled={{ gitups_proxy_enabled | default(false) }};
-      proxy_auth_ref_present={{ (gitups_proxy_credentials_ref | default('') | length) > 0 }};
-      pip_rc={{ gitups_bmc_pip_install.rc | default('skipped') }};
-      pip_output_head={{ (gitups_bmc_pip_install.stdout | default('')).split('\n')[:3] | join(' | ') }};
-      pip_output_tail={{ (gitups_bmc_pip_install.stdout | default('')).split('\n')[-3:] | join(' | ') }};
-      venv_sushy_dirs={{ gitups_bmc_venv_sushy_dirs.files | map(attribute='path') | list }};
-      sushy_emulator_exists={{ gitups_bmc_sushy_emulator_stat.stat.exists | default(false) }}.
+      sushy-tools=={{ bootwright_sushy_tools_version }} did not land in the venv.
+      install_needed={{ bootwright_bmc_sushy_install_needed | default('unknown') }};
+      proxy_enabled={{ bootwright_proxy_enabled | default(false) }};
+      proxy_auth_ref_present={{ (bootwright_proxy_credentials_ref | default('') | length) > 0 }};
+      pip_rc={{ bootwright_bmc_pip_install.rc | default('skipped') }};
+      pip_output_head={{ (bootwright_bmc_pip_install.stdout | default('')).split('\n')[:3] | join(' | ') }};
+      pip_output_tail={{ (bootwright_bmc_pip_install.stdout | default('')).split('\n')[-3:] | join(' | ') }};
+      venv_sushy_dirs={{ bootwright_bmc_venv_sushy_dirs.files | map(attribute='path') | list }};
+      sushy_emulator_exists={{ bootwright_bmc_sushy_emulator_stat.stat.exists | default(false) }}.
 
 - name: Verify sushy-emulator can import libvirt
   ansible.builtin.command:
-    cmd: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/venv/bin/python -c 'import libvirt'"
+    cmd: "{{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/bmc/venv/bin/python -c 'import libvirt'"
   changed_when: false
 
 - name: Allow systemd to exec sushy-emulator under SELinux
   ansible.builtin.file:
-    path: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/venv/bin/sushy-emulator"
+    path: "{{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/bmc/venv/bin/sushy-emulator"
     setype: bin_t
-  register: gitups_bmc_sushy_setype
+  register: bootwright_bmc_sushy_setype
 
 - name: Define libvirt vmedia storage pool
   community.libvirt.virt_pool:
-    name: "gitups-{{ gitups_current_provider.name }}-vmedia"
+    name: "bootwright-{{ bootwright_current_provider.name }}-vmedia"
     state: present
     autostart: true
     xml: |
       <pool type='dir'>
-        <name>gitups-{{ gitups_current_provider.name }}-vmedia</name>
+        <name>bootwright-{{ bootwright_current_provider.name }}-vmedia</name>
         <target>
-          <path>{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/vmedia</path>
+          <path>{{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/bmc/vmedia</path>
         </target>
       </pool>
 
 - name: Activate libvirt vmedia storage pool
   community.libvirt.virt_pool:
-    name: "gitups-{{ gitups_current_provider.name }}-vmedia"
+    name: "bootwright-{{ bootwright_current_provider.name }}-vmedia"
     state: active
 
 - name: Write sushy-emulator config
   ansible.builtin.copy:
-    dest: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/sushy.conf"
+    dest: "{{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/bmc/sushy.conf"
     owner: root
     group: root
     mode: "0644"
     content: |
       SUSHY_EMULATOR_LIBVIRT_URI = u'qemu:///system'
       SUSHY_EMULATOR_FEATURE_SET = u'vmedia'
-      SUSHY_EMULATOR_STATE_DIR = u'{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/state'
-      SUSHY_EMULATOR_STORAGE_POOL = u'gitups-{{ gitups_current_provider.name }}-vmedia'
-      SUSHY_EMULATOR_LISTEN_IP = u'{{ gitups_current_provider.bmc.bindAddress }}'
-      SUSHY_EMULATOR_LISTEN_PORT = {{ gitups_current_provider.bmc.port }}
-      {% if gitups_current_provider.bmc.auth is defined and gitups_current_provider.bmc.auth.credentialRef | default('') | length > 0 %}
-      SUSHY_EMULATOR_AUTH_FILE = u'{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/htpasswd'
+      SUSHY_EMULATOR_STATE_DIR = u'{{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/bmc/state'
+      SUSHY_EMULATOR_STORAGE_POOL = u'bootwright-{{ bootwright_current_provider.name }}-vmedia'
+      SUSHY_EMULATOR_LISTEN_IP = u'{{ bootwright_current_provider.bmc.bindAddress }}'
+      SUSHY_EMULATOR_LISTEN_PORT = {{ bootwright_current_provider.bmc.port }}
+      {% if bootwright_current_provider.bmc.auth is defined and bootwright_current_provider.bmc.auth.credentialRef | default('') | length > 0 %}
+      SUSHY_EMULATOR_AUTH_FILE = u'{{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/bmc/htpasswd'
       {% endif %}
-  register: gitups_bmc_sushy_conf
+  register: bootwright_bmc_sushy_conf
 
 - name: Write sushy-emulator systemd unit
   ansible.builtin.copy:
-    dest: "/etc/systemd/system/gitups-sushy-{{ gitups_current_provider.name }}.service"
+    dest: "/etc/systemd/system/bootwright-sushy-{{ bootwright_current_provider.name }}.service"
     owner: root
     group: root
     mode: "0644"
     content: |
       [Unit]
-      Description=Gitups sushy-emulator for provider {{ gitups_current_provider.name }}
+      Description=Bootwright sushy-emulator for provider {{ bootwright_current_provider.name }}
       After=libvirtd.service network-online.target
       Wants=libvirtd.service network-online.target
 
       [Service]
       Type=simple
-      Environment=SUSHY_EMULATOR_CONFIG={{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/sushy.conf
-      ExecStart={{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/venv/bin/sushy-emulator --config {{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/sushy.conf
+      Environment=SUSHY_EMULATOR_CONFIG={{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/bmc/sushy.conf
+      ExecStart={{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/bmc/venv/bin/sushy-emulator --config {{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/bmc/sushy.conf
       Restart=on-failure
       RestartSec=5
-      StandardOutput=append:{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/sushy.log
-      StandardError=append:{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/sushy.log
+      StandardOutput=append:{{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/bmc/sushy.log
+      StandardError=append:{{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/bmc/sushy.log
 
       [Install]
       WantedBy=multi-user.target
-  register: gitups_bmc_sushy_unit
+  register: bootwright_bmc_sushy_unit
 
 - name: Restart sushy-emulator service when config or unit changed
   ansible.builtin.systemd_service:
-    name: "gitups-sushy-{{ gitups_current_provider.name }}.service"
+    name: "bootwright-sushy-{{ bootwright_current_provider.name }}.service"
     state: restarted
     enabled: true
     daemon_reload: true
-  when: gitups_bmc_sushy_conf.changed or gitups_bmc_sushy_unit.changed or gitups_bmc_sushy_setype.changed or (gitups_bmc_htpasswd is defined and gitups_bmc_htpasswd.changed | default(false))
+  when: bootwright_bmc_sushy_conf.changed or bootwright_bmc_sushy_unit.changed or bootwright_bmc_sushy_setype.changed or (bootwright_bmc_htpasswd is defined and bootwright_bmc_htpasswd.changed | default(false))
 
 - name: Ensure sushy-emulator service is running
   ansible.builtin.systemd_service:
-    name: "gitups-sushy-{{ gitups_current_provider.name }}.service"
+    name: "bootwright-sushy-{{ bootwright_current_provider.name }}.service"
     state: started
     enabled: true
-    daemon_reload: "{{ gitups_bmc_sushy_unit.changed }}"
+    daemon_reload: "{{ bootwright_bmc_sushy_unit.changed }}"
 
 - name: Wait for sushy-emulator Redfish endpoint
   ansible.builtin.uri:
-    url: "http://127.0.0.1:{{ gitups_current_provider.bmc.port }}/redfish/v1/Systems"
+    url: "http://127.0.0.1:{{ bootwright_current_provider.bmc.port }}/redfish/v1/Systems"
     method: GET
     status_code: 200
     return_content: false
-    url_username: "{{ gitups_bmc_username | default(omit) }}"
-    url_password: "{{ gitups_bmc_password | default(omit) }}"
-    force_basic_auth: "{{ gitups_current_provider.bmc.auth is defined and gitups_current_provider.bmc.auth.credentialRef | default('') | length > 0 }}"
-  register: gitups_bmc_sushy_ready
+    url_username: "{{ bootwright_bmc_username | default(omit) }}"
+    url_password: "{{ bootwright_bmc_password | default(omit) }}"
+    force_basic_auth: "{{ bootwright_current_provider.bmc.auth is defined and bootwright_current_provider.bmc.auth.credentialRef | default('') | length > 0 }}"
+  register: bootwright_bmc_sushy_ready
   retries: 30
   delay: 2
-  until: gitups_bmc_sushy_ready.status == 200
-  no_log: "{{ gitups_current_provider.bmc.auth is defined and gitups_current_provider.bmc.auth.credentialRef | default('') | length > 0 }}"
+  until: bootwright_bmc_sushy_ready.status == 200
+  no_log: "{{ bootwright_current_provider.bmc.auth is defined and bootwright_current_provider.bmc.auth.credentialRef | default('') | length > 0 }}"
 
 - name: Check firewalld state on provider host
   ansible.builtin.command:
     argv:
       - firewall-cmd
       - --state
-  register: gitups_bmc_firewalld_state
+  register: bootwright_bmc_firewalld_state
   changed_when: false
   failed_when: false
 
 - name: Open Redfish port on provider host firewall
   ansible.posix.firewalld:
-    port: "{{ gitups_current_provider.bmc.port | int }}/tcp"
+    port: "{{ bootwright_current_provider.bmc.port | int }}/tcp"
     state: enabled
     permanent: true
     immediate: true
-  when: gitups_bmc_firewalld_state.rc == 0
+  when: bootwright_bmc_firewalld_state.rc == 0
 
 - name: Resolve vmedia HTTP port for current provider
   ansible.builtin.set_fact:
-    gitups_bmc_vmedia_http_port: "{{ gitups_current_provider.bmc.port | int + 1 }}"
+    bootwright_bmc_vmedia_http_port: "{{ bootwright_current_provider.bmc.port | int + 1 }}"
   changed_when: false
 
 - name: Write vmedia HTTP server systemd unit
   ansible.builtin.copy:
-    dest: "/etc/systemd/system/gitups-vmedia-{{ gitups_current_provider.name }}.service"
+    dest: "/etc/systemd/system/bootwright-vmedia-{{ bootwright_current_provider.name }}.service"
     owner: root
     group: root
     mode: "0644"
     content: |
       [Unit]
-      Description=Gitups vmedia HTTP server for provider {{ gitups_current_provider.name }}
+      Description=Bootwright vmedia HTTP server for provider {{ bootwright_current_provider.name }}
       After=network-online.target
       Wants=network-online.target
 
       [Service]
       Type=simple
-      ExecStart=/usr/bin/python3 -m http.server {{ gitups_bmc_vmedia_http_port }} --bind 127.0.0.1 --directory {{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/vmedia
+      ExecStart=/usr/bin/python3 -m http.server {{ bootwright_bmc_vmedia_http_port }} --bind 127.0.0.1 --directory {{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/bmc/vmedia
       Restart=on-failure
       RestartSec=5
-      StandardOutput=append:{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/vmedia-http.log
-      StandardError=append:{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/vmedia-http.log
+      StandardOutput=append:{{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/bmc/vmedia-http.log
+      StandardError=append:{{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/bmc/vmedia-http.log
 
       [Install]
       WantedBy=multi-user.target
-  register: gitups_bmc_vmedia_unit
+  register: bootwright_bmc_vmedia_unit
 
 - name: Restart vmedia HTTP server when unit changed
   ansible.builtin.systemd_service:
-    name: "gitups-vmedia-{{ gitups_current_provider.name }}.service"
+    name: "bootwright-vmedia-{{ bootwright_current_provider.name }}.service"
     state: restarted
     enabled: true
     daemon_reload: true
-  when: gitups_bmc_vmedia_unit.changed
+  when: bootwright_bmc_vmedia_unit.changed
 
 - name: Ensure vmedia HTTP server is running
   ansible.builtin.systemd_service:
-    name: "gitups-vmedia-{{ gitups_current_provider.name }}.service"
+    name: "bootwright-vmedia-{{ bootwright_current_provider.name }}.service"
     state: started
     enabled: true
 
 - name: Wait for vmedia HTTP endpoint
   ansible.builtin.uri:
-    url: "http://127.0.0.1:{{ gitups_bmc_vmedia_http_port }}/"
+    url: "http://127.0.0.1:{{ bootwright_bmc_vmedia_http_port }}/"
     method: GET
     status_code: 200
     return_content: false
-  register: gitups_bmc_vmedia_ready
+  register: bootwright_bmc_vmedia_ready
   retries: 30
   delay: 1
-  until: gitups_bmc_vmedia_ready.status == 200
+  until: bootwright_bmc_vmedia_ready.status == 200

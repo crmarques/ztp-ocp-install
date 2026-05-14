@@ -1,4 +1,4 @@
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: OCPCluster
 metadata:
   name: managed-01

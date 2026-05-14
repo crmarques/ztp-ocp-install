@@ -3,14 +3,14 @@ package v1alpha1
 import "fmt"
 
 const (
-	APIVersion = "gitups.io/v1alpha1"
+	APIVersion = "bootwright.io/v1alpha1"
 
 	KindEnvironment            = "Environment"
 	KindInfrastructureProvider = "InfrastructureProvider"
 	KindClusterInfrastructure  = "ClusterInfrastructure"
 	KindOCPCluster             = "OCPCluster"
 	KindInfrastructureState    = "InfrastructureState"
-	KindGitupsLock             = "GitupsLock"
+	KindBootwrightLock         = "BootwrightLock"
 
 	MachineFlavorLibvirt   = "libvirt"
 	MachineFlavorBareMetal = "baremetal"

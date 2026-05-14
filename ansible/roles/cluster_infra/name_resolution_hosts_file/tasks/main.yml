@@ -1,39 +1,39 @@
 ---
 - name: Check hosts-file ownership
   ansible.builtin.set_fact:
-    gitups_manage_hosts_file_here: "{{ gitups_host_name in gitups_current_cluster.network.nameResolution.managed.providerHostRefs }}"
+    bootwright_manage_hosts_file_here: "{{ bootwright_host_name in bootwright_current_cluster.network.nameResolution.managed.providerHostRefs }}"
   changed_when: false
 
 - name: Create name-resolution state directory
   ansible.builtin.file:
-    path: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}/name-resolution"
+    path: "{{ bootwright_host_state_dir }}/{{ bootwright_current_cluster.name }}/name-resolution"
     state: directory
     owner: root
     group: root
     mode: "0755"
-  when: gitups_manage_hosts_file_here
+  when: bootwright_manage_hosts_file_here
 
 - name: Record managed hosts-file entries
   ansible.builtin.copy:
-    dest: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}/name-resolution/hosts-file.yml"
+    dest: "{{ bootwright_host_state_dir }}/{{ bootwright_current_cluster.name }}/name-resolution/hosts-file.yml"
     owner: root
     group: root
     mode: "0644"
     content: |
-      mode: {{ gitups_current_cluster.network.nameResolution.mode }}
+      mode: {{ bootwright_current_cluster.network.nameResolution.mode }}
       providerHostRefs:
-      {% for hostRef in gitups_current_cluster.network.nameResolution.managed.providerHostRefs %}
+      {% for hostRef in bootwright_current_cluster.network.nameResolution.managed.providerHostRefs %}
         - {{ hostRef }}
       {% endfor %}
       entries:
-      {% for entry in gitups_current_cluster.network.nameResolution.managed.hostsFile.entries %}
+      {% for entry in bootwright_current_cluster.network.nameResolution.managed.hostsFile.entries %}
         - address: {{ entry.address }}
           names:
       {% for name in entry.names %}
             - {{ name }}
       {% endfor %}
       {% endfor %}
-  when: gitups_manage_hosts_file_here
+  when: bootwright_manage_hosts_file_here
 
 - name: Write managed hosts-file block
   ansible.builtin.blockinfile:
@@ -42,9 +42,9 @@
     owner: root
     group: root
     mode: "0644"
-    marker: "# {mark} GITUPS {{ gitups_current_cluster.name }} hosts"
+    marker: "# {mark} BOOTWRIGHT {{ bootwright_current_cluster.name }} hosts"
     block: |
-      {% for entry in gitups_current_cluster.network.nameResolution.managed.hostsFile.entries %}
+      {% for entry in bootwright_current_cluster.network.nameResolution.managed.hostsFile.entries %}
       {{ entry.address }} {{ entry.names | join(' ') }}
       {% endfor %}
-  when: gitups_manage_hosts_file_here
+  when: bootwright_manage_hosts_file_here

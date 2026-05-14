@@ -1,16 +1,16 @@
 ---
 - name: Install mirror registry CA into host trust anchors
   ansible.builtin.copy:
-    dest: "{{ gitups_mirror_registry_trust_anchor }}"
+    dest: "{{ bootwright_mirror_registry_trust_anchor }}"
     owner: root
     group: root
     mode: "0644"
-    content: "{{ gitups_mirror_registry_cert_raw.content | b64decode }}"
-  register: gitups_mirror_registry_trust_anchor_write
+    content: "{{ bootwright_mirror_registry_cert_raw.content | b64decode }}"
+  register: bootwright_mirror_registry_trust_anchor_write
 
 - name: Refresh host CA trust store
   ansible.builtin.command:
     argv:
       - update-ca-trust
-  when: gitups_mirror_registry_trust_anchor_write.changed
-  changed_when: gitups_mirror_registry_trust_anchor_write.changed
+  when: bootwright_mirror_registry_trust_anchor_write.changed
+  changed_when: bootwright_mirror_registry_trust_anchor_write.changed

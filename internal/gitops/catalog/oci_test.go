@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	v1 "github.com/crmarques/gitups/api/v1alpha1"
-	"github.com/crmarques/gitups/internal/gitops/catalog"
+	v1 "github.com/crmarques/bootwright/api/v1alpha1"
+	"github.com/crmarques/bootwright/internal/gitops/catalog"
 )
 
 func TestOCIResolverRejectsMissingDigest(t *testing.T) {

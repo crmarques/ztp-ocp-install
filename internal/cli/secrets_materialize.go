@@ -21,7 +21,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/crmarques/gitups/api/v1alpha1"
+	"github.com/crmarques/bootwright/api/v1alpha1"
 )
 
 func parseBMCCredentials(data []byte) (string, string, error) {

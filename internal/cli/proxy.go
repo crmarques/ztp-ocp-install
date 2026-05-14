@@ -8,11 +8,11 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/crmarques/gitups/api/v1alpha1"
-	"github.com/crmarques/gitups/internal/proxy"
+	"github.com/crmarques/bootwright/api/v1alpha1"
+	"github.com/crmarques/bootwright/internal/proxy"
 )
 
-// returns nil when proxy is Gitups-managed: the bastion provisions that proxy, so
+// returns nil when proxy is Bootwright-managed: the bastion provisions that proxy, so
 // it cannot route its own bootstrap through a proxy that does not yet exist.
 func resolveProxyEnv(state v1alpha1.State, secretsDir string) (map[string]string, error) {
 	if proxy.IsManaged(state) {

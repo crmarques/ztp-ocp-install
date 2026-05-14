@@ -28,6 +28,6 @@ balancers.
 ## Commands
 
 ```text
-gitups check bastion -f examples/baremetal-redfish-fleet
-gitups check infra -f examples/baremetal-redfish-fleet --state-dir .state --dry-run
+bootwright check bastion -f examples/baremetal-redfish-fleet
+bootwright check infra -f examples/baremetal-redfish-fleet --state-dir .state --dry-run
 ```

@@ -7,10 +7,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/crmarques/gitups/api/v1alpha1"
-	"github.com/crmarques/gitups/internal/ansible"
-	"github.com/crmarques/gitups/internal/provisioning/render"
-	"github.com/crmarques/gitups/internal/workflow"
+	"github.com/crmarques/bootwright/api/v1alpha1"
+	"github.com/crmarques/bootwright/internal/ansible"
+	"github.com/crmarques/bootwright/internal/provisioning/render"
+	"github.com/crmarques/bootwright/internal/workflow"
 )
 
 func newCheckCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
@@ -84,8 +84,8 @@ func newCheckAllCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
 		Args:  cobra.NoArgs,
 	}
 	cf := addCommonFlags(cmd)
-	cmd.Flags().StringVar(&executable, "ansible-playbook", resolveAnsiblePlaybook(), "ansible-playbook executable to run (defaults to the gitups-managed venv when present)")
-	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material (env: GITUPS_SECRETS_DIR)")
+	cmd.Flags().StringVar(&executable, "ansible-playbook", resolveAnsiblePlaybook(), "ansible-playbook executable to run (defaults to the bootwright-managed venv when present)")
+	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material (env: BOOTWRIGHT_SECRETS_DIR)")
 	cmd.Flags().StringVar(&hostStateDir, "host-state-dir", hostStateDir, "root-managed host runtime state directory")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "render artifacts and print the Ansible preflight command without executing it")
 	cmd.RunE = func(c *cobra.Command, _ []string) error {
@@ -184,7 +184,7 @@ func newRenderClusterInstallFilesCmd(stdout io.Writer, _ io.Writer) *cobra.Comma
 	}
 	cf := addCommonFlags(cmd)
 	cmd.Flags().StringVar(&clusterScope, "scope", "", "comma-separated OCPCluster names to render")
-	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material (env: GITUPS_SECRETS_DIR)")
+	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material (env: BOOTWRIGHT_SECRETS_DIR)")
 	cmd.Flags().BoolVar(&resolveSecrets, "resolve-secrets", false, "also write effective install-config.yaml/agent-config.yaml under each cluster's runtime installer directory (state-dir/runtime/<cluster>/installer/) with secret material inlined for direct openshift-install consumption (mode 0600)")
 	cmd.RunE = func(_ *cobra.Command, _ []string) error {
 		state, err := loadDesiredState(cf)

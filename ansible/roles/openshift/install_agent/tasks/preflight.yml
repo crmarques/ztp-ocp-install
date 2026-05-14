@@ -1,24 +1,24 @@
 ---
-- name: Validate gitups_state_dir is set
+- name: Validate bootwright_state_dir is set
   ansible.builtin.assert:
     that:
-      - gitups_state_dir is defined
-      - gitups_state_dir | length > 0
-    fail_msg: "gitups_state_dir is required (gitups CLI passes it to ansible-playbook)"
+      - bootwright_state_dir is defined
+      - bootwright_state_dir | length > 0
+    fail_msg: "bootwright_state_dir is required (bootwright CLI passes it to ansible-playbook)"
 
 - name: Resolve agent install context
   ansible.builtin.set_fact:
-    gitups_ocp_cluster_install: "{{ gitups_current_cluster.ocp.install }}"
-    gitups_ocp_release: "{{ gitups_current_cluster.ocp.release }}"
-    gitups_ocp_installer_dir: "{{ gitups_state_dir }}/{{ gitups_current_cluster.ocp.installer.relativeDir }}"
-    gitups_ocp_installer_work_dir: "{{ gitups_state_dir }}/{{ gitups_current_cluster.ocp.installer.relativeWorkDir }}"
-    gitups_ocp_installer_relative_work: "{{ gitups_current_cluster.ocp.installer.relativeWorkDir }}"
-    gitups_ocp_install_config_path: "{{ gitups_state_dir }}/{{ gitups_current_cluster.ocp.installer.relativeInstallConfigPath }}"
-    gitups_ocp_agent_config_path: "{{ gitups_state_dir }}/{{ gitups_current_cluster.ocp.installer.relativeAgentConfigPath }}"
-    gitups_ocp_provider_bmc: "{{ gitups_current_provider.bmc }}"
-    gitups_ocp_bmc_auth_enabled: "{{ gitups_current_provider.bmc.auth is defined and gitups_current_provider.bmc.auth.credentialRef | default('') | length > 0 }}"
-    gitups_ocp_local_registry: "{{ gitups_current_cluster.ocp.install.localRegistry | default({}) }}"
-    gitups_ocp_release_image_override: "{{ gitups_current_cluster.ocp.install.releaseImageOverride | default('') }}"
+    bootwright_ocp_cluster_install: "{{ bootwright_current_cluster.ocp.install }}"
+    bootwright_ocp_release: "{{ bootwright_current_cluster.ocp.release }}"
+    bootwright_ocp_installer_dir: "{{ bootwright_state_dir }}/{{ bootwright_current_cluster.ocp.installer.relativeDir }}"
+    bootwright_ocp_installer_work_dir: "{{ bootwright_state_dir }}/{{ bootwright_current_cluster.ocp.installer.relativeWorkDir }}"
+    bootwright_ocp_installer_relative_work: "{{ bootwright_current_cluster.ocp.installer.relativeWorkDir }}"
+    bootwright_ocp_install_config_path: "{{ bootwright_state_dir }}/{{ bootwright_current_cluster.ocp.installer.relativeInstallConfigPath }}"
+    bootwright_ocp_agent_config_path: "{{ bootwright_state_dir }}/{{ bootwright_current_cluster.ocp.installer.relativeAgentConfigPath }}"
+    bootwright_ocp_provider_bmc: "{{ bootwright_current_provider.bmc }}"
+    bootwright_ocp_bmc_auth_enabled: "{{ bootwright_current_provider.bmc.auth is defined and bootwright_current_provider.bmc.auth.credentialRef | default('') | length > 0 }}"
+    bootwright_ocp_local_registry: "{{ bootwright_current_cluster.ocp.install.localRegistry | default({}) }}"
+    bootwright_ocp_release_image_override: "{{ bootwright_current_cluster.ocp.install.releaseImageOverride | default('') }}"
   changed_when: false
 
 - name: Stop stale installer processes
@@ -28,61 +28,61 @@
       delegate_to: localhost
       become: false
   vars:
-    gitups_process_cleanup_pattern: "{{ gitups_ocp_installer_relative_work }}"
+    bootwright_process_cleanup_pattern: "{{ bootwright_ocp_installer_relative_work }}"
 
 - name: Read BMC credential file
   ansible.builtin.slurp:
-    src: "{{ gitups_current_provider.bmc.auth.credentialRef }}"
-  register: gitups_ocp_bmc_credentials_slurp
+    src: "{{ bootwright_current_provider.bmc.auth.credentialRef }}"
+  register: bootwright_ocp_bmc_credentials_slurp
   no_log: true
   delegate_to: localhost
   become: false
-  when: gitups_ocp_bmc_auth_enabled
+  when: bootwright_ocp_bmc_auth_enabled
 
 - name: Parse BMC credentials
   ansible.builtin.set_fact:
-    gitups_ocp_bmc_credentials: "{{ gitups_ocp_bmc_credentials_slurp | gitups_parse_credential('cluster BMC credentialRef ' ~ gitups_current_provider.bmc.auth.credentialRef) }}"
+    bootwright_ocp_bmc_credentials: "{{ bootwright_ocp_bmc_credentials_slurp | bootwright_parse_credential('cluster BMC credentialRef ' ~ bootwright_current_provider.bmc.auth.credentialRef) }}"
   no_log: true
   changed_when: false
-  when: gitups_ocp_bmc_auth_enabled
+  when: bootwright_ocp_bmc_auth_enabled
 
 - name: Publish BMC auth facts
   ansible.builtin.set_fact:
-    gitups_ocp_bmc_username: "{{ gitups_ocp_bmc_credentials.username }}"
-    gitups_ocp_bmc_password: "{{ gitups_ocp_bmc_credentials.password }}"
+    bootwright_ocp_bmc_username: "{{ bootwright_ocp_bmc_credentials.username }}"
+    bootwright_ocp_bmc_password: "{{ bootwright_ocp_bmc_credentials.password }}"
   no_log: true
   changed_when: false
-  when: gitups_ocp_bmc_auth_enabled
+  when: bootwright_ocp_bmc_auth_enabled
 
 - name: Select generated certificate requests
   ansible.builtin.set_fact:
-    gitups_ocp_generated_self_signed_certificates: "{{ gitups_ocp_cluster_install.generatedSecrets | default([]) | selectattr('type', 'equalto', 'self-signed-certificate') | list }}"
+    bootwright_ocp_generated_self_signed_certificates: "{{ bootwright_ocp_cluster_install.generatedSecrets | default([]) | selectattr('type', 'equalto', 'self-signed-certificate') | list }}"
   changed_when: false
 
 - name: Validate agent install method
   ansible.builtin.fail:
-    msg: "install_agent only supports install method 'agent', got '{{ gitups_ocp_cluster_install.method | default('<unset>') }}'"
-  when: (gitups_ocp_cluster_install.method | default('')) != 'agent'
+    msg: "install_agent only supports install method 'agent', got '{{ bootwright_ocp_cluster_install.method | default('<unset>') }}'"
+  when: (bootwright_ocp_cluster_install.method | default('')) != 'agent'
 
 - name: Locate openshift-install
-  ansible.builtin.shell: "command -v {{ gitups_openshift_install | quote }}"
+  ansible.builtin.shell: "command -v {{ bootwright_openshift_install | quote }}"
   args:
     executable: /bin/sh
-  register: gitups_openshift_install_lookup
+  register: bootwright_openshift_install_lookup
   changed_when: false
-  failed_when: gitups_openshift_install_lookup.rc != 0
+  failed_when: bootwright_openshift_install_lookup.rc != 0
   delegate_to: localhost
   become: false
 
 - name: Resolve openshift-install path
   ansible.builtin.set_fact:
-    gitups_openshift_install_path: "{{ gitups_openshift_install_lookup.stdout | trim }}"
+    bootwright_openshift_install_path: "{{ bootwright_openshift_install_lookup.stdout | trim }}"
   changed_when: false
 
 - name: Read openshift-install version
   ansible.builtin.command:
-    cmd: "{{ gitups_openshift_install_path }} version"
-  register: gitups_openshift_install_version
+    cmd: "{{ bootwright_openshift_install_path }} version"
+  register: bootwright_openshift_install_version
   changed_when: false
   delegate_to: localhost
   become: false
@@ -90,10 +90,10 @@
 - name: Validate openshift-install release
   ansible.builtin.assert:
     that:
-      - gitups_ocp_release.version | length > 0
-      - gitups_openshift_install_version.stdout_lines[0] is search(gitups_ocp_release.version)
+      - bootwright_ocp_release.version | length > 0
+      - bootwright_openshift_install_version.stdout_lines[0] is search(bootwright_ocp_release.version)
     fail_msg: |
-      openshift-install at {{ gitups_openshift_install_path }} reports
-      "{{ gitups_openshift_install_version.stdout_lines[0] }}", which does not match
-      release.version {{ gitups_ocp_release.version | default('<unset>') }}.
-      Replace the binary or override gitups_openshift_install.
+      openshift-install at {{ bootwright_openshift_install_path }} reports
+      "{{ bootwright_openshift_install_version.stdout_lines[0] }}", which does not match
+      release.version {{ bootwright_ocp_release.version | default('<unset>') }}.
+      Replace the binary or override bootwright_openshift_install.

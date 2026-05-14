@@ -1,11 +1,11 @@
 ---
 - name: Install cluster with openshift-install agent
-  hosts: gitups_ocp_hosts
+  hosts: bootwright_ocp_hosts
   gather_subset:
     - "!all"
     - min
   become: true
-  environment: "{{ gitups_proxy_env | default({}) }}"
+  environment: "{{ bootwright_proxy_env | default({}) }}"
 
   pre_tasks:
     - name: Gather remote environment
@@ -21,4 +21,4 @@
   roles:
     - role: host_proxy
     - role: install_agent
-      when: gitups_current_cluster.ocp.install.method == 'agent'
+      when: bootwright_current_cluster.ocp.install.method == 'agent'

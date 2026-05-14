@@ -1,9 +1,9 @@
 ---
 - name: Destroy cluster infrastructure
-  hosts: gitups_infra_hosts
+  hosts: bootwright_infra_hosts
   gather_facts: false
   become: true
-  environment: "{{ gitups_proxy_env | default({}) }}"
+  environment: "{{ bootwright_proxy_env | default({}) }}"
 
   pre_tasks:
     - name: Resolve cluster context
@@ -23,69 +23,72 @@
 
     - name: Stop libvirt domains
       community.libvirt.virt:
-        name: "{{ gitups_current_cluster.name }}-{{ item.name }}"
+        name: "{{ bootwright_current_cluster.name }}-{{ item.name }}"
         state: destroyed
       failed_when: false
-      loop: "{{ gitups_current_cluster.provider.nodes | default([]) }}"
+      loop: "{{ bootwright_current_cluster.provider.nodes | default([]) }}"
       loop_control:
         label: "{{ item.name }}"
-      when: gitups_current_cluster.provider.kind == 'libvirt'
+      when: bootwright_current_cluster.provider.kind == 'libvirt'
 
+    # community.libvirt.virt undefine has no API flag to remove storage —
+    # virsh's --remove-all-storage is CLI-side. Disk volumes live under
+    # bootwright_host_state_dir/<cluster>/qemu and are removed by the
+    # "Remove cluster state directory" task below.
     - name: Undefine libvirt domains
       community.libvirt.virt:
         command: undefine
-        name: "{{ gitups_current_cluster.name }}-{{ item.name }}"
+        name: "{{ bootwright_current_cluster.name }}-{{ item.name }}"
         flags:
-          - remove_all_storage
           - keep_nvram
       failed_when: false
-      loop: "{{ gitups_current_cluster.provider.nodes | default([]) }}"
+      loop: "{{ bootwright_current_cluster.provider.nodes | default([]) }}"
       loop_control:
         label: "{{ item.name }}"
-      when: gitups_current_cluster.provider.kind == 'libvirt'
+      when: bootwright_current_cluster.provider.kind == 'libvirt'
 
     - name: Check firewalld state
       ansible.builtin.command:
         argv:
           - firewall-cmd
           - --state
-      register: gitups_firewalld_state
+      register: bootwright_firewalld_state
       changed_when: false
       failed_when: false
-      when: gitups_current_cluster.provider.kind == 'libvirt'
+      when: bootwright_current_cluster.provider.kind == 'libvirt'
 
     - name: Close boot artifacts HTTP port
       ansible.posix.firewalld:
         zone: libvirt
-        port: "{{ gitups_current_cluster.provider.bootArtifactsHttp.port | int }}/tcp"
+        port: "{{ bootwright_current_cluster.provider.bootArtifactsHttp.port | int }}/tcp"
         state: disabled
         permanent: true
         immediate: true
       failed_when: false
       when:
-        - gitups_current_cluster.provider.kind == 'libvirt'
-        - gitups_firewalld_state.rc | default(1) == 0
-        - gitups_current_cluster.provider.bootArtifactsHttp.enabled | default(false) | bool
+        - bootwright_current_cluster.provider.kind == 'libvirt'
+        - bootwright_firewalld_state.rc | default(1) == 0
+        - bootwright_current_cluster.provider.bootArtifactsHttp.enabled | default(false) | bool
 
     - name: Remove libvirt network
       community.libvirt.virt_net:
-        name: "{{ gitups_current_cluster.provider.virtualization.libvirt.network }}"
+        name: "{{ bootwright_current_cluster.provider.virtualization.libvirt.network }}"
         state: absent
       failed_when: false
       when:
-        - gitups_current_cluster.provider.kind == 'libvirt'
-        - (gitups_current_cluster.provider.virtualization.libvirt.network | default('')) | length > 0
+        - bootwright_current_cluster.provider.kind == 'libvirt'
+        - (bootwright_current_cluster.provider.virtualization.libvirt.network | default('')) | length > 0
 
     - name: Remove managed hosts-file block
       ansible.builtin.blockinfile:
         path: /etc/hosts
-        marker: "# {mark} GITUPS {{ gitups_current_cluster.name }} hosts"
+        marker: "# {mark} BOOTWRIGHT {{ bootwright_current_cluster.name }} hosts"
         state: absent
-      when: gitups_current_cluster.network.nameResolution.mode == 'managed'
+      when: bootwright_current_cluster.network.nameResolution.mode == 'managed'
 
     - name: Remove cluster state directory
       ansible.builtin.file:
-        path: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}"
+        path: "{{ bootwright_host_state_dir }}/{{ bootwright_current_cluster.name }}"
         state: absent
 
     - name: Strip host-level proxy configuration

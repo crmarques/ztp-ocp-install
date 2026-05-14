@@ -1,4 +1,4 @@
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: InfrastructureProvider
 metadata:
   name: edge-haproxy-provider
@@ -7,7 +7,7 @@ spec:
     edge-host:
       ssh:
         address: 10.0.0.5
-        user: gitups
+        user: bootwright
         keyRef:
           name: edge-host-ssh
       capabilities:

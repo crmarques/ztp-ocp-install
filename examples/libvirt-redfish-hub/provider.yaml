@@ -1,4 +1,4 @@
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: InfrastructureProvider
 metadata:
   name: libvirt-redfish-provider
@@ -7,7 +7,7 @@ spec:
     libvirt-host:
       ssh:
         address: 192.168.10.11
-        user: gitups
+        user: bootwright
         keyRef:
           name: libvirt-host-ssh
       capabilities:

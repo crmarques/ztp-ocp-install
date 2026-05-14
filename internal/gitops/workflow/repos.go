@@ -1,6 +1,6 @@
 package workflow
 
-import v1 "github.com/crmarques/gitups/api/v1alpha1"
+import v1 "github.com/crmarques/bootwright/api/v1alpha1"
 
 func RenderedRepoNames(fp *v1.GitOpsPackageSet) []string {
 	seen := map[string]bool{}

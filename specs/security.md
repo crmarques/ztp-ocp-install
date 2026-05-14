@@ -5,19 +5,19 @@
 - Never commit plaintext credentials, kubeconfigs, pull secrets, private
   keys, or tokens. Generated examples must use placeholders only.
 - Desired-state YAML references secret material by `SecretRef.name`. The
-  local resolver maps the name to one file under `<gitups-home>/secrets`,
-  where the Gitups user directory is `GITUPS_USER_DIR` or `~/.gitups` by default, and the secrets directory may be overridden via `GITUPS_SECRETS_DIR`.
+  local resolver maps the name to one file under `<bootwright-home>/secrets`,
+  where the Bootwright user directory is `BOOTWRIGHT_USER_DIR` or `~/.bootwright` by default, and the secrets directory may be overridden via `BOOTWRIGHT_SECRETS_DIR`.
 - The secrets directory must be host-local, unversioned, mode `0700`, and
   individual files mode `0600`.
 - BMC credential files referenced by
   `InfrastructureProvider.spec.machine.libvirt.bmcEmulation.auth.credentialRef`
   and `ClusterInfrastructure.spec.machines.<name>.baremetal.bmc.credentialRef`
-  are stored as a single `username:password` line. `gitups secret set <name>`
+  are stored as a single `username:password` line. `bootwright secret set <name>`
   is the only supported writer; sushy emulator htpasswd files are
   derived from the credential file at apply time and are never committed.
 - Generated self-signed certificate material is still secret material when
-  it includes a private key. Gitups creates it through
-  `gitups secret generate`, not through root-escalated Ansible tasks, and
+  it includes a private key. Bootwright creates it through
+  `bootwright secret generate`, not through root-escalated Ansible tasks, and
   must not render it into committed examples, logs, or GitOps output.
 - Logs must not print sensitive values.
 
@@ -29,10 +29,10 @@ rejects `disconnected` without both. Trust bundle material is referenced
 by `spec.registries.mirror.trustBundleRef.name`; bundle bytes are never
 inlined into YAML. Lab environments may request generated self-signed
 registry trust by declaring the same name in
-`Environment.spec.secrets[name].generated.selfSignedCertificate`, and Gitups
+`Environment.spec.secrets[name].generated.selfSignedCertificate`, and Bootwright
 writes the certificate and private key only to the local secrets directory.
 Disconnected mode requires OpenShift `imageDigestSources` for the mirrored
-release payload sources. Gitups renders those sources with
+release payload sources. Bootwright renders those sources with
 `NeverContactSource`, rejects mirror entries outside the configured
 registry, and uses a local release-image override. For libvirt lab
 installs with emulated BMC, disconnected agent ISO rendering also uses
@@ -45,7 +45,7 @@ material reaches the rendered install-config or host runtime.
 
 When the operator declares `InfrastructureProvider.spec.registry.mirrorRegistry`,
 the `mirror_registry` provider role installs the registry CA into the host
-trust store at `/etc/pki/ca-trust/source/anchors/gitups-mirror-<host>.crt`
+trust store at `/etc/pki/ca-trust/source/anchors/bootwright-mirror-<host>.crt`
 and runs `update-ca-trust`. This trust write is host-local: cluster-node
 trust still flows through the install-config `additionalTrustBundle` path.
 The mirror htpasswd file is derived at apply time from a single-line
@@ -59,8 +59,8 @@ secret is also used to inject credentialed installer proxy URLs into
 effective install-config work copies. Managed Squid requires authentication;
 open managed proxies and chained upstream proxies are out of scope.
 
-If a managed proxy is referenced by a Gitups-managed libvirt cluster,
-Gitups removes NAT from that libvirt network so VMs cannot use direct internet
+If a managed proxy is referenced by a Bootwright-managed libvirt cluster,
+Bootwright removes NAT from that libvirt network so VMs cannot use direct internet
 egress. This isolation is limited to those managed libvirt networks and must
 not add firewall blocks to external proxy, no-proxy, bare-metal, vSphere,
 OpenShift Virtualization, or provider-host paths.
@@ -68,9 +68,9 @@ OpenShift Virtualization, or provider-host paths.
 ## Host Runtime State
 
 Keep root-managed runtime state separate. The default host runtime
-directory is `/var/lib/gitups`. Do not place libvirt disks, BMC emulator
+directory is `/var/lib/bootwright`. Do not place libvirt disks, BMC emulator
 state, systemd unit assets, or rootful Podman bind-mounted config under
-`~/.gitups`; secure home traversal, SELinux labels, and QEMU/libvirt
+`~/.bootwright`; secure home traversal, SELinux labels, and QEMU/libvirt
 service-user access become harder and less predictable.
 
 ## Access Control

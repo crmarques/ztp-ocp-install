@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/crmarques/gitups/api/v1alpha1"
-	"github.com/crmarques/gitups/internal/infra"
+	"github.com/crmarques/bootwright/api/v1alpha1"
+	"github.com/crmarques/bootwright/internal/infra"
 	"go.yaml.in/yaml/v3"
 )
 
@@ -36,10 +36,10 @@ func TestRenderResolvesFileBasedSecretsToSourcePath(t *testing.T) {
 		}},
 	}
 	vars := Vars(state, "/anywhere")
-	if got, want := vars.GitupsClusters[0].OCP.Install.SSHKeyRef, "/tmp/foo"; got != want {
+	if got, want := vars.BootwrightClusters[0].OCP.Install.SSHKeyRef, "/tmp/foo"; got != want {
 		t.Fatalf("file-based SSHKeyRef got %q, want %q", got, want)
 	}
-	if got := vars.GitupsClusters[0].OCP.Install.SSHKeyRef; strings.HasPrefix(got, "/anywhere") {
+	if got := vars.BootwrightClusters[0].OCP.Install.SSHKeyRef; strings.HasPrefix(got, "/anywhere") {
 		t.Fatalf("file-based SSHKeyRef must not use secretsDir prefix, got %q", got)
 	}
 }
@@ -98,7 +98,7 @@ func TestRenderAllProducesGeneratedAnsibleArtifacts(t *testing.T) {
 		"hub-hub-sno-host:",
 		"managed-01-managed-01-host:",
 		"managed-02-managed-02-host:",
-		"gitups_cluster_name: hub",
+		"bootwright_cluster_name: hub",
 	} {
 		if !strings.Contains(inventory, expected) {
 			t.Fatalf("inventory missing %q\n%s", expected, inventory)
@@ -191,8 +191,8 @@ func TestRenderInstallerAssets(t *testing.T) {
 		"none:",
 		"machineNetwork:",
 		"cidr: 192.168.122.0/24",
-		"gitups-secret-ref:openshift-pull-secret",
-		"gitups-ssh-key-ref:cluster-admin-key",
+		"bootwright-secret-ref:openshift-pull-secret",
+		"bootwright-ssh-key-ref:cluster-admin-key",
 	} {
 		if !strings.Contains(installConfig, expected) {
 			t.Fatalf("install-config missing %q\n%s", expected, installConfig)
@@ -347,7 +347,7 @@ func TestRenderMirrorRegistryRunVars(t *testing.T) {
 	}
 	varsFile := readFile(t, result.VarsPath)
 	for _, expected := range []string{
-		"gitups_mirror_registries:",
+		"bootwright_mirror_registries:",
 		"name: local-libvirt-1-host-provider",
 		"providerRef: local-libvirt-1-host-provider",
 		"providerHostRef: local-libvirt-host",
@@ -386,7 +386,7 @@ func TestRenderManagedProxyRunVarsAndLibvirtIsolation(t *testing.T) {
 	}
 	varsFile := readFile(t, result.VarsPath)
 	for _, expected := range []string{
-		"gitups_forward_proxies:",
+		"bootwright_forward_proxies:",
 		"name: proxy-render-provider",
 		"providerRef: proxy-render-provider",
 		"providerHostRef: host-01",
@@ -426,7 +426,7 @@ func TestRenderOneHostTreatsLocalhostAsProviderHost(t *testing.T) {
 	inventory := readFile(t, result.InventoryPath)
 	for _, expected := range []string{
 		"ansible_host: localhost",
-		"gitups_cluster_name: local-libvirt-1-host-hub",
+		"bootwright_cluster_name: local-libvirt-1-host-hub",
 	} {
 		if !strings.Contains(inventory, expected) {
 			t.Fatalf("inventory missing %q\n%s", expected, inventory)
@@ -457,12 +457,12 @@ func TestRenderVarsExposeOCPInstallMetadata(t *testing.T) {
 		t.Fatalf("user home: %v", err)
 	}
 	for _, expected := range []string{
-		"gitups_ocp_install:",
+		"bootwright_ocp_install:",
 		"mode: disconnected",
 		"disconnected: true",
 		"method: agent",
-		"pullSecretRef: " + filepath.Join(home, ".gitups/secrets/openshift-pull-secret"),
-		"sshKeyRef: " + filepath.Join(home, ".ssh/gitups-ssh-key.pub"),
+		"pullSecretRef: " + filepath.Join(home, ".bootwright/secrets/openshift-pull-secret"),
+		"sshKeyRef: " + filepath.Join(home, ".ssh/bootwright-ssh-key.pub"),
 		"releaseImageOverride: registry.mirror.local:5000/openshift/release-images:4.21.12-x86_64",
 		"additionalTrustBundleRef: mirror-registry-ca",
 		"version: 4.21.12",
@@ -498,7 +498,7 @@ func TestRenderVarsExposeOCPInstallMetadata(t *testing.T) {
 		"imageDigestSources:",
 		"registry.mirror.local:5000/openshift/release-images",
 		"sourcePolicy: NeverContactSource",
-		"additionalTrustBundle: <gitups-trust-bundle-ref:mirror-registry-ca>",
+		"additionalTrustBundle: <bootwright-trust-bundle-ref:mirror-registry-ca>",
 		"additionalTrustBundlePolicy: Always",
 	} {
 		if !strings.Contains(installConfig, expected) {
@@ -541,24 +541,24 @@ func TestOCPInstallRoleDoesNotShadowEnvironmentInstallVars(t *testing.T) {
 	secrets := readFile(t, "../../../ansible/roles/openshift/install_agent/tasks/secrets.yml")
 	combined := preflight + "\n" + secrets
 	for _, expected := range []string{
-		"gitups_ocp_cluster_install: \"{{ gitups_current_cluster.ocp.install }}\"",
-		"gitups_ocp_cluster_install.method",
-		"gitups_ocp_cluster_install.generatedSecrets",
-		"gitups_ocp_cluster_install.pullSecretRef",
-		"gitups_ocp_cluster_install.sshKeyRef",
-		"gitups_ocp_cluster_install.additionalTrustBundleRef",
+		"bootwright_ocp_cluster_install: \"{{ bootwright_current_cluster.ocp.install }}\"",
+		"bootwright_ocp_cluster_install.method",
+		"bootwright_ocp_cluster_install.generatedSecrets",
+		"bootwright_ocp_cluster_install.pullSecretRef",
+		"bootwright_ocp_cluster_install.sshKeyRef",
+		"bootwright_ocp_cluster_install.additionalTrustBundleRef",
 	} {
 		if !strings.Contains(combined, expected) {
 			t.Fatalf("install_agent must use cluster install fact %q\n%s", expected, combined)
 		}
 	}
 	for _, unexpected := range []string{
-		"gitups_ocp_install: \"{{ gitups_current_cluster.ocp.install }}\"",
-		"gitups_ocp_install.method",
-		"gitups_ocp_install.generatedSecrets",
-		"gitups_ocp_install.pullSecretRef",
-		"gitups_ocp_install.sshKeyRef",
-		"gitups_ocp_install.additionalTrustBundleRef",
+		"bootwright_ocp_install: \"{{ bootwright_current_cluster.ocp.install }}\"",
+		"bootwright_ocp_install.method",
+		"bootwright_ocp_install.generatedSecrets",
+		"bootwright_ocp_install.pullSecretRef",
+		"bootwright_ocp_install.sshKeyRef",
+		"bootwright_ocp_install.additionalTrustBundleRef",
 	} {
 		if strings.Contains(combined, unexpected) {
 			t.Fatalf("install_agent shadows environment install vars with %q\n%s", unexpected, combined)
@@ -573,16 +573,16 @@ func TestLibvirtSubstrateOpensBootArtifactsHTTPPort(t *testing.T) {
 	for _, expected := range []string{
 		"<dhcp>",
 		"<host mac='{{ node.macAddress }}'",
-		"name='{{ gitups_current_cluster.name }}-{{ node.name }}'",
+		"name='{{ bootwright_current_cluster.name }}-{{ node.name }}'",
 		"ip='{{ node.ipAddress }}'",
 		"ansible.posix.firewalld",
 		"zone: libvirt",
-		"interface: \"{{ gitups_current_cluster.provider.virtualization.libvirt.bridge }}\"",
-		"port: \"{{ gitups_current_cluster.provider.bootArtifactsHttp.port | int }}/tcp\"",
+		"interface: \"{{ bootwright_current_cluster.provider.virtualization.libvirt.bridge }}\"",
+		"port: \"{{ bootwright_current_cluster.provider.bootArtifactsHttp.port | int }}/tcp\"",
 		"egressRestrictedToProxy",
-		"{% if not (gitups_current_cluster.provider.virtualization.libvirt.egressRestrictedToProxy | default(false) | bool) %}",
+		"{% if not (bootwright_current_cluster.provider.virtualization.libvirt.egressRestrictedToProxy | default(false) | bool) %}",
 		"<forward mode='nat'>",
-		"port: \"{{ gitups_current_cluster.provider.virtualization.libvirt.proxyPort | int }}/tcp\"",
+		"port: \"{{ bootwright_current_cluster.provider.virtualization.libvirt.proxyPort | int }}/tcp\"",
 	} {
 		if !strings.Contains(combined, expected) {
 			t.Fatalf("substrate_libvirt is missing %q\n%s", expected, combined)
@@ -591,7 +591,7 @@ func TestLibvirtSubstrateOpensBootArtifactsHTTPPort(t *testing.T) {
 	for _, leak := range []string{
 		"provider.bmc.port",
 		"provider.bmc.enabled",
-		"gitups_load_balancers",
+		"bootwright_load_balancers",
 		"Plumb cluster load balancer VIPs",
 		"--get-zone-of-interface",
 		"--add-port=",
@@ -607,8 +607,8 @@ func TestClusterNetworkVipsOwnsVIPPlumbing(t *testing.T) {
 	apply := readFile(t, "../../../ansible/roles/cluster_infra/network_vips/tasks/main.yml")
 	for _, expected := range []string{
 		"Attach load balancer VIPs",
-		"gitups_in_cidr",
-		"gitups_load_balancers",
+		"bootwright_in_cidr",
+		"bootwright_load_balancers",
 	} {
 		if !strings.Contains(apply, expected) {
 			t.Fatalf("network_vips/tasks/main.yml missing %q\n%s", expected, apply)
@@ -619,7 +619,7 @@ func TestClusterNetworkVipsOwnsVIPPlumbing(t *testing.T) {
 		t.Fatalf("network_vips/tasks/destroy.yml missing unplumb task\n%s", destroy)
 	}
 	if _, err := os.Stat("../../../ansible/roles/cluster_infra/network_vips/test_plugins/cidr.py"); err != nil {
-		t.Fatalf("network_vips/test_plugins/cidr.py must own the gitups_in_cidr plugin: %v", err)
+		t.Fatalf("network_vips/test_plugins/cidr.py must own the bootwright_in_cidr plugin: %v", err)
 	}
 }
 
@@ -648,7 +648,7 @@ func TestRenderVarsExposeGeneratedSecrets(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "provider.yaml"), []byte(hubProvider), 0o644); err != nil {
 		t.Fatalf("write provider.yaml: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "environment.yaml"), []byte(`apiVersion: gitups.io/v1alpha1
+	if err := os.WriteFile(filepath.Join(dir, "environment.yaml"), []byte(`apiVersion: bootwright.io/v1alpha1
 kind: Environment
 metadata:
   name: example
@@ -671,11 +671,11 @@ spec:
           - registry.lab.test:5000/openshift/release-images
   secrets:
     openshift-pull-secret:
-      file: ~/.gitups/secrets/openshift-pull-secret
+      file: ~/.bootwright/secrets/openshift-pull-secret
     cluster-admin-key:
-      file: ~/.ssh/gitups-ssh-key.pub
+      file: ~/.ssh/bootwright-ssh-key.pub
     lab-provider-key:
-      file: ~/.ssh/gitups-ssh-key
+      file: ~/.ssh/bootwright-ssh-key
     lab-bmc-credentials:
       generated:
         credentials:
@@ -742,7 +742,7 @@ func TestRenderManagedNetworkDetails(t *testing.T) {
 		"targetPort: 6443",
 		"backends:",
 		"address: 192.168.130.20",
-		"console-openshift-console.apps.libvirt-1-host-hub.gitups.test",
+		"console-openshift-console.apps.libvirt-1-host-hub.bootwright.test",
 		"name: haproxy",
 		"version: 3.3.8",
 	} {
@@ -852,7 +852,7 @@ func TestResolveInstallerInlinesSecretsIntoWorkCopies(t *testing.T) {
 		t.Fatalf("render All returned error: %v", err)
 	}
 	placeholder := readFile(t, result.InstallerAssets[0].InstallConfigPath)
-	if !strings.Contains(placeholder, "gitups-secret-ref:openshift-pull-secret") {
+	if !strings.Contains(placeholder, "bootwright-secret-ref:openshift-pull-secret") {
 		t.Fatalf("placeholder install-config missing pull secret placeholder\n%s", placeholder)
 	}
 	if strings.Contains(placeholder, sshKey) || strings.Contains(placeholder, pullSecretContent) {
@@ -899,9 +899,9 @@ func TestResolveInstallerInlinesSecretsIntoWorkCopies(t *testing.T) {
 		}
 	}
 	for _, leaked := range []string{
-		"gitups-secret-ref:",
-		"<gitups-ssh-key-ref:",
-		"<gitups-trust-bundle-ref:",
+		"bootwright-secret-ref:",
+		"<bootwright-ssh-key-ref:",
+		"<bootwright-trust-bundle-ref:",
 	} {
 		if strings.Contains(effective, leaked) {
 			t.Fatalf("effective install-config still contains placeholder %q\n%s", leaked, effective)
@@ -980,16 +980,16 @@ func TestE2EProxyInputRendersIntoOpenShiftInstallerFiles(t *testing.T) {
       proxyAuthRef:
         name: proxy-credentials
 `, `  proxy:
-    http: http://proxy.gitups.test:3128
-    https: https://secure-proxy.gitups.test:8443
+    http: http://proxy.bootwright.test:3128
+    https: https://secure-proxy.bootwright.test:8443
     noProxy:
       - 192.168.132.0/24
     auth:
       proxyAuthRef:
         name: proxy-credentials
 `)
-	envBody = replaceOnce(t, envBody, "      file: ~/.ssh/gitups-ssh-key.pub\n", "      file: secrets/cluster-admin-key\n")
-	envBody = replaceOnce(t, envBody, "      file: ~/.gitups/secrets/openshift-pull-secret\n", "      file: secrets/openshift-pull-secret\n")
+	envBody = replaceOnce(t, envBody, "      file: ~/.ssh/bootwright-ssh-key.pub\n", "      file: secrets/cluster-admin-key\n")
+	envBody = replaceOnce(t, envBody, "      file: ~/.bootwright/secrets/openshift-pull-secret\n", "      file: secrets/openshift-pull-secret\n")
 	envBody = replaceOnce(t, envBody, "    proxy-credentials:\n      generated:\n        credentials:\n          username: proxy\n", "    proxy-credentials:\n      file: secrets/proxy-credentials\n")
 	if err := os.WriteFile(envPath, []byte(envBody), 0o644); err != nil {
 		t.Fatalf("write environment with proxy: %v", err)
@@ -1015,7 +1015,7 @@ func TestE2EProxyInputRendersIntoOpenShiftInstallerFiles(t *testing.T) {
 		content string
 	}{
 		{name: "openshift-pull-secret", content: `{"auths":{"quay.io":{"auth":"cmVkaGF0OnNlY3JldA=="}}}`},
-		{name: "cluster-admin-key", content: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFake gitups-test"},
+		{name: "cluster-admin-key", content: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFake bootwright-test"},
 		{name: "proxy-credentials", content: "proxy user:pass/word"},
 	} {
 		if err := os.WriteFile(filepath.Join(secretsDir, item.name), []byte(item.content), 0o600); err != nil {
@@ -1033,12 +1033,12 @@ func TestE2EProxyInputRendersIntoOpenShiftInstallerFiles(t *testing.T) {
 		t.Fatalf("render All returned error: %v", err)
 	}
 	varsFile := readFile(t, result.VarsPath)
-	if strings.Contains(varsFile, "gitups_forward_proxies:") || strings.Contains(varsFile, "egressRestrictedToProxy: true") {
+	if strings.Contains(varsFile, "bootwright_forward_proxies:") || strings.Contains(varsFile, "egressRestrictedToProxy: true") {
 		t.Fatalf("external proxy must not render managed proxy or libvirt isolation\n%s", varsFile)
 	}
 	asset := installerAssetFor(result.InstallerAssets, "sno-libvirt")
-	noProxy := []string{"192.168.132.0/24", "localhost", "127.0.0.1", ".gitups.test", ".svc", ".cluster.local"}
-	assertInstallConfigProxy(t, asset.InstallConfigPath, "http://proxy.gitups.test:3128", "https://secure-proxy.gitups.test:8443", noProxy)
+	noProxy := []string{"192.168.132.0/24", "localhost", "127.0.0.1", ".bootwright.test", ".svc", ".cluster.local"}
+	assertInstallConfigProxy(t, asset.InstallConfigPath, "http://proxy.bootwright.test:3128", "https://secure-proxy.bootwright.test:8443", noProxy)
 	if safeConfig := readFile(t, asset.InstallConfigPath); strings.Contains(safeConfig, "proxy%20user") || strings.Contains(safeConfig, "pass%2Fword") {
 		t.Fatalf("safe install-config must not contain proxy credentials\n%s", safeConfig)
 	}
@@ -1051,8 +1051,8 @@ func TestE2EProxyInputRendersIntoOpenShiftInstallerFiles(t *testing.T) {
 	assertInstallConfigProxy(
 		t,
 		resolvedAsset.EffectiveInstallConfigPath,
-		"http://proxy%20user:pass%2Fword@proxy.gitups.test:3128",
-		"https://proxy%20user:pass%2Fword@secure-proxy.gitups.test:8443",
+		"http://proxy%20user:pass%2Fword@proxy.bootwright.test:3128",
+		"https://proxy%20user:pass%2Fword@secure-proxy.bootwright.test:8443",
 		noProxy,
 	)
 }
@@ -1060,7 +1060,7 @@ func TestE2EProxyInputRendersIntoOpenShiftInstallerFiles(t *testing.T) {
 func TestOCPInstallCommandEnvironmentIncludesProxyEnv(t *testing.T) {
 	effectiveConfig := readFile(t, "../../../ansible/roles/openshift/install_agent/tasks/effective-config.yml")
 	for _, expected := range []string{
-		"gitups_proxy_env | default({})",
+		"bootwright_proxy_env | default({})",
 		"| combine(",
 		"OPENSHIFT_INSTALL_RELEASE_IMAGE_OVERRIDE",
 	} {
@@ -1073,8 +1073,8 @@ func TestOCPInstallCommandEnvironmentIncludesProxyEnv(t *testing.T) {
 func TestHostProxyFactsEscapesSlashInProxyCredentials(t *testing.T) {
 	facts := readFile(t, "../../../ansible/roles/shared/host_proxy/tasks/facts.yml")
 	for _, expected := range []string{
-		"gitups_proxy_credentials.username | urlencode | replace('/', '%2F')",
-		"gitups_proxy_credentials.password | urlencode | replace('/', '%2F')",
+		"bootwright_proxy_credentials.username | urlencode | replace('/', '%2F')",
+		"bootwright_proxy_credentials.password | urlencode | replace('/', '%2F')",
 	} {
 		if !strings.Contains(facts, expected) {
 			t.Fatalf("host_proxy facts must escape slash in proxy userinfo; missing %q\n%s", expected, facts)
@@ -1085,7 +1085,7 @@ func TestHostProxyFactsEscapesSlashInProxyCredentials(t *testing.T) {
 func TestProviderBMCEmulatedPipInstallUsesPrivatePipConfig(t *testing.T) {
 	tasks := readFile(t, "../../../ansible/roles/providers/bmc_emulated/tasks/main.yml")
 	for _, expected := range []string{
-		"dest: \"{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/bmc/pip.conf\"",
+		"dest: \"{{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/bmc/pip.conf\"",
 		"PIP_CONFIG_FILE=\"$PIP_CONFIG\"",
 		"-u HTTP_PROXY -u HTTPS_PROXY -u NO_PROXY",
 		"-u http_proxy -u https_proxy -u no_proxy",
@@ -1134,14 +1134,14 @@ func TestResolveInstallerFailsWhenSecretFileMissing(t *testing.T) {
 
 func TestProviderDispatchCoversAllKinds(t *testing.T) {
 	clusterTasks := readFile(t, "../../../ansible/playbooks/layers/cluster_infra/apply.yml")
-	if !strings.Contains(clusterTasks, "substrate_{{ gitups_current_cluster.provider.substrateRole }}") {
+	if !strings.Contains(clusterTasks, "substrate_{{ bootwright_current_cluster.provider.substrateRole }}") {
 		t.Fatalf("cluster infra apply playbook missing substrate dispatch fragment\n%s", clusterTasks)
 	}
 	providerTasks := readFile(t, "../../../ansible/playbooks/layers/providers/apply.yml")
 	for _, expected := range []string{
 		"proxy_squid",
-		"bmc_{{ gitups_current_provider.bmcRole }}",
-		"gitups_current_provider.bootArtifactsHttp.enabled",
+		"bmc_{{ bootwright_current_provider.bmcRole }}",
+		"bootwright_current_provider.bootArtifactsHttp.enabled",
 	} {
 		if !strings.Contains(providerTasks, expected) {
 			t.Fatalf("providers apply playbook missing dispatch fragment %q\n%s", expected, providerTasks)
@@ -1171,8 +1171,8 @@ func TestProviderDispatchCoversAllKinds(t *testing.T) {
 func TestProviderDestroyRemovesManagedProxyWithoutBroadNetworkBlocks(t *testing.T) {
 	destroy := readFile(t, "../../../ansible/roles/providers/proxy_squid/tasks/destroy.yml")
 	for _, expected := range []string{
-		"gitups_current_forward_proxy",
-		"gitups-squid-{{ gitups_current_forward_proxy.name }}",
+		"bootwright_current_forward_proxy",
+		"bootwright-squid-{{ bootwright_current_forward_proxy.name }}",
 		"Close managed proxy firewall port",
 		"Remove managed proxy state directory",
 	} {
@@ -1229,7 +1229,7 @@ func writeFile(t *testing.T, path string, content string) {
 }
 
 func managedProxyRenderYAML(name, providerName, cidr, gateway, apiVIP, ingressVIP, nodeIP string) string {
-	return strings.Replace(strings.Replace(strings.Replace(strings.Replace(fmt.Sprintf(`apiVersion: gitups.io/v1alpha1
+	return strings.Replace(strings.Replace(strings.Replace(strings.Replace(fmt.Sprintf(`apiVersion: bootwright.io/v1alpha1
 kind: Environment
 metadata:
   name: env-%s
@@ -1252,7 +1252,7 @@ spec:
         credentials:
           username: proxy
 ---
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: InfrastructureProvider
 metadata:
   name: %s
@@ -1261,7 +1261,7 @@ spec:
     host-01:
       ssh:
         address: 10.0.0.1
-        user: gitups
+        user: bootwright
         keyRef:
           name: default-key
       capabilities:
@@ -1277,7 +1277,7 @@ spec:
       hostRef:
         name: host-01
 ---
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: ClusterInfrastructure
 metadata:
   name: %s
@@ -1308,7 +1308,7 @@ spec:
     ingress:
       address: %s
 ---
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: OCPCluster
 metadata:
   name: %s

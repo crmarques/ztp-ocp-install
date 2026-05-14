@@ -1,9 +1,9 @@
 ---
 - name: Destroy OpenShift agent install state
-  hosts: gitups_ocp_hosts
+  hosts: bootwright_ocp_hosts
   gather_facts: false
   become: true
-  environment: "{{ gitups_proxy_env | default({}) }}"
+  environment: "{{ bootwright_proxy_env | default({}) }}"
 
   pre_tasks:
     - name: Resolve cluster context
@@ -19,7 +19,7 @@
     - name: Destroy agent install state
       ansible.builtin.import_role:
         name: destroy_agent
-      when: gitups_current_cluster.ocp.install.method == 'agent'
+      when: bootwright_current_cluster.ocp.install.method == 'agent'
 
     - name: Strip host-level proxy configuration
       ansible.builtin.import_role:

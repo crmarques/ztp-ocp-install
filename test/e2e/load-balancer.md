@@ -2,10 +2,10 @@
 
 The e2e cases front the API, API-internal, and Ingress VIPs with a load
 balancer the operator picks via desired state. The reference YAMLs use
-**Gitups-managed HAProxy** on the provider host — switch modes by editing
+**Bootwright-managed HAProxy** on the provider host — switch modes by editing
 `provider.yaml` and (for some modes) `infra.yaml`.
 
-| Mode | What Gitups does | When to use |
+| Mode | What Bootwright does | When to use |
 | --- | --- | --- |
 | [Managed HAProxy](#managed-haproxy) | Pins a HAProxy component on the provider host and writes its config | Lab / e2e default; provider has the `loadBalancer.haProxy` capability |
 | [Installer-managed](#installer-managed-or-external) | Hands the VIPs to the agent installer, which runs `keepalived` + `haproxy` on the control planes (multi-node baremetal/libvirt only) | Production-style platform-managed VIPs without an external LB |
@@ -56,13 +56,13 @@ spec:
         - ingress
 ```
 
-`gitups apply infra` provisions and binds the HAProxy container on the
+`bootwright apply infra` provisions and binds the HAProxy container on the
 referenced host. Nothing else for the operator to set up.
 
 ## Installer-Managed Or External
 
 Drop the `loadBalancer:` block from `provider.yaml` and the
-`loadBalancers:` block from `infra.yaml`, but keep `endpoints:`. Gitups
+`loadBalancers:` block from `infra.yaml`, but keep `endpoints:`. Bootwright
 forwards the VIPs to the installer and provisions nothing.
 
 What happens next depends on the cluster shape:

@@ -19,10 +19,10 @@ trust referenced through `SecretRef`.
 ## Commands
 
 ```text
-gitups check bastion -f examples/libvirt-redfish-hub
-gitups check infra -f examples/libvirt-redfish-hub --state-dir .state --dry-run
-gitups apply infra -f examples/libvirt-redfish-hub --state-dir .state --dry-run
-gitups apply clusters -f examples/libvirt-redfish-hub --state-dir .state --dry-run
-gitups apply hub -f examples/libvirt-redfish-hub --state-dir .state --dry-run
-gitups secret generate -f examples/libvirt-redfish-hub
+bootwright check bastion -f examples/libvirt-redfish-hub
+bootwright check infra -f examples/libvirt-redfish-hub --state-dir .state --dry-run
+bootwright apply infra -f examples/libvirt-redfish-hub --state-dir .state --dry-run
+bootwright apply clusters -f examples/libvirt-redfish-hub --state-dir .state --dry-run
+bootwright apply hub -f examples/libvirt-redfish-hub --state-dir .state --dry-run
+bootwright secret generate -f examples/libvirt-redfish-hub
 ```

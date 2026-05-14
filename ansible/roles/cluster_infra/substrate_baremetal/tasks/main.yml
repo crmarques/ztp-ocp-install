@@ -2,9 +2,9 @@
 
 - name: Select bare-metal machines
   ansible.builtin.set_fact:
-    gitups_baremetal_machines: >-
+    bootwright_baremetal_machines: >-
       {{
-        gitups_current_cluster.ocp.nodes
+        bootwright_current_cluster.ocp.nodes
         | selectattr('bareMetal', 'defined')
         | rejectattr('bareMetal', 'equalto', None)
         | list
@@ -14,15 +14,15 @@
 - name: Validate bare-metal BMC details
   ansible.builtin.assert:
     that:
-      - gitups_baremetal_machines | length == gitups_current_cluster.ocp.nodes | length
-      - gitups_baremetal_machines | rejectattr('bareMetal.address', 'defined') | list | length == 0
-    fail_msg: "Every machine in cluster {{ gitups_current_cluster.name }} must declare bareMetal.bmc.address; got {{ gitups_baremetal_machines | length }} of {{ gitups_current_cluster.ocp.nodes | length }} with BMC info"
+      - bootwright_baremetal_machines | length == bootwright_current_cluster.ocp.nodes | length
+      - bootwright_baremetal_machines | rejectattr('bareMetal.address', 'defined') | list | length == 0
+    fail_msg: "Every machine in cluster {{ bootwright_current_cluster.name }} must declare bareMetal.bmc.address; got {{ bootwright_baremetal_machines | length }} of {{ bootwright_current_cluster.ocp.nodes | length }} with BMC info"
 
 - name: Select BMC credential files
   ansible.builtin.set_fact:
-    gitups_baremetal_credential_refs: >-
+    bootwright_baremetal_credential_refs: >-
       {{
-        gitups_baremetal_machines
+        bootwright_baremetal_machines
         | map(attribute='bareMetal.credentialRef')
         | select('truthy') | unique | list
       }}
@@ -31,20 +31,20 @@
 - name: Check BMC credential files
   ansible.builtin.stat:
     path: "{{ item }}"
-  loop: "{{ gitups_baremetal_credential_refs }}"
-  register: gitups_baremetal_credential_stats
+  loop: "{{ bootwright_baremetal_credential_refs }}"
+  register: bootwright_baremetal_credential_stats
 
 - name: Validate BMC credential files
   ansible.builtin.fail:
     msg: "Missing bare-metal BMC credentials at {{ item.item }}"
-  loop: "{{ gitups_baremetal_credential_stats.results }}"
+  loop: "{{ bootwright_baremetal_credential_stats.results }}"
   loop_control:
     label: "{{ item.item }}"
   when: not (item.stat.exists | default(false))
 
 - name: Create bare-metal state directory
   ansible.builtin.file:
-    path: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}/baremetal"
+    path: "{{ bootwright_host_state_dir }}/{{ bootwright_current_cluster.name }}/baremetal"
     state: directory
     owner: root
     group: root
@@ -52,14 +52,14 @@
 
 - name: Record bare-metal manifest
   ansible.builtin.copy:
-    dest: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}/baremetal/manifest.yml"
+    dest: "{{ bootwright_host_state_dir }}/{{ bootwright_current_cluster.name }}/baremetal/manifest.yml"
     owner: root
     group: root
     mode: "0644"
     content: |
-      cluster: {{ gitups_current_cluster.name }}
+      cluster: {{ bootwright_current_cluster.name }}
       machines:
-      {% for node in gitups_baremetal_machines %}
+      {% for node in bootwright_baremetal_machines %}
         - name: {{ node.name }}
           role: {{ node.role }}
           ipAddress: {{ node.ipAddress }}

@@ -9,10 +9,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/crmarques/gitups/api/v1alpha1"
-	"github.com/crmarques/gitups/internal/embedded"
-	"github.com/crmarques/gitups/internal/provisioning/render"
-	"github.com/crmarques/gitups/internal/workflow"
+	"github.com/crmarques/bootwright/api/v1alpha1"
+	"github.com/crmarques/bootwright/internal/embedded"
+	"github.com/crmarques/bootwright/internal/provisioning/render"
+	"github.com/crmarques/bootwright/internal/workflow"
 )
 
 const ansibleBundleDirName = "ansible-bundle"

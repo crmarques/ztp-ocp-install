@@ -6,37 +6,37 @@
       - hosts
       - "{{ item }}"
   loop:
-    - "{{ gitups_current_cluster.network.records.api }}"
-    - "{{ gitups_current_cluster.network.records.apiInt }}"
+    - "{{ bootwright_current_cluster.network.records.api }}"
+    - "{{ bootwright_current_cluster.network.records.apiInt }}"
   changed_when: false
-  when: gitups_current_cluster.network.nameResolution.mode == 'external'
+  when: bootwright_current_cluster.network.nameResolution.mode == 'external'
 
 - name: Create external network state directory
   ansible.builtin.file:
-    path: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}"
+    path: "{{ bootwright_host_state_dir }}/{{ bootwright_current_cluster.name }}"
     state: directory
     owner: root
     group: root
     mode: "0755"
-  when: gitups_current_cluster.network.nameResolution.mode == 'external' or gitups_current_cluster.network.loadBalancer.external | default(false) | bool
+  when: bootwright_current_cluster.network.nameResolution.mode == 'external' or bootwright_current_cluster.network.loadBalancer.external | default(false) | bool
 
 - name: Record external network expectations
   ansible.builtin.copy:
-    dest: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}/external-network.yml"
+    dest: "{{ bootwright_host_state_dir }}/{{ bootwright_current_cluster.name }}/external-network.yml"
     owner: root
     group: root
     mode: "0644"
     content: |
       endpoints:
         api:
-          hostname: {{ gitups_current_cluster.network.endpoints.api.hostname }}
-          address: {{ gitups_current_cluster.network.endpoints.api.address }}
+          hostname: {{ bootwright_current_cluster.network.endpoints.api.hostname }}
+          address: {{ bootwright_current_cluster.network.endpoints.api.address }}
         apiInt:
-          hostname: {{ gitups_current_cluster.network.endpoints.apiInt.hostname }}
-          address: {{ gitups_current_cluster.network.endpoints.apiInt.address }}
+          hostname: {{ bootwright_current_cluster.network.endpoints.apiInt.hostname }}
+          address: {{ bootwright_current_cluster.network.endpoints.apiInt.address }}
         ingress:
-          hostname: "{{ gitups_current_cluster.network.endpoints.ingress.hostname }}"
-          address: {{ gitups_current_cluster.network.endpoints.ingress.address }}
-      loadBalancerMode: {{ gitups_current_cluster.network.loadBalancer.mode }}
-      nameResolutionMode: {{ gitups_current_cluster.network.nameResolution.mode }}
-  when: gitups_current_cluster.network.nameResolution.mode == 'external' or gitups_current_cluster.network.loadBalancer.external | default(false) | bool
+          hostname: "{{ bootwright_current_cluster.network.endpoints.ingress.hostname }}"
+          address: {{ bootwright_current_cluster.network.endpoints.ingress.address }}
+      loadBalancerMode: {{ bootwright_current_cluster.network.loadBalancer.mode }}
+      nameResolutionMode: {{ bootwright_current_cluster.network.nameResolution.mode }}
+  when: bootwright_current_cluster.network.nameResolution.mode == 'external' or bootwright_current_cluster.network.loadBalancer.external | default(false) | bool

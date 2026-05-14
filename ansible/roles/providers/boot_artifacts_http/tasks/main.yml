@@ -3,13 +3,13 @@
 - name: Validate boot artifact HTTP settings
   ansible.builtin.assert:
     that:
-      - gitups_current_provider.bootArtifactsHttp.port | int > 0
-      - (gitups_current_provider.bootArtifactsHttp.bindAddress | default('')) | length > 0
+      - bootwright_current_provider.bootArtifactsHttp.port | int > 0
+      - (bootwright_current_provider.bootArtifactsHttp.bindAddress | default('')) | length > 0
     fail_msg: "boot_artifacts_http requires bootArtifactsHttp.{port,bindAddress} on the provider vars"
 
 - name: Create boot artifact directory
   ansible.builtin.file:
-    path: "{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/boot-artifacts"
+    path: "{{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/boot-artifacts"
     state: directory
     owner: root
     group: root
@@ -17,49 +17,49 @@
 
 - name: Install boot artifact HTTP unit
   ansible.builtin.copy:
-    dest: "/etc/systemd/system/gitups-boot-artifacts-{{ gitups_current_provider.name }}.service"
+    dest: "/etc/systemd/system/bootwright-boot-artifacts-{{ bootwright_current_provider.name }}.service"
     owner: root
     group: root
     mode: "0644"
     content: |
       [Unit]
-      Description=Gitups boot artifacts HTTP server for provider {{ gitups_current_provider.name }}
+      Description=Bootwright boot artifacts HTTP server for provider {{ bootwright_current_provider.name }}
       After=network-online.target
       Wants=network-online.target
 
       [Service]
       Type=simple
-      ExecStart=/usr/bin/python3 -m http.server {{ gitups_current_provider.bootArtifactsHttp.port | int }} --bind {{ gitups_current_provider.bootArtifactsHttp.bindAddress }} --directory {{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/boot-artifacts
+      ExecStart=/usr/bin/python3 -m http.server {{ bootwright_current_provider.bootArtifactsHttp.port | int }} --bind {{ bootwright_current_provider.bootArtifactsHttp.bindAddress }} --directory {{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/boot-artifacts
       Restart=on-failure
       RestartSec=5
-      StandardOutput=append:{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/boot-artifacts-http.log
-      StandardError=append:{{ gitups_host_state_dir }}/providers/{{ gitups_current_provider.name }}/boot-artifacts-http.log
+      StandardOutput=append:{{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/boot-artifacts-http.log
+      StandardError=append:{{ bootwright_host_state_dir }}/providers/{{ bootwright_current_provider.name }}/boot-artifacts-http.log
 
       [Install]
       WantedBy=multi-user.target
-  register: gitups_boot_artifacts_unit
+  register: bootwright_boot_artifacts_unit
 
 - name: Restart boot artifact HTTP service
   ansible.builtin.systemd_service:
-    name: "gitups-boot-artifacts-{{ gitups_current_provider.name }}.service"
+    name: "bootwright-boot-artifacts-{{ bootwright_current_provider.name }}.service"
     state: restarted
     enabled: true
     daemon_reload: true
-  when: gitups_boot_artifacts_unit.changed
+  when: bootwright_boot_artifacts_unit.changed
 
 - name: Start boot artifact HTTP service
   ansible.builtin.systemd_service:
-    name: "gitups-boot-artifacts-{{ gitups_current_provider.name }}.service"
+    name: "bootwright-boot-artifacts-{{ bootwright_current_provider.name }}.service"
     state: started
     enabled: true
 
 - name: Wait for boot artifact HTTP endpoint
   ansible.builtin.uri:
-    url: "http://127.0.0.1:{{ gitups_current_provider.bootArtifactsHttp.port | int }}/"
+    url: "http://127.0.0.1:{{ bootwright_current_provider.bootArtifactsHttp.port | int }}/"
     method: GET
     status_code: 200
     return_content: false
-  register: gitups_boot_artifacts_ready
+  register: bootwright_boot_artifacts_ready
   retries: 30
   delay: 1
-  until: gitups_boot_artifacts_ready.status == 200
+  until: bootwright_boot_artifacts_ready.status == 200

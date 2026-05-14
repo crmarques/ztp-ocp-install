@@ -31,8 +31,8 @@ func NewWorkspace(outputDir, name string) (Workspace, error) {
 		Name:               name,
 		Root:               root,
 		PackageSet:         filepath.Join(root, "gitops-package-set.yaml"),
-		ExpandedPackageSet: filepath.Join(root, ".gitups", "expanded", "gitops-package-set.yaml"),
-		RenderRoot:         filepath.Join(root, ".gitups", "render"),
+		ExpandedPackageSet: filepath.Join(root, ".bootwright", "expanded", "gitops-package-set.yaml"),
+		RenderRoot:         filepath.Join(root, ".bootwright", "render"),
 	}, nil
 }
 
@@ -45,12 +45,12 @@ func AbsPath(p string) string {
 }
 
 func ScaffoldPackageSet(name string) string {
-	return fmt.Sprintf(`apiVersion: gitups.io/v1alpha1
+	return fmt.Sprintf(`apiVersion: bootwright.io/v1alpha1
 kind: GitOpsPackageSet
 metadata:
   name: %s
 spec:
-  # Package sources: where gitups looks up package definitions.
+  # Package sources: where bootwright looks up package definitions.
   sources: []
   # - name: local
   #   filesystem:

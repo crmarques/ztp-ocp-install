@@ -6,4 +6,4 @@
 
 **Fix:** Always set `additionalTrustBundlePolicy: Always` when `additionalTrustBundle` is present. See `InstallerConfig` in `internal/render/installer.go`.
 
-**Invariant:** Gitups unconditionally sets `Always` whenever `additionalTrustBundleRef` is declared on the OCPCluster.
+**Invariant:** Bootwright unconditionally sets `Always` whenever `additionalTrustBundleRef` is declared on the OCPCluster.

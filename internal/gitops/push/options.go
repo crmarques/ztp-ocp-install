@@ -1,4 +1,4 @@
-// Package push publishes rendered gitups workspaces to a git provider
+// Package push publishes rendered bootwright workspaces to a git provider
 // (GitHub, GitLab, Gitea).
 package push
 

@@ -5,7 +5,7 @@
 
 - name: Create libvirt storage directory
   ansible.builtin.file:
-    path: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}/qemu"
+    path: "{{ bootwright_host_state_dir }}/{{ bootwright_current_cluster.name }}/qemu"
     state: directory
     owner: root
     group: root
@@ -13,23 +13,23 @@
 
 - name: Record libvirt desired state
   ansible.builtin.copy:
-    dest: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}/qemu/virtualization.yml"
+    dest: "{{ bootwright_host_state_dir }}/{{ bootwright_current_cluster.name }}/qemu/virtualization.yml"
     owner: root
     group: root
     mode: "0644"
     content: |
-      type: {{ gitups_current_cluster.provider.virtualization.type }}
+      type: {{ bootwright_current_cluster.provider.virtualization.type }}
       libvirt:
-        network: {{ gitups_current_cluster.provider.virtualization.libvirt.network }}
-        bridge: {{ gitups_current_cluster.provider.virtualization.libvirt.bridge }}
-        egressRestrictedToProxy: {{ gitups_current_cluster.provider.virtualization.libvirt.egressRestrictedToProxy | default(false) | bool }}
-        proxyURL: {{ gitups_current_cluster.provider.virtualization.libvirt.proxyURL | default('') }}
+        network: {{ bootwright_current_cluster.provider.virtualization.libvirt.network }}
+        bridge: {{ bootwright_current_cluster.provider.virtualization.libvirt.bridge }}
+        egressRestrictedToProxy: {{ bootwright_current_cluster.provider.virtualization.libvirt.egressRestrictedToProxy | default(false) | bool }}
+        proxyURL: {{ bootwright_current_cluster.provider.virtualization.libvirt.proxyURL | default('') }}
       defaultNode:
-        cpu: {{ gitups_current_cluster.provider.virtualization.defaultNode.cpu }}
-        memoryMiB: {{ gitups_current_cluster.provider.virtualization.defaultNode.memoryMiB }}
-        diskGiB: {{ gitups_current_cluster.provider.virtualization.defaultNode.diskGiB }}
+        cpu: {{ bootwright_current_cluster.provider.virtualization.defaultNode.cpu }}
+        memoryMiB: {{ bootwright_current_cluster.provider.virtualization.defaultNode.memoryMiB }}
+        diskGiB: {{ bootwright_current_cluster.provider.virtualization.defaultNode.diskGiB }}
       nodes:
-      {% for node in gitups_current_cluster.provider.nodes %}
+      {% for node in bootwright_current_cluster.provider.nodes %}
         - name: {{ node.name }}
           role: {{ node.role }}
           hostRef: {{ node.hostRef }}
@@ -44,61 +44,61 @@
 - name: List libvirt networks
   community.libvirt.virt_net:
     command: list_nets
-  register: gitups_libvirt_net_list
+  register: bootwright_libvirt_net_list
   changed_when: false
 
 - name: Check target libvirt network
   ansible.builtin.set_fact:
-    gitups_libvirt_net_exists: "{{ gitups_current_cluster.provider.virtualization.libvirt.network in (gitups_libvirt_net_list.list_nets | default([])) }}"
+    bootwright_libvirt_net_exists: "{{ bootwright_current_cluster.provider.virtualization.libvirt.network in (bootwright_libvirt_net_list.list_nets | default([])) }}"
   changed_when: false
 
 - name: Read live libvirt network XML
   community.libvirt.virt_net:
     command: get_xml
-    name: "{{ gitups_current_cluster.provider.virtualization.libvirt.network }}"
-  register: gitups_libvirt_net_existing_xml
+    name: "{{ bootwright_current_cluster.provider.virtualization.libvirt.network }}"
+  register: bootwright_libvirt_net_existing_xml
   failed_when: false
   changed_when: false
-  when: gitups_libvirt_net_exists
+  when: bootwright_libvirt_net_exists
 
 - name: Select libvirt network UUID
   ansible.builtin.set_fact:
-    gitups_libvirt_net_uuid: >-
+    bootwright_libvirt_net_uuid: >-
       {{
-        ((gitups_libvirt_net_existing_xml.get_xml | default(''))
+        ((bootwright_libvirt_net_existing_xml.get_xml | default(''))
           | regex_search('[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'))
-        if gitups_libvirt_net_exists
-        else (gitups_current_cluster.name ~ '-net-' ~ gitups_current_cluster.provider.virtualization.libvirt.network) | to_uuid
+        if bootwright_libvirt_net_exists
+        else (bootwright_current_cluster.name ~ '-net-' ~ bootwright_current_cluster.provider.virtualization.libvirt.network) | to_uuid
       }}
   changed_when: false
 
 - name: Select machine network
   ansible.builtin.set_fact:
-    gitups_libvirt_machine_network: >-
+    bootwright_libvirt_machine_network: >-
       {{
-        (gitups_current_cluster.network.machineNetworks
+        (bootwright_current_cluster.network.machineNetworks
           | selectattr('libvirt', 'defined')
-          | selectattr('libvirt.bridge', 'equalto', gitups_current_cluster.provider.virtualization.libvirt.bridge)
+          | selectattr('libvirt.bridge', 'equalto', bootwright_current_cluster.provider.virtualization.libvirt.bridge)
           | list
           | first)
-        | default(gitups_current_cluster.network.machineNetworks | first)
+        | default(bootwright_current_cluster.network.machineNetworks | first)
       }}
   changed_when: false
 
 - name: Compute libvirt network fingerprint
   ansible.builtin.set_fact:
-    gitups_libvirt_net_fingerprint: >-
+    bootwright_libvirt_net_fingerprint: >-
       {{
         ([
-          gitups_libvirt_machine_network.gateway,
-          gitups_libvirt_machine_network.cidr,
-          gitups_current_cluster.provider.virtualization.libvirt.bridge,
-          (gitups_current_cluster.provider.virtualization.libvirt.dnsHosts | default([])),
-          (gitups_current_cluster.provider.nodes | default([])
+          bootwright_libvirt_machine_network.gateway,
+          bootwright_libvirt_machine_network.cidr,
+          bootwright_current_cluster.provider.virtualization.libvirt.bridge,
+          (bootwright_current_cluster.provider.virtualization.libvirt.dnsHosts | default([])),
+          (bootwright_current_cluster.provider.nodes | default([])
             | map(attribute='macAddress') | list),
-          (gitups_current_cluster.provider.nodes | default([])
+          (bootwright_current_cluster.provider.nodes | default([])
             | map(attribute='ipAddress') | list),
-          (gitups_current_cluster.provider.virtualization.libvirt.egressRestrictedToProxy | default(false) | bool),
+          (bootwright_current_cluster.provider.virtualization.libvirt.egressRestrictedToProxy | default(false) | bool),
           'no-hosts',
         ] | to_json) | hash('sha1')
       }}
@@ -107,52 +107,52 @@
 - name: Render libvirt network XML
   ansible.builtin.template:
     src: network.xml.j2
-    dest: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}/qemu/network.xml"
+    dest: "{{ bootwright_host_state_dir }}/{{ bootwright_current_cluster.name }}/qemu/network.xml"
     owner: root
     group: root
     mode: "0644"
-  register: gitups_libvirt_net_xml_file
+  register: bootwright_libvirt_net_xml_file
 
 - name: Read rendered libvirt network XML
   ansible.builtin.slurp:
-    src: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}/qemu/network.xml"
-  register: gitups_libvirt_net_xml_slurp
+    src: "{{ bootwright_host_state_dir }}/{{ bootwright_current_cluster.name }}/qemu/network.xml"
+  register: bootwright_libvirt_net_xml_slurp
 
 - name: Select rendered libvirt network XML content
   ansible.builtin.set_fact:
-    gitups_libvirt_net_xml_content: "{{ gitups_libvirt_net_xml_slurp.content | b64decode }}"
+    bootwright_libvirt_net_xml_content: "{{ bootwright_libvirt_net_xml_slurp.content | b64decode }}"
   changed_when: false
 
 - name: Detect libvirt network drift
   ansible.builtin.set_fact:
-    gitups_libvirt_net_drifted: >-
+    bootwright_libvirt_net_drifted: >-
       {{
-        gitups_libvirt_net_exists
-        and ('gitups-net-fingerprint:' ~ gitups_libvirt_net_fingerprint)
-            not in (gitups_libvirt_net_existing_xml.get_xml | default(''))
+        bootwright_libvirt_net_exists
+        and ('bootwright-net-fingerprint:' ~ bootwright_libvirt_net_fingerprint)
+            not in (bootwright_libvirt_net_existing_xml.get_xml | default(''))
       }}
   changed_when: false
 
 - name: Remove conflicting libvirt bridges
-  when: not gitups_libvirt_net_exists
+  when: not bootwright_libvirt_net_exists
   block:
     - name: Read XML for every other libvirt network
       community.libvirt.virt_net:
         command: get_xml
         name: "{{ item }}"
-      register: gitups_libvirt_other_net_xmls
-      loop: "{{ (gitups_libvirt_net_list.list_nets | default([])) | reject('equalto', gitups_current_cluster.provider.virtualization.libvirt.network) | list }}"
+      register: bootwright_libvirt_other_net_xmls
+      loop: "{{ (bootwright_libvirt_net_list.list_nets | default([])) | reject('equalto', bootwright_current_cluster.provider.virtualization.libvirt.network) | list }}"
       failed_when: false
       changed_when: false
 
     - name: Resolve libvirt networks claiming this bridge
       ansible.builtin.set_fact:
-        gitups_libvirt_conflicting_nets: >-
+        bootwright_libvirt_conflicting_nets: >-
           {{
-            gitups_libvirt_other_net_xmls.results
+            bootwright_libvirt_other_net_xmls.results
             | default([])
             | selectattr('get_xml', 'defined')
-            | selectattr('get_xml', 'search', "<bridge name='" ~ gitups_current_cluster.provider.virtualization.libvirt.bridge ~ "'")
+            | selectattr('get_xml', 'search', "<bridge name='" ~ bootwright_current_cluster.provider.virtualization.libvirt.bridge ~ "'")
             | map(attribute='item')
             | list
           }}
@@ -162,31 +162,31 @@
       community.libvirt.virt_net:
         name: "{{ item }}"
         state: absent
-      loop: "{{ gitups_libvirt_conflicting_nets }}"
+      loop: "{{ bootwright_libvirt_conflicting_nets }}"
       failed_when: false
 
 - name: Stop changed libvirt network
   community.libvirt.virt_net:
-    name: "{{ gitups_current_cluster.provider.virtualization.libvirt.network }}"
+    name: "{{ bootwright_current_cluster.provider.virtualization.libvirt.network }}"
     state: inactive
   when:
-    - gitups_libvirt_net_exists
-    - gitups_libvirt_net_xml_file.changed or gitups_libvirt_net_drifted | bool
+    - bootwright_libvirt_net_exists
+    - bootwright_libvirt_net_xml_file.changed or bootwright_libvirt_net_drifted | bool
 
 - name: Define libvirt network
   community.libvirt.virt_net:
-    name: "{{ gitups_current_cluster.provider.virtualization.libvirt.network }}"
+    name: "{{ bootwright_current_cluster.provider.virtualization.libvirt.network }}"
     state: present
-    xml: "{{ gitups_libvirt_net_xml_content }}"
+    xml: "{{ bootwright_libvirt_net_xml_content }}"
 
 - name: Enable libvirt network autostart
   community.libvirt.virt_net:
-    name: "{{ gitups_current_cluster.provider.virtualization.libvirt.network }}"
+    name: "{{ bootwright_current_cluster.provider.virtualization.libvirt.network }}"
     autostart: true
 
 - name: Start libvirt network
   community.libvirt.virt_net:
-    name: "{{ gitups_current_cluster.provider.virtualization.libvirt.network }}"
+    name: "{{ bootwright_current_cluster.provider.virtualization.libvirt.network }}"
     state: active
 
 - name: Check firewalld state
@@ -194,48 +194,48 @@
     argv:
       - firewall-cmd
       - --state
-  register: gitups_firewalld_state
+  register: bootwright_firewalld_state
   changed_when: false
   failed_when: false
 
 - name: Assign bridge to libvirt firewalld zone
   ansible.posix.firewalld:
     zone: libvirt
-    interface: "{{ gitups_current_cluster.provider.virtualization.libvirt.bridge }}"
+    interface: "{{ bootwright_current_cluster.provider.virtualization.libvirt.bridge }}"
     state: enabled
     permanent: true
     immediate: true
   when:
-    - gitups_firewalld_state.rc == 0
-    - (gitups_current_cluster.provider.bootArtifactsHttp.enabled | default(false) | bool) or (gitups_current_cluster.provider.virtualization.libvirt.egressRestrictedToProxy | default(false) | bool)
+    - bootwright_firewalld_state.rc == 0
+    - (bootwright_current_cluster.provider.bootArtifactsHttp.enabled | default(false) | bool) or (bootwright_current_cluster.provider.virtualization.libvirt.egressRestrictedToProxy | default(false) | bool)
 
 - name: Open boot artifact HTTP port
   ansible.posix.firewalld:
     zone: libvirt
-    port: "{{ gitups_current_cluster.provider.bootArtifactsHttp.port | int }}/tcp"
+    port: "{{ bootwright_current_cluster.provider.bootArtifactsHttp.port | int }}/tcp"
     state: enabled
     permanent: true
     immediate: true
   when:
-    - gitups_firewalld_state.rc == 0
-    - gitups_current_cluster.provider.bootArtifactsHttp.enabled | default(false) | bool
+    - bootwright_firewalld_state.rc == 0
+    - bootwright_current_cluster.provider.bootArtifactsHttp.enabled | default(false) | bool
 
 - name: Open managed proxy port
   ansible.posix.firewalld:
     zone: libvirt
-    port: "{{ gitups_current_cluster.provider.virtualization.libvirt.proxyPort | int }}/tcp"
+    port: "{{ bootwright_current_cluster.provider.virtualization.libvirt.proxyPort | int }}/tcp"
     state: enabled
     permanent: true
     immediate: true
   when:
-    - gitups_firewalld_state.rc == 0
-    - gitups_current_cluster.provider.virtualization.libvirt.egressRestrictedToProxy | default(false) | bool
-    - (gitups_current_cluster.provider.virtualization.libvirt.proxyPort | default(0) | int) > 0
+    - bootwright_firewalld_state.rc == 0
+    - bootwright_current_cluster.provider.virtualization.libvirt.egressRestrictedToProxy | default(false) | bool
+    - (bootwright_current_cluster.provider.virtualization.libvirt.proxyPort | default(0) | int) > 0
 
 - name: Check QEMU emulator candidates
   ansible.builtin.stat:
     path: "{{ item }}"
-  register: gitups_qemu_emulator_candidate_stats
+  register: bootwright_qemu_emulator_candidate_stats
   loop:
     - /usr/bin/qemu-kvm
     - /usr/libexec/qemu-kvm
@@ -243,21 +243,21 @@
 
 - name: Select QEMU emulator
   ansible.builtin.set_fact:
-    gitups_qemu_emulator_path: "{{ gitups_qemu_emulator_candidate_stats.results | selectattr('stat.exists') | map(attribute='item') | first | default('') }}"
+    bootwright_qemu_emulator_path: "{{ bootwright_qemu_emulator_candidate_stats.results | selectattr('stat.exists') | map(attribute='item') | first | default('') }}"
 
 - name: Validate QEMU emulator
   ansible.builtin.fail:
     msg: "No QEMU emulator found. Expected one of: /usr/bin/qemu-kvm, /usr/libexec/qemu-kvm, /usr/bin/qemu-system-x86_64"
-  when: gitups_qemu_emulator_path == ""
+  when: bootwright_qemu_emulator_path == ""
 
 - name: Create VM directories
   ansible.builtin.file:
-    path: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}/qemu/{{ item.name }}"
+    path: "{{ bootwright_host_state_dir }}/{{ bootwright_current_cluster.name }}/qemu/{{ item.name }}"
     state: directory
     owner: root
     group: root
     mode: "0755"
-  loop: "{{ gitups_current_cluster.provider.nodes }}"
+  loop: "{{ bootwright_current_cluster.provider.nodes }}"
 
 - name: Create VM disks
   ansible.builtin.command:
@@ -266,53 +266,53 @@
       - create
       - -f
       - qcow2
-      - "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}/qemu/{{ item.name }}/disk.qcow2"
+      - "{{ bootwright_host_state_dir }}/{{ bootwright_current_cluster.name }}/qemu/{{ item.name }}/disk.qcow2"
       - "{{ item.resources.diskGiB }}G"
   args:
-    creates: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}/qemu/{{ item.name }}/disk.qcow2"
-  loop: "{{ gitups_current_cluster.provider.nodes }}"
+    creates: "{{ bootwright_host_state_dir }}/{{ bootwright_current_cluster.name }}/qemu/{{ item.name }}/disk.qcow2"
+  loop: "{{ bootwright_current_cluster.provider.nodes }}"
 
 - name: Read live libvirt domain XML
   community.libvirt.virt:
     command: get_xml
-    name: "{{ gitups_current_cluster.name }}-{{ item.name }}"
-  register: gitups_qemu_domain_xmls
+    name: "{{ bootwright_current_cluster.name }}-{{ item.name }}"
+  register: bootwright_qemu_domain_xmls
   failed_when: false
   changed_when: false
-  loop: "{{ gitups_current_cluster.provider.nodes }}"
+  loop: "{{ bootwright_current_cluster.provider.nodes }}"
 
 - name: Select libvirt domain UUIDs
   ansible.builtin.set_fact:
-    gitups_qemu_node_uuids: >-
+    bootwright_qemu_node_uuids: >-
       {{
-        gitups_qemu_node_uuids | default({}) | combine({
+        bootwright_qemu_node_uuids | default({}) | combine({
           item.item.name: (
             (item.get_xml | default('') | regex_search('[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'))
             if (item.get_xml | default('') | length) > 0
-            else (gitups_current_cluster.name ~ '-' ~ item.item.name) | to_uuid
+            else (bootwright_current_cluster.name ~ '-' ~ item.item.name) | to_uuid
           )
         })
       }}
-  loop: "{{ gitups_qemu_domain_xmls.results }}"
+  loop: "{{ bootwright_qemu_domain_xmls.results }}"
   loop_control:
     label: "{{ item.item.name }}"
 
 - name: Render VM domain XML
   ansible.builtin.template:
     src: domain.xml.j2
-    dest: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}/qemu/{{ item.name }}/domain.xml"
+    dest: "{{ bootwright_host_state_dir }}/{{ bootwright_current_cluster.name }}/qemu/{{ item.name }}/domain.xml"
     owner: root
     group: root
     mode: "0644"
   vars:
-    gitups_qemu_node: "{{ item }}"
-  loop: "{{ gitups_current_cluster.provider.nodes }}"
+    bootwright_qemu_node: "{{ item }}"
+  loop: "{{ bootwright_current_cluster.provider.nodes }}"
 
 - name: Read rendered VM domain XML
   ansible.builtin.slurp:
-    src: "{{ gitups_host_state_dir }}/{{ gitups_current_cluster.name }}/qemu/{{ item.name }}/domain.xml"
-  register: gitups_qemu_domain_xml_slurp
-  loop: "{{ gitups_current_cluster.provider.nodes }}"
+    src: "{{ bootwright_host_state_dir }}/{{ bootwright_current_cluster.name }}/qemu/{{ item.name }}/domain.xml"
+  register: bootwright_qemu_domain_xml_slurp
+  loop: "{{ bootwright_current_cluster.provider.nodes }}"
   loop_control:
     label: "{{ item.name }}"
 
@@ -320,6 +320,6 @@
   community.libvirt.virt:
     command: define
     xml: "{{ item.content | b64decode }}"
-  loop: "{{ gitups_qemu_domain_xml_slurp.results }}"
+  loop: "{{ bootwright_qemu_domain_xml_slurp.results }}"
   loop_control:
     label: "{{ item.item.name }}"

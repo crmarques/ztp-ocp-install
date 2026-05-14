@@ -57,7 +57,7 @@ func TestPushHappyPath(t *testing.T) {
 		Out:           &buf,
 	}, Options{
 		Branch:        "main",
-		CommitMessage: "gitups: sync",
+		CommitMessage: "bootwright: sync",
 		Token:         "tkn",
 	}, ParsedBaseURL{Scheme: "https", Host: "gitea.example.com", Owner: "myorg"})
 	if err != nil {

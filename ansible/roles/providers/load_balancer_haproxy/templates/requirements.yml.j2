@@ -1,12 +1,12 @@
-name: {{ gitups_current_load_balancer.name }}
-runtime: {{ gitups_current_load_balancer.runtime }}
-providerRef: {{ gitups_current_load_balancer.providerRef }}
-providerHostRef: {{ gitups_current_load_balancer.placement.providerHostRef }}
+name: {{ bootwright_current_load_balancer.name }}
+runtime: {{ bootwright_current_load_balancer.runtime }}
+providerRef: {{ bootwright_current_load_balancer.providerRef }}
+providerHostRef: {{ bootwright_current_load_balancer.placement.providerHostRef }}
 image:
-  local: {{ gitups_current_load_balancer.image.local | default('') }}
-  public: {{ gitups_current_load_balancer.image.public | default('') }}
+  local: {{ bootwright_current_load_balancer.image.local | default('') }}
+  public: {{ bootwright_current_load_balancer.image.public | default('') }}
 frontends:
-{% for frontend in gitups_current_load_balancer.frontends %}
+{% for frontend in bootwright_current_load_balancer.frontends %}
   - name: {{ frontend.name }}
     endpointRef: {{ frontend.endpointRef }}
     ports:

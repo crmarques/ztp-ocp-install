@@ -5,7 +5,7 @@ const (
 	KindPackageDefinition = "PackageDefinition"
 	KindPackageDescriptor = "PackageDescriptor"
 
-	PlaceholderSentinel = "__GITUPS_PLACEHOLDER__"
+	PlaceholderSentinel = "__BOOTWRIGHT_PLACEHOLDER__"
 
 	UnitTypeInstall  = "install"
 	UnitTypeResource = "resource"
@@ -40,8 +40,8 @@ const (
 	ProvisioningStyleCRD    = "crd"
 	ProvisioningStyleScript = "script"
 
-	ApplyWaveAnnotation = "gitups.io/apply-wave"
-	ReadinessAnnotation = "gitups.io/readiness"
+	ApplyWaveAnnotation = "bootwright.io/apply-wave"
+	ReadinessAnnotation = "bootwright.io/readiness"
 )
 
 type Role string

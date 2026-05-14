@@ -1,38 +1,38 @@
 ---
 - name: Remove mirror registry container
   containers.podman.podman_container:
-    name: "gitups-mirror-registry-{{ gitups_current_mirror_registry.name }}"
+    name: "bootwright-mirror-registry-{{ bootwright_current_mirror_registry.name }}"
     state: absent
-  when: gitups_current_mirror_registry is not none
+  when: bootwright_current_mirror_registry is not none
   failed_when: false
 
 - name: Remove mirror registry CA trust
   ansible.builtin.file:
-    path: "/etc/pki/ca-trust/source/anchors/gitups-mirror-{{ gitups_current_mirror_registry.host }}.crt"
+    path: "/etc/pki/ca-trust/source/anchors/bootwright-mirror-{{ bootwright_current_mirror_registry.host }}.crt"
     state: absent
-  register: gitups_mirror_registry_trust_remove
-  when: gitups_current_mirror_registry is not none
+  register: bootwright_mirror_registry_trust_remove
+  when: bootwright_current_mirror_registry is not none
 
 - name: Refresh host CA trust store
   ansible.builtin.command:
     argv:
       - update-ca-trust
   when:
-    - gitups_current_mirror_registry is not none
-    - gitups_mirror_registry_trust_remove.changed
-  changed_when: gitups_mirror_registry_trust_remove.changed
+    - bootwright_current_mirror_registry is not none
+    - bootwright_mirror_registry_trust_remove.changed
+  changed_when: bootwright_mirror_registry_trust_remove.changed
 
 - name: Remove mirror registry state directory
   ansible.builtin.file:
-    path: "{{ gitups_host_state_dir }}/mirror-registry/{{ gitups_current_mirror_registry.name }}"
+    path: "{{ bootwright_host_state_dir }}/mirror-registry/{{ bootwright_current_mirror_registry.name }}"
     state: absent
   when:
-    - gitups_current_mirror_registry is not none
-    - not (gitups_keep_mirrored_images | default(false) | bool)
+    - bootwright_current_mirror_registry is not none
+    - not (bootwright_keep_mirrored_images | default(false) | bool)
 
 - name: Remove mirror registry transient files
   ansible.builtin.file:
-    path: "{{ gitups_host_state_dir }}/mirror-registry/{{ gitups_current_mirror_registry.name }}/{{ item }}"
+    path: "{{ bootwright_host_state_dir }}/mirror-registry/{{ bootwright_current_mirror_registry.name }}/{{ item }}"
     state: absent
   loop:
     - auth
@@ -44,21 +44,21 @@
     - last-run.log
     - mirror-results.json
   when:
-    - gitups_current_mirror_registry is not none
-    - gitups_keep_mirrored_images | default(false) | bool
+    - bootwright_current_mirror_registry is not none
+    - bootwright_keep_mirrored_images | default(false) | bool
 
 - name: Report retained mirror registry data
   ansible.builtin.debug:
-    msg: "Retained mirror registry data volume at {{ gitups_host_state_dir }}/mirror-registry/{{ gitups_current_mirror_registry.name }}/data"
+    msg: "Retained mirror registry data volume at {{ bootwright_host_state_dir }}/mirror-registry/{{ bootwright_current_mirror_registry.name }}/data"
   when:
-    - gitups_current_mirror_registry is not none
-    - gitups_keep_mirrored_images | default(false) | bool
+    - bootwright_current_mirror_registry is not none
+    - bootwright_keep_mirrored_images | default(false) | bool
 
 - name: Remove empty mirror-registry directory
   ansible.builtin.command:
     argv:
       - rmdir
-      - "{{ gitups_host_state_dir }}/mirror-registry"
-  register: gitups_mirror_registry_parent_rm
+      - "{{ bootwright_host_state_dir }}/mirror-registry"
+  register: bootwright_mirror_registry_parent_rm
   failed_when: false
-  changed_when: gitups_mirror_registry_parent_rm.rc == 0
+  changed_when: bootwright_mirror_registry_parent_rm.rc == 0

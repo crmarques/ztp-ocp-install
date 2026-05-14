@@ -1,4 +1,4 @@
-// Package load decodes and validates on-disk gitups YAML documents.
+// Package load decodes and validates on-disk bootwright YAML documents.
 package load
 
 import (
@@ -10,8 +10,8 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
-	v1 "github.com/crmarques/gitups/api/v1alpha1"
-	"github.com/crmarques/gitups/internal/gitops/safepath"
+	v1 "github.com/crmarques/bootwright/api/v1alpha1"
+	"github.com/crmarques/bootwright/internal/gitops/safepath"
 )
 
 func DetectKind(path string) (v1.TypeMeta, error) {

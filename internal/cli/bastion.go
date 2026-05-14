@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/crmarques/gitups/api/v1alpha1"
+	"github.com/crmarques/bootwright/api/v1alpha1"
 )
 
 func newBastionCheckCmd(stdout io.Writer, stderr io.Writer) *cobra.Command {
@@ -68,7 +68,7 @@ func newBastionApplyCmd(stdin io.Reader, stdout io.Writer, stderr io.Writer) *co
 	cf := addCommonFlags(cmd)
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print planned commands without executing them")
 	cmd.Flags().BoolVar(&yes, "yes", false, "skip the confirmation prompt")
-	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material (env: GITUPS_SECRETS_DIR)")
+	cmd.Flags().StringVar(&secretsDir, "secrets-dir", secretsDir, "directory containing local install secret material (env: BOOTWRIGHT_SECRETS_DIR)")
 	cmd.RunE = func(c *cobra.Command, _ []string) error {
 		var state v1alpha1.State
 		if len(cf.files) > 0 {

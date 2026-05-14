@@ -11,12 +11,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	v1 "github.com/crmarques/gitups/api/v1alpha1"
-	"github.com/crmarques/gitups/internal/gitops/catalog"
-	"github.com/crmarques/gitups/internal/gitops/cluster"
-	"github.com/crmarques/gitups/internal/gitops/load"
-	"github.com/crmarques/gitups/internal/gitops/render"
-	"github.com/crmarques/gitups/internal/gitops/workflow"
+	v1 "github.com/crmarques/bootwright/api/v1alpha1"
+	"github.com/crmarques/bootwright/internal/gitops/catalog"
+	"github.com/crmarques/bootwright/internal/gitops/cluster"
+	"github.com/crmarques/bootwright/internal/gitops/load"
+	"github.com/crmarques/bootwright/internal/gitops/render"
+	"github.com/crmarques/bootwright/internal/gitops/workflow"
 )
 
 func newGitopsWaitCmd() *cobra.Command {
@@ -38,7 +38,7 @@ func newGitopsWaitCmd() *cobra.Command {
 				return err
 			}
 			if _, err := os.Stat(ws.ExpandedPackageSet); err != nil {
-				return fmt.Errorf("%s not found (run `gitups expand gitops %s` first)", ws.ExpandedPackageSet, ws.Name)
+				return fmt.Errorf("%s not found (run `bootwright expand gitops %s` first)", ws.ExpandedPackageSet, ws.Name)
 			}
 			fp, err := load.ExpandedPackageSet(ws.ExpandedPackageSet)
 			if err != nil {
@@ -68,10 +68,10 @@ func newGitopsWaitCmd() *cobra.Command {
 			subs := cluster.SubscriptionsFromPackages(fp.Spec.Resolved.Packages)
 			out := cmd.ErrOrStderr()
 			if len(subs) == 0 {
-				fmt.Fprintf(out, "gitups: no OLM subscriptions in %s\n", ws.ExpandedPackageSet)
+				fmt.Fprintf(out, "bootwright: no OLM subscriptions in %s\n", ws.ExpandedPackageSet)
 				return nil
 			}
-			fmt.Fprintf(out, "gitups: waiting on %d subscription(s) via %s (timeout %s)\n",
+			fmt.Fprintf(out, "bootwright: waiting on %d subscription(s) via %s (timeout %s)\n",
 				len(subs), kc.Binary(), timeout)
 			return cluster.WaitForSubscriptions(cmd.Context(), kc, subs, cluster.WaitOptions{
 				Timeout: timeout,
@@ -102,7 +102,7 @@ func newGitopsStatusCmd() *cobra.Command {
 				return err
 			}
 			if _, err := os.Stat(ws.ExpandedPackageSet); err != nil {
-				return fmt.Errorf("%s not found (run `gitups expand gitops %s` first)",
+				return fmt.Errorf("%s not found (run `bootwright expand gitops %s` first)",
 					ws.ExpandedPackageSet, ws.Name)
 			}
 			fp, err := load.ExpandedPackageSet(ws.ExpandedPackageSet)
@@ -122,7 +122,7 @@ func newGitopsStatusCmd() *cobra.Command {
 			if err := workflow.EnsureRenderBinaries(); err != nil {
 				return err
 			}
-			scratchRoot, err := os.MkdirTemp("", "gitups-status-")
+			scratchRoot, err := os.MkdirTemp("", "bootwright-status-")
 			if err != nil {
 				return fmt.Errorf("create scratch: %w", err)
 			}
@@ -142,10 +142,10 @@ func newGitopsStatusCmd() *cobra.Command {
 			}
 			out := cmd.ErrOrStderr()
 			if len(drifts) == 0 {
-				fmt.Fprintf(out, "gitups: %s is up to date with %s\n", ws.RenderRoot, ws.ExpandedPackageSet)
+				fmt.Fprintf(out, "bootwright: %s is up to date with %s\n", ws.RenderRoot, ws.ExpandedPackageSet)
 				return nil
 			}
-			fmt.Fprintf(out, "gitups: %d drift(s) between %s and %s:\n",
+			fmt.Fprintf(out, "bootwright: %d drift(s) between %s and %s:\n",
 				len(drifts), ws.RenderRoot, ws.ExpandedPackageSet)
 			for _, d := range drifts {
 				fmt.Fprintf(out, "  %-12s %s\n", d.Kind, d.Path)
@@ -153,7 +153,7 @@ func newGitopsStatusCmd() *cobra.Command {
 					workflow.WriteDriftDiff(out, filepath.Join(scratchOut, d.Path), filepath.Join(ws.RenderRoot, d.Path), diffLines)
 				}
 			}
-			return fmt.Errorf("drift detected; re-render with `gitups render gitops %s` to reconcile", ws.Name)
+			return fmt.Errorf("drift detected; re-render with `bootwright render gitops %s` to reconcile", ws.Name)
 		},
 	}
 	addOutputDirFlag(cmd, &outputDir)
@@ -165,11 +165,11 @@ func newGitopsStatusCmd() *cobra.Command {
 
 func printPlaceholderSummary(w interface{ Write([]byte) (int, error) }, fp *v1.GitOpsPackageSet) {
 	if len(fp.Spec.Resolved.Placeholders) == 0 {
-		fmt.Fprintf(stdioWriter{w}, "gitups: no placeholders; ready to render.\n")
+		fmt.Fprintf(stdioWriter{w}, "bootwright: no placeholders; ready to render.\n")
 		return
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "gitups: %d placeholder(s) require user input:\n", len(fp.Spec.Resolved.Placeholders))
+	fmt.Fprintf(&b, "bootwright: %d placeholder(s) require user input:\n", len(fp.Spec.Resolved.Placeholders))
 	for _, ph := range fp.Spec.Resolved.Placeholders {
 		tag := ""
 		if ph.Sensitive {

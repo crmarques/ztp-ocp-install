@@ -4,7 +4,7 @@ title: Desired State
 
 # Desired State
 
-Gitups input is four user-authored YAML kinds. Every fact has one owner, and
+Bootwright input is four user-authored YAML kinds. Every fact has one owner, and
 everything else is rendered from those files. The definitive schema and
 validation rules live in [`/specs/state-model.md`](../specs/state-model.md).
 
@@ -22,7 +22,7 @@ If changing the substrate forces an `OCPCluster` edit, the model is wrong.
 ## Minimal Connected Hub
 
 ```yaml
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: Environment
 metadata:
   name: connected-hub
@@ -31,15 +31,15 @@ spec:
   ocpInstallType: connected
   secrets:
     openshift-pull-secret:
-      file: ~/.gitups/secrets/openshift-pull-secret
+      file: ~/.bootwright/secrets/openshift-pull-secret
     cluster-admin-key:
-      file: ~/.ssh/gitups-ssh-key.pub
+      file: ~/.ssh/bootwright-ssh-key.pub
   openshift:
     release:
       channel: stable-4.21
       version: 4.21.12
 ---
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: InfrastructureProvider
 metadata:
   name: baremetal-redfish-provider
@@ -48,7 +48,7 @@ spec:
     baremetal:
       bmcProtocol: redfish
 ---
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: ClusterInfrastructure
 metadata:
   name: hub
@@ -84,7 +84,7 @@ spec:
     ingress:
       address: 192.168.130.11
 ---
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: OCPCluster
 metadata:
   name: hub
@@ -111,16 +111,16 @@ resolution. Load balancing has three dispositions, selected purely by what
 `ClusterInfrastructure` does or does not declare:
 
 - **External LB** — `endpoints` defined, `loadBalancers` omitted, and the
-  referenced provider has no `loadBalancer` capability. Gitups passes the VIPs
+  referenced provider has no `loadBalancer` capability. Bootwright passes the VIPs
   to the installer and provisions nothing; an external LB answers the VIPs.
 - **Installer-managed (keepalived + haproxy on the control planes)** — same
   desired state as External LB. On multi-node `platform: baremetal` (libvirt
   renders as baremetal) the agent installer itself deploys keepalived and
   haproxy on the control-plane nodes, so no external LB is required. See
   [`examples/baremetal-redfish-fleet`](../examples/baremetal-redfish-fleet/).
-- **Gitups-managed HAProxy** — `loadBalancers` is declared on
+- **Bootwright-managed HAProxy** — `loadBalancers` is declared on
   `ClusterInfrastructure` and the referenced provider declares a
-  `loadBalancer.haProxy` capability. Gitups pins the HAProxy component and
+  `loadBalancer.haProxy` capability. Bootwright pins the HAProxy component and
   Ansible places it on the chosen provider host. See
   [`examples/baremetal-edge-lb-fleet`](../examples/baremetal-edge-lb-fleet/).
 
@@ -128,15 +128,15 @@ Proxy has the same split between client contract and provider placement.
 `Environment.spec.proxy` (`http`, `https`, `noProxy`, `auth.proxyAuthRef`)
 declares the outbound proxy that every component should use — bastion CLI,
 provider-host package and image pulls, generated `install-config.yaml`, and
-`openshift-install`. Gitups auto-extends `noProxy` with cluster-local
+`openshift-install`. Bootwright auto-extends `noProxy` with cluster-local
 endpoints (service/cluster CIDRs, `.svc`, `.cluster.local`, base domain,
 mirror registry host, provider host addresses); user-supplied entries take
-precedence. If a referenced provider also declares `spec.proxy.squid`, Gitups
+precedence. If a referenced provider also declares `spec.proxy.squid`, Bootwright
 provisions authenticated Squid on that host and materializes its htpasswd
 from the same `auth.proxyAuthRef`. If no provider declares `proxy.squid`, the
 proxy URLs are treated as external.
 
-For the managed-Squid case Gitups renders **two** client URLs from the same
+For the managed-Squid case Bootwright renders **two** client URLs from the same
 deployment: a **host URL** (`http://<squid-host-ssh-address>:<port>`) used by
 host-level config — `/etc/dnf/dnf.conf`, `/etc/environment`, the systemd
 drop-in, `pip.conf` — and a **VM URL** (`http://<libvirt-network-gateway>:<port>`)
@@ -145,7 +145,7 @@ because the libvirt-bridge gateway only becomes a local address on the host
 once `substrate_libvirt` brings up the network, but `host_proxy` runs before
 that to enable the initial dnf installs. For an external proxy both URLs
 collapse to the same user-configured URL, so the split is invisible. Internally
-the values surface as `gitups_ocp_install.proxy.http` / `.https` (host) and
+the values surface as `bootwright_ocp_install.proxy.http` / `.https` (host) and
 `.vmHttp` / `.vmHttps` (VM) in the ansible vars file. See
 [`concepts.md`](concepts.md#managed-squid-two-url-model) for the rationale.
 
@@ -153,7 +153,7 @@ the values surface as `gitups_ocp_install.proxy.http` / `.https` (host) and
 and trust material. It is required when `ocpInstallType: disconnected` and
 optional alongside `connected` when only release content is mirrored.
 
-For Gitups-managed libvirt networks, managed Squid also isolates VM egress:
+For Bootwright-managed libvirt networks, managed Squid also isolates VM egress:
 the rendered libvirt network omits NAT and VMs reach the internet through the
 proxy only. This is not applied for external proxies, no proxy, bare metal,
 vSphere, OpenShift Virtualization, or provider-host networking.
@@ -164,7 +164,7 @@ The same `Environment` and `OCPCluster` work for the QEMU/Redfish lab. Only
 the provider and cluster infrastructure change:
 
 ```yaml
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: InfrastructureProvider
 metadata:
   name: qemu-redfish-provider
@@ -173,7 +173,7 @@ spec:
     qemu-host:
       ssh:
         address: 192.168.10.11
-        user: gitups
+        user: bootwright
         keyRef:
           name: qemu-host-ssh
       capabilities:
@@ -188,7 +188,7 @@ spec:
           credentialRef:
             name: qemu-redfish-bmc
 ---
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: ClusterInfrastructure
 metadata:
   name: hub
@@ -233,25 +233,25 @@ Canonical examples:
 
 ## Secret Material
 
-`SecretRef.name` maps to files under `<gitups-user-dir>/secrets` by default,
-where the Gitups user directory is `GITUPS_USER_DIR` or `~/.gitups`. Override
-the secrets directory directly with `GITUPS_SECRETS_DIR` or `--secrets-dir`.
+`SecretRef.name` maps to files under `<bootwright-user-dir>/secrets` by default,
+where the Bootwright user directory is `BOOTWRIGHT_USER_DIR` or `~/.bootwright`. Override
+the secrets directory directly with `BOOTWRIGHT_SECRETS_DIR` or `--secrets-dir`.
 
 ```text
-gitups secret set openshift-pull-secret --pull-secret ~/pull-secret.json
-gitups secret set baremetal-redfish-bmc --username admin --password-stdin
-gitups secret generate -f examples/libvirt-redfish-hub
+bootwright secret set openshift-pull-secret --pull-secret ~/pull-secret.json
+bootwright secret set baremetal-redfish-bmc --username admin --password-stdin
+bootwright secret generate -f examples/libvirt-redfish-hub
 ```
 
-Both file-sourced and gitups-generated secrets are declared in
+Both file-sourced and bootwright-generated secrets are declared in
 `Environment.spec.secrets[name]`. A `file:` source points at operator-supplied
-material on disk; a `generated:` source asks gitups to materialize the
+material on disk; a `generated:` source asks bootwright to materialize the
 secret itself — either a `username:password\n` file (`generated.credentials`)
 or a self-signed cert/key pair (`generated.selfSignedCertificate`). The
 mirror trust bundle is wired via `registries.mirror.trustBundleRef.name`;
 the matching `secrets[name].generated.selfSignedCertificate` decides how that
-reference is sourced. `gitups secret generate -f` materializes only
+reference is sourced. `bootwright secret generate -f` materializes only
 `generated:` entries; `file:` entries must already exist at their declared
-paths or be written with `gitups secret set <name> --pull-secret <path>` for
-pull-secrets or `gitups secret set <name> [--from-file|--username|--generate]`
+paths or be written with `bootwright secret set <name> --pull-secret <path>` for
+pull-secrets or `bootwright secret set <name> [--from-file|--username|--generate]`
 for credentials.

@@ -1,7 +1,7 @@
 # SNO On Libvirt
 
 Provisions one OpenShift single-node cluster on a libvirt host. The bastion
-that runs `gitups` can be either a VM/host or a Podman container — operator's
+that runs `bootwright` can be either a VM/host or a Podman container — operator's
 choice.
 
 ## Shape
@@ -21,7 +21,7 @@ expose hardware-accelerated virtualization to user space (`/dev/kvm`).
 On bare metal that means CPU virtualization extensions enabled in BIOS.
 If the provider host is itself a VM (VMware / ESXi, OpenStack, libvirt,
 etc.), enable **nested virtualization** on that VM so it can act as a
-KVM host. Gitups checks the capability during `gitups apply infra`;
+KVM host. Bootwright checks the capability during `bootwright apply infra`;
 package installation is its responsibility, not the operator's.
 
 ## 1. Bring Up A Bastion
@@ -36,8 +36,8 @@ export CASE=sno-libvirt
 - Containerized bastion → [containerized-bastion.md](../containerized-bastion.md)
 
 Stop after that doc's "Bootstrap Bastion Dependencies" section. You should
-now have a working `gitups` and the env vars (`$GITUPS_STATE_DIR`,
-`$GITUPS_SECRETS_DIR`, `$GITUPS_REPO`, `$CASE`) exported.
+now have a working `bootwright` and the env vars (`$BOOTWRIGHT_STATE_DIR`,
+`$BOOTWRIGHT_SECRETS_DIR`, `$BOOTWRIGHT_REPO`, `$CASE`) exported.
 
 ## 2. Customize Desired State
 
@@ -46,13 +46,13 @@ hand-edit a fresh workspace instead; the copied files are the known-good
 target state.
 
 ```bash
-WORKSPACE="$GITUPS_STATE_DIR/git-repos/clusters-bootstrap/$CASE/gitups"
+WORKSPACE="$BOOTWRIGHT_STATE_DIR/git-repos/clusters-bootstrap/$CASE/bootwright"
 
-gitups init workspace \
+bootwright init workspace \
   --cluster-name "$CASE" \
   --provider emulated-bare-metal
 
-cp "$GITUPS_REPO/test/e2e/$CASE"/{environment,provider,infra,cluster}.yaml "$WORKSPACE/"
+cp "$BOOTWRIGHT_REPO/test/e2e/$CASE"/{environment,provider,infra,cluster}.yaml "$WORKSPACE/"
 vi "$WORKSPACE/environment.yaml" "$WORKSPACE/provider.yaml" "$WORKSPACE/infra.yaml"
 ```
 
@@ -65,7 +65,7 @@ Review these user-specific fields:
 | `infra.yaml` | CIDR, bridge name, VIPs, node IP, MAC address |
 
 For the same-machine layout (default), leave `ssh.address: localhost` and
-no `ssh.user`; Gitups defaults the SSH user to the current bastion user.
+no `ssh.user`; Bootwright defaults the SSH user to the current bastion user.
 
 ## 3. Pick A Proxy Mode (Optional)
 

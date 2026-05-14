@@ -10,8 +10,8 @@ import (
 	"regexp"
 	"strings"
 
-	v1 "github.com/crmarques/gitups/api/v1alpha1"
-	"github.com/crmarques/gitups/internal/gitops/safepath"
+	v1 "github.com/crmarques/bootwright/api/v1alpha1"
+	"github.com/crmarques/bootwright/internal/gitops/safepath"
 )
 
 // GitResolver materializes a git package source by shallow-cloning at the

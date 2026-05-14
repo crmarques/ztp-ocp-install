@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/crmarques/gitups/internal/infra"
+	"github.com/crmarques/bootwright/internal/infra"
 )
 
 func TestProviderCheckRunsAnsiblePreflight(t *testing.T) {
@@ -139,9 +139,9 @@ func TestSudoPackageInstallCmdPreservesProxyOnlyWhenRequested(t *testing.T) {
 }
 
 func TestResolveAnsiblePlaybookPrefersVenvBinaryWhenPresent(t *testing.T) {
-	clearGitupsEnv(t)
+	clearBootwrightEnv(t)
 	home := t.TempDir()
-	t.Setenv(gitupsUserDirEnv, home)
+	t.Setenv(bootwrightUserDirEnv, home)
 	if got := resolveAnsiblePlaybook(); got != "ansible-playbook" {
 		t.Fatalf("expected fallback to literal 'ansible-playbook' when no venv exists, got %q", got)
 	}
@@ -158,7 +158,7 @@ func TestResolveAnsiblePlaybookPrefersVenvBinaryWhenPresent(t *testing.T) {
 }
 
 func TestBastionApplyDryRunPrintsPlanAndDoesNotExecute(t *testing.T) {
-	clearGitupsEnv(t)
+	clearBootwrightEnv(t)
 	t.Setenv("HOME", t.TempDir())
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -179,7 +179,7 @@ func TestBastionApplyDryRunPrintsPlanAndDoesNotExecute(t *testing.T) {
 }
 
 func TestBastionApplyDryRunSkipsCLIsWithoutState(t *testing.T) {
-	clearGitupsEnv(t)
+	clearBootwrightEnv(t)
 	t.Setenv("HOME", t.TempDir())
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -194,7 +194,7 @@ func TestBastionApplyDryRunSkipsCLIsWithoutState(t *testing.T) {
 }
 
 func TestBastionApplyDryRunPlansCLIsFromState(t *testing.T) {
-	clearGitupsEnv(t)
+	clearBootwrightEnv(t)
 	t.Setenv("HOME", t.TempDir())
 	wantInstallDir := defaultControllerCLIInstallDir()
 	var stdout bytes.Buffer
@@ -213,8 +213,8 @@ func TestBastionApplyDryRunPlansCLIsFromState(t *testing.T) {
 	for _, expected := range []string{
 		"install OCP CLIs",
 		"playbooks/targets/bastion/apply-clis.yml",
-		"gitups_openshift_release_version=4.21.12",
-		"gitups_clis_install_dir=" + wantInstallDir,
+		"bootwright_openshift_release_version=4.21.12",
+		"bootwright_clis_install_dir=" + wantInstallDir,
 	} {
 		if !strings.Contains(out, expected) {
 			t.Fatalf("CLI dry-run missing %q\n%s", expected, out)

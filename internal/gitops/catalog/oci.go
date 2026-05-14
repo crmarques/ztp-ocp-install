@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	v1 "github.com/crmarques/gitups/api/v1alpha1"
+	v1 "github.com/crmarques/bootwright/api/v1alpha1"
 )
 
 // OCIResolver materializes an OCI package source by shelling out to `oras`,

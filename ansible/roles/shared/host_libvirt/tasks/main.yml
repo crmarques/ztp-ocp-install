@@ -4,11 +4,11 @@
 
 - name: Install libvirt host packages
   ansible.builtin.package:
-    name: "{{ gitups_host_libvirt_packages }}"
+    name: "{{ bootwright_host_libvirt_packages }}"
     state: present
 
 - name: Start libvirt service
   ansible.builtin.service:
-    name: "{{ gitups_host_libvirt_libvirt_service }}"
+    name: "{{ bootwright_host_libvirt_libvirt_service }}"
     state: started
     enabled: true

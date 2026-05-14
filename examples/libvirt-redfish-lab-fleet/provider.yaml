@@ -1,4 +1,4 @@
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: InfrastructureProvider
 metadata:
   name: lab-hub-provider
@@ -7,7 +7,7 @@ spec:
     hub-sno-host:
       ssh:
         address: 10.10.10.1
-        user: gitups
+        user: bootwright
         keyRef:
           name: lab-provider-key
       capabilities:
@@ -33,7 +33,7 @@ spec:
       hostRefs:
         - name: hub-sno-host
 ---
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: InfrastructureProvider
 metadata:
   name: lab-managed-01-provider
@@ -42,7 +42,7 @@ spec:
     managed-01-host:
       ssh:
         address: 10.10.10.2
-        user: gitups
+        user: bootwright
         keyRef:
           name: lab-provider-key
       capabilities:
@@ -68,7 +68,7 @@ spec:
       hostRefs:
         - name: managed-01-host
 ---
-apiVersion: gitups.io/v1alpha1
+apiVersion: bootwright.io/v1alpha1
 kind: InfrastructureProvider
 metadata:
   name: lab-managed-02-provider
@@ -77,7 +77,7 @@ spec:
     managed-02-host:
       ssh:
         address: 10.10.10.3
-        user: gitups
+        user: bootwright
         keyRef:
           name: lab-provider-key
       capabilities:

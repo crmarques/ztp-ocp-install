@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	v1 "github.com/crmarques/gitups/api/v1alpha1"
+	v1 "github.com/crmarques/bootwright/api/v1alpha1"
 )
 
 func computeApplyWaves(fp *v1.GitOpsPackageSet) error {

@@ -1,11 +1,11 @@
 ---
 - name: Apply cluster infrastructure
-  hosts: gitups_infra_hosts
+  hosts: bootwright_infra_hosts
   gather_subset:
     - "!all"
     - min
   become: true
-  environment: "{{ gitups_proxy_env | default({}) }}"
+  environment: "{{ bootwright_proxy_env | default({}) }}"
 
   pre_tasks:
     - name: Resolve cluster context
@@ -23,7 +23,7 @@
 
     - name: Apply substrate provider
       ansible.builtin.include_role:
-        name: "substrate_{{ gitups_current_cluster.provider.substrateRole }}"
+        name: "substrate_{{ bootwright_current_cluster.provider.substrateRole }}"
 
     - name: Attach managed load balancer VIPs
       ansible.builtin.import_role:
@@ -32,9 +32,9 @@
     - name: Apply managed hosts-file records
       ansible.builtin.import_role:
         name: name_resolution_hosts_file
-      when: gitups_current_cluster.network.nameResolution.mode == 'managed'
+      when: bootwright_current_cluster.network.nameResolution.mode == 'managed'
 
     - name: Validate external DNS and load balancer
       ansible.builtin.import_role:
         name: external_network_validate
-      when: gitups_current_cluster.network.nameResolution.mode == 'external' or gitups_current_cluster.network.loadBalancer.external | default(false) | bool
+      when: bootwright_current_cluster.network.nameResolution.mode == 'external' or bootwright_current_cluster.network.loadBalancer.external | default(false) | bool
