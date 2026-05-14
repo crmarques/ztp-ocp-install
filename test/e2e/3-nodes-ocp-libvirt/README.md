@@ -1,53 +1,54 @@
-# 3-Node OCP On Libvirt (Containerized Bastion)
+# 3-Node OCP On Libvirt
 
 Provisions one 3-node compact OpenShift cluster (3 control-plane nodes, no
-dedicated workers) on the local libvirt host while the Gitups controller runs
-inside a UBI9 container. Default is a direct connected install; the same case
-can route through an explicit forward proxy or a Gitups-managed Squid by
-declaring it in desired state.
+dedicated workers) on a libvirt host. The bastion that runs `gitups` can be
+either a VM/host or a Podman container — operator's choice.
 
 ## Shape
 
 | Piece | Value |
 | --- | --- |
-| Bastion | UBI9 container, host UID/GID, non-root user |
-| Provider host | Same machine, reached by SSH as `localhost` through `--network host` |
 | Cluster | 3 control-plane nodes on libvirt bridge `vbr-cb-3n` |
-| Network | `192.168.133.0/24`, API/API-int `.10`, Ingress `.11`, nodes `.20`-`.22` |
-| Install mode | Connected direct by default; routes through a proxy when `Environment.spec.proxy` is set |
+| Network | `192.168.133.0/24`, API/API-int `.10`, Ingress `.11`, nodes `.20`–`.22` |
+| Provider | libvirt, emulated bare metal (Redfish BMC) |
+| Load balancer | Managed HAProxy on the provider host (default; see [load-balancer.md](../load-balancer.md)) |
+| Proxy | Pick one mode from [proxy.md](../proxy.md); reference YAMLs ship the managed-Squid layout |
 
-## Case-Specific Operator Input
+## Provider Host Requirements
 
-In addition to the [shared host requirements](../containerized-bastion.md#host-requirements),
-this case needs hardware virtualization exposed on the host:
+The provider host launches the cluster VMs through QEMU/KVM, so it must
+expose hardware-accelerated virtualization to user space (`/dev/kvm`).
+On bare metal that means CPU virtualization extensions enabled in BIOS.
+If the provider host is itself a VM (VMware / ESXi, OpenStack, libvirt,
+etc.), enable **nested virtualization** on that VM so it can act as a
+KVM host. Gitups checks the capability during `gitups apply infra`;
+package installation is its responsibility, not the operator's.
+
+Three VMs are launched on the same provider host, each sized by the
+`compact-control-plane` profile (`provider.yaml`). Plan for roughly
+**12 vCPU + 48 GiB RAM + 360 GiB disk** total (default: 4 vCPU,
+16 GiB RAM, 120 GiB disk per node).
+
+## 1. Bring Up A Bastion
+
+Set `CASE` and follow the bastion doc for the mode you want:
 
 ```bash
-test -c /dev/kvm
+export CASE=3-nodes-ocp-libvirt
 ```
 
-Three VMs are launched on the same host, each sized by the
-`compact-control-plane` profile (`provider.yaml`). Confirm the lab host has
-enough headroom (default: 4 vCPU + 16 GiB RAM + 120 GiB disk per node).
+- VM/host bastion → [bastion.md](../bastion.md)
+- Containerized bastion → [containerized-bastion.md](../containerized-bastion.md)
 
-## Bring Up The Bastion
+Stop after that doc's "Bootstrap Bastion Dependencies" section. You should
+now have a working `gitups` and the env vars (`$GITUPS_STATE_DIR`,
+`$GITUPS_SECRETS_DIR`, `$GITUPS_REPO`, `$CASE`) exported.
 
-```bash
-CASE=3-nodes-ocp-libvirt
-```
+## 2. Customize Desired State
 
-Then follow the [shared bastion-container setup](../containerized-bastion.md):
-
-1. Optional proxy env vars for the container build.
-2. Build and start the bastion container.
-3. `podman exec` into it and set the bastion env vars (remember to re-export
-   `CASE=3-nodes-ocp-libvirt` inside the container).
-4. Bootstrap bastion dependencies (`gitups apply bastion --yes`).
-
-## Create And Edit Desired State
-
-Generate the workspace, then copy the reference files for this case. You can
-edit the generated files by hand instead; the copied files are the known-good
-target state for the local-container layout.
+Generate the workspace and copy the reference YAMLs for this case. You can
+hand-edit a fresh workspace instead; the copied files are the known-good
+target state.
 
 ```bash
 WORKSPACE="$GITUPS_STATE_DIR/git-repos/clusters-bootstrap/$CASE/gitups"
@@ -56,7 +57,7 @@ gitups init workspace \
   --cluster-name "$CASE" \
   --provider emulated-bare-metal
 
-cp /work/test/e2e/$CASE/{environment,provider,infra,cluster}.yaml "$WORKSPACE/"
+cp "$GITUPS_REPO/test/e2e/$CASE"/{environment,provider,infra,cluster}.yaml "$WORKSPACE/"
 vi "$WORKSPACE/environment.yaml" "$WORKSPACE/provider.yaml" "$WORKSPACE/infra.yaml"
 ```
 
@@ -64,221 +65,37 @@ Review these user-specific fields:
 
 | File | Field |
 | --- | --- |
-| `environment.yaml` | `spec.baseDomain`, OpenShift release, optional proxy, secret sources under `spec.secrets` |
-| `provider.yaml` | `spec.hosts.lab-host.ssh.address`, optional `ssh.user`, `libvirtURI`, BMC port, `compact-control-plane` profile sizing |
+| `environment.yaml` | `spec.baseDomain`, OpenShift release, optional proxy |
+| `provider.yaml` | `spec.hosts.lab-host.ssh.address` (set to the provider host's reachable address when the bastion is remote), optional `ssh.user`, `libvirtURI`, BMC port, `compact-control-plane` profile sizing |
 | `infra.yaml` | CIDR, bridge name, VIPs, per-node IPs, MAC addresses |
 
-For the standard local-container path, leave `provider.yaml` with
-`ssh.address: localhost` and no `ssh.user`; Gitups defaults the SSH user to the
-current bastion user, which matches the host user created in the image.
+For the same-machine layout (default), leave `ssh.address: localhost` and
+no `ssh.user`; Gitups defaults the SSH user to the current bastion user.
 
-### Optional Proxy For The OpenShift Install
+## 3. Pick A Proxy Mode (Optional)
 
-For a proxied install, add a top-level `proxy:` block to `environment.yaml`
-alongside `ocpInstallType: connected`:
+The reference YAMLs ship the managed-Squid layout. To use a different mode,
+edit `environment.yaml` and `provider.yaml` per [proxy.md](../proxy.md). For
+a direct connected install, prune the `proxy:` blocks per
+[proxy.md Mode 1](../proxy.md#mode-1--direct-no-proxy).
 
-```yaml
-proxy:
-  http: http://proxy.example.test:3128
-  https: http://proxy.example.test:3128
-  noProxy:
-    - 192.168.133.0/24
-```
+## 4. Pick A Load Balancer (Optional)
 
-Gitups auto-extends `noProxy` with cluster-local endpoints (service/cluster
-CIDRs, `.svc`, `.cluster.local`, `localhost`, the base domain, mirror registry
-host, provider host addresses) — only user-specific entries need to be listed.
+The reference YAMLs ship the managed-HAProxy layout. Multi-node lets you
+also switch to installer-managed `keepalived` + `haproxy` on the control
+planes or to an external LB — see [load-balancer.md](../load-balancer.md).
 
-If the proxy requires authentication, add an auth ref and a matching
-`spec.secrets` entry. Pick one form.
+## 5. Run The Common Steps
 
-**File-backed** — you write the credentials yourself with `gitups secret set`:
+Save secrets, apply the workspace, provision the provider host, install the
+cluster, verify, and tear it down — all in
+[common-steps.md](../common-steps.md). When you reach the "Verify" step,
+`oc get nodes` should show **three** `Ready` control-plane nodes.
 
-```yaml
-proxy:
-  auth:
-    proxyAuthRef:
-      name: proxy-credentials
-secrets:
-  proxy-credentials:
-    file: ~/.gitups/secrets/proxy-credentials
-```
+## 6. Tear Down The Bastion
 
-**Generated** — `gitups secret generate` materializes the file. The password is
-auto-generated; the username defaults to `admin` if `username:` is omitted:
+After [common-steps.md § Tear Down The Cluster](../common-steps.md#6-tear-down-the-cluster),
+clean the bastion side:
 
-```yaml
-proxy:
-  auth:
-    proxyAuthRef:
-      name: proxy-credentials
-secrets:
-  proxy-credentials:
-    generated:
-      credentials:
-        username: proxy
-```
-
-### Optional Managed Squid Proxy
-
-To have Gitups stand up an authenticated Squid proxy on the provider host
-instead of using an external one, declare it on `provider.yaml`:
-
-```yaml
-spec:
-  hosts:
-    lab-host:
-      capabilities:
-        - libvirt
-        - container-runtime
-        - hosts-file
-        - proxy
-  proxy:
-    squid:
-      hostRef:
-        name: lab-host
-      # port: 3128       # default
-      # runtime: podman  # default
-```
-
-Requirements when `spec.proxy.squid` is set:
-
-- The referenced host must carry the `proxy` capability and an `ssh` block.
-- `environment.yaml` `spec.proxy.http` and `spec.proxy.https` must be bare
-  `http://` URLs and include the same port as `spec.proxy.squid.port`.
-- `environment.yaml` `spec.proxy.auth.proxyAuthRef` is mandatory — managed
-  Squid is always authenticated.
-- The libvirt machine `hostRef` must match `spec.proxy.squid.hostRef` (v1 keeps
-  proxy and VMs on the same host so isolated networks remain reachable). The
-  primary machine network must declare a `gateway` so VMs route egress through
-  the managed proxy.
-
-Hosts and VMs reach managed Squid at different addresses. Gitups renders two
-client URLs:
-
-- **Host URL** — `http://<proxy.squid.hostRef SSH address>:<port>`. Written by
-  `host_proxy` into `/etc/dnf/dnf.conf`, `/etc/environment`, the systemd
-  drop-in, and `pip.conf`. Routable on every host before libvirt is installed.
-- **VM URL** — `http://<machineNetwork.gateway>:<port>`. Embedded in
-  `install-config.yaml` so the OpenShift cluster sends runtime egress through
-  the libvirt-bridge gateway, where Squid (bound via host networking) answers.
-
-For external proxies (no `spec.proxy.squid`) both URLs collapse to the same
-user-configured `spec.proxy.http` / `spec.proxy.https`.
-
-## Save And Generate Secrets
-
-| Secret | Form | Required for |
-| --- | --- | --- |
-| `gitups-ssh-key` / `.pub` | File under `~/.ssh` (from operator inputs) | Cluster SSH key, bastion→host SSH |
-| `openshift-pull-secret` | Set from the pull-secret JSON | `render installer`, `apply clusters` |
-| `proxy-credentials` (optional) | Set (file-backed) or generated | `apply bastion -f`, install-config proxy block |
-| `bmc-credentials` | Generated from `environment.yaml` | `apply infra`, `apply clusters` |
-
-```bash
-test -r ~/.ssh/gitups-ssh-key
-test -r ~/.ssh/gitups-ssh-key.pub
-
-gitups secret set openshift-pull-secret \
-  --pull-secret "$HOME/pull-secret.json" \
-  --secrets-dir "$GITUPS_SECRETS_DIR"
-```
-
-If `environment.yaml` declares `proxy-credentials` in the **file-backed** form,
-write it now (skip for the **generated** form):
-
-```bash
-gitups secret set proxy-credentials \
-  --username <proxy-user> \
-  --password-stdin \
-  --secrets-dir "$GITUPS_SECRETS_DIR"
-```
-
-Materialize every `generated:` key (`bmc-credentials` always; `proxy-credentials`
-if it is in generated form):
-
-```bash
-gitups secret generate -f "$WORKSPACE" --secrets-dir "$GITUPS_SECRETS_DIR"
-find "$GITUPS_SECRETS_DIR" -maxdepth 1 -type f -printf '%f\n' | sort
-```
-
-## Apply The Workspace To The Bastion
-
-Installs release-specific OpenShift CLIs declared by the workspace:
-
-```bash
-gitups apply bastion -f "$WORKSPACE" --yes
-gitups check bastion -f "$WORKSPACE"
-```
-
-Bastion bootstrap runs *before* the managed Squid proxy exists, so Gitups
-deliberately ignores `environment.yaml` `spec.proxy` here. Once
-`gitups apply infra` provisions Squid, every subsequent phase (provider-host
-package/image pulls, install-config rendering, agent install) routes through
-it.
-
-## Provision The Provider Host
-
-Read-only preflight, then converge: base packages, libvirt, the cluster bridge,
-managed HAProxy, managed host-file entries, and the Redfish BMC emulator.
-
-```bash
-gitups check infra -f "$WORKSPACE"
-gitups apply infra -f "$WORKSPACE" --dry-run
-gitups apply infra -f "$WORKSPACE" --yes
-gitups check infra -f "$WORKSPACE"
-```
-
-If the host user has passwordless sudo, add `--ask-become-pass=false` to the
-two `apply` commands.
-
-## Install The 3-Node Cluster
-
-`render installer` writes `install-config.yaml` and `agent-config.yaml` under
-`git-repos/clusters-bootstrap/<cluster>/openshift/` with placeholder strings in place
-of pull secret, SSH key, and trust bundle (this tree is the GitOps-publishable
-declarative source). Add `--resolve-secrets` to also write
-`runtime/<cluster>/installer/{install,agent}-config.yaml` with secret material
-inlined (mode `0600`) — the form `openshift-install` consumes. The runtime
-tree never leaves local state.
-
-```bash
-gitups check clusters -f "$WORKSPACE"
-gitups render installer -f "$WORKSPACE" --scope "$CASE" --resolve-secrets
-
-gitups apply clusters -f "$WORKSPACE" --dry-run
-gitups apply clusters -f "$WORKSPACE" --yes
-```
-
-`apply clusters` regenerates the runtime installer copies under
-`runtime/<cluster>/installer/`, renders the agent installer assets, boots all
-three masters through the emulated Redfish BMC, and waits for
-`openshift-install agent wait-for install-complete`.
-
-## Verify
-
-```bash
-export KUBECONFIG="$GITUPS_STATE_DIR/clusters/$CASE/auth/kubeconfig"
-
-oc get nodes
-oc get clusterversion
-oc get clusteroperators
-
-gitups check infra -f "$WORKSPACE"
-gitups check clusters -f "$WORKSPACE"
-```
-
-`oc get nodes` should list three `Ready` control-plane nodes.
-
-## Tear Down
-
-Inside the bastion:
-
-```bash
-gitups destroy clusters -f "$WORKSPACE" --yes
-gitups destroy infra -f "$WORKSPACE" --yes
-exit
-```
-
-Then remove the container and per-case host state — see
-[shared teardown](../containerized-bastion.md#teardown--container-and-host-state).
+- VM/host bastion → [bastion.md § Tear Down](../bastion.md#tear-down--bastion-state)
+- Containerized bastion → [containerized-bastion.md § Tear Down](../containerized-bastion.md#tear-down--container-and-host-state)

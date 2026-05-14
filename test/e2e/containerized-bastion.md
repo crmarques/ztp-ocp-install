@@ -1,16 +1,17 @@
 # Containerized Bastion Setup
 
-Shared setup for e2e cases that run the Gitups controller inside a non-root
-UBI9 container with `--network host`. See [bastion.md](bastion.md) for the
-equivalent flow on a normal VM or host bastion. Case READMEs reference this
-file and only cover what is specific to their cluster shape.
+Run `gitups` inside a non-root UBI9 container with `--network host` on the
+operator's Linux host. Good for ephemeral, fully isolated e2e runs on a dev
+workstation. For the VM/host alternative, see [bastion.md](bastion.md). The
+case README points at this doc when the operator chooses the containerized
+mode.
 
-## Host Requirements
+## Requirements
 
-- Linux host with a container runtime (commands use Podman).
+- Linux host with Podman.
 - A non-root user that can SSH to `localhost` and escalate with `sudo`.
-- An OpenShift pull secret JSON at `~/.gitups/secrets/openshift-pull-secret`.
 - `bin/gitups` built from this repository (`make build`).
+- An OpenShift pull secret at `~/.gitups/secrets/openshift-pull-secret`.
 
 ```bash
 command -v podman
@@ -30,13 +31,18 @@ make build
 test -x bin/gitups
 ```
 
-Cases may add their own checks (for example `/dev/kvm` for a local libvirt
-provider).
+Cases may add their own host requirements (for example `/dev/kvm` for a
+local libvirt provider) — those are in the case README, not here.
 
-## Optional Proxy For The Container Build
+## Optional Proxy Env For The Container Build
 
-Leave unset for direct internet access. The container build picks up the
-standard process proxy environment. Replace the placeholder URL before
+The container build picks up the standard process proxy environment. The
+no-state `gitups apply bastion --yes` (below, inside the container) also
+honors these. The workspace-scoped `gitups apply bastion -f` strips them and
+uses `Environment.spec.proxy` from desired state instead. See
+[proxy.md](proxy.md) for how to express the proxy in desired state.
+
+Leave unset for direct internet access. Replace the placeholder URL before
 exporting:
 
 ```bash
@@ -48,16 +54,14 @@ exporting:
 # export no_proxy="$NO_PROXY"
 ```
 
-These variables only affect image build and the no-state `gitups apply bastion`
-below. `gitups apply bastion -f "$WORKSPACE"` strips ambient proxy variables
-and uses `Environment.spec.proxy` instead.
-
 ## Build And Start The Bastion Container
 
 `$CASE` is the case directory name under `test/e2e/`. Run from the repository
 root.
 
 ```bash
+export CASE=<case-directory>
+
 BASTION_IMAGE=gitups-bastion:$CASE
 BASTION_NAME=gitups-bastion-$CASE
 BASTION_HOME="/home/$(id -un)"
@@ -104,16 +108,20 @@ podman run -dit --name "$BASTION_NAME" \
 podman exec -it "$BASTION_NAME" bash
 ```
 
+The repo is mounted read-write at `/work` inside the bastion.
+
 ## Inside The Bastion
 
-Re-export `$CASE` after `podman exec`, then set the gitups env vars the rest of
-the case relies on:
+Re-export `$CASE` after `podman exec`, then set the gitups env vars the rest
+of the case relies on. `GITUPS_REPO` points to the repo mount, so subsequent
+docs can reference `$GITUPS_REPO/test/e2e/$CASE/`:
 
 ```bash
 export CASE=<same value as on host>
 export GITUPS_USER_DIR="$HOME/.gitups"
 export GITUPS_STATE_DIR="$GITUPS_USER_DIR/state"
 export GITUPS_SECRETS_DIR="$GITUPS_USER_DIR/secrets"
+export GITUPS_REPO=/work
 ```
 
 ## Bootstrap Bastion Dependencies
@@ -131,11 +139,12 @@ gitups check bastion || true
 
 In an externally proxied environment, skip this no-state apply and run the
 workspace-scoped `gitups apply bastion -f "$WORKSPACE"` after the workspace
-and proxy secret exist — see the case README.
+and proxy secret exist — see [common-steps.md](common-steps.md).
 
-## Teardown — Container And Host State
+## Tear Down — Container And Host State
 
-After the case-specific `gitups destroy` steps, on the host:
+After the case-specific cluster destroy steps in
+[common-steps.md](common-steps.md), exit the container and on the host:
 
 ```bash
 podman rm -f "gitups-bastion-$CASE"
