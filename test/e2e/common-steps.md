@@ -72,12 +72,16 @@ runs before `apply infra` provisions it. Gitups deliberately ignores
 `spec.proxy` for this phase; every later phase routes through Squid once
 infra is up. See [proxy.md](proxy.md) for the full bootstrap order.
 
-## 3. Provision The Provider Host
+## 3. Provision The Infrastructure
 
-Read-only preflight, then converge: base packages, libvirt, the cluster
-bridge, the managed load balancer (HAProxy by default — see
-[load-balancer.md](load-balancer.md)), managed host-file entries, the
-Redfish BMC emulator, and managed Squid (if declared).
+Read-only preflight, then converge the `InfrastructureProvider` and the
+`ClusterInfrastructure` it owns: cluster networks, machine infrastructure,
+the managed load balancer (see [load-balancer.md](load-balancer.md)),
+name resolution, the machine-control integration (Redfish BMC for
+baremetal, libvirt for libvirt, hypervisor API for OpenShift
+Virtualization / ESXi), and managed Squid (see [proxy.md](proxy.md))
+when declared. The case's `provider.yaml` and `infra.yaml` decide which
+of these apply.
 
 ```bash
 gitups check infra -f "$WORKSPACE"
@@ -86,31 +90,71 @@ gitups apply infra -f "$WORKSPACE" --yes
 gitups check infra -f "$WORKSPACE"
 ```
 
-If the provider-host user has passwordless sudo, add
-`--ask-become-pass=false` to the two `apply` commands.
+If the provider integration drives Ansible over SSH (libvirt, bare
+metal) and the target SSH user has passwordless sudo, add
+`--ask-become-pass=false` to the two `apply` commands. Providers that
+talk to an API (OpenShift Virtualization, ESXi) skip this prompt.
 
 ## 4. Install The Cluster
 
 `render installer` writes `install-config.yaml` and `agent-config.yaml`
-under `git-repos/clusters-bootstrap/<cluster>/openshift/` with placeholder
-strings in place of pull secret, SSH key, and trust bundle (this tree is
-the GitOps-publishable declarative source). `--resolve-secrets` also writes
-`runtime/<cluster>/installer/{install,agent}-config.yaml` with secret
-material inlined (mode `0600`) — the form `openshift-install` consumes.
-The runtime tree never leaves local state.
+under `git-repos/clusters-bootstrap/<cluster>/openshift/` with
+placeholder strings in place of pull secret, SSH key, and trust bundle.
+This tree is the GitOps-publishable declarative source — safe to
+commit.
 
 ```bash
 gitups check clusters -f "$WORKSPACE"
-gitups render installer -f "$WORKSPACE" --scope "$CASE" --resolve-secrets
+gitups render installer -f "$WORKSPACE"
 
 gitups apply clusters -f "$WORKSPACE" --dry-run
 gitups apply clusters -f "$WORKSPACE" --yes
 ```
 
-`apply clusters` regenerates the runtime installer copies, renders the
-agent installer assets, boots every cluster node through the emulated
-Redfish BMC, and waits for
-`openshift-install agent wait-for install-complete`.
+`apply clusters` materializes
+`runtime/<cluster>/installer/{install,agent}-config.yaml` with secret
+material inlined (mode `0600`) — the form `openshift-install` consumes.
+The runtime tree never leaves local state. It then renders the agent
+installer assets, boots every cluster node through the provider's
+machine-control path (Redfish/IPMI BMC for baremetal, libvirt for
+libvirt, hypervisor API for OpenShift Virtualization / ESXi), and waits
+for `openshift-install agent wait-for install-complete`.
+
+To see the final form `openshift-install` will consume, re-run `render
+installer` with `--resolve-secrets`:
+
+```bash
+gitups render installer -f "$WORKSPACE" --resolve-secrets
+```
+
+That writes the runtime copies eagerly so you can review them. It is
+**not** required for the install — `apply clusters` regenerates the
+same runtime copies on its own. Skip it when you want the rendered
+files to stay free of secret material (for example, before checking
+them into a GitOps repo).
+
+### Following The Install Logs
+
+`gitups apply clusters` is one long-running command. Its Ansible output
+streams to the foreground terminal; the `openshift-install agent
+wait-for install-complete` phase that gates the run writes a richer log
+to disk. Open a second shell on the bastion to follow it:
+
+```bash
+tail -f "$GITUPS_STATE_DIR/runtime/$CASE/installer/.openshift_install.log"
+```
+
+For node-side visibility, SSH to a booted control plane (IPs are in
+`infra.yaml` under `spec.machines.<name>.interfaces.primary.ipAddress`)
+and watch the agent / bootkube journals:
+
+```bash
+ssh -i ~/.ssh/gitups-ssh-key core@<node-ip> \
+  sudo journalctl -fu assisted-service.service
+# or, after bootstrap kicks off:
+ssh -i ~/.ssh/gitups-ssh-key core@<node-ip> \
+  sudo journalctl -fu bootkube.service
+```
 
 ## 5. Verify
 
